@@ -1,0 +1,150 @@
+export function PricingTable({onclick}: {onclick: () => void}) {
+  return (
+    <div className="w-full  flex items-center justify-center">
+      <div className="w-full max-w-[1292px] bg-white rounded-[29px] shadow-lg overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-[#E6F1FD]/50 px-9 py-3.75 flex items-center justify-between">
+          <div className="flex items-center gap-2 bg-[#f1f5f9] rounded-[22px] p-1">
+            <button className="bg-[#007aff] text-white px-5.75 py-3 rounded-[22px] text-sm font-extrabold">
+              MONTHLY
+            </button>
+            <button className="text-[#848199]  py-3 text-sm font-extrabold">
+              YEARLY (20% OFF)
+            </button>
+          </div>
+
+          <div className="text-[#5243c2] text-sm font-extrabold">
+            FOR ALL PLANS 14 DAYS TRIAL IS AVAILABLE
+          </div>
+        </div>
+
+        {/* Pricing Table */}
+        <div className="px-6">
+          <div className="grid grid-cols-[200px_220px_220px_316px_260px] text-left">
+
+            {/* Header Row */}
+            <div></div>
+
+            <PlanHeader title="Free" price="$0" button="Take this plan" onClick={onclick} />
+            <PlanHeader title="Basic" price="$9" button="14 day free trial" primary />
+            <PlanHeader
+              title="Essential"
+              price="$20"
+              button="14 day free trial"
+              highlight
+            />
+            <PlanHeader title="Growth" price="$56" button="14 day free trial" primary />
+
+            {/* Row 1 */}
+            <Feature title="No of Domains" />
+            <Cell>01</Cell>
+            <Cell>01</Cell>
+            <Cell highlight>01</Cell>
+            <Cell>01</Cell>
+
+            {/* Row 2 */}
+            <Feature title="No of scans" />
+            <Cell>100</Cell>
+            <Cell>750</Cell>
+            <Cell highlight>5000 scans</Cell>
+            <Cell>
+              <div className="font-bold text-[#5243c2]">10000 pageviews/m</div>
+              <div className="text-xs text-gray-500">
+                + $.49 for additional 10000 page views
+              </div>
+            </Cell>
+
+            {/* Row 3 */}
+            <Feature title="No of Page views" />
+            <Cell>7500</Cell>
+            <Cell>100,000 page views/m</Cell>
+            <Cell highlight>
+              <div className="font-bold text-[#5243c2]">500,000 pageviews/m</div>
+              <div className="text-xs text-gray-500">
+                + $.49 for additional 10000 page views
+              </div>
+            </Cell>
+            <Cell>
+              <div className="font-bold text-[#5243c2]">2 Million pageviews/m</div>
+              <div className="text-xs text-gray-500">
+                + $.39 for additional 10000 page views
+              </div>
+            </Cell>
+
+            {/* Row 4 */}
+            <Feature title="IAB / TCF" />
+            <Cell gray>NIL</Cell>
+            <Cell gray>NIL</Cell>
+            <Cell highlight>Yes</Cell>
+            <Cell>Yes</Cell>
+
+            {/* Row 5 */}
+            <Feature title="Compliance" />
+            <Cell gray>GDPR/CCPA</Cell>
+            <Cell gray>GDPR/CCPA</Cell>
+            <Cell highlight last>GDPR+CCPA</Cell>
+            <Cell>GDPR+CCPA</Cell>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanHeader({ title, price, button, primary, highlight, onClick }) {
+  return (
+    <div
+      className={`py-7.5 px-6 flex flex-col gap-4 ${
+        highlight ? "bg-[#f0fff1] border border-b-0 border-[#A4BFA64D] rounded-t-[20px] relative" : ""
+      }`}
+    >
+      {highlight && (
+        <div className="absolute -top-3 left-4 bg-[#4cbb66] text-white text-[17px] px-3.25 py-0.5 rounded-full">
+          Recommended
+        </div>
+      )}
+
+      <h3 className="text-[#007aff] text-[28px] font-extrabold mb-0.5">{title}</h3>
+
+      <div className="flex items-baseline gap-1 mb-2.75">
+        <span className="text-[#231d4f] text-4xl font-extrabold">{price}</span>
+        <span className="text-gray-500 text-[base]">/month</span>
+      </div>
+
+      <button
+        onClick={onClick}
+        className={`py-[16.5px] px-[23.5px] rounded-lg w-fit text-[15px] ${
+          highlight
+            ? "bg-[#4cbb66] text-white  "
+            : primary
+            ? "bg-[#007aff] text-white"
+            : "bg-[#e0efff] text-[#007aff]"
+        }`}
+      >
+        {button}
+      </button>
+    </div>
+  );
+}
+
+function Feature({ title }) {
+  return (
+    <div className="py-4 px-6 border-t border-[#000000]/10 text-black text-[17px] font-medium">{title}</div>
+  );
+}
+
+function Cell({ children, highlight, gray,last }) {
+  return (
+    <div
+      className={`py-5.5 px-6 border-t border-[#000000]/10 font-bold ${
+        highlight ? "bg-[#f0fff1] text-[#5243c2] border-r border-l" : gray ? "text-gray-400" : "text-[#5243c2]"
+      }
+      
+      ${last?'rounded-b-[20px] pb-7':''}`}
+    >
+      {children}
+    </div>
+  );
+}

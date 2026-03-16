@@ -1,0 +1,161 @@
+'use client';
+
+import { useState } from 'react';
+
+type Position = 'box' | 'banner' | 'popup';
+type Alignment = 'bottom-left' | 'bottom-right';
+
+export default function BannerControl() {
+  const [position, setPosition] = useState<Position>('box');
+  const [alignment, setAlignment] = useState<Alignment>('bottom-left');
+  const [borderRadius, setBorderRadius] = useState('12');
+  const [animation, setAnimation] = useState('fade-in');
+
+  const positions: Array<{ id: Position; label: string }> = [
+    { id: 'box', label: 'Box' },
+    { id: 'banner', label: 'Banner' },
+    { id: 'popup', label: 'Popup' },
+  ];
+
+  const animations = ['Fade In', 'Slide Up', 'Slide Down', 'Zoom In'];
+
+  return (
+    <div className="max-w-[454px] space-y-6 rounded-lg bg-white p-6">
+      {/* Banner Position Section */}
+      <div className="space-y-3 mb-[50px]">
+        <h3 className="text-sm font-semibold text-gray-900">Banner position</h3>
+        <div className="flex items-end gap-8">
+          {positions.map((pos) => (
+            <button
+              key={pos.id}
+              onClick={() => setPosition(pos.id)}
+              className="relative flex flex-col items-center gap-2 focus:outline-none"
+              aria-label={`Select ${pos.label} position`}
+            >
+
+{position === pos.id && (
+      <span className="absolute top-1 right-1">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle cx="8" cy="8" r="8" fill="#2EC04F" />
+          <path
+            d="M5 8L6.64645 9.64645C6.84171 9.84171 7.15829 9.84171 7.35355 9.64645L11 6"
+            stroke="white"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
+    )}
+
+
+              {pos.id === 'box' && (
+              <svg width="100" height="64" viewBox="0 0 100 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="99" height="63" rx="3.5" fill="white" stroke="#E5E5E5"/>
+<rect x="7" y="38" width="50" height="21" rx="2" fill="#007AFF"/>
+<path d="M85 13L86.6464 14.6464C86.8417 14.8417 87.1583 14.8417 87.3536 14.6464L91 11" stroke="white" stroke-linecap="round"/>
+</svg>
+
+              )}
+              {pos.id === 'banner' && (
+              <svg width="100" height="64" viewBox="0 0 100 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="99" height="63" rx="3.5" fill="white" stroke="#E5E5E5"/>
+<rect x="7" y="38" width="86" height="21" rx="2" fill="#007AFF"/>
+<path d="M85 13L86.6464 14.6464C86.8417 14.8417 87.1583 14.8417 87.3536 14.6464L91 11" stroke="white" stroke-linecap="round"/>
+</svg>
+              )}
+              {pos.id === 'popup' && (
+           <svg width="100" height="64" viewBox="0 0 100 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="99" height="63" rx="3.5" fill="white" stroke="#E5E5E5"/>
+<rect x="27" y="23" width="47" height="19" rx="2" fill="#007AFF"/>
+</svg>
+
+              )}
+              <span className="text-sm text-gray-700">{pos.label}</span>
+            
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Alignment Section */}
+     {/* Alignment Section */}
+<div className="space-y-3 mb-[37px]">
+  <h3 className=" font-semibold text-gray-900">Alignment</h3>
+
+  <div className="flex items-center gap-10">
+    {(['bottom-left', 'bottom-right'] as const).map((value) => {
+      const isActive = alignment === value;
+
+      return (
+        <label key={value} className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="radio"
+            name="alignment"
+            value={value}
+            checked={isActive}
+            onChange={() => setAlignment(value)}
+            className="hidden"
+          />
+
+          {/* Custom radio */}
+          <span
+            className={`flex items-center justify-center w-[27px] h-[27px] rounded-full border transition
+            ${isActive ? 'border-blue-500' : 'border-gray-300'}`}
+          >
+            {isActive && (
+              <span className="w-4 h-4 bg-blue-500 rounded-full"></span>
+            )}
+          </span>
+
+          <span className="text-sm text-[#111827]">
+            {value === 'bottom-left' ? 'Bottom left' : 'Bottom right'}
+          </span>
+        </label>
+      );
+    })}
+  </div>
+</div>
+
+      {/* Border Radius Section */}
+      {/* Border Radius */}
+<div className="rounded-xl border border-gray-200 bg-[#F9F9FA] p-5 space-y-3">
+  <h3 className="text-sm font-semibold text-gray-900">
+    Border Radious
+  </h3>
+
+  <input
+    type="number"
+    value={borderRadius}
+    onChange={(e) => setBorderRadius(e.target.value)}
+    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500"
+    placeholder="12"
+  />
+</div>
+
+      {/* Animation Section */}
+    {/* Animation */}
+<div className="rounded-xl border border-[#E5E5E5] bg-[#F9F9FA] p-5 space-y-3">
+  <h3 className="text-sm font-semibold text-gray-900">
+    Animation
+  </h3>
+
+  <select
+    value={animation}
+    onChange={(e) => setAnimation(e.target.value)}
+    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500"
+  >
+    {animations.map((anim) => (
+      <option key={anim} value={anim.toLowerCase().replace(' ', '-')}>
+        {anim}
+      </option>
+    ))}
+  </select>
+</div>
+    </div>
+  );
+}
