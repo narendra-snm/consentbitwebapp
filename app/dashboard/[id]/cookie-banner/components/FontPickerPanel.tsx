@@ -97,15 +97,15 @@ const FontPickerPanel: React.FC = () => {
         <div className="flex items-center justify-between">
           <label className="">Alignment</label>
           <div className="flex items-center space-x-2">
-            {(['left', 'center', 'right'] as Alignment[]).map((a) => (
+            {(['left', 'right','center', ] as Alignment[]).map((a) => (
               <button
                 key={a}
                 type="button"
                 onClick={() => setAlignment(a)}
                 className={`w-10 h-10 rounded-md flex items-center justify-center transition-colors ${
                   alignment === a
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                    ? 'bg-[#007AFF] text-white'
+                    : 'bg-white border border-[#E5E5E5]  hover:bg-gray-50'
                 }`}
                 aria-label={`Align ${a}`}
               >

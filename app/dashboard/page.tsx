@@ -52,6 +52,7 @@ export default function DashboardPage() {
       <SiteSummaryCards site={activeSite} />
       <GettingStarted activeSiteId={activeSiteId} />
       {/* <AddSiteModal open={true}  /> */}
+      {/* {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />} */}
       {/* <InstallConsentModal open={true} /> */}
       </div>
       
