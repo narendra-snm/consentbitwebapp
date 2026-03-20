@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./SideBar";
 import ConsentPreview from "./ConsentPreview";
 import BannerControl from "./BannerControl";
@@ -10,15 +10,68 @@ import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
 import CookieListAccordion from "./CookieListAccordion";
 import { FloatingButtonSettings } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
+import { updateSiteBannerSettings } from "@/lib/client-api";
+import { useRouter } from "next/navigation";
+import { useDashboardSession } from "../../../DashboardSessionProvider";
 
-export default function page() {
+export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
+  const router = useRouter();
+  const [updatingRegulation, setUpdatingRegulation] = useState(false);
+  const { loading, authenticated, sites, effectivePlanId, updateSiteInState } = useDashboardSession();
+  const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
+
+  const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
+    const bannerType = site?.banner_type || 'gdpr';
+    const regionMode = site?.region_mode || 'gdpr';
+    if (regionMode === 'both') return 'both';
+    if (bannerType === 'ccpa' || regionMode === 'ccpa') return 'ccpa';
+    return 'gdpr';
+  }, [site]);
+
+  // For the free plan we always force the preview to match the single selected banner.
+  const previewBannerType = useMemo<'gdpr' | 'ccpa' | undefined>(() => {
+    if (effectivePlanId !== 'free') return undefined;
+    return consentType === 'ccpa' ? 'ccpa' : 'gdpr';
+  }, [effectivePlanId, consentType]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!authenticated) router.replace("/login");
+  }, [authenticated, loading, router]);
+
+  const handleRegulationChange = async (next: {
+    bannerType: 'gdpr' | 'ccpa';
+    regionMode: 'gdpr' | 'ccpa' | 'both';
+  }) => {
+    if (!site) return;
+    try {
+      setUpdatingRegulation(true);
+      await updateSiteBannerSettings({
+        name: String(site.name || site.domain || ''),
+        domain: String(site.domain || ''),
+        bannerType: next.bannerType,
+        regionMode: next.regionMode,
+      });
+
+      updateSiteInState({
+        id: String(site.id),
+        banner_type: next.bannerType,
+        region_mode: next.regionMode,
+      });
+    } catch (e) {
+      console.error("[cookie-banner] failed to update banner settings", e);
+    } finally {
+      setUpdatingRegulation(false);
+    }
+  };
+
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_740px]">
       <Sidebar active={active} setActive={setActive} />
       <div className="w-full  px-5.5 pt-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
-        {active === "Content" && (
+        {active === "General" && (
           <div>
             <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mb-4.25">
               <p className="font-semibold text-base text-black mb-3">
@@ -26,21 +79,12 @@ export default function page() {
               </p>
 
               <div className="relative mb-3">
-                <button className="w-full px-4 py-3 bg-white border border-[#e5e5e5] rounded-lg text-left flex items-center justify-between hover:border-gray-400 transition-colors">
-                  <span className="text-base text-[#111827]">CCPA (USA)</span>
-
-                  <svg
-                    className="w-[10px] h-[4px]"
-                    fill="none"
-                    viewBox="0 0 10.7962 4.41784"
-                  >
-                    <path
-                      d="M0.500015 0.500015L4.13305 3.46692C4.86927 4.06815 5.92694 4.06814 6.66315 3.46692L10.2962 0.500015"
-                      stroke="black"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
+                <RegulationSelector
+                  site={site}
+                  loading={loading || updatingRegulation}
+                  effectivePlanId={effectivePlanId}
+                  onChange={handleRegulationChange}
+                />
               </div>
 
               <p className="text-[15px] leading-[22px] text-black tracking-tight">
@@ -82,9 +126,13 @@ export default function page() {
             </div>
           </div>
         )}
-        {active === "General" && (
+        {active === "Content" && (
           <>
-            <RegulationSelector/>
+            <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mb-4.25">
+              <p className="font-semibold text-base text-black mb-3">
+                Content settings
+              </p>
+            </div>
             <CookieNoticeAccordion2 />
             <PreferenceBannerAccordion /> <CookieListAccordion /><FloatingButtonSettings/>
             
@@ -94,7 +142,11 @@ export default function page() {
         {active === "Colors" && <ColorPickerPanel />}
         {active === "Type" && <FontPickerPanel />}
       </div>
-      <ConsentPreview />
+      <ConsentPreview
+        previewBannerType={previewBannerType}
+        siteDomain={site?.domain ?? null}
+        consentType={consentType}
+      />
     </div>
   );
 }

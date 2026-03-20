@@ -4,9 +4,21 @@ import { useState } from "react";
 import { Globe, Check, Copy, Share2 } from "lucide-react";
 import Image from "next/image";
 import { PricingTable } from "./PricingTable";
+import { firstSetup, verifyScript } from "@/lib/client-api";
+import { useRouter } from "next/navigation";
 
-export default function StepWizard() {
+export default function StepWizard({
+  userName,
+  organizationId,
+  onWizardComplete,
+}: {
+  userName?: string;
+  organizationId?: string | null;
+  onWizardComplete?: () => void;
+}) {
+  const router = useRouter();
   const [step, setStep] = useState(1);
+  const [siteData, setSiteData] = useState<{ scriptUrl?: string; siteId?: string; domain?: string } | null>(null);
 
   const nextStep = () => {
     setStep((prev) => prev + 1);
@@ -15,7 +27,7 @@ export default function StepWizard() {
   return (
     <div className={`${step===3 || step===2? '':'bg-white p-8 shadow-lg '}  transition-all duration-500 ease-in-out rounded-[28px]   w-full ${step === 2 ? 'max-w-[1292px]' : step === 3 ? 'max-w-[785px]' : 'max-w-[635px]'} min-h-[513px]`}>
       {/* Title */}
-      <h2 className={`text-center text-2xl font-semibold mb-8 text-black font-s ${step===3?'mb-10':'my-10'}`}> 
+      <h2 className={`text-center text-2xl font-semibold mb-8 text-black font-s ${step===3?'mb-10':'my-10'}`}>
         Add your first domain
       </h2>
 
@@ -28,11 +40,17 @@ export default function StepWizard() {
         </div>
 
         {/* Step Content */}
-        {step === 1 && <StepOne nextStep={nextStep} />}
+        {step === 1 && (
+          <StepOne
+            userName={userName}
+            nextStep={nextStep}
+            onSetupComplete={(data) => setSiteData(data)}
+          />
+        )}
         {/* {step === 2 && <StepTwo nextStep={nextStep} />} */}
       </div>
-      {step === 2 && <PricingTable onclick={()=>setStep(3)} />}
-      {step === 3 && <StepThree />}
+      {step === 2 && <PricingTable onclick={()=>setStep(3)} organizationId={organizationId} />}
+      {step === 3 && <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />}
     </div>
   );
 }
@@ -82,8 +100,37 @@ function StepCircle({
   );
 }
 
-function StepOne({ nextStep }: { nextStep: () => void }) {
+function StepOne({
+  nextStep,
+  userName,
+  onSetupComplete,
+}: {
+  nextStep: () => void;
+  userName?: string;
+  onSetupComplete: (data: { scriptUrl?: string; siteId?: string; domain?: string }) => void;
+}) {
   const [domain, setDomain] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleNext() {
+    if (!domain.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await firstSetup({ websiteUrl: domain.trim() });
+      onSetupComplete({
+        scriptUrl: result?.scriptUrl ?? result?.site?.scriptUrl,
+        siteId: result?.siteId ?? result?.site?.id,
+        domain: domain.trim(),
+      });
+      nextStep();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Setup failed');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <>
@@ -102,18 +149,22 @@ function StepOne({ nextStep }: { nextStep: () => void }) {
             className="placeholder:text-[#000000] placeholder:text-base w-full px-4 py-3.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        {error && (
+          <p className="mt-2 text-sm text-red-600">{error}</p>
+        )}
       </div>
 
       <div className="flex justify-between items-center">
-         <p className="text-[15px] text-[#00000050] ">
+        <p className="text-[15px] text-[#00000050] ">
           Do not include 'https://www'
         </p>
         <button
-          onClick={nextStep}
-          className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2"
+          onClick={handleNext}
+          disabled={loading || !domain.trim()}
+          className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2"
         >
-          Next
-          <span>→</span>
+          {loading ? 'Setting up…' : 'Next'}
+          {!loading && <span>→</span>}
         </button>
       </div>
     </>
@@ -185,15 +236,79 @@ function StepTwo({ nextStep }: { nextStep: () => void }) {
   );
 }
 
-function StepThree() {
+function StepThree({
+  siteData,
+  onWizardComplete,
+}: {
+  siteData: { scriptUrl?: string; siteId?: string; domain?: string } | null;
+  onWizardComplete?: () => void;
+}) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [publicUrl, setPublicUrl] = useState(siteData?.domain || '');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
 
-  const codeSnippet = `<!-- Start cookieyes banner --> <script id="CookieYes" src="https://cdn-cookieyes.com/client_data/abcdef1234/script.js" async></script> <!-- End cookieyes banner -->`;
+  const scriptUrl = siteData?.scriptUrl || (siteData?.siteId ? `/client_data/${siteData.siteId}/script.js` : '');
+  const codeSnippet = scriptUrl
+    ? `<!-- Start ConsentBit banner --> <script id="consentbit" src="${scriptUrl}" async></script> <!-- End ConsentBit banner -->`
+    : `<!-- Start ConsentBit banner --> <script id="consentbit" src="YOUR_SCRIPT_URL" async></script> <!-- End ConsentBit banner -->`;
+
+  const normalizePublicUrl = (value: string) => {
+    const v = value.trim();
+    if (!v) return '';
+    if (/^https?:\/\//i.test(v)) return v;
+    return `https://${v}`;
+  };
+
+  const handleVerify = async () => {
+    setVerifyError(null);
+    setVerified(false);
+    const url = normalizePublicUrl(publicUrl);
+    if (!url) {
+      setVerifyError('Enter a website domain or URL');
+      return;
+    }
+    if (!scriptUrl) {
+      setVerifyError('Missing script URL for this site');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await verifyScript({
+        publicUrl: url,
+        scriptUrl,
+        siteId: siteData?.siteId,
+      });
+      if (res.found) {
+        setVerified(true);
+      } else {
+        setVerifyError('Script not found on your site yet. Please publish the changes and try again.');
+      }
+    } catch (e: unknown) {
+      setVerifyError(e instanceof Error ? e.message : 'Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeSnippet);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToCookieBanner = () => {
+    const id = siteData?.siteId;
+    if (id) router.push(`/dashboard/${id}/cookie-banner`);
+  };
+
+  const goToDashboard = async () => {
+    const id = siteData?.siteId;
+    if (onWizardComplete) await onWizardComplete();
+    if (id) router.push(`/dashboard/${id}`);
+    else router.push("/dashboard");
   };
 
   const platforms = [
@@ -242,7 +357,12 @@ function StepThree() {
                   <Share2 size={16} />
                 </button>
               </div>
-              <button className="px-4 py-3.25 bg-[#007AFF]  hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+              <button
+                type="button"
+                onClick={goToCookieBanner}
+                disabled={!siteData?.siteId}
+                className="px-4 py-3.25 bg-[#007AFF] hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
                 Customize your banner →
               </button>
             </div>
@@ -284,18 +404,52 @@ function StepThree() {
                 <h4 className="font-semibold text-gray-800 mb-2">Step 3: Verify your installation.</h4>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🌐</span>
-                  <p className="text-sm text-gray-600">Yoursite.com</p>
+                  <input
+                    type="text"
+                    value={publicUrl}
+                    onChange={(e) => setPublicUrl(e.target.value)}
+                    placeholder="yoursite.com"
+                    className="border rounded-md px-3 py-2 text-sm w-[260px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={verifying}
+                  />
                 </div>
+                {verified && (
+                  <p className="text-sm text-emerald-700 font-medium">
+                    Verified! We detected the ConsentBit script on your site.
+                  </p>
+                )}
+                {verifyError && (
+                  <p className="text-sm text-[#AC2734] font-medium">
+                    {verifyError}
+                  </p>
+                )}
                 <p className="text-sm text-gray-600">
                   Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
                 </p>
               </div>
-              <button className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded flex-shrink-0 ml-4 transition-colors">
-                Verify
+              <button
+                type="button"
+                onClick={handleVerify}
+                disabled={verifying}
+                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium rounded flex-shrink-0 ml-4 transition-colors"
+              >
+                {verifying ? 'Verifying…' : 'Verify'}
               </button>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Finish */}
+      <div className="flex justify-end mt-8 pr-5">
+        <button
+          type="button"
+          onClick={goToDashboard}
+          className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-8 py-3 rounded-md font-medium transition-colors flex items-center gap-2"
+          disabled={!siteData?.siteId}
+        >
+          Go to Dashboard →
+        </button>
       </div>
     </div>
   );

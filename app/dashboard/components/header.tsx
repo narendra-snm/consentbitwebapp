@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Globe, Plus } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useDashboardSession } from "../DashboardSessionProvider";
 
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
@@ -10,11 +12,12 @@ export default function Header() {
   const domainRef = useRef<any>(null);
   const notifRef = useRef<any>(null);
 
-  const domains = [
-    "Https.sitenamehere.com",
-    "Https.sitenamehere.com",
-    "Https.sitenamehere.com",
-  ];
+  const router = useRouter();
+  const pathname = usePathname();
+  const pathParts = (pathname || "").split("/").filter(Boolean);
+  const urlSiteId = pathParts[0] === "dashboard" && pathParts.length >= 2 ? pathParts[1] : null;
+  const { sites, activeSiteId, setActiveSiteId, logout, loading } = useDashboardSession();
+  const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
 
   const notifications = new Array(7).fill({
     title: "Lorem ipsum dolor sit amet",
@@ -32,6 +35,15 @@ export default function Header() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const displayDomain =
+    activeSite?.domain || activeSite?.name || (loading ? "Loading…" : "Select a site");
+
+  const handleSelectSite = (site: any) => {
+    setActiveSiteId(site?.id ? String(site.id) : null);
+    setDomainOpen(false);
+    if (site?.id) router.push(`/dashboard/${site.id}`);
+  };
 
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
@@ -51,7 +63,7 @@ export default function Header() {
             onClick={() => setDomainOpen(!domainOpen)}
             className="border-2 border-[#E6F1FD] bg-[#E6F1FD] rounded-md px-3 py-2 text-sm"
           >
-            acme.com
+            {displayDomain}
           </button>
 
           <button className="w-8 h-8 flex items-center justify-center rounded-md bg-[#E6F1FD] text-[#007AFF]">
@@ -60,16 +72,15 @@ export default function Header() {
 
           {domainOpen && (
             <div className="absolute top-[110%] left-0 w-[300px] bg-white rounded-xl  shadow-[0_12px_40px_rgba(15,23,42,0.16)]  overflow-hidden z-50">
-              {domains.map((d, i) => (
+              {sites.map((s: any) => (
                 <div
-                  key={i}
-                  className={`px-4 py-3 text-sm cursor-pointer ${
-                    i === 0
-                      ? "bg-[#E6F1FD] text-[#007AFF]"
-                      : "hover:bg-gray-50"
+                  key={s.id}
+                  onClick={() => handleSelectSite(s)}
+                  className={`px-4 py-3 text-sm cursor-pointer hover:bg-gray-50 ${
+                    activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
                   }`}
                 >
-                  {d}
+                  {s?.domain || s?.name || s?.id}
                 </div>
               ))}
 
@@ -107,6 +118,16 @@ export default function Header() {
 
         {/* SETTINGS */}
         <img src="/images/Button.svg" className="mt-1 cursor-pointer" />
+
+        {/* LOGOUT */}
+        <button
+          type="button"
+          onClick={logout}
+          disabled={loading}
+          className="px-3 py-3.5 rounded-lg bg-white border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        >
+          Logout
+        </button>
 
         {/* NOTIFICATION */}
         <div ref={notifRef} className="relative">
