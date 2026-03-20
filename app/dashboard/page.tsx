@@ -8,9 +8,10 @@ import Header from "./components/header";
 import InstallConsentModal from "./components/InstallConsentModal";
 import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
+import AddNewSiteModal from "./components/AddNewSiteModal";
 
 export default function DashboardPage() {
-  const isNewUser = true; // later this can come from DB/session
+  const isNewUser = false; // later this can come from DB/session
  const router = useRouter();
   if (!isNewUser) {
     return (
@@ -22,6 +23,7 @@ export default function DashboardPage() {
       <SiteSummaryCards/>
       <GettingStarted/>
       {/* <AddSiteModal open={true}  /> */}
+      {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />}
       {/* <InstallConsentModal open={true} /> */}
       </div>
       

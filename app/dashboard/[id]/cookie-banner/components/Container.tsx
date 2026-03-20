@@ -18,7 +18,7 @@ export default function page() {
       <Sidebar active={active} setActive={setActive} />
       <div className="w-full  px-5.5 pt-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
-        {active === "Content" && (
+        {active === "General" && (
           <div>
             <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mb-4.25">
               <p className="font-semibold text-base text-black mb-3">
@@ -82,7 +82,7 @@ export default function page() {
             </div>
           </div>
         )}
-        {active === "General" && (
+        {active === "Content" && (
           <>
             <RegulationSelector/>
             <CookieNoticeAccordion2 />
