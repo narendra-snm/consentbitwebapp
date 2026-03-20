@@ -1,6 +1,7 @@
 import { Headphones, SlidersHorizontal, Paintbrush, CreditCard } from "lucide-react";
+import Link from "next/link";
 
-export default function GettingStarted() {
+export default function GettingStarted({ activeSiteId }: { activeSiteId?: string | null }) {
   return (
     <div className="bg-gray-100 rounded-xl mt-5.5 px-6 py-6.5 grid grid-cols-[1fr_1.3fr_1.3fr_1fr] divide-x divide-gray-200">
 
@@ -51,18 +52,21 @@ export default function GettingStarted() {
           </p>
         </div>
 
-        <a className="flex items-center font-medium gap-1.5 text-[#007AFF] text-[15px] mt-auto pt-6 cursor-pointer">
+        <Link
+          href={activeSiteId ? `/dashboard/${activeSiteId}/cookie-banner` : "/dashboard/one"}
+          className="flex items-center font-medium gap-1.5 text-[#007AFF] text-[15px] mt-auto pt-6 cursor-pointer"
+        >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M13.75 4.0625H10" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3.75 4.0625H1.25" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.25 6.25C7.45812 6.25 8.4375 5.27062 8.4375 4.0625C8.4375 2.85438 7.45812 1.875 6.25 1.875C5.04188 1.875 4.0625 2.85438 4.0625 4.0625C4.0625 5.27062 5.04188 6.25 6.25 6.25Z" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M13.75 10.9375H11.25" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M5 10.9375H1.25" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M8.75 13.125C9.95812 13.125 10.9375 12.1456 10.9375 10.9375C10.9375 9.72938 9.95812 8.75 8.75 8.75C7.54188 8.75 6.5625 9.72938 6.5625 10.9375C6.5625 12.1456 7.54188 13.125 8.75 13.125Z" stroke="#007AFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.75 4.0625H10" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M3.75 4.0625H1.25" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6.25 6.25C7.45812 6.25 8.4375 5.27062 8.4375 4.0625C8.4375 2.85438 7.45812 1.875 6.25 1.875C5.04188 1.875 4.0625 2.85438 4.0625 4.0625C4.0625 5.27062 5.04188 6.25 6.25 6.25Z" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M13.75 10.9375H11.25" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M5 10.9375H1.25" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M8.75 13.125C9.95812 13.125 10.9375 12.1456 10.9375 10.9375C10.9375 9.72938 9.95812 8.75 8.75 8.75C7.54188 8.75 6.5625 9.72938 6.5625 10.9375C6.5625 12.1456 7.54188 13.125 8.75 13.125Z" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
           Review Settings
-        </a>
+        </Link>
       </div>
 
       {/* ITEM 3 */}

@@ -3,7 +3,15 @@
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 
-export default function ComplianceAlert() {
+export default function ComplianceAlert({
+  userName,
+  siteDomain,
+  bannerActive,
+}: {
+  userName?: string;
+  siteDomain?: string;
+  bannerActive?: boolean;
+}) {
   const [visible, setVisible] = useState(true);
 
   if (!visible) return null;
@@ -13,12 +21,12 @@ export default function ComplianceAlert() {
 
       {/* Greeting */}
       <p className="text-[17px]  ">
-        Hi sam! <br />
+        Hi {userName || "there"}! <br />
         </p>
       <p className="text-[17px] text-[#4B5563] mb-5">
         You are currently viewing the dashboard for{" "}
         <span className="text-blue-600 font-medium cursor-pointer hover:underline">
-          acme.com
+          {siteDomain || "—"}
         </span>
       </p>
 
@@ -37,7 +45,7 @@ export default function ComplianceAlert() {
           {/* Text */}
           <div>
             <p className="text-sm font-bold text-[#AC2734]">
-              Compliance alert: Cookie banner missing
+              Compliance alert: Cookie banner {bannerActive ? "active" : "missing"}
             </p>
 
             <p className="text-sm text-[#AC2734] mt-1 max-w-[808px] font-semibold">
@@ -53,7 +61,7 @@ export default function ComplianceAlert() {
 
           {/* Button */}
           <button className="bg-[#007AFF] py-2 px-2.5 mt-2 hover:bg-blue-700 text-white text-sm  rounded-md font-medium">
-            Enable consent banner
+            {bannerActive ? "Review banner settings" : "Enable consent banner"}
           </button>
 
           {/* Close */}

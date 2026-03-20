@@ -1,4 +1,44 @@
-export function PricingTable({onclick}: {onclick: () => void}) {
+import type React from 'react';
+import { useMemo, useState } from 'react';
+import { createCheckoutSession } from '@/lib/client-api';
+
+export function PricingTable({
+  onclick,
+  organizationId,
+}: {
+  onclick: () => void;
+  organizationId?: string | null;
+}) {
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
+  const [loadingPlan, setLoadingPlan] = useState<null | 'basic' | 'essential' | 'growth'>(null);
+
+  const prices = useMemo(() => {
+    const monthly = { basic: 9, essential: 20, growth: 56 };
+    if (billingInterval === 'month') return monthly;
+    // 20% off yearly, show equivalent /month
+    return {
+      basic: Math.round(monthly.basic * 0.8),
+      essential: Math.round(monthly.essential * 0.8),
+      growth: Math.round(monthly.growth * 0.8),
+    };
+  }, [billingInterval]);
+
+  async function goPaid(planId: 'basic' | 'essential' | 'growth') {
+    if (!organizationId) return;
+    try {
+      setLoadingPlan(planId);
+      const data = await createCheckoutSession({
+        organizationId,
+        planType: 'standard',
+        planId,
+        interval: billingInterval,
+      });
+      window.location.href = data.url;
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
+
   return (
     <div className="w-full  flex items-center justify-center">
       <div className="w-full max-w-[1292px] bg-white rounded-[29px] shadow-lg overflow-hidden">
@@ -6,10 +46,18 @@ export function PricingTable({onclick}: {onclick: () => void}) {
         {/* Header */}
         <div className="bg-[#E6F1FD]/50 px-9 py-3.75 flex items-center justify-between">
           <div className="flex items-center gap-2 bg-[#f1f5f9] rounded-[22px] p-1">
-            <button className="bg-[#007aff] text-white px-5.75 py-3 rounded-[22px] text-sm font-extrabold">
+            <button
+              type="button"
+              onClick={() => setBillingInterval('month')}
+              className={`${billingInterval === 'month' ? 'bg-[#007aff] text-white' : 'text-[#848199]'} px-5.75 py-3 rounded-[22px] text-sm font-extrabold`}
+            >
               MONTHLY
             </button>
-            <button className="text-[#848199]  py-3 text-sm font-extrabold">
+            <button
+              type="button"
+              onClick={() => setBillingInterval('year')}
+              className={`${billingInterval === 'year' ? 'bg-[#007aff] text-white px-5.75 rounded-[22px]' : 'text-[#848199]'} py-3 text-sm font-extrabold`}
+            >
               YEARLY (20% OFF)
             </button>
           </div>
@@ -27,14 +75,30 @@ export function PricingTable({onclick}: {onclick: () => void}) {
             <div></div>
 
             <PlanHeader title="Free" price="$0" button="Take this plan" onClick={onclick} />
-            <PlanHeader title="Basic" price="$9" button="14 day free trial" primary />
+            <PlanHeader
+              title="Basic"
+              price={`$${prices.basic}`}
+              button={loadingPlan === 'basic' ? 'Redirecting…' : '14 day free trial'}
+              primary
+              disabled={!organizationId || loadingPlan !== null}
+              onClick={() => goPaid('basic')}
+            />
             <PlanHeader
               title="Essential"
-              price="$20"
-              button="14 day free trial"
+              price={`$${prices.essential}`}
+              button={loadingPlan === 'essential' ? 'Redirecting…' : '14 day free trial'}
               highlight
+              disabled={!organizationId || loadingPlan !== null}
+              onClick={() => goPaid('essential')}
             />
-            <PlanHeader title="Growth" price="$56" button="14 day free trial" primary />
+            <PlanHeader
+              title="Growth"
+              price={`$${prices.growth}`}
+              button={loadingPlan === 'growth' ? 'Redirecting…' : '14 day free trial'}
+              primary
+              disabled={!organizationId || loadingPlan !== null}
+              onClick={() => goPaid('growth')}
+            />
 
             {/* Row 1 */}
             <Feature title="No of Domains" />
@@ -93,7 +157,17 @@ export function PricingTable({onclick}: {onclick: () => void}) {
   );
 }
 
-function PlanHeader({ title, price, button, primary, highlight, onClick }) {
+type PlanHeaderProps = {
+  title: string;
+  price: string;
+  button: string;
+  primary?: boolean;
+  highlight?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+};
+
+function PlanHeader({ title, price, button, primary = false, highlight = false, onClick, disabled = false }: PlanHeaderProps) {
   return (
     <div
       className={`py-7.5 px-6 flex flex-col gap-4 ${
@@ -115,13 +189,14 @@ function PlanHeader({ title, price, button, primary, highlight, onClick }) {
 
       <button
         onClick={onClick}
+        disabled={disabled || onClick == null}
         className={`py-[16.5px] px-[23.5px] rounded-lg w-fit text-[15px] ${
           highlight
             ? "bg-[#4cbb66] text-white  "
             : primary
             ? "bg-[#007aff] text-white"
             : "bg-[#e0efff] text-[#007aff]"
-        }`}
+        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
       >
         {button}
       </button>
@@ -129,13 +204,20 @@ function PlanHeader({ title, price, button, primary, highlight, onClick }) {
   );
 }
 
-function Feature({ title }) {
+function Feature({ title }: { title: string }) {
   return (
     <div className="py-4 px-6 border-t border-[#000000]/10 text-black text-[17px] font-medium">{title}</div>
   );
 }
 
-function Cell({ children, highlight, gray,last }) {
+type CellProps = {
+  children: React.ReactNode;
+  highlight?: boolean;
+  gray?: boolean;
+  last?: boolean;
+};
+
+function Cell({ children, highlight = false, gray = false, last = false }: CellProps) {
   return (
     <div
       className={`py-5.5 px-6 border-t border-[#000000]/10 font-bold ${

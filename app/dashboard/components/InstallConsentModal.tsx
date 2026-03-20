@@ -2,8 +2,20 @@
 
 import { X, Copy, Share2, Check } from "lucide-react";
 
-export default function InstallConsentModal({ open }: any) {
+export default function InstallConsentModal({
+  open,
+  scriptUrl,
+  siteDomain,
+  onClose,
+}: {
+  open: boolean;
+  scriptUrl: string;
+  siteDomain?: string;
+  onClose?: () => void;
+}) {
   if (!open) return null;
+
+  const installCode = `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${scriptUrl}" async></script>\n<!-- End ConsentBit banner -->`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -11,7 +23,7 @@ export default function InstallConsentModal({ open }: any) {
       {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        // onClick={onclose}
+        onClick={onClose}
       />
 
       {/* Modal */}
@@ -23,7 +35,7 @@ export default function InstallConsentModal({ open }: any) {
           </h2>
 
           <button 
-          // onClick={onclose}
+          onClick={onClose}
           >
             <X size={18} className="text-gray-600" />
           </button>
@@ -40,9 +52,7 @@ export default function InstallConsentModal({ open }: any) {
           <div className="relative bg-[#F9F9FA] border border-[#E5E5E5] p-5 pb-8.5 rounded-md   text-[#161616] mb-3.75">
 
             <p className="pr-10">
-              {"<!-- Start cookieyes banner -->"}
-              {" <script id='cookieyes' type='text/javascript' src='https://cdn-cookieyes.com/client_data/.../script.js'></script> "}
-              {"<!-- End cookieyes banner -->"}
+              {installCode}
             </p>
 <svg width="24" className="absolute right-4 bottom-4  text-gray-500 cursor-pointer" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M16 12.9V17.1C16 20.6 14.6 22 11.1 22H6.9C3.4 22 2 20.6 2 17.1V12.9C2 9.4 3.4 8 6.9 8H11.1C14.6 8 16 9.4 16 12.9Z" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -99,7 +109,7 @@ export default function InstallConsentModal({ open }: any) {
 
             <input
               type="text"
-              placeholder="Yoursite.com"
+              placeholder={siteDomain || "Yoursite.com"}
               className="border rounded-lg px-3 py-2 text-sm w-[319px] h-[48px] focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
@@ -111,7 +121,7 @@ export default function InstallConsentModal({ open }: any) {
 
           <p className="text-xs  mb-5.5">
             Your site domain <br />
-            Yoursite.com <br />
+            {siteDomain || "—"} <br />
             Lorem ipsum dolor sit amet, consectetur adipiscing elit.
           </p>
 

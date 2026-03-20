@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AddSiteModal from "./components/AddSiteModal";
 import ComplianceAlert from "./components/ComplianceAlert";
 import DashboardTabs from "./components/DashboardTabs";
@@ -8,22 +8,51 @@ import Header from "./components/header";
 import InstallConsentModal from "./components/InstallConsentModal";
 import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
-import AddNewSiteModal from "./components/AddNewSiteModal";
+import { useEffect, useMemo } from "react";
+import { useDashboardSession } from "./DashboardSessionProvider";
 
 export default function DashboardPage() {
-  const isNewUser = false; // later this can come from DB/session
  const router = useRouter();
-  if (!isNewUser) {
+ const pathname = usePathname();
+ const { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, refresh } = useDashboardSession();
+ const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || null;
+ const userEmail = user?.email ?? "";
+ const showOnboarding = authenticated && (sites?.length || 0) === 0;
+ const userName = useMemo(() => (userEmail ? userEmail.split("@")[0] : undefined), [userEmail]);
+
+  // When sites exist, keep selected siteId in URL.
+  useEffect(() => {
+    if (loading) return;
+    if (!authenticated) return;
+    if (showOnboarding) return;
+    if (!activeSiteId) return;
+    if (pathname === "/dashboard") {
+      router.replace(`/dashboard/${activeSiteId}`);
+    }
+  }, [activeSiteId, authenticated, loading, pathname, router, showOnboarding]);
+
+  const handleWizardComplete = async () => {
+    await refresh();
+  };
+
+
+
+
+  if (!loading && authenticated && !showOnboarding) {
     return (
       <>
       <Header/>
       <div className="max-w-[1148px] mx-auto pb-4">
       <DashboardTabs/>
-      <ComplianceAlert/>
-      <SiteSummaryCards/>
-      <GettingStarted/>
+      <ComplianceAlert
+        userName={userName}
+        siteDomain={activeSite?.domain}
+        bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
+      />
+      <SiteSummaryCards site={activeSite} />
+      <GettingStarted activeSiteId={activeSiteId} />
       {/* <AddSiteModal open={true}  /> */}
-      {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />}
+      {/* {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />} */}
       {/* <InstallConsentModal open={true} /> */}
       </div>
       
@@ -41,15 +70,21 @@ export default function DashboardPage() {
           className="h-6"
         />
 
-        <button   onClick={() => router.push("/dashboard/one")}  className=" cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium ">
+        <button   onClick={() => router.push("/dashboard")}  className=" cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium ">
         Skip to Dashboard → 
         </button>
       </div>
 
       {/* Wizard */}
-      <div className="flex justify-center mt-20">
-        <StepWizard />
-      </div>
+      {authenticated && showOnboarding && (
+        <div className="flex justify-center mt-20">
+                    <StepWizard
+                      onWizardComplete={handleWizardComplete}
+                      organizationId={activeOrganizationId}
+                      userName={userName}
+                    />
+        </div>
+      )}
     </div>
   );
 }

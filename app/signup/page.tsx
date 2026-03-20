@@ -1,5 +1,9 @@
-import { LoginForm } from "../../components/auth/LoginForm";
-export default function LoginPage() {
+import { SignupForm } from "@/components/auth/SignupForm";
+import Link from "next/link";
+
+
+
+export default function SignupPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center bg-cover bg-center px-6"
@@ -15,9 +19,9 @@ export default function LoginPage() {
           className="h-8"
         />
       </div>
+      <SignupForm />
 
-      {/* Login Section */}
-      <LoginForm /> 
+   
     </div>
   );
 }
