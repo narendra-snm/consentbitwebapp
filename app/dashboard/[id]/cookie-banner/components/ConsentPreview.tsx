@@ -60,8 +60,20 @@ export default function ConsentPreview({
     <div className="w-full px-4.5">
       {/* Tabs */}
       <div className="flex items-center justify-between mb-4 mt-4.5">
-        {/* Only show preview tabs when banner selection supports both (non-free). */}
-        {!isFreeForced && consentType === 'both' ? (
+        {/* Free user: show ONLY selected tab based on dropdown selection. */}
+        {isFreeForced ? (
+          <div className="flex items-center gap-4">
+            <div
+              className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
+              aria-label={selectedBannerType === 'gdpr' ? 'GDPR tab' : 'CCPA tab'}
+            >
+              <p className="font-medium text-base text-[#007aff]">
+                {selectedBannerType === 'gdpr' ? 'GDPR' : 'CCPA'}
+              </p>
+            </div>
+          </div>
+        ) : consentType === 'both' ? (
+          // Non-free: allow switching between GDPR and CCPA inside preview.
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -95,8 +107,17 @@ export default function ConsentPreview({
             </button>
           </div>
         ) : (
-          // Keep the header spacing consistent when tabs are hidden.
-          <div className="flex-1" />
+          // Non-free with single regulation: show one tab.
+          <div className="flex items-center gap-4">
+            <div
+              className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
+              aria-label={selectedBannerType === 'gdpr' ? 'GDPR tab' : 'CCPA tab'}
+            >
+              <p className="font-medium text-base text-[#007aff]">
+                {selectedBannerType === 'gdpr' ? 'GDPR' : 'CCPA'}
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Right Side Buttons */}

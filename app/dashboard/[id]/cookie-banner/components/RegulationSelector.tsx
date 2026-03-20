@@ -12,7 +12,10 @@ export function RegulationSelector({
   effectivePlanId?: string;
   onChange?: (next: { bannerType: 'gdpr' | 'ccpa'; regionMode: 'gdpr' | 'ccpa' | 'both' }) => void | Promise<void>;
 }) {
-  const isFree = effectivePlanId === 'free';
+  const isFree = useMemo(() => {
+    const v = String(effectivePlanId ?? '').toLowerCase();
+    return v === 'free' || v.startsWith('free');
+  }, [effectivePlanId]);
   const computedValue = useMemo(() => {
     const bannerType = site?.banner_type || "gdpr";
     const regionMode = site?.region_mode || "gdpr";

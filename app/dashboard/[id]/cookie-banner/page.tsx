@@ -1,10 +1,18 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import Container from "./components/Container";
 
-export default function page({ params }: { params: { id: string } }) {
+export default function page() {
+  const params = useParams<{ id: string }>();
+  const siteId = params?.id;
+
+  if (!siteId) return null;
+
   return (
     <div>
-     <Container siteId={params.id}/>
+      <Container siteId={siteId} />
     </div>
-  )
+  );
 }
   

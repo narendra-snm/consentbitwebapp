@@ -18,8 +18,13 @@ export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
   const router = useRouter();
   const [updatingRegulation, setUpdatingRegulation] = useState(false);
-  const { loading, authenticated, sites, effectivePlanId, updateSiteInState } = useDashboardSession();
+  const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState } = useDashboardSession();
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
+
+  const isFreePlan = useMemo(() => {
+    const v = String(effectivePlanId ?? "").toLowerCase();
+    return v === "free" || v.startsWith("free");
+  }, [effectivePlanId]);
 
   const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
     const bannerType = site?.banner_type || 'gdpr';
@@ -29,11 +34,22 @@ export default function page({ siteId }: { siteId: string }) {
     return 'gdpr';
   }, [site]);
 
+  // Free-plan preview should follow the dropdown selection immediately.
+  // (Sometimes site state updates lag, so relying only on `site` can make preview look stale.)
+  const [freePreviewBannerType, setFreePreviewBannerType] = useState<'gdpr' | 'ccpa'>(() => {
+    const initialBannerType = site?.banner_type === 'ccpa' || site?.region_mode === 'ccpa' ? 'ccpa' : 'gdpr';
+    return initialBannerType;
+  });
+
   // For the free plan we always force the preview to match the single selected banner.
   const previewBannerType = useMemo<'gdpr' | 'ccpa' | undefined>(() => {
-    if (effectivePlanId !== 'free') return undefined;
-    return consentType === 'ccpa' ? 'ccpa' : 'gdpr';
-  }, [effectivePlanId, consentType]);
+    if (!isFreePlan) return undefined;
+    return freePreviewBannerType;
+  }, [isFreePlan, freePreviewBannerType]);
+
+  // IMPORTANT: do not continuously sync this from `site` after mount.
+  // Otherwise, there are race/timing cases where `site` lags behind the dropdown selection
+  // and the preview reverts back to the old banner.
 
   useEffect(() => {
     if (loading) return;
@@ -45,11 +61,23 @@ export default function page({ siteId }: { siteId: string }) {
     regionMode: 'gdpr' | 'ccpa' | 'both';
   }) => {
     if (!site) return;
+    if (!activeOrganizationId) {
+      console.error("[cookie-banner] activeOrganizationId missing; cannot update site banner settings");
+      return;
+    }
+
+    // Free-plan UX: update preview immediately on dropdown change,
+    // even if the backend roundtrip is slow.
+    if (isFreePlan) {
+      setFreePreviewBannerType(next.bannerType);
+    }
+
     try {
       setUpdatingRegulation(true);
       await updateSiteBannerSettings({
         name: String(site.name || site.domain || ''),
         domain: String(site.domain || ''),
+        organizationId: String(activeOrganizationId),
         bannerType: next.bannerType,
         regionMode: next.regionMode,
       });
@@ -81,7 +109,9 @@ export default function page({ siteId }: { siteId: string }) {
               <div className="relative mb-3">
                 <RegulationSelector
                   site={site}
-                  loading={loading || updatingRegulation}
+                  // Only disable dropdown while we're actively saving banner settings.
+                  // Session-level loading can cause the whole dropdown to appear "stuck disabled".
+                  loading={updatingRegulation}
                   effectivePlanId={effectivePlanId}
                   onChange={handleRegulationChange}
                 />

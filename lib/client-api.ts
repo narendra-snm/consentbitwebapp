@@ -183,6 +183,7 @@ export async function getSites(organizationId?: string) {
 export async function updateSiteBannerSettings(payload: {
   name: string;
   domain: string;
+  organizationId: string;
   bannerType: 'gdpr' | 'ccpa';
   regionMode: 'gdpr' | 'ccpa' | 'both';
 }) {
