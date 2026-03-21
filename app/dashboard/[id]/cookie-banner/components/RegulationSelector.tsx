@@ -63,8 +63,6 @@ export function RegulationSelector({
               <button
                 key={opt.label}
                 onClick={() => {
-                  if (loading) return;
-
                   if (opt.disabled) return;
 
                   setValue(opt.label);
@@ -87,7 +85,9 @@ export function RegulationSelector({
                     return;
                   }
                 }}
-                disabled={loading || opt.disabled}
+                // Do not block dropdown selection due to async loading state;
+                // only block options that are actually disabled by plan.
+                disabled={opt.disabled}
                 className="w-full text-left px-4 py-3 font-['DM_Sans'] text-[15px] text-[#111827] hover:bg-gray-50 disabled:opacity-60"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >

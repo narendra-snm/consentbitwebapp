@@ -1,33 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Accordion from "./ui/Accordion";
-import ToggleSwitch from "./ui/ToggleSwitch";
 
-export default function PreferenceBannerAccordion() {
+export default function PreferenceBannerAccordion({
+  variant = "gdpr",
+  isOpen,
+  onToggle,
+  value,
+  onChange,
+}: {
+  variant?: "gdpr" | "ccpa";
+  isOpen?: boolean;
+  onToggle?: (nextOpen: boolean) => void;
+  value?: { title?: string; message?: string; saveButtonLabel?: string };
+  onChange?: (next: {
+    title: string;
+    message: string;
+    saveButtonLabel?: string;
+  }) => void;
+}) {
   const [settings, setSettings] = useState({
-    title: "We value your privacy",
+    title: "Cookie Preferences",
     overview:
-      "We use cookies to help you navigate efficiently and perform certain functions...",
-    showPolicy: true,
-    message:
-      "For more information on how Google's third-party cookies operate and handle your data, see:",
-    linkText: "Google Privacy Policy",
-    url: "https://business.safety.google/privacy/",
+      "By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.",
     savePreferences: "Save My Preferences",
-    showMore: "Show more",
-    showLess: "Show less",
   });
 
-  const update = (key: keyof typeof settings, value: string | boolean) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+  const update = (key: keyof typeof settings, v: string) => {
+    setSettings((prev) => ({ ...prev, [key]: v }));
   };
+
+  useEffect(() => {
+    if (!value) return;
+    setSettings((prev) => ({
+      ...prev,
+      title: value.title ?? prev.title,
+      overview: value.message ?? prev.overview,
+      savePreferences: value.saveButtonLabel ?? prev.savePreferences,
+    }));
+  }, [value?.title, value?.message, value?.saveButtonLabel]);
+
+  const accordionTitle =
+    variant === "ccpa" ? "Preference banner (opt-out)" : "Preference Banner";
+
+  const overviewLabel =
+    variant === "ccpa" ? "Introduction" : "Privacy overview";
 
   return (
     <div className="w-full max-w-[409px] mx-auto">
-      <Accordion title="Preference Banner">
+      <Accordion title={accordionTitle} isOpen={isOpen} onToggle={onToggle}>
         <div className="pb-6 space-y-6">
-
           {/* Title */}
           <div className="space-y-2">
             <label
@@ -39,155 +62,77 @@ export default function PreferenceBannerAccordion() {
             <input
               type="text"
               value={settings.title}
-              onChange={(e) => update("title", e.target.value)}
+              onChange={(e) => {
+                const nextTitle = e.target.value;
+                update("title", nextTitle);
+                onChange?.({
+                  title: nextTitle,
+                  message: settings.overview,
+                  saveButtonLabel:
+                    variant === "ccpa" ? settings.savePreferences : undefined,
+                });
+              }}
               className="w-full h-12 px-4 bg-white border-[3px] border-[rgba(0,122,255,0.1)] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
 
-          {/* Privacy overview */}
+          {/* Main copy */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
-              Privacy overview
+              {overviewLabel}
             </label>
 
             <textarea
-              rows={6}
+              rows={variant === "ccpa" ? 8 : 6}
               value={settings.overview}
-              onChange={(e) => update("overview", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                update("overview", v);
+                onChange?.({
+                  title: settings.title,
+                  message: v,
+                  saveButtonLabel:
+                    variant === "ccpa" ? settings.savePreferences : undefined,
+                });
+              }}
               className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
 
-          {/* Toggle */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label
-                className="block font-['DM_Sans'] text-base text-black leading-5"
-                style={{ fontVariationSettings: "'opsz' 14" }}
-              >
-                Show Google Privacy Policy
-              </label>
-
-              <ToggleSwitch
-                checked={settings.showPolicy}
-                onChange={() => update("showPolicy", !settings.showPolicy)}
-              />
-            </div>
-          </div>
-
-          {/* Message */}
+          {/* Save button label */}
           <div className="space-y-2">
             <label
               className="block font-['DM_Sans'] text-base text-black leading-5"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
-              Message
-            </label>
-
-            <textarea
-              rows={4}
-              value={settings.message}
-              onChange={(e) => update("message", e.target.value)}
-              className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            />
-          </div>
-
-          {/* Link text */}
-          <div className="space-y-2">
-            <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              Link text
-            </label>
-
-            <input
-              type="text"
-              value={settings.linkText}
-              onChange={(e) => update("linkText", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            />
-          </div>
-
-          {/* URL */}
-          <div className="space-y-2">
-            <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              URL
-            </label>
-
-            <input
-              type="text"
-              value={settings.url}
-              onChange={(e) => update("url", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            />
-          </div>
-
-          {/* Save Preferences */}
-          <div className="space-y-2">
-            <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              "Save My Preferences" button
+              {variant === "ccpa"
+                ? '"Save my preferences" button'
+                : '"Save My Preferences" button'}
             </label>
 
             <input
               type="text"
               value={settings.savePreferences}
-              onChange={(e) => update("savePreferences", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                update("savePreferences", v);
+                if (variant === "ccpa") {
+                  onChange?.({
+                    title: settings.title,
+                    message: settings.overview,
+                    saveButtonLabel: v,
+                  });
+                }
+              }}
               className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
-
-          {/* Show more */}
-          <div className="space-y-2">
-            <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              "Show more" button
-            </label>
-
-            <input
-              type="text"
-              value={settings.showMore}
-              onChange={(e) => update("showMore", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            />
-          </div>
-
-          {/* Show less */}
-          <div className="space-y-2">
-            <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              "Show less" button
-            </label>
-
-            <input
-              type="text"
-              value={settings.showLess}
-              onChange={(e) => update("showLess", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            />
-          </div>
-
         </div>
       </Accordion>
     </div>

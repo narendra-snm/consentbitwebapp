@@ -1,8 +1,16 @@
-import { useState } from "react";
+export type FloatingButtonState = {
+  enabled: boolean;
+  position: "left" | "right";
+};
 
-export function FloatingButtonSettings() {
-  const [floatingEnabled, setFloatingEnabled] = useState(true);
-  const [position, setPosition] = useState<"left" | "right">("left");
+export function FloatingButtonSettings({
+  value,
+  onChange,
+}: {
+  value: FloatingButtonState;
+  onChange: (next: FloatingButtonState) => void;
+}) {
+  const { enabled: floatingEnabled, position } = value;
 
   return (
     <div className="w-full max-w-[409px] mx-auto">
@@ -19,7 +27,9 @@ export function FloatingButtonSettings() {
 
           <ToggleSwitch
             checked={floatingEnabled}
-            onChange={() => setFloatingEnabled(!floatingEnabled)}
+            onChange={() =>
+              onChange({ ...value, enabled: !floatingEnabled })
+            }
           />
         </div>
 
@@ -41,7 +51,7 @@ export function FloatingButtonSettings() {
                 name="position"
                 value="left"
                 checked={position === "left"}
-                onChange={() => setPosition("left")}
+                onChange={() => onChange({ ...value, position: "left" })}
                 className="w-5 h-5 accent-[#007aff]"
               />
 
@@ -60,7 +70,7 @@ export function FloatingButtonSettings() {
                 name="position"
                 value="right"
                 checked={position === "right"}
-                onChange={() => setPosition("right")}
+                onChange={() => onChange({ ...value, position: "right" })}
                 className="w-5 h-5 accent-[#007aff]"
               />
 

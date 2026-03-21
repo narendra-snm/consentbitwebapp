@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+'use client';
+
+import React from 'react';
+import type { TypeSettings } from './bannerAppearance';
 
 const FONTS = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins',
@@ -7,7 +10,7 @@ const FONTS = [
 
 const WEIGHTS = ['Thin', 'Light', 'Regular', 'Medium', 'Semi Bold', 'Bold', 'Extra Bold', 'Black'];
 
-type Alignment = 'left' | 'center' | 'right';
+type Alignment = TypeSettings['alignment'];
 
 const AlignLeftIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -33,16 +36,22 @@ const AlignRightIcon = ({ active }: { active: boolean }) => (
   </svg>
 );
 
-const FontPickerPanel: React.FC = () => {
-  const [font, setFont] = useState('Inter');
-  const [weight, setWeight] = useState('Bold');
-  const [alignment, setAlignment] = useState<Alignment>('left');
+type Props = {
+  value: TypeSettings;
+  onChange: (next: TypeSettings) => void;
+};
+
+const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
+  const { font, weight, alignment } = value;
+
+  const patch = (partial: Partial<TypeSettings>) => {
+    onChange({ ...value, ...partial });
+  };
 
   return (
     <div className="max-w-[410px] w-full  bg-white rounded-lg ">
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg p-4 pb-6 space-y-4">
 
-        {/* Choose Font */}
         <div>
           <div className="flex items-center space-x-1 mb-2">
             <label className=" ">Choose Font</label>
@@ -57,7 +66,7 @@ const FontPickerPanel: React.FC = () => {
           <div className="relative">
             <select
               value={font}
-              onChange={(e) => setFont(e.target.value)}
+              onChange={(e) => patch({ font: e.target.value })}
               className="w-full appearance-none bg-white border h-[48px] border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer pr-8"
             >
               {FONTS.map(f => (
@@ -72,13 +81,12 @@ const FontPickerPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Weight */}
         <div>
           <label className="block   mb-2">Weight</label>
           <div className="relative">
             <select
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => patch({ weight: e.target.value })}
               className="w-full appearance-none bg-white border h-[48px] border-gray-300 rounded-lg px-3 py-2  text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer pr-8"
             >
               {WEIGHTS.map(w => (
@@ -93,15 +101,14 @@ const FontPickerPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Alignment */}
         <div className="flex items-center justify-between">
           <label className="">Alignment</label>
           <div className="flex items-center space-x-2">
-            {(['left', 'right','center', ] as Alignment[]).map((a) => (
+            {(['left', 'right', 'center'] as Alignment[]).map((a) => (
               <button
                 key={a}
                 type="button"
-                onClick={() => setAlignment(a)}
+                onClick={() => patch({ alignment: a })}
                 className={`w-10 h-10 rounded-md flex items-center justify-center transition-colors ${
                   alignment === a
                     ? 'bg-[#007AFF] text-white'

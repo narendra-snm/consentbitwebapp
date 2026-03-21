@@ -34,9 +34,11 @@ const tabs = [
 
 export default function DashboardTabs() {
   const pathname = usePathname();
-
-  const basePath = pathname.split("/").slice(0, 3).join("/"); 
-  // /dashboard/1234
+  const parts = (pathname || "").split("/").filter(Boolean); // e.g. ["dashboard","1234","cookie-banner"]
+  const basePath =
+    parts[0] === "dashboard" && parts[1]
+      ? `/dashboard/${parts[1]}`
+      : "/dashboard";
 
   return (
     <div className="w-full flex justify-center mt-4.5">
@@ -47,8 +49,8 @@ export default function DashboardTabs() {
           const href = tab.slug ? `${basePath}/${tab.slug}` : basePath;
 
           const isActive = tab.slug
-            ? pathname.includes(`/${tab.slug}`)
-            : pathname.split("/").length <= 3;
+            ? pathname.startsWith(href)
+            : pathname === "/dashboard" || pathname === basePath;
 
           return (
             <Link
