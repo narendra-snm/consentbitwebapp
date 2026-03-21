@@ -1,6 +1,14 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getMe, getSites } from "@/lib/client-api";
 
@@ -15,8 +23,13 @@ type DashboardSessionState = {
   activeSiteId: string | null;
 };
 
+export type DashboardRefreshOptions = {
+  /** Default true. Set false after checkout / background sync to avoid blanking the whole dashboard. */
+  showLoading?: boolean;
+};
+
 type DashboardSessionApi = DashboardSessionState & {
-  refresh: () => Promise<void>;
+  refresh: (opts?: DashboardRefreshOptions) => Promise<void>;
   setActiveSiteId: (siteId: string | null) => void;
   updateSiteInState: (patch: { id: string } & Record<string, any>) => void;
   logout: () => Promise<void>;
@@ -24,18 +37,47 @@ type DashboardSessionApi = DashboardSessionState & {
 
 const DashboardSessionContext = createContext<DashboardSessionApi | null>(null);
 
+/** Must match DashboardTabs — these segments are not site ids. */
+const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
+
 function pickActiveSiteIdFromPath(pathname: string | null): string | null {
   const parts = (pathname || "").split("/").filter(Boolean);
   if (parts[0] !== "dashboard") return null;
   if (parts.length < 2) return null;
   const id = parts[1];
   if (!id || id === "one") return null;
+  if (RESERVED_DASHBOARD_SEGMENTS.has(id)) return null;
   return id;
+}
+
+/** `/api/auth/me` may return org rows with `id`, `organizationId`, or D1 lowercase keys. */
+function pickOrganizationIdFromMe(orgs: unknown): string | null {
+  if (!Array.isArray(orgs) || orgs.length === 0) return null;
+  const o: unknown = orgs[0];
+  if (typeof o === "string") return o.trim() || null;
+  if (o && typeof o === "object") {
+    const rec = o as Record<string, unknown>;
+    const raw = rec.id ?? rec.organizationId ?? rec.organization_id;
+    const s = raw != null ? String(raw).trim() : "";
+    return s || null;
+  }
+  return null;
+}
+
+function pickOrganizationIdFromSite(site: unknown): string | null {
+  if (!site || typeof site !== "object") return null;
+  const s = site as Record<string, unknown>;
+  const raw = s.organizationId ?? s.organizationid;
+  const id = raw != null ? String(raw).trim() : "";
+  return id || null;
 }
 
 export function DashboardSessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  /** Latest path without putting `pathname` in `refresh` deps (avoids refetch on every tab switch). */
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   const [state, setState] = useState<DashboardSessionState>({
     loading: true,
@@ -48,15 +90,15 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
     activeSiteId: null,
   });
 
-  const refresh = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true }));
+  const refresh = useCallback(async (opts?: DashboardRefreshOptions) => {
+    const showLoading = opts?.showLoading !== false;
+    if (showLoading) setState((s) => ({ ...s, loading: true }));
     try {
       const me = await getMe();
       const authenticated = Boolean(me?.authenticated);
-      const orgs = me?.organizations ?? [];
-      const activeOrgId = orgs?.[0]?.id ?? null;
+      const orgs = Array.isArray(me?.organizations) ? me.organizations : [];
 
-      if (!authenticated || !activeOrgId) {
+      if (!authenticated) {
         setState({
           loading: false,
           authenticated: false,
@@ -70,11 +112,21 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
         return;
       }
 
-      const sitesRes = await getSites(activeOrgId);
-      const sites = sitesRes?.success ? sitesRes.sites || [] : [];
-      const effectivePlanId = sitesRes?.effectivePlanId || "free";
+      let activeOrgId = pickOrganizationIdFromMe(orgs);
 
-      const urlActive = pickActiveSiteIdFromPath(pathname);
+      // If /me didn't include an org id, load sites without organizationId — the Worker
+      // resolves the org from the session (getOrCreateOrganizationForUser) and we infer id from Site rows.
+      let sitesRes = activeOrgId
+        ? await getSites(activeOrgId)
+        : await getSites();
+      let sites = sitesRes?.success ? sitesRes.sites || [] : [];
+      let effectivePlanId = sitesRes?.effectivePlanId || "free";
+
+      if (!activeOrgId && sites.length > 0) {
+        activeOrgId = pickOrganizationIdFromSite(sites[0]);
+      }
+
+      const urlActive = pickActiveSiteIdFromPath(pathnameRef.current);
       const fallbackActive = sites?.[0]?.id ?? null;
       const activeSiteId = urlActive || fallbackActive;
 
@@ -92,12 +144,23 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
       console.error("[DashboardSession] refresh failed", e);
       setState((s) => ({ ...s, loading: false }));
     }
-  }, [pathname]);
+  }, []);
 
+  // Fetch user + sites once on mount (and when `refresh` is explicitly called elsewhere).
   useEffect(() => {
-    refresh();
-    // refresh when route changes so activeSiteId stays in sync
+    void refresh();
   }, [refresh]);
+
+  // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
+  useEffect(() => {
+    const urlActive = pickActiveSiteIdFromPath(pathname);
+    if (!urlActive) return;
+    setState((s) => {
+      if (!s.authenticated) return s;
+      if (String(s.activeSiteId) === String(urlActive)) return s;
+      return { ...s, activeSiteId: String(urlActive) };
+    });
+  }, [pathname]);
 
   const setActiveSiteId = useCallback((siteId: string | null) => {
     setState((s) => ({ ...s, activeSiteId: siteId }));

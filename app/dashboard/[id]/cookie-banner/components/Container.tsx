@@ -77,7 +77,8 @@ export default function page({ siteId }: { siteId: string }) {
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
-  const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState } = useDashboardSession();
+  const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+    useDashboardSession();
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const siteRef = useRef(site);
   siteRef.current = site;
@@ -225,6 +226,7 @@ export default function page({ siteId }: { siteId: string }) {
         banner_type: next.bannerType,
         region_mode: next.regionMode,
       });
+      void refresh({ showLoading: false });
     } catch (e) {
       console.error("[cookie-banner] failed to update banner settings", e);
     } finally {
@@ -528,6 +530,7 @@ export default function page({ siteId }: { siteId: string }) {
       }));
       setPreviewRevision((r) => r + 1);
       setPublishSuccess(true);
+      void refresh({ showLoading: false });
     } catch (e) {
       console.error("[cookie-banner] failed to publish banner customization", e);
       setPublishError(

@@ -12,6 +12,7 @@ import {
   type ScheduledScan,
 } from '@/lib/client-api';
 import { ScheduleScanModal } from './ScheduleScanModal';
+import { useDashboardSession } from '../../DashboardSessionProvider';
 
 const CATEGORY_LABELS: Record<string, string> = {
   necessary: 'Necessary',
@@ -115,6 +116,7 @@ function formatCookieDuration(expires: string | null) {
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
+  const { refresh } = useDashboardSession();
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
@@ -187,6 +189,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     try {
       await scanSiteNow(siteId);
       await loadData();
+      void refresh({ showLoading: false });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Scan failed');
     } finally {
@@ -198,6 +201,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     try {
       await deleteScheduledScan(id);
       setScheduledScans((prev) => prev.filter((s) => s.id !== id));
+      void refresh({ showLoading: false });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to cancel schedule');
     }
@@ -469,6 +473,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         siteId={siteId}
         onScheduled={() => {
           void getScheduledScans(siteId).then((d) => setScheduledScans(d.scheduledScans || []));
+          void refresh({ showLoading: false });
         }}
       />
     </div>

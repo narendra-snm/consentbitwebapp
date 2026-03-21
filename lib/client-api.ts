@@ -228,13 +228,22 @@ export async function saveBannerCustomization(payload: { siteId: string; customi
 }
 // banner customization ends here
 
-// payments starts here
-export async function createCheckoutSession(payload: {
+// payments starts here — matches consent-manager tier checkout (planId + interval + siteId)
+export type CreateCheckoutPayload = {
   organizationId: string;
-  planType: 'standard';
   planId: 'basic' | 'essential' | 'growth';
-  interval?: 'month' | 'year';
-}) {
+  interval: 'monthly' | 'yearly';
+  siteId?: string | null;
+  siteName?: string | null;
+  siteDomain?: string | null;
+  stripeCouponId?: string | null;
+  successUrl?: string;
+  cancelUrl?: string;
+};
+
+export async function createCheckoutSession(
+  payload: CreateCheckoutPayload,
+): Promise<{ success: true; url: string; sessionId?: string }> {
   const res = await fetch('/api/create-checkout-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -243,7 +252,7 @@ export async function createCheckoutSession(payload: {
   });
   const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
   if (!res.ok || !data.success) throw new Error(data.error || `Checkout failed: ${res.status}`);
-  return data as { success: true; url: string };
+  return data as { success: true; url: string; sessionId?: string };
 }
 // payments ends here
 

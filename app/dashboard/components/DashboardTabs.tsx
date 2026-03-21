@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import { Home, Cookie, ScanLine, FileText, Box } from "lucide-react";
+import { useDashboardSession } from "../DashboardSessionProvider";
+
+/** Second path segment after /dashboard that is not a site id */
+const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
 
 const tabs = [
   {
@@ -34,11 +39,18 @@ const tabs = [
 
 export default function DashboardTabs() {
   const pathname = usePathname();
-  const parts = (pathname || "").split("/").filter(Boolean); // e.g. ["dashboard","1234","cookie-banner"]
-  const basePath =
-    parts[0] === "dashboard" && parts[1]
-      ? `/dashboard/${parts[1]}`
-      : "/dashboard";
+  const { activeSiteId } = useDashboardSession();
+
+  const basePath = useMemo(() => {
+    const segs = (pathname || "").split("/").filter(Boolean);
+    if (activeSiteId && !RESERVED_DASHBOARD_SEGMENTS.has(String(activeSiteId))) {
+      return `/dashboard/${activeSiteId}`;
+    }
+    if (segs[0] === "dashboard" && segs[1] && !RESERVED_DASHBOARD_SEGMENTS.has(segs[1])) {
+      return `/dashboard/${segs[1]}`;
+    }
+    return "/dashboard";
+  }, [pathname, activeSiteId]);
 
   return (
     <div className="w-full flex justify-center mt-4.5">

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { getBannerLanguage, getTranslation } from './translations';
 import floatingBtnLogo from '@/public/asset/logo.webp';
+import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
@@ -319,7 +320,7 @@ export default function ConsentPreview({
                   <>
                     {' '}
                     <a
-                      href={content.privacyPolicyUrl}
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[#007aff] underline"
@@ -394,7 +395,7 @@ export default function ConsentPreview({
                   <>
                     {' '}
                     <a
-                      href={content.privacyPolicyUrl}
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[#007aff] underline"
@@ -553,7 +554,7 @@ export default function ConsentPreview({
                   <>
                     {' '}
                     <a
-                      href={content.privacyPolicyUrl}
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[#007aff] underline"

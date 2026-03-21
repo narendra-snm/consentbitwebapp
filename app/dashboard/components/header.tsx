@@ -16,7 +16,16 @@ export default function Header() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
   const urlSiteId = pathParts[0] === "dashboard" && pathParts.length >= 2 ? pathParts[1] : null;
-  const { sites, activeSiteId, setActiveSiteId, logout, loading } = useDashboardSession();
+  const { sites, activeSiteId, setActiveSiteId, logout, loading, effectivePlanId } = useDashboardSession();
+
+  const planLabel = (() => {
+    const k = String(effectivePlanId || "free").toLowerCase();
+    if (k === "free") return "Free";
+    if (k === "basic") return "Basic";
+    if (k === "essential") return "Essential";
+    if (k === "growth") return "Growth";
+    return effectivePlanId;
+  })();
   const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
 
   const notifications = new Array(7).fill({
@@ -108,12 +117,20 @@ export default function Header() {
           <span className="px-2 py-3.5 bg-gray-100 text-gray-600">
             Current Plan :
           </span>
-          <span className="px-3 py-1 bg-[#E6F1FD]">Free</span>
+          <span className="px-3 py-1 bg-[#E6F1FD]">{planLabel}</span>
         </div>
 
         {/* UPGRADE BUTTON */}
-        <button className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-sm">
-          Update to Pro
+        <button
+          type="button"
+          onClick={() => {
+            const id = activeSiteId || sites[0]?.id;
+            if (id) router.push(`/dashboard/${id}/upgrade`);
+            else router.push("/dashboard");
+          }}
+          className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-sm"
+        >
+          {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
         </button>
 
         {/* SETTINGS */}
