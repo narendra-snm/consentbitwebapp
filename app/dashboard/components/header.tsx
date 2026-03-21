@@ -4,11 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { Globe, Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
-
+import AddNewSiteModal from "./AddNewSiteModal";
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-
+const [addSiteOpen, setAddSiteOpen] = useState(false);
   const domainRef = useRef<any>(null);
   const notifRef = useRef<any>(null);
 
@@ -48,6 +48,7 @@ export default function Header() {
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
       {/* LEFT SECTION */}
+   {  addSiteOpen && <AddNewSiteModal  onClose={() => setAddSiteOpen(false)} />}
       <div className="flex items-center gap-6">
         {/* Logo */}
         <img
@@ -66,7 +67,11 @@ export default function Header() {
             {displayDomain}
           </button>
 
-          <button className="w-8 h-8 flex items-center justify-center rounded-md bg-[#E6F1FD] text-[#007AFF]">
+          <button onClick={() =>{ 
+            setAddSiteOpen(true)
+            setDomainOpen(false)
+
+          }}  className="w-8 cursor-pointer h-8 flex items-center justify-center rounded-md bg-[#E6F1FD] text-[#007AFF]">
             <Plus size={16} />
           </button>
 
@@ -87,15 +92,21 @@ export default function Header() {
               <div className="border-t" />
 
               <div className="flex justify-between px-4 py-3 text-sm">
-                <button className="text-[#007AFF]">View All →</button>
-                <button className="text-[#007AFF]">Add New +</button>
+                <button className="text-[#007AFF] cursor-pointer" onClick={()=>router.push("/dashboard/all-domain")}>View All →</button>
+                <button className="text-[#007AFF] cursor-pointer" onClick={() =>{ 
+            setAddSiteOpen(true)
+            setDomainOpen(false)
+
+          }}>
+                  Add New +
+                </button>
               </div>
             </div>
           )}
         </div>
 
         {/* VIEW ALL DOMAINS */}
-        <button className="flex items-center gap-2 text-base text-[#4B5563]">
+        <button onClick={()=>router.push("/dashboard/all-domain")} className="flex items-center gap-2 text-base cursor-pointer  text-[#4B5563]">
           <Globe size={16} />
           View all Domains
         </button>
@@ -177,7 +188,8 @@ export default function Header() {
         </div>
 
         {/* AVATAR */}
-        <img src="/images/Icon.svg" className="mt-1 rounded-full" />
+
+        <img src="/images/Icon.svg"  className="mt-1 rounded-full cursor-pointer" onClick={()=>router.push("/dashboard/profile")} />
       </div>
     </header>
   );

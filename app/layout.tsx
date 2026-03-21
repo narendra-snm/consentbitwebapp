@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DM_Sans } from "next/font/google";
 import "react-datepicker/dist/react-datepicker.css";
+import {AppProvider} from "./context/AppProvider"
 const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
@@ -33,7 +34,9 @@ export default function RootLayout({
       <body
         className={`${dmSans.className} antialiased`}
       >
-        {children}
+        <AppProvider>{children}</AppProvider>
+        
+        
       </body>
     </html>
   );

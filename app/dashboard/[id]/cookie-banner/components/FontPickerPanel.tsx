@@ -4,7 +4,7 @@ const FONTS = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins',
   'Raleway', 'Oswald', 'Merriweather', 'Playfair Display', 'Source Sans Pro',
 ];
-
+import { useAppContext } from "@/app/context/AppProvider";
 const WEIGHTS = ['Thin', 'Light', 'Regular', 'Medium', 'Semi Bold', 'Bold', 'Extra Bold', 'Black'];
 
 type Alignment = 'left' | 'center' | 'right';
@@ -35,9 +35,7 @@ const AlignRightIcon = ({ active }: { active: boolean }) => (
 
 const FontPickerPanel: React.FC = () => {
   const [font, setFont] = useState('Inter');
-  const [weight, setWeight] = useState('Bold');
-  const [alignment, setAlignment] = useState<Alignment>('left');
-
+const {weight, setWeight,alignment, setAlignment} =  useAppContext();
   return (
     <div className="max-w-[410px] w-full  bg-white rounded-lg ">
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg p-4 pb-6 space-y-4">
