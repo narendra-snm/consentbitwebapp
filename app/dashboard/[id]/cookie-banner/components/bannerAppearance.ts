@@ -15,8 +15,15 @@ export type ColorSettings = {
   bannerBg: string;
   textColor: string;
   headingColor: string;
+  /** Accept all — maps to API `acceptButtonBg` / `acceptButtonText`. */
   buttonColor: string;
   buttonTextColor: string;
+  /** “Preferences” / customise — maps to `customiseButtonBg` / `customiseButtonText`. */
+  preferencesButtonBg: string;
+  preferencesButtonText: string;
+  /** “Save my preferences” in the preference panel footer — `saveButtonBg` / `saveButtonText`. */
+  savePreferencesButtonBg: string;
+  savePreferencesButtonText: string;
 };
 
 export type TypeSettings = {
@@ -44,6 +51,10 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     headingColor: '#0f172a',
     buttonColor: '#0284c7',
     buttonTextColor: '#ffffff',
+    preferencesButtonBg: '#ffffff',
+    preferencesButtonText: '#334155',
+    savePreferencesButtonBg: '#ffffff',
+    savePreferencesButtonText: '#334155',
   },
   type: {
     font: 'Inter',
@@ -154,6 +165,10 @@ export function appearanceFromCustomization(
     headingColor?: string;
     acceptButtonBg?: string;
     acceptButtonText?: string;
+    customiseButtonBg?: string;
+    customiseButtonText?: string;
+    saveButtonBg?: string;
+    saveButtonText?: string;
   };
 
   const colors: ColorSettings = {
@@ -162,6 +177,10 @@ export function appearanceFromCustomization(
     headingColor: c.headingColor || DEFAULT_APPEARANCE.colors.headingColor,
     buttonColor: c.acceptButtonBg || DEFAULT_APPEARANCE.colors.buttonColor,
     buttonTextColor: c.acceptButtonText || DEFAULT_APPEARANCE.colors.buttonTextColor,
+    preferencesButtonBg: c.customiseButtonBg || DEFAULT_APPEARANCE.colors.preferencesButtonBg,
+    preferencesButtonText: c.customiseButtonText || DEFAULT_APPEARANCE.colors.preferencesButtonText,
+    savePreferencesButtonBg: c.saveButtonBg || DEFAULT_APPEARANCE.colors.savePreferencesButtonBg,
+    savePreferencesButtonText: c.saveButtonText || DEFAULT_APPEARANCE.colors.savePreferencesButtonText,
   };
 
   const type: TypeSettings = {

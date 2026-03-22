@@ -448,6 +448,10 @@ export default function page({ siteId }: { siteId: string }) {
           headingColor: appearance.colors.headingColor,
           acceptButtonBg: appearance.colors.buttonColor,
           acceptButtonText: appearance.colors.buttonTextColor,
+          customiseButtonBg: appearance.colors.preferencesButtonBg,
+          customiseButtonText: appearance.colors.preferencesButtonText,
+          saveButtonBg: appearance.colors.savePreferencesButtonBg,
+          saveButtonText: appearance.colors.savePreferencesButtonText,
           bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
           privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
           translations: {
@@ -496,6 +500,10 @@ export default function page({ siteId }: { siteId: string }) {
         headingColor: appearance.colors.headingColor,
         acceptButtonBg: appearance.colors.buttonColor,
         acceptButtonText: appearance.colors.buttonTextColor,
+        customiseButtonBg: appearance.colors.preferencesButtonBg,
+        customiseButtonText: appearance.colors.preferencesButtonText,
+        saveButtonBg: appearance.colors.savePreferencesButtonBg,
+        saveButtonText: appearance.colors.savePreferencesButtonText,
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {

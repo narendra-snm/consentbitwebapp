@@ -105,17 +105,46 @@ const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
           Buttons colors
         </h3>
 
-        <div className="space-y-4">
+        <p className="text-xs text-[#6B7280] mb-3">Accept all</p>
+        <div className="space-y-4 mb-6">
           <ColorInput
-            label="Button Color"
+            label="Background"
             value={colors.buttonColor}
             onChange={(v) => updateColor("buttonColor", v)}
           />
 
           <ColorInput
-            label="Text color"
+            label="Text"
             value={colors.buttonTextColor}
             onChange={(v) => updateColor("buttonTextColor", v)}
+          />
+        </div>
+
+        <p className="text-xs text-[#6B7280] mb-3">Preferences (opens cookie settings)</p>
+        <div className="space-y-4 mb-6">
+          <ColorInput
+            label="Background"
+            value={colors.preferencesButtonBg}
+            onChange={(v) => updateColor("preferencesButtonBg", v)}
+          />
+          <ColorInput
+            label="Text"
+            value={colors.preferencesButtonText}
+            onChange={(v) => updateColor("preferencesButtonText", v)}
+          />
+        </div>
+
+        <p className="text-xs text-[#6B7280] mb-3">Save in preference panel</p>
+        <div className="space-y-4">
+          <ColorInput
+            label="Background"
+            value={colors.savePreferencesButtonBg}
+            onChange={(v) => updateColor("savePreferencesButtonBg", v)}
+          />
+          <ColorInput
+            label="Text"
+            value={colors.savePreferencesButtonText}
+            onChange={(v) => updateColor("savePreferencesButtonText", v)}
           />
         </div>
       </div>
