@@ -201,13 +201,49 @@ export async function updateSiteBannerSettings(payload: {
 }
 // site banner settings update ends here
 
-// payments starts here
-export async function createCheckoutSession(payload: {
+// banner customization starts here
+export async function getBannerCustomization(siteId: string) {
+  const res = await fetch(`/api/banner-customization?siteId=${encodeURIComponent(siteId)}`, {
+    credentials: 'include',
+  });
+  const data = await res
+    .json()
+    .catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Get customization failed: ${res.status}`);
+  return data as { success: true; customization: any | null };
+}
+
+export async function saveBannerCustomization(payload: { siteId: string; customization: any }) {
+  const res = await fetch('/api/banner-customization', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await res
+    .json()
+    .catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Save customization failed: ${res.status}`);
+  return data as { success: true };
+}
+// banner customization ends here
+
+// payments starts here — matches consent-manager tier checkout (planId + interval + siteId)
+export type CreateCheckoutPayload = {
   organizationId: string;
-  planType: 'standard';
   planId: 'basic' | 'essential' | 'growth';
-  interval?: 'month' | 'year';
-}) {
+  interval: 'monthly' | 'yearly';
+  siteId?: string | null;
+  siteName?: string | null;
+  siteDomain?: string | null;
+  stripeCouponId?: string | null;
+  successUrl?: string;
+  cancelUrl?: string;
+};
+
+export async function createCheckoutSession(
+  payload: CreateCheckoutPayload,
+): Promise<{ success: true; url: string; sessionId?: string }> {
   const res = await fetch('/api/create-checkout-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -216,9 +252,189 @@ export async function createCheckoutSession(payload: {
   });
   const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
   if (!res.ok || !data.success) throw new Error(data.error || `Checkout failed: ${res.status}`);
-  return data as { success: true; url: string };
+  return data as { success: true; url: string; sessionId?: string };
 }
 // payments ends here
+
+// —— Cookie scan (site scanner) ——
+export type ScanHistoryRow = {
+  id: string;
+  siteId: string;
+  scanUrl: string | null;
+  scriptsFound: number;
+  cookiesFound: number;
+  scanDuration: number | null;
+  scanStatus: string;
+  createdAt: string;
+};
+
+export type ScanCookie = {
+  id: string;
+  siteId: string;
+  scanHistoryId: string | null;
+  name: string;
+  domain: string | null;
+  path: string | null;
+  category: string;
+  provider: string | null;
+  description: string | null;
+  expires: string | null;
+  httpOnly: number;
+  secure: number;
+  sameSite: string | null;
+  source?: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+export type ScheduledScan = {
+  id: string;
+  siteId: string;
+  scheduledAt: string;
+  frequency: 'once' | 'daily' | 'weekly' | 'monthly';
+  isActive: number;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getScanHistory(siteId: string): Promise<{ success: boolean; scans: ScanHistoryRow[] }> {
+  const res = await fetch(`/api/scan-history?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Scan history failed: ${res.status}`);
+  return data;
+}
+
+export async function getSiteCookies(siteId: string): Promise<{
+  success: boolean;
+  cookies: ScanCookie[];
+  cookiesByCategory: Record<string, ScanCookie[]>;
+}> {
+  const res = await fetch(`/api/cookies?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Cookies failed: ${res.status}`);
+  return data;
+}
+
+export async function scanSiteNow(siteId: string): Promise<{
+  success: boolean;
+  scanHistoryId?: string;
+  scriptsFound?: number;
+  cookiesFound?: number;
+  scanDuration?: number;
+  error?: string;
+}> {
+  const res = await fetch('/api/scan-site', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ siteId }),
+  });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Scan failed: ${res.status}`);
+  return data;
+}
+
+export async function getScheduledScans(siteId: string): Promise<{
+  success: boolean;
+  scheduledScans?: ScheduledScan[];
+}> {
+  const res = await fetch(`/api/scheduled-scan?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Scheduled scans failed: ${res.status}`);
+  return data;
+}
+
+export async function createScheduledScan(
+  siteId: string,
+  scheduledAt: string,
+  frequency: 'once' | 'daily' | 'weekly' | 'monthly' = 'once',
+): Promise<{ success: boolean; scheduledScanId?: string }> {
+  const res = await fetch('/api/scheduled-scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ siteId, scheduledAt, frequency }),
+  });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Schedule failed: ${res.status}`);
+  return data;
+}
+
+export async function deleteScheduledScan(id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/scheduled-scan?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Delete schedule failed: ${res.status}`);
+  return data;
+}
+
+// —— Consent logs ——
+export type ConsentCategories = {
+  essential?: boolean;
+  analytics?: boolean;
+  marketing?: boolean;
+  preferences?: boolean;
+  ccpa?: { doNotSell?: boolean };
+};
+
+export type ConsentLog = {
+  id: string;
+  siteId: string;
+  deviceId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  country: string | null;
+  region: string | null;
+  is_eu: number;
+  createdAt: string;
+  updatedAt: string;
+  regulation: string | null;
+  bannerType: string | null;
+  consentMethod: string | null;
+  status: string | null;
+  expiresAt: string | null;
+  categories: ConsentCategories | null;
+};
+
+export type ConsentLogCookie = {
+  id: string;
+  name: string;
+  domain: string | null;
+  path: string | null;
+  category: string;
+  provider: string | null;
+  description: string | null;
+  expires: string | null;
+  source: string | null;
+  lastSeenAt: string | null;
+};
+
+export type ConsentHistoryResponse = {
+  success: boolean;
+  consents: ConsentLog[];
+  cookies: ConsentLogCookie[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export async function getConsentHistory(
+  siteId: string,
+  limit: number = 100,
+  offset: number = 0,
+): Promise<ConsentHistoryResponse> {
+  const res = await fetch(
+    `/api/consent-history?siteId=${encodeURIComponent(siteId)}&limit=${limit}&offset=${offset}`,
+    { credentials: 'include' },
+  );
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
+  return data;
+}
 
 // script verification starts here
 export async function verifyScript(payload: { publicUrl: string; scriptUrl: string; siteId?: string }) {

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { PricingTable } from "./PricingTable";
 import { firstSetup, verifyScript } from "@/lib/client-api";
 import { useRouter } from "next/navigation";
+import { useDashboardSession } from "../DashboardSessionProvider";
 
 export default function StepWizard({
   userName,
@@ -49,7 +50,13 @@ export default function StepWizard({
         )}
         {/* {step === 2 && <StepTwo nextStep={nextStep} />} */}
       </div>
-      {step === 2 && <PricingTable onclick={()=>setStep(3)} organizationId={organizationId} />}
+      {step === 2 && (
+        <PricingTable
+          onclick={() => setStep(3)}
+          organizationId={organizationId}
+          siteId={siteData?.siteId ?? null}
+        />
+      )}
       {step === 3 && <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />}
     </div>
   );
@@ -109,6 +116,7 @@ function StepOne({
   userName?: string;
   onSetupComplete: (data: { scriptUrl?: string; siteId?: string; domain?: string }) => void;
 }) {
+  const { refresh } = useDashboardSession();
   const [domain, setDomain] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +132,7 @@ function StepOne({
         siteId: result?.siteId ?? result?.site?.id,
         domain: domain.trim(),
       });
+      void refresh({ showLoading: false });
       nextStep();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Setup failed');

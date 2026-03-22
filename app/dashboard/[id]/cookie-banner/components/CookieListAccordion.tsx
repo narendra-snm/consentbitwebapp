@@ -4,7 +4,13 @@ import { useState } from "react";
 import Accordion from "./ui/Accordion";
 import ToggleSwitch from "./ui/ToggleSwitch";
 
-export default function CookieListAccordion() {
+export default function CookieListAccordion({
+  isOpen,
+  onToggle,
+}: {
+  isOpen?: boolean;
+  onToggle?: (nextOpen: boolean) => void;
+}) {
   const [settings, setSettings] = useState({
     showCookieList: true,
     embedCode: '<div class="cky-audit-table-element"></div>',
@@ -21,7 +27,7 @@ export default function CookieListAccordion() {
 
   return (
     <div className="w-full max-w-[409px] mx-auto">
-      <Accordion title="Cookie List">
+      <Accordion title="Cookie List" isOpen={isOpen} onToggle={onToggle}>
         <div className="pb-6 space-y-6">
 
           {/* Toggle */}

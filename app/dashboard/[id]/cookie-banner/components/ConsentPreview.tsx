@@ -1,17 +1,68 @@
 "use client";
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from "react";
 import { getBannerLanguage, getTranslation } from "./translations";
 import { useAppContext } from "@/app/context/AppProvider";
+import floatingBtnLogo from '@/public/asset/logo.webp';
+import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
+
+/** Strip legacy "More info." suffix from saved preference copy */
+function stripTrailingMoreInfo(text: string): string {
+  return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
+}
 
 export default function ConsentPreview({
   previewBannerType,
   siteDomain,
   consentType,
+  content,
+  floatingButton = { enabled: true, position: 'left' as const },
+  onPublishChanges,
+  isPublishing = false,
+  canPublish = false,
+  publishError = null,
+  publishSuccess = false,
+  onDismissPublishSuccess,
+  bothModeBannerType,
+  onBothModeBannerTypeChange,
 }: {
   previewBannerType?: "gdpr" | "ccpa";
   siteDomain?: string | null;
-  consentType?: "gdpr" | "ccpa" | "both";
+  consentType?: 'gdpr' | 'ccpa' | 'both';
+  /** When template is GDPR+CCPA, sync preview tabs with Content editor (controlled). */
+  bothModeBannerType?: 'gdpr' | 'ccpa';
+  onBothModeBannerTypeChange?: (next: 'gdpr' | 'ccpa') => void;
+  /** Floating reopen / preferences control in the browser mock */
+  floatingButton?: { enabled: boolean; position: 'left' | 'right' };
+  /** Persist banner + floating settings to backend (same payload as dashboard save). */
+  onPublishChanges?: () => void | Promise<void>;
+  isPublishing?: boolean;
+  /** True when there are unpublished draft changes (content, floating button, layout, colors, type). */
+  canPublish?: boolean;
+  publishError?: string | null;
+  publishSuccess?: boolean;
+  /** Called when user closes the publish-success popup (backdrop or OK). */
+  onDismissPublishSuccess?: () => void;
+  content?: {
+    title?: string;
+    message?: string;
+    acceptAll?: string;
+    rejectAll?: string;
+    preferencesLabel?: string;
+    doNotSellLabel?: string;
+    preferenceTitle?: string;
+    preferenceMessage?: string;
+    closeButton?: boolean;
+    rejectButton?: boolean;
+    customizeButton?: boolean;
+    cookiePolicyLink?: boolean;
+    privacyPolicyUrl?: string;
+    /** CCPA opt-out preference panel (Do Not Share → modal) */
+    ccpaOptOutTitle?: string;
+    ccpaOptOutMessage?: string;
+    saveMyPreferencesLabel?: string;
+  };
 }) {
   // Avoid unused prop warnings in strict TS configs.
   void siteDomain;
@@ -29,10 +80,13 @@ export default function ConsentPreview({
 
   const selectedBannerType: "gdpr" | "ccpa" = useMemo(() => {
     if (previewBannerType) return previewBannerType;
-    if (consentType === "ccpa") return "ccpa";
-    if (consentType === "both") return activeBothType;
-    return "gdpr";
-  }, [previewBannerType, consentType, activeBothType]);
+    if (consentType === 'ccpa') return 'ccpa';
+    if (consentType === 'both') {
+      if (bothModeBannerType != null) return bothModeBannerType;
+      return activeBothType;
+    }
+    return 'gdpr';
+  }, [previewBannerType, consentType, bothModeBannerType, activeBothType]);
 
   const lang = useMemo(
     () => getBannerLanguage({ autoDetectLanguage: true }),
@@ -43,10 +97,38 @@ export default function ConsentPreview({
   type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
   const [modalView, setModalView] = useState<ModalView>("main");
 
+  /** GDPR preference panel: which accordion row is expanded (+ / −) */
+  const [prefExpanded, setPrefExpanded] = useState<string | null>(null);
+  const [prefMarketing, setPrefMarketing] = useState(true);
+  const [prefAnalytics, setPrefAnalytics] = useState(false);
+  const [prefUserCategory, setPrefUserCategory] = useState(false);
+
   useEffect(() => {
     // When the banner selection changes, reset to main preview.
     setModalView("main");
   }, [selectedBannerType]);
+
+  useEffect(() => {
+    if (modalView !== 'gdpr-preferences') setPrefExpanded(null);
+  }, [modalView]);
+
+  const toggleSwitch = (on: boolean, onToggle: () => void) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors ${
+        on ? 'bg-[#22c55e]' : 'bg-[#d1d5db]'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow transition-all ${
+          on ? 'right-0.5' : 'left-0.5'
+        }`}
+      />
+    </button>
+  );
 
   const openPreferences = () => {
     setModalView(
@@ -61,11 +143,26 @@ export default function ConsentPreview({
       case "mobile":
         return "w-[390px] max-w-full h-[680px]";
       default:
-        return "w-full h-[444px]";
+        return 'w-full h-[444px]';
     }
   };
 
+  useEffect(() => {
+    if (!publishSuccess) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismissPublishSuccess?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [publishSuccess, onDismissPublishSuccess]);
+
   return (
+    <>
     <div className="w-full px-4.5">
       {/* Tabs */}
       <div className="flex items-center justify-between mb-4 mt-4.5">
@@ -95,8 +192,11 @@ export default function ConsentPreview({
               }`}
               aria-label="GDPR tab"
               onClick={() => {
-                if (consentType === "both") setActiveBothType("gdpr");
-                setModalView("main");
+                if (consentType === 'both') {
+                  onBothModeBannerTypeChange?.('gdpr');
+                  if (!onBothModeBannerTypeChange) setActiveBothType('gdpr');
+                }
+                setModalView('main');
               }}
             >
               <p className="font-medium text-base text-[#007aff]">GDPR</p>
@@ -110,8 +210,11 @@ export default function ConsentPreview({
               }`}
               aria-label="CCPA tab"
               onClick={() => {
-                if (consentType === "both") setActiveBothType("ccpa");
-                setModalView("main");
+                if (consentType === 'both') {
+                  onBothModeBannerTypeChange?.('ccpa');
+                  if (!onBothModeBannerTypeChange) setActiveBothType('ccpa');
+                }
+                setModalView('main');
               }}
             >
               <p className="font-medium text-base text-[#007aff]">CCPA</p>
@@ -166,9 +269,23 @@ export default function ConsentPreview({
             </svg>
           </button>
 
-          <button className="px-4 h-9 bg-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors">
-            Publish Changes
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              disabled={!canPublish || isPublishing}
+              onClick={() => {
+                void onPublishChanges?.();
+              }}
+              className="px-4 h-9 bg-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isPublishing ? 'Publishing…' : 'Publish Changes'}
+            </button>
+            {publishError ? (
+              <p className="text-xs text-red-600 max-w-[220px] text-right" role="alert">
+                {publishError}
+              </p>
+            ) : null}
+          </div>
 
           <button className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors">
             Next
@@ -187,132 +304,250 @@ export default function ConsentPreview({
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
         </div>
 
-        {/* Preview Area */}
-        <div className="relative bg-gray-100 flex-1 flex items-end p-6">
-          {modalView === "main" && (
-            <div
-              className="bg-white rounded-md shadow-lg w-full max-w-[360px] p-4"
-              style={{ backgroundColor: colors.bannerBg }}
-            >
-              <p
-                style={{ color: colors.headingColor, textAlign: alignment  }}
-                className="font-semibold text-[13px] text-black opacity-80 tracking-tight mb-2"
-              >
-                {selectedBannerType === "ccpa" ? t("title") : t("title")}
+        {/* Preview Area — initial banner bottom-left; preference / opt-out panels centered */}
+        <div
+          className={`relative bg-gray-100 flex-1 flex flex-col min-h-0 overflow-y-auto p-6 pb-5 ${
+            modalView === 'main' ? 'justify-end' : 'justify-center'
+          }`}
+        >
+          {modalView === 'main' ? (
+            <div className="w-full max-w-[360px] shrink-0 self-start">
+            <div className="bg-white rounded-md shadow-lg w-full p-4 relative">
+              {content?.closeButton ? (
+                <button
+                  type="button"
+                  className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100"
+                  aria-label="Close banner preview"
+                >
+                  ×
+                </button>
+              ) : null}
+              <p className="font-semibold text-[13px] text-black opacity-80 tracking-tight mb-2">
+                {content?.title || t('title')}
               </p>
 
               <p
                 style={{ color: colors.textColor, textAlign: alignment  }}
-                className="text-[11px] text-black opacity-80 tracking-tight mb-3"
+                className="text-[11px] text-black opacity-80 tracking-tight mb-2"
               >
-                {selectedBannerType === "ccpa"
+                {(content?.message != null && content.message !== ''
+                  ? content.message
+                  : null) ??
+                  (selectedBannerType === "ccpa"
                   ? t("ccpaDescription")
-                  : t("description")}
+                  : t("description"))}
+                {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
+                  <>
+                    {' '}
+                    <a
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#007aff] underline"
+                    >
+                      {t('privacyPolicy')}
+                    </a>
+                  </>
+                ) : null}
               </p>
 
-              <div className="flex gap-2" style={{justifyContent:`${alignment==="right"?"flex-end":alignment==="center"?"center":"flex-start"}`}}>
-                <button
-                  className="px-3 py-[2px] border border-[#007aff] text-[10px] text-[#007aff]"
-                  onClick={openPreferences}
-                  type="button"
+              {selectedBannerType === 'ccpa' && content?.rejectButton !== false ? (
+                <p className="mb-3">
+                  <button
+                    type="button"
+                    className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left"
+                    onClick={() => setModalView('ccpa-optout')}
+                  >
+                    {content?.doNotSellLabel || t('doNotSell')}
+                  </button>
+                </p>
+              ) : null}
+
+              {selectedBannerType !== 'ccpa' ? (
+                <div className="flex gap-2" style={{justifyContent:`${alignment==="right"?"flex-end":alignment==="center"?"center":"flex-start"}`}}>
+                  {content?.customizeButton !== false ? (
+                    <button
+                      className="px-3 py-[2px] border border-[#007aff] text-[10px] text-[#007aff]"
+                      onClick={openPreferences}
+                      type="button"
                   style={{
                     backgroundColor: colors.buttonColor,
                     color: colors.buttonTextColor,
                     borderColor: colors.buttonTextColor,
                   }}
-                >
-                  {t("preferences")}
-                </button>
+                    >
+                      {content?.preferencesLabel || t("preferences")}
+                    </button>
+                  ) : null}
 
-                {selectedBannerType === "ccpa" ? (
-                  <button
-                    className="px-3 py-[2px] bg-[#007aff] text-[10px] text-white"
-                    type="button"
-                  >
-                    {t("doNotSell")}
-                  </button>
-                ) : (
-                  <button
-                    style={{
-                      backgroundColor: colors.SecButtonColor,
-                      color: colors.SecButtonTextColor,
-                    }}
-                    className="px-3 py-[2px] bg-[#007aff] text-[10px] text-white"
-                    type="button"
-                  >
-                    {t("rejectAll")}
-                  </button>
-                )}
+                  {content?.rejectButton !== false ? (
+                    <button className="px-3 py-[2px] bg-[#007aff] text-[10px] text-white" type="button">
+                      {content?.rejectAll || t('rejectAll')}
+                    </button>
+                  ) : null}
 
-                <button
-                style={{
-    backgroundColor: colors.SecButtonColor,
-    color: colors.SecButtonTextColor,
-    
-  }}
-                  className="px-3 py-[2px] bg-[#007aff] text-[10px] text-white"
-                  type="button"
-                >
-                  {t("acceptAll") || "Ok, Got it"}
-                </button>
-              </div>
+                  <button className="px-3 py-[2px] bg-[#007aff] text-[10px] text-white" type="button">
+                    {content?.acceptAll || t('acceptAll') || 'Ok, Got it'}
+                  </button>
+                </div>
+              ) : null}
             </div>
-          )}
-
-          {modalView === "gdpr-preferences" && (
-            <div style={{background:colors.bannerBg}} className="absolute bottom-[58px] left-1/2 -translate-x-1/2 bg-white rounded-md shadow-lg w-full max-w-[360px] p-4">
+            </div>
+          ) : (
+            <div className="flex w-full shrink-0 justify-center px-1">
+            <div className="w-full max-w-[360px]">
+          {modalView === "gdpr-preferences" ? (
+            <div style={{background:colors.bannerBg}} className="bg-white rounded-md shadow-lg w-full p-5 border border-[#e2e8f0]">
               <div className="flex items-center justify-between mb-3">
-                <p style={{ color: colors.headingColor, textAlign: alignment  }} className="font-semibold text-[13px] text-black opacity-80 tracking-tight">
-                  {t("cookiePreferences")}
+                <p style={{ color: colors.headingColor, textAlign: alignment  }} className="font-semibold text-[14px] text-[#0f172a] tracking-tight">
+                  {content?.preferenceTitle || t("cookiePreferences")}
                 </p>
-                <button
-                  className="text-black opacity-70"
-                  type="button"
-                  onClick={() => setModalView("main")}
-                  aria-label="Close preferences"
-                >
-                  ×
-                </button>
+                {content?.closeButton ? (
+                  <button
+                    className="text-black opacity-70"
+                    type="button"
+                    onClick={() => setModalView("main")}
+                    aria-label="Close preferences"
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
 
-              <p style={{ color: colors.textColor, textAlign: alignment  }}  className="text-[11px] text-black opacity-80 tracking-tight mb-3">
-                {t("managePreferences")}
+              <p className="text-[11px] text-[#334155] leading-relaxed mb-4">
+                {stripTrailingMoreInfo(content?.preferenceMessage || t('managePreferences'))}
+                {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
+                  <>
+                    {' '}
+                    <a
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#007aff] underline"
+                    >
+                      {t('privacyPolicy')}
+                    </a>
+                    .
+                  </>
+                ) : null}
               </p>
 
-              <div className="space-y-2">
-                {[
-                  { key: "necessary", locked: true },
-                  { key: "functional", locked: false },
-                  { key: "analytics", locked: false },
-                  { key: "performance", locked: false },
-                  { key: "advertisement", locked: false },
-                ].map((c) => (
-                  <label
-                    key={c.key}
-                    className="flex items-center justify-between text-[11px]"
-                  >
-                    <span style={{ color: colors.textColor, textAlign: alignment  }} className="text-black opacity-80">{t(c.key)}</span>
-                    <input
-                      type="checkbox"
-                      defaultChecked={c.locked}
-                      disabled={c.locked}
-                    />
-                  </label>
-                ))}
+              <div className="rounded-lg border border-[#e5e7eb] overflow-hidden mb-1 divide-y divide-[#e5e7eb] bg-white">
+                {/* Strictly Necessary — Always active */}
+                <div>
+                  <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
+                    <button
+                      type="button"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      aria-expanded={prefExpanded === 'necessary'}
+                      onClick={() =>
+                        setPrefExpanded((v) => (v === 'necessary' ? null : 'necessary'))
+                      }
+                    >
+                      {prefExpanded === 'necessary' ? '−' : '+'}
+                    </button>
+                    <span className="flex-1 text-[11px] font-semibold text-[#0f172a]">
+                      {t('strictlyNecessary')}
+                    </span>
+                    <span className="shrink-0 text-[11px] font-semibold text-[#374151]">
+                      {t('alwaysActive')}
+                    </span>
+                  </div>
+                  {prefExpanded === 'necessary' ? (
+                    <p className="px-3 pb-3 pl-11 text-[10px] leading-relaxed text-[#64748b]">
+                      {t('essentialDescription')}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Marketing */}
+                <div>
+                  <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
+                    <button
+                      type="button"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      aria-expanded={prefExpanded === 'marketing'}
+                      onClick={() =>
+                        setPrefExpanded((v) => (v === 'marketing' ? null : 'marketing'))
+                      }
+                    >
+                      {prefExpanded === 'marketing' ? '−' : '+'}
+                    </button>
+                    <span className="flex-1 text-[11px] font-semibold text-[#0f172a]">
+                      {t('marketing')}
+                    </span>
+                    {toggleSwitch(prefMarketing, () => setPrefMarketing((v) => !v))}
+                  </div>
+                  {prefExpanded === 'marketing' ? (
+                    <p className="px-3 pb-3 pl-11 text-[10px] leading-relaxed text-[#64748b]">
+                      {t('marketingDescription')}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Analytics */}
+                <div>
+                  <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
+                    <button
+                      type="button"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      aria-expanded={prefExpanded === 'analytics'}
+                      onClick={() =>
+                        setPrefExpanded((v) => (v === 'analytics' ? null : 'analytics'))
+                      }
+                    >
+                      {prefExpanded === 'analytics' ? '−' : '+'}
+                    </button>
+                    <span className="flex-1 text-[11px] font-semibold text-[#0f172a]">
+                      {t('analytics')}
+                    </span>
+                    {toggleSwitch(prefAnalytics, () => setPrefAnalytics((v) => !v))}
+                  </div>
+                  {prefExpanded === 'analytics' ? (
+                    <p className="px-3 pb-3 pl-11 text-[10px] leading-relaxed text-[#64748b]">
+                      {t('analyticsDescription')}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Preferences (functional) */}
+                <div>
+                  <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
+                    <button
+                      type="button"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      aria-expanded={prefExpanded === 'preferences'}
+                      onClick={() =>
+                        setPrefExpanded((v) => (v === 'preferences' ? null : 'preferences'))
+                      }
+                    >
+                      {prefExpanded === 'preferences' ? '−' : '+'}
+                    </button>
+                    <span className="flex-1 text-[11px] font-semibold text-[#0f172a]">
+                      {t('preferences')}
+                    </span>
+                    {toggleSwitch(prefUserCategory, () => setPrefUserCategory((v) => !v))}
+                  </div>
+                  {prefExpanded === 'preferences' ? (
+                    <p className="px-3 pb-3 pl-11 text-[10px] leading-relaxed text-[#64748b]">
+                      {t('preferencesDescription')}
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
-              <div className="flex gap-2 mt-4">
+              <div className="flex justify-end gap-3 mt-6 flex-wrap">
                 <button
                  style={{
                     backgroundColor: colors.buttonColor,
                     color: colors.buttonTextColor,
                     borderColor: colors.buttonTextColor,
                   }}
-                  className="flex-1 px-3 py-[6px] border border-[#e5e5e5] text-[11px] text-[#111827] rounded"
+                  className="px-5 py-2 min-w-[88px] border border-[#e2e8f0] bg-white text-[11px] font-semibold text-[#334155] rounded-md hover:bg-gray-50"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {t("rejectAll")}
+                  {content?.rejectAll || t("rejectAll")}
                 </button>
                 <button
                   style={{
@@ -320,7 +555,7 @@ export default function ConsentPreview({
                     color: colors.SecButtonTextColor,
                     
                   }}
-                  className="flex-1 px-3 py-[6px] bg-[#007aff] text-[11px] text-white rounded"
+                  className="px-5 py-2 min-w-[88px] bg-[#007aff] text-[11px] font-semibold text-white rounded-md border border-[#007aff] hover:opacity-95"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -328,31 +563,49 @@ export default function ConsentPreview({
                 </button>
               </div>
             </div>
-          )}
-
-          {modalView === "ccpa-optout" && (
-            <div style={{ background: colors.bannerBg  }} className="absolute bottom-[58px] left-1/2 -translate-x-1/2 bg-white rounded-md shadow-lg w-full max-w-[360px] p-4">
+          ) : (
+            <div className="bg-white rounded-md shadow-lg w-full p-4">
               <div className="flex items-center justify-between mb-3">
                 <p style={{ color: colors.headingColor, textAlign: alignment  }} className="font-semibold text-[13px] text-black opacity-80 tracking-tight">
-                  {t("doNotSell")}
+                  {content?.ccpaOptOutTitle || t("optOutPreference")}
                 </p>
-                <button
-                  className="text-black opacity-70"
-                  type="button"
-                  onClick={() => setModalView("main")}
-                  aria-label="Close opt-out"
-                >
-                  ×
-                </button>
+                {content?.closeButton ? (
+                  <button
+                    className="text-black opacity-70"
+                    type="button"
+                    onClick={() => setModalView("main")}
+                    aria-label="Close opt-out"
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
 
-              <p style={{ color: colors.textColor, textAlign: alignment  }} className="text-[11px] text-black opacity-80 tracking-tight mb-3">
-                {t("ccpaOptOut")}
+              <p className="text-[11px] text-black opacity-80 tracking-tight mb-3 leading-relaxed">
+                {stripTrailingMoreInfo(
+                  content?.ccpaOptOutMessage || t('ccpaOptOutPreferenceIntro')
+                )}
+                {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
+                  <>
+                    {' '}
+                    <a
+                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#007aff] underline"
+                    >
+                      {t('privacyPolicy')}
+                    </a>
+                    .
+                  </>
+                ) : null}
               </p>
 
-              <label className="flex items-center justify-between text-[11px] mb-3">
-                <span style={{ color: colors.textColor, textAlign: alignment  }} className="text-black opacity-80">{t("limitUse")}</span>
-                <input type="checkbox" defaultChecked />
+              <label className="flex items-start gap-3 text-[11px] mb-4 cursor-pointer">
+                <input type="checkbox" className="shrink-0 mt-0.5" />
+                <span className="text-black opacity-90 leading-snug flex-1">
+                  {content?.doNotSellLabel || t('doNotSell')}
+                </span>
               </label>
 
               <div className="flex gap-2">
@@ -378,11 +631,41 @@ export default function ConsentPreview({
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {t("confirmChoice")}
+                  {content?.saveMyPreferencesLabel || t("saveMyPreferences")}
                 </button>
               </div>
             </div>
           )}
+            </div>
+            </div>
+          )}
+
+          {/* Corner of the browser mock (default bottom-left; right when Position = bottom right) */}
+          {floatingButton.enabled ? (
+            <button
+              type="button"
+              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#007aff]/50 focus:ring-offset-2 focus:ring-offset-gray-100 ${
+                floatingButton.position === 'right' ? 'right-4' : 'left-4'
+              }`}
+              onClick={openPreferences}
+              aria-label={
+                content?.preferencesLabel ||
+                (selectedBannerType === 'ccpa'
+                  ? content?.doNotSellLabel || t('doNotSell')
+                  : t('preferences'))
+              }
+            >
+              <Image
+                src={floatingBtnLogo}
+                alt=""
+                width={floatingBtnLogo.width}
+                height={floatingBtnLogo.height}
+                draggable={false}
+                className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain object-center select-none drop-shadow-md"
+                sizes="28px"
+              />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -444,5 +727,59 @@ export default function ConsentPreview({
         </button>
       </div>
     </div>
+
+    {publishSuccess ? (
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4"
+        role="presentation"
+        onClick={() => onDismissPublishSuccess?.()}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="publish-success-title"
+          aria-describedby="publish-success-desc"
+          className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[#dcfce7]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M20 6L9 17l-5-5"
+                stroke="#15803d"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <h2
+            id="publish-success-title"
+            className="mt-3 font-['DM_Sans'] text-lg font-semibold text-[#15803d]"
+            style={{ fontVariationSettings: "'opsz' 14" }}
+          >
+            Banner updated successfully
+          </h2>
+          <p
+            id="publish-success-desc"
+            className="mt-2 font-['DM_Sans'] text-sm leading-relaxed text-[#374151]"
+            style={{ fontVariationSettings: "'opsz' 14" }}
+          >
+            Your preview reflects saved content.
+            <span className="mt-2 block text-[#6b7280]">
+              On live sites, allow up to ~2 minutes for the embed script cache to refresh, or hard-refresh the page.
+            </span>
+          </p>
+          <button
+            type="button"
+            className="mt-6 w-full rounded-lg bg-[#2ec04f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#26a342] transition-colors"
+            onClick={() => onDismissPublishSuccess?.()}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

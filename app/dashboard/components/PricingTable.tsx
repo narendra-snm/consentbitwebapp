@@ -5,9 +5,12 @@ import { createCheckoutSession } from '@/lib/client-api';
 export function PricingTable({
   onclick,
   organizationId,
+  siteId,
 }: {
   onclick: () => void;
   organizationId?: string | null;
+  /** Required for Stripe tier checkout (Basic/Essential/Growth) */
+  siteId?: string | null;
 }) {
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [loadingPlan, setLoadingPlan] = useState<null | 'basic' | 'essential' | 'growth'>(null);
@@ -24,16 +27,28 @@ export function PricingTable({
   }, [billingInterval]);
 
   async function goPaid(planId: 'basic' | 'essential' | 'growth') {
-    if (!organizationId) return;
+    if (!organizationId) {
+      alert('Organization not loaded. Please refresh and try again.');
+      return;
+    }
+    if (!siteId) {
+      alert('Select or create a site first so we can attach the subscription.');
+      return;
+    }
     try {
       setLoadingPlan(planId);
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const data = await createCheckoutSession({
         organizationId,
-        planType: 'standard',
         planId,
-        interval: billingInterval,
+        interval: billingInterval === 'month' ? 'monthly' : 'yearly',
+        siteId,
+        successUrl: origin ? `${origin}/dashboard/${siteId}/upgrade?success=1` : undefined,
+        cancelUrl: origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined,
       });
       window.location.href = data.url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Checkout failed');
     } finally {
       setLoadingPlan(null);
     }
@@ -80,7 +95,7 @@ export function PricingTable({
               price={`$${prices.basic}`}
               button={loadingPlan === 'basic' ? 'Redirecting…' : '14 day free trial'}
               primary
-              disabled={!organizationId || loadingPlan !== null}
+              disabled={!organizationId || !siteId || loadingPlan !== null}
               onClick={() => goPaid('basic')}
             />
             <PlanHeader
@@ -88,7 +103,7 @@ export function PricingTable({
               price={`$${prices.essential}`}
               button={loadingPlan === 'essential' ? 'Redirecting…' : '14 day free trial'}
               highlight
-              disabled={!organizationId || loadingPlan !== null}
+              disabled={!organizationId || !siteId || loadingPlan !== null}
               onClick={() => goPaid('essential')}
             />
             <PlanHeader
@@ -96,7 +111,7 @@ export function PricingTable({
               price={`$${prices.growth}`}
               button={loadingPlan === 'growth' ? 'Redirecting…' : '14 day free trial'}
               primary
-              disabled={!organizationId || loadingPlan !== null}
+              disabled={!organizationId || !siteId || loadingPlan !== null}
               onClick={() => goPaid('growth')}
             />
 

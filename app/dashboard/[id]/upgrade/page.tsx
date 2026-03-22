@@ -1,15 +1,53 @@
 "use client";
-import { useState } from "react";
+
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createCheckoutSession } from "@/lib/client-api";
+import { useDashboardSession } from "../../DashboardSessionProvider";
 
 type Plan = "basic" | "essential" | "growth" | null;
 
 export default function PricingTable() {
+  const params = useParams();
+  const siteId = params?.id != null ? String(params.id) : "";
+  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId } =
+    useDashboardSession();
+
+  /** Which tier column is the active subscription (from /api/sites). */
+  const currentTier = String(effectivePlanId || "free").toLowerCase() as
+    | "free"
+    | "basic"
+    | "essential"
+    | "growth";
+
+  // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok = new URLSearchParams(window.location.search).get("success");
+    if (ok !== "1") return;
+    void refresh({ showLoading: false });
+    // Webhook can lag; refresh again so "Current plan" moves off Free.
+    const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
+    return () => window.clearTimeout(t);
+  }, [refresh]);
+
+  const CurrentPlanButton = () => (
+    <button
+      type="button"
+      disabled
+      className="bg-gray-400 text-white px-6 py-2 rounded-lg cursor-default w-full max-w-[200px]"
+    >
+      Current Plan
+    </button>
+  );
+
   const prices = { basic: 9, essential: 20, growth: 56 };
 
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("TESTWEB");
   const [promoOn, setPromoOn] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const getPrice = (plan: keyof typeof prices) => {
     const mp = prices[plan];
@@ -40,6 +78,44 @@ export default function PricingTable() {
   };
 
   const total = calculateTotal();
+
+  async function checkoutWithPlan(plan: "basic" | "essential" | "growth") {
+    if (sessionLoading) {
+      alert("Please wait — loading your account.");
+      return;
+    }
+    if (!activeOrganizationId) {
+      alert(
+        "We could not load your organization. Refresh the page or sign in again.",
+      );
+      return;
+    }
+    if (!siteId) {
+      alert("Missing site. Open Upgrade from a site in the dashboard.");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const { url } = await createCheckoutSession({
+        organizationId: activeOrganizationId,
+        planId: plan,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        siteId,
+        successUrl: origin
+          ? `${origin}/dashboard/${siteId}/upgrade?success=1`
+          : undefined,
+        cancelUrl: origin
+          ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
+          : undefined,
+      });
+      window.location.href = url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not start checkout.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
 
   const PlanHeader = ({
     name,
@@ -98,11 +174,17 @@ export default function PricingTable() {
     recommended?: boolean;
   }) => {
     const isSelected = selected === plan;
+    const busy = checkoutLoading && selected === plan;
 
     return (
       <button
-        onClick={() => setSelected(plan)}
-        className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85
+        type="button"
+        disabled={checkoutLoading}
+        onClick={() => {
+          setSelected(plan);
+          void checkoutWithPlan(plan);
+        }}
+        className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
         ${
           isSelected
             ? "bg-green-500"
@@ -111,7 +193,7 @@ export default function PricingTable() {
             : "bg-[#007aff]"
         }`}
       >
-        {isSelected ? "Selected" : "Switch plan"}
+        {busy ? "Redirecting…" : isSelected ? "Selected" : "Switch plan"}
       </button>
     );
   };
@@ -203,25 +285,39 @@ export default function PricingTable() {
             ]}
           />
 
-          {/* BUTTONS */}
+          {/* BUTTONS — "Current Plan" sits under the column that matches effectivePlanId (not always Free). */}
           <div></div>
 
           <div className="p-4">
-            <button className="bg-gray-400 text-white px-6 py-2 rounded-lg">
-              Current Plan
-            </button>
+            {currentTier === "free" ? (
+              <CurrentPlanButton />
+            ) : (
+              <span className="text-sm text-[#848199]">—</span>
+            )}
           </div>
 
           <div className="p-4">
-            <PlanButton plan="basic" />
+            {currentTier === "basic" ? (
+              <CurrentPlanButton />
+            ) : (
+              <PlanButton plan="basic" />
+            )}
           </div>
 
           <div className="p-4 bg-[#f0fff1] border-x border-[rgba(164,191,166,0.3)] border-b rounded-b-[20px]">
-            <PlanButton plan="essential" recommended />
+            {currentTier === "essential" ? (
+              <CurrentPlanButton />
+            ) : (
+              <PlanButton plan="essential" recommended />
+            )}
           </div>
 
           <div className="p-4 pl-[50px]">
-            <PlanButton plan="growth" />
+            {currentTier === "growth" ? (
+              <CurrentPlanButton />
+            ) : (
+              <PlanButton plan="growth" />
+            )}
           </div>
 
         </div>
@@ -280,8 +376,19 @@ export default function PricingTable() {
 
               </div>
 
-              <button className="bg-[#2ec04f] text-white px-6 py-3 rounded-lg">
-                Proceed to pay
+              <button
+                type="button"
+                disabled={checkoutLoading || !selected}
+                onClick={() => {
+                  if (!selected) {
+                    alert("Select Basic, Essential, or Growth first.");
+                    return;
+                  }
+                  void checkoutWithPlan(selected);
+                }}
+                className="bg-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {checkoutLoading ? "Redirecting…" : "Proceed to pay"}
               </button>
 
             </div>
@@ -294,7 +401,6 @@ export default function PricingTable() {
     </div>
   );
 }
-
 function Feature({
   label,
   values,

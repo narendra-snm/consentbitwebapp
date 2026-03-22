@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import { Home, Cookie, ScanLine, FileText, Box } from "lucide-react";
+import { useDashboardSession } from "../DashboardSessionProvider";
+
+/** Second path segment after /dashboard that is not a site id */
+const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
 
 const tabs = [
   {
@@ -34,9 +39,18 @@ const tabs = [
 
 export default function DashboardTabs() {
   const pathname = usePathname();
+  const { activeSiteId } = useDashboardSession();
 
-  const basePath = pathname.split("/").slice(0, 3).join("/"); 
-  // /dashboard/1234
+  const basePath = useMemo(() => {
+    const segs = (pathname || "").split("/").filter(Boolean);
+    if (activeSiteId && !RESERVED_DASHBOARD_SEGMENTS.has(String(activeSiteId))) {
+      return `/dashboard/${activeSiteId}`;
+    }
+    if (segs[0] === "dashboard" && segs[1] && !RESERVED_DASHBOARD_SEGMENTS.has(segs[1])) {
+      return `/dashboard/${segs[1]}`;
+    }
+    return "/dashboard";
+  }, [pathname, activeSiteId]);
 
   return (
     <div className="w-full flex justify-center mt-4.5">
@@ -47,8 +61,8 @@ export default function DashboardTabs() {
           const href = tab.slug ? `${basePath}/${tab.slug}` : basePath;
 
           const isActive = tab.slug
-            ? pathname.includes(`/${tab.slug}`)
-            : pathname.split("/").length <= 3;
+            ? pathname.startsWith(href)
+            : pathname === "/dashboard" || pathname === basePath;
 
           return (
             <Link
