@@ -2,16 +2,12 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { HexColorPicker } from "react-colorful";
-import type { ColorSettings } from "./bannerAppearance";
+import { useAppContext } from "@/app/context/AppProvider";
+const ColorPickerPanel: React.FC = () => {
+  const {colors, setColors} =  useAppContext();
 
-type Props = {
-  value: ColorSettings;
-  onChange: (next: ColorSettings) => void;
-};
-
-const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
-  const updateColor = (key: keyof ColorSettings, v: string) => {
-    onChange({ ...colors, [key]: v });
+  const updateColor = (key: keyof typeof colors, value: string) => {
+    setColors((prev: any) => ({ ...prev, [key]: value }));
   };
 
   const ColorInput = ({
@@ -116,6 +112,25 @@ const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
             label="Text color"
             value={colors.buttonTextColor}
             onChange={(v) => updateColor("buttonTextColor", v)}
+          />
+        </div>
+      </div>
+      <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
+        <h3 className="text-base font-semibold text-[#111827] mb-5">
+          Buttons colors
+        </h3>
+
+        <div className="space-y-4">
+          <ColorInput
+            label="Button Color"
+            value={colors.SecButtonColor}
+            onChange={(v) => updateColor("SecButtonColor", v)}
+          />
+
+          <ColorInput
+            label="Text color"
+            value={colors.SecButtonTextColor}
+            onChange={(v) => updateColor("SecButtonTextColor", v)}
           />
         </div>
       </div>

@@ -7,6 +7,8 @@ import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
+import { useAppContext } from "@/app/context/AppProvider";
+
 // import CookieListAccordion from "./CookieListAccordion";
 import {
   FloatingButtonSettings,
@@ -39,6 +41,8 @@ export default function page({ siteId }: { siteId: string }) {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
+    const { colors,weight,alignment } = useAppContext();
+
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
   const [openAccordionKey, setOpenAccordionKey] = useState<
@@ -443,11 +447,13 @@ export default function page({ siteId }: { siteId: string }) {
         customization: {
           ...(customizationBase || {}),
           position: appearance.layout.alignment,
-          backgroundColor: appearance.colors.bannerBg,
-          textColor: appearance.colors.textColor,
-          headingColor: appearance.colors.headingColor,
-          acceptButtonBg: appearance.colors.buttonColor,
-          acceptButtonText: appearance.colors.buttonTextColor,
+          backgroundColor: colors.bannerBg,
+          textColor: colors.textColor,
+          headingColor: colors.headingColor,
+          acceptButtonBg: colors.SecButtonColor,
+          acceptButtonText: colors.SecButtonTextColor,
+          prefButtonBg: colors.buttonColor,
+          prefButtonText: colors.buttonTextColor,
           bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
           privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
           translations: {
@@ -544,7 +550,7 @@ export default function page({ siteId }: { siteId: string }) {
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_740px]">
       <Sidebar active={active} setActive={setActive} />
-      <div className="w-full  px-5.5 pt-10 space-y-5 border-r border-[#00000010]">
+      <div className="w-full h-screen overflow-y-scroll px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
         {active === "General" && (
           <div>
@@ -795,14 +801,14 @@ export default function page({ siteId }: { siteId: string }) {
         )}
         {active === "Colors" && (
           <ColorPickerPanel
-            value={appearance.colors}
-            onChange={(colors) => setAppearance((a) => ({ ...a, colors }))}
+            // value={appearance.colors}
+            // onChange={(colors) => setAppearance((a) => ({ ...a, colors }))}
           />
         )}
         {active === "Type" && (
           <FontPickerPanel
-            value={appearance.type}
-            onChange={(type) => setAppearance((a) => ({ ...a, type }))}
+            // value={appearance.type}
+            // onChange={(type) => setAppearance((a) => ({ ...a, type }))}
           />
         )}
       </div>

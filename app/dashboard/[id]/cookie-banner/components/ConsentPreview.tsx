@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
-import { getBannerLanguage, getTranslation } from './translations';
+import { useEffect, useMemo, useState } from "react";
+import { getBannerLanguage, getTranslation } from "./translations";
+import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
 import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 
@@ -26,7 +27,7 @@ export default function ConsentPreview({
   bothModeBannerType,
   onBothModeBannerTypeChange,
 }: {
-  previewBannerType?: 'gdpr' | 'ccpa';
+  previewBannerType?: "gdpr" | "ccpa";
   siteDomain?: string | null;
   consentType?: 'gdpr' | 'ccpa' | 'both';
   /** When template is GDPR+CCPA, sync preview tabs with Content editor (controlled). */
@@ -65,16 +66,19 @@ export default function ConsentPreview({
 }) {
   // Avoid unused prop warnings in strict TS configs.
   void siteDomain;
+  const { colors, setColors,weight, setWeight,alignment, setAlignment } = useAppContext();
 
   const isFreeForced = Boolean(previewBannerType);
 
-  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">(
+    "desktop",
+  );
 
   // For free-plan selection, dropdown already forces previewBannerType.
   // For "both" (non-free), allow switching using the preview tabs.
-  const [activeBothType, setActiveBothType] = useState<'gdpr' | 'ccpa'>('gdpr');
+  const [activeBothType, setActiveBothType] = useState<"gdpr" | "ccpa">("gdpr");
 
-  const selectedBannerType: 'gdpr' | 'ccpa' = useMemo(() => {
+  const selectedBannerType: "gdpr" | "ccpa" = useMemo(() => {
     if (previewBannerType) return previewBannerType;
     if (consentType === 'ccpa') return 'ccpa';
     if (consentType === 'both') {
@@ -84,11 +88,14 @@ export default function ConsentPreview({
     return 'gdpr';
   }, [previewBannerType, consentType, bothModeBannerType, activeBothType]);
 
-  const lang = useMemo(() => getBannerLanguage({ autoDetectLanguage: true }), []);
+  const lang = useMemo(
+    () => getBannerLanguage({ autoDetectLanguage: true }),
+    [],
+  );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
 
-  type ModalView = 'main' | 'gdpr-preferences' | 'ccpa-optout';
-  const [modalView, setModalView] = useState<ModalView>('main');
+  type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
+  const [modalView, setModalView] = useState<ModalView>("main");
 
   /** GDPR preference panel: which accordion row is expanded (+ / −) */
   const [prefExpanded, setPrefExpanded] = useState<string | null>(null);
@@ -98,7 +105,7 @@ export default function ConsentPreview({
 
   useEffect(() => {
     // When the banner selection changes, reset to main preview.
-    setModalView('main');
+    setModalView("main");
   }, [selectedBannerType]);
 
   useEffect(() => {
@@ -124,15 +131,17 @@ export default function ConsentPreview({
   );
 
   const openPreferences = () => {
-    setModalView(selectedBannerType === 'gdpr' ? 'gdpr-preferences' : 'ccpa-optout');
+    setModalView(
+      selectedBannerType === "gdpr" ? "gdpr-preferences" : "ccpa-optout",
+    );
   };
 
   const getDeviceFrameClasses = () => {
     switch (device) {
-      case 'tablet':
-        return 'w-[768px] max-w-full h-[500px]';
-      case 'mobile':
-        return 'w-[390px] max-w-full h-[680px]';
+      case "tablet":
+        return "w-[768px] max-w-full h-[500px]";
+      case "mobile":
+        return "w-[390px] max-w-full h-[680px]";
       default:
         return 'w-full h-[444px]';
     }
@@ -162,22 +171,24 @@ export default function ConsentPreview({
           <div className="flex items-center gap-4">
             <div
               className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
-              aria-label={selectedBannerType === 'gdpr' ? 'GDPR tab' : 'CCPA tab'}
+              aria-label={
+                selectedBannerType === "gdpr" ? "GDPR tab" : "CCPA tab"
+              }
             >
               <p className="font-medium text-base text-[#007aff]">
-                {selectedBannerType === 'gdpr' ? 'GDPR' : 'CCPA'}
+                {selectedBannerType === "gdpr" ? "GDPR" : "CCPA"}
               </p>
             </div>
           </div>
-        ) : consentType === 'both' ? (
+        ) : consentType === "both" ? (
           // Non-free: allow switching between GDPR and CCPA inside preview.
           <div className="flex items-center gap-4">
             <button
               type="button"
               className={`h-[30px] rounded-t-md px-3 flex items-center ${
-                selectedBannerType === 'gdpr'
-                  ? 'bg-[#edeefc] border-b-2 border-[#007aff]'
-                  : 'text-[#007aff]'
+                selectedBannerType === "gdpr"
+                  ? "bg-[#edeefc] border-b-2 border-[#007aff]"
+                  : "text-[#007aff]"
               }`}
               aria-label="GDPR tab"
               onClick={() => {
@@ -193,9 +204,9 @@ export default function ConsentPreview({
             <button
               type="button"
               className={`h-[30px] rounded-t-md px-3 flex items-center ${
-                selectedBannerType === 'ccpa'
-                  ? 'bg-[#edeefc] border-b-2 border-[#007aff]'
-                  : 'text-[#111827]'
+                selectedBannerType === "ccpa"
+                  ? "bg-[#edeefc] border-b-2 border-[#007aff]"
+                  : "text-[#111827]"
               }`}
               aria-label="CCPA tab"
               onClick={() => {
@@ -214,10 +225,12 @@ export default function ConsentPreview({
           <div className="flex items-center gap-4">
             <div
               className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
-              aria-label={selectedBannerType === 'gdpr' ? 'GDPR tab' : 'CCPA tab'}
+              aria-label={
+                selectedBannerType === "gdpr" ? "GDPR tab" : "CCPA tab"
+              }
             >
               <p className="font-medium text-base text-[#007aff]">
-                {selectedBannerType === 'gdpr' ? 'GDPR' : 'CCPA'}
+                {selectedBannerType === "gdpr" ? "GDPR" : "CCPA"}
               </p>
             </div>
           </div>
@@ -281,7 +294,9 @@ export default function ConsentPreview({
       </div>
 
       {/* Browser Preview */}
-      <div className={`${getDeviceFrameClasses()} rounded-md overflow-hidden shadow-lg flex flex-col mx-auto`}>
+      <div
+        className={`${getDeviceFrameClasses()} rounded-md overflow-hidden shadow-lg flex flex-col mx-auto`}
+      >
         {/* Browser Header */}
         <div className="h-[24px] bg-[#d9d9d9] opacity-50 flex items-center px-2 gap-2">
           <div className="w-2 h-2 rounded-full bg-red-400"></div>
@@ -311,11 +326,16 @@ export default function ConsentPreview({
                 {content?.title || t('title')}
               </p>
 
-              <p className="text-[11px] text-black opacity-80 tracking-tight mb-2">
+              <p
+                style={{ color: colors.textColor, textAlign: alignment  }}
+                className="text-[11px] text-black opacity-80 tracking-tight mb-2"
+              >
                 {(content?.message != null && content.message !== ''
                   ? content.message
                   : null) ??
-                  (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
+                  (selectedBannerType === "ccpa"
+                  ? t("ccpaDescription")
+                  : t("description"))}
                 {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
                   <>
                     {' '}
@@ -344,14 +364,19 @@ export default function ConsentPreview({
               ) : null}
 
               {selectedBannerType !== 'ccpa' ? (
-                <div className="flex gap-2">
+                <div className="flex gap-2" style={{justifyContent:`${alignment==="right"?"flex-end":alignment==="center"?"center":"flex-start"}`}}>
                   {content?.customizeButton !== false ? (
                     <button
                       className="px-3 py-[2px] border border-[#007aff] text-[10px] text-[#007aff]"
                       onClick={openPreferences}
                       type="button"
+                  style={{
+                    backgroundColor: colors.buttonColor,
+                    color: colors.buttonTextColor,
+                    borderColor: colors.buttonTextColor,
+                  }}
                     >
-                      {content?.preferencesLabel || t('preferences')}
+                      {content?.preferencesLabel || t("preferences")}
                     </button>
                   ) : null}
 
@@ -371,17 +396,17 @@ export default function ConsentPreview({
           ) : (
             <div className="flex w-full shrink-0 justify-center px-1">
             <div className="w-full max-w-[360px]">
-          {modalView === 'gdpr-preferences' ? (
-            <div className="bg-white rounded-md shadow-lg w-full p-5 border border-[#e2e8f0]">
+          {modalView === "gdpr-preferences" ? (
+            <div style={{background:colors.bannerBg}} className="bg-white rounded-md shadow-lg w-full p-5 border border-[#e2e8f0]">
               <div className="flex items-center justify-between mb-3">
-                <p className="font-semibold text-[14px] text-[#0f172a] tracking-tight">
-                  {content?.preferenceTitle || t('cookiePreferences')}
+                <p style={{ color: colors.headingColor, textAlign: alignment  }} className="font-semibold text-[14px] text-[#0f172a] tracking-tight">
+                  {content?.preferenceTitle || t("cookiePreferences")}
                 </p>
                 {content?.closeButton ? (
                   <button
                     className="text-black opacity-70"
                     type="button"
-                    onClick={() => setModalView('main')}
+                    onClick={() => setModalView("main")}
                     aria-label="Close preferences"
                   >
                     ×
@@ -513,32 +538,42 @@ export default function ConsentPreview({
 
               <div className="flex justify-end gap-3 mt-6 flex-wrap">
                 <button
+                 style={{
+                    backgroundColor: colors.buttonColor,
+                    color: colors.buttonTextColor,
+                    borderColor: colors.buttonTextColor,
+                  }}
                   className="px-5 py-2 min-w-[88px] border border-[#e2e8f0] bg-white text-[11px] font-semibold text-[#334155] rounded-md hover:bg-gray-50"
                   type="button"
-                  onClick={() => setModalView('main')}
+                  onClick={() => setModalView("main")}
                 >
-                  {content?.rejectAll || t('rejectAll')}
+                  {content?.rejectAll || t("rejectAll")}
                 </button>
                 <button
+                  style={{
+                    backgroundColor: colors.SecButtonColor,
+                    color: colors.SecButtonTextColor,
+                    
+                  }}
                   className="px-5 py-2 min-w-[88px] bg-[#007aff] text-[11px] font-semibold text-white rounded-md border border-[#007aff] hover:opacity-95"
                   type="button"
-                  onClick={() => setModalView('main')}
+                  onClick={() => setModalView("main")}
                 >
-                  {t('save')}
+                  {t("save")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="bg-white rounded-md shadow-lg w-full p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="font-semibold text-[13px] text-black opacity-80 tracking-tight">
-                  {content?.ccpaOptOutTitle || t('optOutPreference')}
+                <p style={{ color: colors.headingColor, textAlign: alignment  }} className="font-semibold text-[13px] text-black opacity-80 tracking-tight">
+                  {content?.ccpaOptOutTitle || t("optOutPreference")}
                 </p>
                 {content?.closeButton ? (
                   <button
                     className="text-black opacity-70"
                     type="button"
-                    onClick={() => setModalView('main')}
+                    onClick={() => setModalView("main")}
                     aria-label="Close opt-out"
                   >
                     ×
@@ -575,18 +610,28 @@ export default function ConsentPreview({
 
               <div className="flex gap-2">
                 <button
+                 style={{
+                    backgroundColor: colors.buttonColor,
+                    color: colors.buttonTextColor,
+                    borderColor: colors.buttonTextColor,
+                  }}
                   className="flex-1 px-3 py-[6px] border border-[#e5e5e5] text-[11px] text-[#111827] rounded"
                   type="button"
-                  onClick={() => setModalView('main')}
+                  onClick={() => setModalView("main")}
                 >
-                  {t('cancel')}
+                  {t("cancel")}
                 </button>
                 <button
+                 style={{
+                    backgroundColor: colors.SecButtonColor,
+                    color: colors.SecButtonTextColor,
+                    
+                  }}
                   className="flex-1 px-3 py-[6px] bg-[#007aff] text-[11px] text-white rounded"
                   type="button"
-                  onClick={() => setModalView('main')}
+                  onClick={() => setModalView("main")}
                 >
-                  {content?.saveMyPreferencesLabel || t('saveMyPreferences')}
+                  {content?.saveMyPreferencesLabel || t("saveMyPreferences")}
                 </button>
               </div>
             </div>
@@ -629,17 +674,17 @@ export default function ConsentPreview({
         <button
           type="button"
           className="flex items-center gap-2"
-          onClick={() => setDevice('mobile')}
+          onClick={() => setDevice("mobile")}
         >
           <div
             className="w-[10px] h-[17px] border-2 rounded-sm"
             style={{
-              borderColor: device === 'mobile' ? '#007aff' : '#4B5563',
+              borderColor: device === "mobile" ? "#007aff" : "#4B5563",
             }}
           />
           <p
             className="text-base"
-            style={{ color: device === 'mobile' ? '#007aff' : '#6B7280' }}
+            style={{ color: device === "mobile" ? "#007aff" : "#6B7280" }}
           >
             Phone
           </p>
@@ -647,17 +692,17 @@ export default function ConsentPreview({
         <button
           type="button"
           className="flex items-center gap-2"
-          onClick={() => setDevice('tablet')}
+          onClick={() => setDevice("tablet")}
         >
           <div
             className="w-[16px] h-[17px] border-2 rounded-sm"
             style={{
-              borderColor: device === 'tablet' ? '#007aff' : '#4B5563',
+              borderColor: device === "tablet" ? "#007aff" : "#4B5563",
             }}
           />
           <p
             className="text-base"
-            style={{ color: device === 'tablet' ? '#007aff' : '#6B7280' }}
+            style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}
           >
             Tab
           </p>
@@ -665,17 +710,17 @@ export default function ConsentPreview({
         <button
           type="button"
           className="flex items-center gap-2"
-          onClick={() => setDevice('desktop')}
+          onClick={() => setDevice("desktop")}
         >
           <div
             className="w-[24px] h-[17px] border-2 rounded-sm"
             style={{
-              borderColor: device === 'desktop' ? '#007aff' : '#4B5563',
+              borderColor: device === "desktop" ? "#007aff" : "#4B5563",
             }}
           />
           <p
             className="text-base"
-            style={{ color: device === 'desktop' ? '#007aff' : '#6B7280' }}
+            style={{ color: device === "desktop" ? "#007aff" : "#6B7280" }}
           >
             Desktop
           </p>
