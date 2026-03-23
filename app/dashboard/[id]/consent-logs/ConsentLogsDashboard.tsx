@@ -8,6 +8,7 @@ import {
   type ConsentLogCookie,
   type ConsentHistoryResponse,
 } from '@/lib/client-api';
+import LoadingPopup from '../scan/component/LoadingPopup';
 
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
@@ -135,6 +136,11 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
   return (
     <>
+      <LoadingPopup
+        show={loading}
+        title="Loading..."
+        subtitle={`Loading consent logs for "${displayDomain}"`}
+      />
       {loadError ? (
         <div className="mx-auto mb-2 max-w-[1139px] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {loadError}

@@ -13,6 +13,7 @@ import {
   type ScheduledScan,
 } from '@/lib/client-api';
 import { ScheduleScanModal } from './ScheduleScanModal';
+import LoadingPopup from './component/LoadingPopup';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -117,7 +118,7 @@ function formatCookieDuration(expires: string | null) {
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
-  const { refresh } = useDashboardSession();
+  const { refresh, sites } = useDashboardSession();
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
@@ -192,6 +193,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   }, [cookiesByCategory]);
 
   const selectedCookies = cookiesByCategory[selectedCategory] || [];
+  const siteLabel = useMemo(() => {
+    const list = Array.isArray(sites) ? sites : [];
+    const site = list.find((s: any) => String(s?.id) === String(siteId));
+    return String(site?.name || site?.domain || "this site");
+  }, [siteId, sites]);
 
   const handleScanNow = async () => {
     if (!siteId || scanning) return;
@@ -282,6 +288,15 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
+      <LoadingPopup
+        show={scanning || loading}
+        title={scanning ? "Scanning..." : "Loading..."}
+        subtitle={
+          scanning
+            ? `Your site "${siteLabel}" is scanning`
+            : `Fetching scan data for "${siteLabel}"`
+        }
+      />
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
@@ -409,9 +424,19 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               <ul className="mt-6 space-y-4">
                 {selectedCookies.map((c) => (
                   <li key={c.id} className="rounded-lg border border-[#e5e7eb] p-4">
-                    <p className="font-['DM_Sans'] text-sm font-semibold text-black" style={dm}>
-                      {c.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-['DM_Sans'] text-sm font-semibold text-black" style={dm}>
+                        {c.name}
+                      </p>
+                      {String(c.source || '').startsWith('user-rule:') ? (
+                        <span
+                          className="inline-flex h-5 items-center rounded-full bg-[#e6f1fd] px-2 text-[11px] font-medium text-[#007aff]"
+                          style={dm}
+                        >
+                          User-defined
+                        </span>
+                      ) : null}
+                    </div>
                     {c.provider ? (
                       <p className="mt-1 font-['DM_Sans'] text-xs text-[#64748b]" style={dm}>
                         Provider: {c.provider}
