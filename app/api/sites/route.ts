@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { serverFetch } from '@/lib/server-api';
 
+export const runtime = 'edge';
+
 function jsonOrText(res: Response) {
   const contentType = res.headers.get('content-type') ?? '';
   if (contentType.toLowerCase().includes('application/json')) {
