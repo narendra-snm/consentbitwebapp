@@ -1,16 +1,20 @@
-'use client';
-
-import React from 'react';
+import React, { useState } from 'react';
+import { useAppContext } from "@/app/context/AppProvider";
 import type { TypeSettings } from './bannerAppearance';
 
 const FONTS = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins',
   'Raleway', 'Oswald', 'Merriweather', 'Playfair Display', 'Source Sans Pro',
 ];
-
 const WEIGHTS = ['Thin', 'Light', 'Regular', 'Medium', 'Semi Bold', 'Bold', 'Extra Bold', 'Black'];
 
-type Alignment = TypeSettings['alignment'];
+type Alignment = 'left' | 'center' | 'right';
+
+type Props = {
+  /** When set with `onChange`, panel is controlled from parent `appearance.type` (publish + preview stay in sync). */
+  value?: TypeSettings;
+  onChange?: (next: TypeSettings) => void;
+};
 
 const AlignLeftIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -36,22 +40,33 @@ const AlignRightIcon = ({ active }: { active: boolean }) => (
   </svg>
 );
 
-type Props = {
-  value: TypeSettings;
-  onChange: (next: TypeSettings) => void;
-};
-
 const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
-  const { font, weight, alignment } = value;
+  const ctx = useAppContext();
+  const [localFont, setLocalFont] = useState('Inter');
 
-  const patch = (partial: Partial<TypeSettings>) => {
-    onChange({ ...value, ...partial });
+  const controlled = value != null && onChange != null;
+  const font = controlled ? value.font : localFont;
+  const weight = controlled ? value.weight : ctx.weight;
+  const alignment = controlled ? value.alignment : ctx.alignment;
+
+  const patch = (next: Partial<TypeSettings>) => {
+    if (controlled && value && onChange) {
+      onChange({ ...value, ...next });
+      return;
+    }
+    if (next.font != null) {
+      setLocalFont(next.font);
+      ctx.setFontFamily(next.font);
+    }
+    if (next.weight != null) ctx.setWeight(next.weight);
+    if (next.alignment != null) ctx.setAlignment(next.alignment);
   };
 
   return (
     <div className="max-w-[410px] w-full  bg-white rounded-lg ">
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg p-4 pb-6 space-y-4">
 
+        {/* Choose Font */}
         <div>
           <div className="flex items-center space-x-1 mb-2">
             <label className=" ">Choose Font</label>
@@ -81,6 +96,7 @@ const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
           </div>
         </div>
 
+        {/* Weight */}
         <div>
           <label className="block   mb-2">Weight</label>
           <div className="relative">
@@ -101,10 +117,11 @@ const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
           </div>
         </div>
 
+        {/* Alignment */}
         <div className="flex items-center justify-between">
           <label className="">Alignment</label>
           <div className="flex items-center space-x-2">
-            {(['left', 'right', 'center'] as Alignment[]).map((a) => (
+            {(['left', 'center', 'right'] as Alignment[]).map((a) => (
               <button
                 key={a}
                 type="button"

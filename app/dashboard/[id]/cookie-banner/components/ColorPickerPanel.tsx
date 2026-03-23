@@ -2,16 +2,41 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { HexColorPicker } from "react-colorful";
+import { useAppContext } from "@/app/context/AppProvider";
 import type { ColorSettings } from "./bannerAppearance";
 
 type Props = {
-  value: ColorSettings;
-  onChange: (next: ColorSettings) => void;
+  /** When set with `onChange`, panel is controlled from parent `appearance.colors` (publish + preview stay in sync). */
+  value?: ColorSettings;
+  onChange?: (next: ColorSettings) => void;
 };
 
-const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
+const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: controlledOnChange }) => {
+  const ctx = useAppContext();
+  const colors = (controlledValue ?? ctx.colors) as ColorSettings;
+
   const updateColor = (key: keyof ColorSettings, v: string) => {
-    onChange({ ...colors, [key]: v });
+    const applyPreferenceSync = (next: ColorSettings): ColorSettings => {
+      if (key === "preferencesButtonBg" || key === "preferencesButtonText") {
+        return {
+          ...next,
+          savePreferencesButtonBg: next.preferencesButtonBg,
+          savePreferencesButtonText: next.preferencesButtonText,
+        };
+      }
+      return next;
+    };
+
+    if (controlledOnChange && controlledValue) {
+      controlledOnChange(
+        applyPreferenceSync({ ...controlledValue, [key]: v }),
+      );
+      return;
+    }
+    ctx.setColors((prev: Record<string, string>) => {
+      const raw = { ...prev, [key]: v } as ColorSettings;
+      return applyPreferenceSync(raw) as Record<string, string>;
+    });
   };
 
   const ColorInput = ({
@@ -120,8 +145,10 @@ const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
           />
         </div>
 
-        <p className="text-xs text-[#6B7280] mb-3">Preferences (opens cookie settings)</p>
-        <div className="space-y-4 mb-6">
+        <p className="text-xs text-[#6B7280] mb-3">
+          Preferences &amp; save (opens cookie settings, save in panel)
+        </p>
+        <div className="space-y-4">
           <ColorInput
             label="Background"
             value={colors.preferencesButtonBg}
@@ -131,20 +158,6 @@ const ColorPickerPanel: React.FC<Props> = ({ value: colors, onChange }) => {
             label="Text"
             value={colors.preferencesButtonText}
             onChange={(v) => updateColor("preferencesButtonText", v)}
-          />
-        </div>
-
-        <p className="text-xs text-[#6B7280] mb-3">Save in preference panel</p>
-        <div className="space-y-4">
-          <ColorInput
-            label="Background"
-            value={colors.savePreferencesButtonBg}
-            onChange={(v) => updateColor("savePreferencesButtonBg", v)}
-          />
-          <ColorInput
-            label="Text"
-            value={colors.savePreferencesButtonText}
-            onChange={(v) => updateColor("savePreferencesButtonText", v)}
           />
         </div>
       </div>

@@ -27,7 +27,7 @@ export default function DashboardPage() {
     if (showOnboarding) return;
     if (!activeSiteId) return;
     if (pathname === "/dashboard") {
-      router.replace(`/dashboard/${activeSiteId}`);
+      // router.replace(`/dashboard/${activeSiteId}`);
     }
   }, [activeSiteId, authenticated, loading, pathname, router, showOnboarding]);
 

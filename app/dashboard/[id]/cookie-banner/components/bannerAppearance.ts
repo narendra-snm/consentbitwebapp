@@ -21,7 +21,7 @@ export type ColorSettings = {
   /** “Preferences” / customise — maps to `customiseButtonBg` / `customiseButtonText`. */
   preferencesButtonBg: string;
   preferencesButtonText: string;
-  /** “Save my preferences” in the preference panel footer — `saveButtonBg` / `saveButtonText`. */
+  /** Kept in sync with preferences for publish; same visual group as “Save” in the panel. */
   savePreferencesButtonBg: string;
   savePreferencesButtonText: string;
 };
@@ -182,6 +182,9 @@ export function appearanceFromCustomization(
     savePreferencesButtonBg: c.saveButtonBg || DEFAULT_APPEARANCE.colors.savePreferencesButtonBg,
     savePreferencesButtonText: c.saveButtonText || DEFAULT_APPEARANCE.colors.savePreferencesButtonText,
   };
+  // Preference + save-in-panel use the same colors (preview + publish).
+  colors.savePreferencesButtonBg = colors.preferencesButtonBg;
+  colors.savePreferencesButtonText = colors.preferencesButtonText;
 
   const type: TypeSettings = {
     font: en.bannerFontFamily || DEFAULT_APPEARANCE.type.font,

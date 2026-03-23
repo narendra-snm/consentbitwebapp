@@ -256,6 +256,61 @@ export async function createCheckoutSession(
 }
 // payments ends here
 
+// billing invoices starts here
+export type BillingInvoice = {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountDue: number;
+  amountPaid: number;
+  created: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+};
+
+export async function getBillingInvoices(
+  organizationId: string,
+  limit: number = 20,
+): Promise<{ invoices: BillingInvoice[] }> {
+  const res = await fetch(
+    `/api/billing/invoices?organizationId=${encodeURIComponent(organizationId)}&limit=${limit}`,
+    { credentials: "include" },
+  );
+  const data = await res
+    .json()
+    .catch(async () => ({ error: await res.text(), invoices: [] }));
+  if (!res.ok) throw new Error(data.error || `Billing invoices failed: ${res.status}`);
+  return data as { invoices: BillingInvoice[] };
+}
+// billing invoices ends here
+
+// billing usage starts here
+export type BillingUsage = {
+  yearMonth: string;
+  pageviewsUsed: number;
+  pageviewsLimit: number;
+  scansUsed: number;
+  scansLimit: number;
+  sitesUsed: number;
+  sitesLimit: number;
+  planId: string;
+};
+
+export async function getBillingUsage(
+  organizationId: string,
+): Promise<BillingUsage> {
+  const res = await fetch(
+    `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}`,
+    { credentials: "include" },
+  );
+  const data = await res
+    .json()
+    .catch(async () => ({ error: await res.text() }));
+  if (!res.ok) throw new Error(data.error || `Billing usage failed: ${res.status}`);
+  return data as BillingUsage;
+}
+// billing usage ends here
+
 // —— Cookie scan (site scanner) ——
 export type ScanHistoryRow = {
   id: string;

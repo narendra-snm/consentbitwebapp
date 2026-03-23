@@ -1,7 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
+import { useDashboardSession } from "../DashboardSessionProvider";
+import { getBillingUsage, type BillingUsage } from "@/lib/client-api";
 
 const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
@@ -9,46 +12,129 @@ const svgPaths = {
 
 type TabType = "general" | "billing" | "organizations" | "usage";
 
-interface Organization {
+type Organization = {
   siteUrl: string;
   siteName: string;
   createdDate: string;
-  plan: string;
-  planPrice?: string;
+  plan: "Free" | "Basic" | "Essential" | "Growth";
+  isPaid: boolean;
   nextRenewal?: string;
+};
+
+type PlanTier = "Free" | "Basic" | "Essential" | "Growth";
+
+function fmtDate(raw: unknown): string {
+  const s = raw ? String(raw) : "";
+  if (!s) return "-";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
-const organizations: Organization[] = [
-  {
-    siteUrl: "Acne.com",
-    siteName: "Acme",
-    createdDate: "12/02/2026",
-    plan: "Pro",
-    planPrice: "25 USD / M",
-    nextRenewal: "March 17, 2026",
-  },
-  {
-    siteUrl: "Acne.com",
-    siteName: "Acme",
-    createdDate: "12/02/2026",
-    plan: "Free",
-    nextRenewal: undefined,
-  },
-  {
-    siteUrl: "Acne.com",
-    siteName: "Acme",
-    createdDate: "12/02/2026",
-    plan: "Free",
-    nextRenewal: undefined,
-  },
-];
+function fmtLongDate(raw: unknown): string | undefined {
+  const s = raw ? String(raw) : "";
+  if (!s) return undefined;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function toPlanLabel(raw: unknown): PlanTier {
+  const v = String(raw || "").toLowerCase();
+  if (v === "basic") return "Basic";
+  if (v === "essential") return "Essential";
+  if (v === "growth") return "Growth";
+  if (v === "pro" || v === "paid") return "Essential";
+  return "Free";
+}
 
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId } =
+    useDashboardSession();
   const [activeTab, setActiveTab] = useState<TabType>("organizations");
   const isActive = (tab: TabType) => activeTab === tab;
+
+  const accountOwnerEmail = useMemo(
+    () => String(user?.email || "").trim() || "—",
+    [user?.email],
+  );
+  const accountOwnerName = useMemo(
+    () => String(user?.name || "").trim() || "—",
+    [user?.name],
+  );
+  const accountId = useMemo(() => {
+    const firstOrg = Array.isArray(orgsFromSession) ? orgsFromSession[0] : null;
+    const raw = user?.id ?? firstOrg?.id ?? firstOrg?.organizationId ?? firstOrg?.organization_id;
+    return raw ? String(raw) : "—";
+  }, [orgsFromSession, user?.id]);
+
+  const organizations = useMemo<Organization[]>(() => {
+    const rows = Array.isArray(sites) ? sites : [];
+    return rows.map((site: any) => {
+      const rawPlan =
+        site?.planId ??
+        site?.plan_id ??
+        site?.subscription_plan ??
+        effectivePlanId;
+      const plan = toPlanLabel(rawPlan);
+      const isPaid = plan !== "Free";
+      const nextRenewal =
+        fmtLongDate(site?.nextRenewal ?? site?.next_renewal ?? site?.subscriptionCurrentPeriodEnd) ||
+        undefined;
+
+      return {
+        siteUrl: String(site?.domain || "—"),
+        siteName: String(site?.name || site?.domain || "—"),
+        createdDate: fmtDate(site?.createdAt ?? site?.created_at),
+        plan,
+        isPaid,
+        nextRenewal,
+      };
+    });
+  }, [sites, effectivePlanId]);
+
+  const currentPlan = useMemo<PlanTier>(() => {
+    return toPlanLabel(effectivePlanId);
+  }, [effectivePlanId]);
+  const domainCount = useMemo(() => (Array.isArray(sites) ? sites.length : 0), [sites]);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeOrganizationId) {
+      setUsage(null);
+      return;
+    }
+    let cancelled = false;
+    setUsageLoading(true);
+    setUsageError(null);
+    getBillingUsage(activeOrganizationId)
+      .then((res) => {
+        if (!cancelled) setUsage(res);
+      })
+      .catch((e) => {
+        if (!cancelled) setUsageError(e?.message || "Failed to load usage");
+      })
+      .finally(() => {
+        if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrganizationId]);
 
   return (
     <div className="size-full bg-white">
@@ -60,7 +146,10 @@ export default function SettingsPage() {
           Profile Settings
         </p>
         <div className="flex items-center gap-[19px]">
-          <button className="bg-[#4b5563] h-[36px] min-w-[174px] rounded-[6px] border border-[#4b5563] flex items-center justify-center">
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="bg-[#4b5563] h-[36px] min-w-[174px] rounded-[6px] border border-[#4b5563] flex items-center justify-center"
+          >
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium text-xs text-white whitespace-pre flex items-center gap-1" style={{ fontVariationSettings: "'opsz' 14" }}>
               <svg width="9" height="8" viewBox="0 0 9 8" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M3.97496 7.95174L-0.000887752 3.97589L3.97496 3.29018e-05L4.74201 0.758556L2.07866 3.42191H8.769V4.52986H2.07866L4.74201 7.18895L3.97496 7.95174Z" fill="white" />
@@ -137,8 +226,11 @@ export default function SettingsPage() {
               </p>
               <div className="bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 pr-2 py-1.5 flex items-center justify-between mb-[40px]">
                 <div>
-                  <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>web@seattlenewmedia.com</p>
-                  <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: 701709</p>
+                  <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{accountOwnerEmail}</p>
+                  <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: {accountId}</p>
+                  <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                    Current Plan: {currentPlan}
+                  </p>
                 </div>
                 <button className="bg-[#007aff] h-[36px] px-[11px] rounded-[8px] flex items-center justify-center">
                   <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Transfer Ownership</p>
@@ -151,7 +243,7 @@ export default function SettingsPage() {
                 <div className="px-[13px] py-[20px] border-b border-black/10">
                   <div className="flex items-center justify-between mb-[29px]">
                     <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[16px] text-black tracking-[-1px]" style={{ fontVariationSettings: "'opsz' 14" }}>Organization</p>
-                    <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black text-right" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: 701709</p>
+                    <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black text-right" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: {accountId}</p>
                   </div>
 
                   {/* Column Headers — same grid as rows */}
@@ -186,15 +278,13 @@ export default function SettingsPage() {
 
                       {/* Plan */}
                       <div className="min-w-0">
-                        {org.plan === "Pro" ? (
+                        {org.isPaid ? (
                           <div>
                             <div className="flex items-center gap-[8px] mb-[4px]">
                               <div className="bg-[#69B4FF73] h-[19px] px-[8px] rounded-[50px] flex items-center justify-center">
-                                <p className="font-medium leading-[normal] text-[#007aff] text-[10px] tracking-[-0.5px]" style={{ fontVariationSettings: "'opsz' 14" }}>Pro</p>
+                                <p className="font-medium leading-[normal] text-[#007aff] text-[10px] tracking-[-0.5px]" style={{ fontVariationSettings: "'opsz' 14" }}>{org.plan}</p>
                               </div>
                             </div>
-                            <p className="font-normal leading-[14px] text-[11px] text-black mb-[2px]" style={{ fontVariationSettings: "'opsz' 14" }}>{org.planPrice}</p>
-                            <p className="font-semibold text-[#007aff] text-[11px] tracking-[-0.4px] leading-tight" style={{ fontVariationSettings: "'opsz' 14" }}>Switch to Annual - Save 17%</p>
                           </div>
                         ) : (
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{org.plan}</p>
@@ -221,7 +311,7 @@ export default function SettingsPage() {
                             <circle cx="2" cy="16" fill="#007AFF" r="2" />
                           </svg>
                         </div>
-                        {org.plan === "Pro" && (
+                        {org.isPaid && (
                           <button className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0">
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Change Plan</p>
                           </button>
@@ -234,25 +324,68 @@ export default function SettingsPage() {
                     {index < organizations.length - 1 && <div className="h-[1px] bg-black/10 mx-[2px]" />}
                   </div>
                 ))}
+                {!loading && organizations.length === 0 ? (
+                  <div className="px-[13px] py-6 text-sm text-[#6b7280]">
+                    No organizations found.
+                  </div>
+                ) : null}
               </div>
             </>
           )}
 
           {activeTab === "general" && (
             <div className="text-center">
-              <ProfileForm />
+              <ProfileForm name={accountOwnerName} email={accountOwnerEmail} />
             </div>
           )}
 
           {activeTab === "billing" && (
             <div className="text-center">
-              <BillingPage />
+              <BillingPage
+                currentPlan={currentPlan}
+                domainCount={domainCount}
+                organizationId={activeOrganizationId}
+                scansCount={usage?.scansUsed ?? 0}
+                pageViews={usage?.pageviewsUsed ?? 0}
+              />
             </div>
           )}
 
           {activeTab === "usage" && (
-            <div className="text-center pt-20">
-              <p className="text-2xl text-gray-500">Usage Overview</p>
+            <div className="max-w-[980px] bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] p-6 text-left">
+              <p className="font-semibold text-[18px] text-black mb-4">Usage Overview</p>
+              {usageLoading ? (
+                <p className="text-sm text-[#6b7280]">Loading usage...</p>
+              ) : usageError ? (
+                <p className="text-sm text-[#b91c1c]">{usageError}</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">
+                    <p className="text-sm text-[#4b5563]">Pageviews</p>
+                    <p className="text-xl font-semibold text-[#111827]">
+                      {usage?.pageviewsUsed ?? 0} / {usage?.pageviewsLimit ?? 0}
+                    </p>
+                  </div>
+                  <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">
+                    <p className="text-sm text-[#4b5563]">Scans</p>
+                    <p className="text-xl font-semibold text-[#111827]">
+                      {usage?.scansUsed ?? 0} / {usage?.scansLimit ?? 0}
+                    </p>
+                  </div>
+                  <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">
+                    <p className="text-sm text-[#4b5563]">Sites</p>
+                    <p className="text-xl font-semibold text-[#111827]">
+                      {usage?.sitesUsed ?? domainCount} / {usage?.sitesLimit ?? domainCount}
+                    </p>
+                  </div>
+                  <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">
+                    <p className="text-sm text-[#4b5563]">Billing Cycle</p>
+                    <p className="text-xl font-semibold text-[#111827]">
+                      {usage?.yearMonth || "-"}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -7,6 +7,8 @@ import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
+import { useAppContext } from "@/app/context/AppProvider";
+
 // import CookieListAccordion from "./CookieListAccordion";
 import {
   FloatingButtonSettings,
@@ -39,6 +41,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
+
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
   const [openAccordionKey, setOpenAccordionKey] = useState<
@@ -77,6 +80,33 @@ export default function page({ siteId }: { siteId: string }) {
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
+  const {
+    setColors: setPreviewColors,
+    setFontFamily: setPreviewFontFamily,
+    setWeight: setPreviewWeight,
+    setAlignment: setPreviewAlignment,
+    setBannerLayout: setPreviewBannerLayout,
+  } = useAppContext();
+
+  /** Single source of truth is `appearance`; mirror into preview context so ConsentPreview matches publish. */
+  useEffect(() => {
+    setPreviewColors({ ...appearance.colors });
+    setPreviewFontFamily(appearance.type.font);
+    setPreviewWeight(appearance.type.weight);
+    setPreviewAlignment(appearance.type.alignment);
+    setPreviewBannerLayout({
+      position: appearance.layout.position,
+      alignment: appearance.layout.alignment,
+    });
+  }, [
+    appearance,
+    setPreviewColors,
+    setPreviewFontFamily,
+    setPreviewWeight,
+    setPreviewAlignment,
+    setPreviewBannerLayout,
+  ]);
+
   const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
@@ -552,7 +582,7 @@ export default function page({ siteId }: { siteId: string }) {
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_740px]">
       <Sidebar active={active} setActive={setActive} />
-      <div className="w-full  px-5.5 pt-10 space-y-5 border-r border-[#00000010]">
+      <div className="w-full h-screen overflow-y-scroll px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
         {active === "General" && (
           <div>
@@ -819,6 +849,7 @@ export default function page({ siteId }: { siteId: string }) {
         previewBannerType={previewBannerType}
         siteDomain={site?.domain ?? null}
         consentType={consentType}
+        initialLayout={appearance.layout}
         content={contentForPreview}
         floatingButton={floatingButton}
         onPublishChanges={handlePublishChanges}

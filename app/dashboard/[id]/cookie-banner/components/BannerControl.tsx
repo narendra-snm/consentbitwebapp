@@ -80,10 +80,17 @@ export default function BannerControl({ value, onChange }: Props) {
             </button>
           ))}
         </div>
+        <p className="text-xs text-[#6b7280] leading-relaxed">
+          <strong>Box</strong> — compact card in a corner (choose left or right).{' '}
+          <strong>Banner</strong> — full-width bar fixed to the bottom of the screen.{' '}
+          <strong>Popup</strong> — centered modal-style banner.
+        </p>
       </div>
 
+      {position === 'box' && (
       <div className="space-y-3 mb-[37px]">
         <h3 className=" font-semibold text-gray-900">Alignment</h3>
+        <p className="text-xs text-[#6b7280]">Corner position for the box layout only.</p>
 
         <div className="flex items-center gap-10">
           {(['bottom-left', 'bottom-right'] as const).map((a) => {
@@ -112,6 +119,7 @@ export default function BannerControl({ value, onChange }: Props) {
           })}
         </div>
       </div>
+      )}
 
       <div className="rounded-xl border border-gray-200 bg-[#F9F9FA] p-5 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Border Radious</h3>

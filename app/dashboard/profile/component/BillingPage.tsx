@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getBillingInvoices, type BillingInvoice } from "@/lib/client-api";
+
 const svgPaths =  {
 p112ba780: "M6.3 0H2.8C2.41395 0 2.1 0.31395 2.1 0.7V2.1H0.7C0.31395 2.1 0 2.41395 0 2.8V6.3C0 6.68605 0.31395 7 0.7 7H4.2C4.58605 7 4.9 6.68605 4.9 6.3V4.9H6.3C6.68605 4.9 7 4.58605 7 4.2V0.7C7 0.31395 6.68605 0 6.3 0ZM0.7 6.3V2.8H4.2L4.2007 6.3H0.7ZM6.3 4.2H4.9V2.8C4.9 2.41395 4.58605 2.1 4.2 2.1H2.8V0.7H6.3V4.2Z",
 p1e2ddd80: "M10.1417 7.15C10.5083 8.45833 11.5333 9.49167 12.85 9.85833",
@@ -11,70 +13,88 @@ pc41fd00: "M2.91667 3.5L4.08333 2.04167H3.20833V0H2.625V2.04167H1.75L2.91667 3.5
 
 // import imgMastercard from "figma:asset/f16ae9b9607d2d26ba4c40c3c8f6541a860101c4.png";
 
-type TabType = "general" | "billing" | "organizations" | "usage";
-
 interface Invoice {
   date: string;
   invoiceNumber: string;
   amount: string;
   paymentMethod: string;
   status: string;
+  hostedInvoiceUrl?: string | null;
+  invoicePdf?: string | null;
 }
 
-const invoices: Invoice[] = [
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-  {
-    date: "Feb 17, 2026",
-    invoiceNumber: "5256BCEE-694920",
-    amount: "25.00USD",
-    paymentMethod: "Card ****1345",
-    status: "Completed",
-  },
-];
+type Props = {
+  currentPlan: "Free" | "Basic" | "Essential" | "Growth";
+  domainCount: number;
+  organizationId?: string | null;
+  scansCount?: number;
+  pageViews?: number;
+};
 
-export default function BillingPage() {
-  const [activeTab, setActiveTab] = useState<TabType>("billing");
+export default function BillingPage({
+  currentPlan,
+  domainCount,
+  organizationId,
+  scansCount = 0,
+  pageViews = 0,
+}: Props) {
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [rawInvoices, setRawInvoices] = useState<BillingInvoice[]>([]);
+
+  useEffect(() => {
+    if (!organizationId) {
+      setRawInvoices([]);
+      return;
+    }
+    let cancelled = false;
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+    getBillingInvoices(organizationId, 20)
+      .then((res) => {
+        if (!cancelled) setRawInvoices(Array.isArray(res.invoices) ? res.invoices : []);
+      })
+      .catch((e) => {
+        if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices");
+      })
+      .finally(() => {
+        if (!cancelled) setInvoiceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
+
+  const invoices = useMemo<Invoice[]>(() => {
+    return (rawInvoices || []).map((inv) => {
+      const created = inv.created ? new Date(inv.created) : null;
+      const date = created && !Number.isNaN(created.getTime())
+        ? created.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
+        : "-";
+      const amount = ((inv.amountPaid ?? inv.amountDue ?? 0) / 100).toFixed(2) + " USD";
+      const status = String(inv.status || "open").toLowerCase() === "paid" ? "Completed" : String(inv.status || "Open");
+      return {
+        date,
+        invoiceNumber: inv.number || inv.id,
+        amount,
+        paymentMethod: "Card",
+        status,
+        hostedInvoiceUrl: inv.hostedInvoiceUrl,
+        invoicePdf: inv.invoicePdf,
+      };
+    });
+  }, [rawInvoices]);
+
+  const planLabel = currentPlan;
+  const upgradeCta =
+    currentPlan === "Free"
+      ? "Upgrade to Basic"
+      : currentPlan === "Basic"
+        ? "Upgrade to Essential"
+        : currentPlan === "Essential"
+          ? "Upgrade to Growth"
+          : "Manage Subscription";
+  const canUpgrade = currentPlan !== "Growth";
 
   return (
       
@@ -89,7 +109,7 @@ export default function BillingPage() {
               <div className="flex items-center gap-[12px]">
                 {/* Year Dropdown */}
                 <div className="relative">
-                  <select className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
                     <option>Year</option>
                   </select>
                   <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
@@ -101,7 +121,7 @@ export default function BillingPage() {
                 
                 {/* Month Dropdown */}
                 <div className="relative">
-                  <select className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
                     <option>Month</option>
                   </select>
                   <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
@@ -113,7 +133,7 @@ export default function BillingPage() {
                 
                 {/* All Domains Dropdown */}
                 <div className="relative">
-                  <select className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
                     <option>All Domains</option>
                   </select>
                   <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
@@ -158,17 +178,33 @@ export default function BillingPage() {
                     <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                       {invoice.invoiceNumber}
                     </p>
-                    <button className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center">
-                      <svg className="w-[7px] h-[7px]" fill="none" viewBox="0 0 7 7">
-                        <path d={svgPaths.p112ba780} fill="#007AFF" />
-                      </svg>
-                    </button>
-                    <button className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center">
-                      <svg className="w-[6px] h-[5px]" fill="none" viewBox="0 0 5.83333 4.66667">
-                        <path d={svgPaths.pc41fd00} fill="#007AFF" />
-                        <path d={svgPaths.pbc14700} fill="#007AFF" />
-                      </svg>
-                    </button>
+                    {invoice.hostedInvoiceUrl ? (
+                      <a
+                        href={invoice.hostedInvoiceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center"
+                        title="Open invoice"
+                      >
+                        <svg className="w-[7px] h-[7px]" fill="none" viewBox="0 0 7 7">
+                          <path d={svgPaths.p112ba780} fill="#007AFF" />
+                        </svg>
+                      </a>
+                    ) : null}
+                    {invoice.invoicePdf ? (
+                      <a
+                        href={invoice.invoicePdf}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center"
+                        title="Download invoice PDF"
+                      >
+                        <svg className="w-[6px] h-[5px]" fill="none" viewBox="0 0 5.83333 4.66667">
+                          <path d={svgPaths.pc41fd00} fill="#007AFF" />
+                          <path d={svgPaths.pbc14700} fill="#007AFF" />
+                        </svg>
+                      </a>
+                    ) : null}
                   </div>
 
                   {/* Amount */}
@@ -197,6 +233,15 @@ export default function BillingPage() {
                   </div>
                 </div>
               ))}
+              {invoiceLoading ? (
+                <p className="text-sm text-[#6b7280]">Loading invoices...</p>
+              ) : null}
+              {invoiceError ? (
+                <p className="text-sm text-[#b91c1c]">{invoiceError}</p>
+              ) : null}
+              {!invoiceLoading && !invoiceError && invoices.length === 0 ? (
+                <p className="text-sm text-[#6b7280]">No invoices found.</p>
+              ) : null}
             </div>
           </div>
 
@@ -207,7 +252,7 @@ export default function BillingPage() {
       {/* Header */}
       <div className=" pb-6 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-lg font-medium ">Your Current plan</h2>
-        <span className="text-xl font-black text-[#007AFF]">Basic</span>
+        <span className="text-xl font-black text-[#007AFF]">{planLabel}</span>
       </div>
 
       {/* Content Section 1 */}
@@ -216,13 +261,13 @@ export default function BillingPage() {
           {/* No of Domains */}
           <div>
             <p className="text-[17px] font-normal mb-1">No of Domains</p>
-            <p className="text-[17px] font-semibold text-[#5243C2]">01</p>
+            <p className="text-[17px] font-semibold text-[#5243C2]">{String(domainCount).padStart(2, "0")}</p>
           </div>
 
           {/* No of scans */}
           <div>
             <p className="text-[17px] font-normal mb-1">No of scans</p>
-            <p className="text-[17px]text-2xl font-bold text-[#5243C2]">100</p>
+            <p className="text-[17px]text-2xl font-bold text-[#5243C2]">{scansCount}</p>
           </div>
 
           {/* Compliance */}
@@ -239,7 +284,7 @@ export default function BillingPage() {
           {/* No of Page views */}
           <div>
             <p className="text-[17px] font-normal mb-1">No of Page views</p>
-            <p className="text-[17px] font-bold text-[#5243C2]">7500</p>
+            <p className="text-[17px] font-bold text-[#5243C2]">{pageViews}</p>
           </div>
 
           {/* IAB / TCF */}
@@ -255,8 +300,11 @@ export default function BillingPage() {
 
       {/* Footer Actions */}
       <div className=" pt-7 flex gap-4">
-        <button className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 active:bg-blue-800 text-white  py-2 px-4 rounded-lg transition-colors cursor-pointer">
-          Upgrade to Essential
+        <button
+          className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 active:bg-blue-800 text-white  py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={!canUpgrade}
+        >
+          {upgradeCta}
         </button>
         <button className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 active:bg-gray-400 text-[#4B5563]  py-2 px-4 rounded-lg transition-colors cursor-pointer">
           Cancel Subscription
