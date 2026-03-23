@@ -12,40 +12,82 @@ type LoadingPopupProps = {
   subtitle?: string;
 };
 
-export default function LoadingPopup({
+// export default function LoadingPopup({
+//   show,
+//   title = "Scanning...",
+//   subtitle = "Please wait while we load data",
+// }: LoadingPopupProps) {
+//   if (!show) return null;
+//   return (
+//     <div
+//       className="fixed inset-0 z-[100] flex items-center justify-center"
+//       role="status"
+//       aria-live="polite"
+//       aria-busy="true"
+//     >
+//       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      
+//       <div className="relative h-[302px] w-[503px]">
+//         <div className="absolute h-full w-full rounded-[20px] bg-white shadow-lg">
+//           <div className="absolute left-1/2 top-[58px] flex -translate-x-1/2 items-center gap-1">
+//             <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb] [animation-delay:-0.2s]" />
+//             <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb] [animation-delay:-0.1s]" />
+//             <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb]" />
+//           </div>
+          
+//           <div className="absolute left-1/2 top-[175px] -translate-x-1/2 text-center">
+//             <p
+//               className="mb-2 text-[16px] font-semibold leading-[20px] text-black"
+//               style={{ fontVariationSettings: "'opsz' 14" }}
+//             >
+//               {title}
+//             </p>
+//             <p
+//               className="text-[16px] font-normal leading-[normal] text-[#4b5563]"
+//               style={{ fontVariationSettings: "'opsz' 14" }}
+//             >
+//               {subtitle}
+//             </p>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+import imgImage5 from "@/public/images/loading.png";
+
+ export default function LoadingPopup2({
   show,
   title = "Scanning...",
   subtitle = "Please wait while we load data",
 }: LoadingPopupProps) {
-  if (!show) return null;
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       
-      <div className="relative h-[302px] w-[503px]">
-        <div className="absolute h-full w-full rounded-[20px] bg-white shadow-lg">
-          <div className="absolute left-1/2 top-[58px] flex -translate-x-1/2 items-center gap-1">
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb] [animation-delay:-0.2s]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb] [animation-delay:-0.1s]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#18a0fb]" />
+      {/* Modal Container */}
+      <div className="relative w-[503px] h-[302px]">
+        <div className="absolute bg-white h-full w-full rounded-[20px] shadow-lg">
+          {/* Loading Animation */}
+          <div className="absolute left-1/2 top-[58px] -translate-x-1/2">
+            <div className="relative w-[131px] h-[112px] rounded-[20px] overflow-hidden animate-pulse">
+              <img 
+                alt="Loading animation" 
+                className="absolute   max-w-none top-2] animate-spin" 
+                src={imgImage5.src}
+                style={{ animationDuration: '2s' }}
+              />
+            </div>
           </div>
           
+          {/* Text Content */}
           <div className="absolute left-1/2 top-[175px] -translate-x-1/2 text-center">
-            <p
-              className="mb-2 text-[16px] font-semibold leading-[20px] text-black"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              {title}
+            <p className=" font-semibold leading-[20px] text-black text-[16px] mb-2" style={{ fontVariationSettings: "'opsz' 14" }}>
+              Scanning...
             </p>
-            <p
-              className="text-[16px] font-normal leading-[normal] text-[#4b5563]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
+            <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4b5563] text-[16px]" style={{ fontVariationSettings: "'opsz' 14" }}>
               {subtitle}
             </p>
           </div>

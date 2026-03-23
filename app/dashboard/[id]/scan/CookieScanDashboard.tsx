@@ -290,6 +290,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
       <LoadingPopup
         show={scanning || loading}
+        
         title={scanning ? "Scanning..." : "Loading..."}
         subtitle={
           scanning
