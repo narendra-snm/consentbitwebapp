@@ -8,6 +8,7 @@ import {
   type ConsentLogCookie,
   type ConsentHistoryResponse,
 } from '@/lib/client-api';
+import LoadingPopup from '../scan/component/LoadingPopup';
 
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
@@ -77,9 +78,10 @@ function HLine({ left, top, width }: { left: number; top: number; width: number 
   );
 }
 
-const COOKIE_ROW_START = 382;
 const COOKIE_ROW_STEP = 62;
 const LINE_AFTER_ROW = 40;
+const CONSENT_ROW_START = 166;
+const CONSENT_ROW_STEP = 30;
 
 export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; siteDomain: string }) {
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
@@ -105,33 +107,40 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
     };
   }, [siteId]);
 
-  const latestConsent = useMemo(() => {
+  const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
-    if (list.length === 0) return null;
-    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [data]);
 
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
 
-  const [line1, line2] = useMemo(() => {
-    if (!latestConsent) return ['—', ''] as [string, string];
-    return splitSummaryTwoLines(categoriesSummary(latestConsent.categories));
-  }, [latestConsent]);
+  const consentRowsCount = loading ? 1 : Math.max(consentRows.length, 1);
+  const consentSectionLineTop = CONSENT_ROW_START + (consentRowsCount - 1) * CONSENT_ROW_STEP + 43;
+  const cookieHeaderTop = consentSectionLineTop + 17;
+  const cookieSubTop = consentSectionLineTop + 50;
+  const cookieTableHeaderTop = consentSectionLineTop + 112;
+  const cookieTableLineTop = consentSectionLineTop + 143;
+  const cookieRowStart = consentSectionLineTop + 173;
 
   const containerHeight = useMemo(() => {
     const n = Math.max(cookies.length, 1);
-    const lastRowTop = COOKIE_ROW_START + (n - 1) * COOKIE_ROW_STEP;
+    const lastRowTop = cookieRowStart + (n - 1) * COOKIE_ROW_STEP;
     const lastLineTop = lastRowTop + LINE_AFTER_ROW;
     return Math.max(658, lastLineTop + 40);
-  }, [cookies.length]);
+  }, [cookieRowStart, cookies.length]);
 
   // Site label comes from parent (session); do not hide it while consent API loads
   const displayDomain = siteDomain?.trim() || '—';
 
   return (
     <>
+      <LoadingPopup
+        show={loading}
+        title="Loading..."
+        subtitle={`Loading consent logs for "${displayDomain}"`}
+      />
       {loadError ? (
         <div className="mx-auto mb-2 max-w-[1139px] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {loadError}
@@ -198,51 +207,108 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
         Analytics / Marketing / Preferences
       </p>
 
-      {/* Latest consent row */}
-      <p
-        className="absolute left-[28px] top-[166px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-        style={dm}
-      >
-        {loading ? '…' : latestConsent ? formatTimeUtc(latestConsent.createdAt) : '—'}
-      </p>
-      <p
-        className="absolute left-[259px] top-[166px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-        style={dm}
-      >
-        {loading ? '…' : latestConsent ? displayStatus(latestConsent.status) : '—'}
-      </p>
-      <p
-        className="absolute left-[426px] top-[166px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-        style={dm}
-      >
-        {loading ? '…' : latestConsent?.consentMethod?.trim() || '—'}
-      </p>
-      <div
-        className="absolute left-[600px] top-[166px] w-[537px] font-medium leading-[normal] text-[15px] text-[#4b5563]"
-        style={dm}
-      >
-        {loading ? (
-          <p className="mb-0">…</p>
-        ) : (
-          <>
-            <p className="mb-0">{line1}</p>
-            {line2 ? <p>{line2}</p> : null}
-          </>
-        )}
-      </div>
+      {/* Consent rows */}
+      {loading ? (
+        <>
+          <p
+            className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            …
+          </p>
+          <p
+            className="absolute left-[259px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            …
+          </p>
+          <p
+            className="absolute left-[426px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            …
+          </p>
+          <p
+            className="absolute left-[600px] w-[537px] font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            …
+          </p>
+        </>
+      ) : consentRows.length === 0 ? (
+        <>
+          <p
+            className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            —
+          </p>
+          <p
+            className="absolute left-[259px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            —
+          </p>
+          <p
+            className="absolute left-[426px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            —
+          </p>
+          <p
+            className="absolute left-[600px] w-[537px] font-medium leading-[normal] text-[15px] text-[#4b5563]"
+            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
+          >
+            —
+          </p>
+        </>
+      ) : (
+        consentRows.map((row, i) => {
+          const top = CONSENT_ROW_START + i * CONSENT_ROW_STEP;
+          return (
+            <div key={row.id}>
+              <p
+                className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+                style={{ ...dm, top: `${top}px` }}
+              >
+                {formatTimeUtc(row.createdAt)}
+              </p>
+              <p
+                className="absolute left-[259px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+                style={{ ...dm, top: `${top}px` }}
+              >
+                {displayStatus(row.status)}
+              </p>
+              <p
+                className="absolute left-[426px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
+                style={{ ...dm, top: `${top}px` }}
+              >
+                {row.consentMethod?.trim() || '—'}
+              </p>
+              <p
+                className="absolute left-[600px] w-[537px] truncate font-medium leading-[normal] text-[15px] text-[#4b5563]"
+                style={{ ...dm, top: `${top}px` }}
+                title={categoriesSummary(row.categories)}
+              >
+                {categoriesSummary(row.categories)}
+              </p>
+            </div>
+          );
+        })
+      )}
 
-      <HLine left={0} top={209} width={1137} />
+      <HLine left={0} top={consentSectionLineTop} width={1137} />
 
       {/* Cookie inventory header */}
       <p
-        className="absolute left-[28px] top-[226px] whitespace-nowrap font-medium leading-[normal] tracking-[-0.32px] text-[16px] text-[#007aff]"
-        style={dm}
+        className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] tracking-[-0.32px] text-[16px] text-[#007aff]"
+        style={{ ...dm, top: `${cookieHeaderTop}px` }}
       >
         Cookie inventory (set by whom, for what)
       </p>
       <p
-        className="absolute left-[28px] top-[259px] whitespace-nowrap font-medium leading-[normal] text-[16px] text-[#4b5563]"
-        style={dm}
+        className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[16px] text-[#4b5563]"
+        style={{ ...dm, top: `${cookieSubTop}px` }}
       >
         These are cookies detected for this site. Consent above shows whether the user accepted or rejected
         analytics/marketing
@@ -250,49 +316,49 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
       {/* Table headers */}
       <p
-        className="absolute left-[28px] top-[321px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
-        style={dm}
+        className="absolute left-[28px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
+        style={{ ...dm, top: `${cookieTableHeaderTop}px` }}
       >
         Cookie
       </p>
       <p
-        className="absolute left-[259px] top-[321px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
-        style={dm}
+        className="absolute left-[259px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
+        style={{ ...dm, top: `${cookieTableHeaderTop}px` }}
       >
         Category
       </p>
       <p
-        className="absolute left-[441px] top-[321px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
-        style={dm}
+        className="absolute left-[441px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
+        style={{ ...dm, top: `${cookieTableHeaderTop}px` }}
       >
         Provider
       </p>
       <p
-        className="absolute left-[600px] top-[321px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
-        style={dm}
+        className="absolute left-[600px] whitespace-nowrap font-semibold leading-[normal] text-[17px] text-black"
+        style={{ ...dm, top: `${cookieTableHeaderTop}px` }}
       >
         Purpose / Description
       </p>
 
-      <HLine left={28} top={352} width={1111} />
+      <HLine left={28} top={cookieTableLineTop} width={1111} />
 
       {loading ? (
         <p
-          className="absolute left-[28px] top-[382px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
-          style={dm}
+          className="absolute left-[28px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
+          style={{ ...dm, top: `${cookieRowStart}px` }}
         >
           Loading cookies…
         </p>
       ) : cookies.length === 0 ? (
         <p
-          className="absolute left-[28px] top-[382px] max-w-[1000px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
-          style={dm}
+          className="absolute left-[28px] max-w-[1000px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
+          style={{ ...dm, top: `${cookieRowStart}px` }}
         >
           No cookies recorded yet. Run a scan to populate.
         </p>
       ) : (
         cookies.map((c, i) => {
-          const topPx = COOKIE_ROW_START + i * COOKIE_ROW_STEP;
+          const topPx = cookieRowStart + i * COOKIE_ROW_STEP;
           const lineTop = topPx + LINE_AFTER_ROW;
           const topStyle: CSSProperties = { ...dm, top: `${topPx}px` };
           const descStyle: CSSProperties = { ...dm, top: `${topPx + 1}px` };
@@ -332,7 +398,7 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
       {!loading && cookies.length > 0 ? (
         <HLine
           left={28}
-          top={COOKIE_ROW_START + (cookies.length - 1) * COOKIE_ROW_STEP + LINE_AFTER_ROW}
+          top={cookieRowStart + (cookies.length - 1) * COOKIE_ROW_STEP + LINE_AFTER_ROW}
           width={1111}
         />
       ) : null}

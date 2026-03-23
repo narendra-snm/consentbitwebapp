@@ -51,7 +51,10 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
   const handleSelectSite = (site: any) => {
     setActiveSiteId(site?.id ? String(site.id) : null);
     setDomainOpen(false);
-    if (site?.id) router.push(`/dashboard/${site.id}`);
+    if (!site?.id) return;
+    if ((pathname || "").startsWith("/dashboard/profile")) return;
+    if ((pathname || "").startsWith("/dashboard/all-domain")) return;
+    router.push(`/dashboard/${site.id}`);
   };
 
   return (
@@ -128,7 +131,17 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
           <span className="px-2 py-3.5 bg-gray-100 text-gray-600">
             Current Plan :
           </span>
-          <span className="px-3 py-1 bg-[#E6F1FD]">{planLabel}</span>
+          <button
+            type="button"
+            onClick={() => {
+              const id = activeSiteId || sites[0]?.id;
+              if (id) router.push(`/dashboard/${id}/upgrade`);
+              else router.push("/dashboard");
+            }}
+            className="px-3 py-1 bg-[#E6F1FD] text-[#007AFF]"
+          >
+            {planLabel}
+          </button>
         </div>
 
         {/* UPGRADE BUTTON */}

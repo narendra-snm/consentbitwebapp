@@ -7,7 +7,7 @@ import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
 import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 import type { BannerLayoutValue } from './bannerAppearance';
-import { weightLabelToNumeric } from './bannerAppearance';
+import { pxBorderRadiusToRem, weightLabelToNumeric } from './bannerAppearance';
 import {CookieConsentBanner} from "./Iab"
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
@@ -27,6 +27,7 @@ export default function ConsentPreview({
   publishError = null,
   publishSuccess = false,
   onDismissPublishSuccess,
+  onNext,
   bothModeBannerType,
   onBothModeBannerTypeChange,
   /** Initial cookie banner layout (matches published embed: box / banner / popup). */
@@ -50,7 +51,9 @@ export default function ConsentPreview({
   publishSuccess?: boolean;
   /** Called when user closes the publish-success popup (backdrop or OK). */
   onDismissPublishSuccess?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius'>;
+  /** Optional action for top-right Next button. */
+  onNext?: () => void;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'borderRadius'>;
   content?: {
     title?: string;
     message?: string;
@@ -156,6 +159,13 @@ export default function ConsentPreview({
     initialLayout?.position ?? bannerLayout?.position ?? "box";
   const layoutAlign =
     initialLayout?.alignment ?? bannerLayout?.alignment ?? "bottom-left";
+  const bannerRadiusRem = useMemo(() => {
+    const raw =
+      initialLayout?.borderRadius ??
+      (bannerLayout as { borderRadius?: string } | null)?.borderRadius ??
+      "12";
+    return pxBorderRadiusToRem(String(raw));
+  }, [bannerLayout, initialLayout?.borderRadius]);
 
   type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
   const [modalView, setModalView] = useState<ModalView>("main");
@@ -350,7 +360,11 @@ export default function ConsentPreview({
             ) : null}
           </div>
 
-          <button className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors">
+          <button
+            type="button"
+            onClick={onNext}
+            className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
+          >
             Next
           </button>
         </div>
@@ -528,7 +542,7 @@ export default function ConsentPreview({
 
               <div
                 className="rounded-lg border border-[#e5e7eb] overflow-hidden mb-1 divide-y divide-[#e5e7eb]"
-                style={{ backgroundColor: colors.bannerBg }}
+                style={{ backgroundColor: colors.bannerBg, borderRadius: bannerRadiusRem }}
               >
                 {/* Strictly Necessary — Always active */}
                 <div>

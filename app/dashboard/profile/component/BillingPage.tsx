@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBillingInvoices, type BillingInvoice } from "@/lib/client-api";
+import { useRouter } from "next/navigation";
 
 const svgPaths =  {
 p112ba780: "M6.3 0H2.8C2.41395 0 2.1 0.31395 2.1 0.7V2.1H0.7C0.31395 2.1 0 2.41395 0 2.8V6.3C0 6.68605 0.31395 7 0.7 7H4.2C4.58605 7 4.9 6.68605 4.9 6.3V4.9H6.3C6.68605 4.9 7 4.58605 7 4.2V0.7C7 0.31395 6.68605 0 6.3 0ZM0.7 6.3V2.8H4.2L4.2007 6.3H0.7ZM6.3 4.2H4.9V2.8C4.9 2.41395 4.58605 2.1 4.2 2.1H2.8V0.7H6.3V4.2Z",
@@ -27,17 +28,24 @@ type Props = {
   currentPlan: "Free" | "Basic" | "Essential" | "Growth";
   domainCount: number;
   organizationId?: string | null;
+  activeSiteId?: string | null;
   scansCount?: number;
   pageViews?: number;
 };
+
+// Simple in-memory cache to avoid refetch on each tab switch.
+const invoiceCache = new Map<string, { rows: BillingInvoice[]; ts: number }>();
+const INVOICE_TTL_MS = 60_000;
 
 export default function BillingPage({
   currentPlan,
   domainCount,
   organizationId,
+  activeSiteId,
   scansCount = 0,
   pageViews = 0,
 }: Props) {
+  const router = useRouter();
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [rawInvoices, setRawInvoices] = useState<BillingInvoice[]>([]);
@@ -47,12 +55,49 @@ export default function BillingPage({
       setRawInvoices([]);
       return;
     }
+    const now = Date.now();
+    const cached = invoiceCache.get(organizationId);
+    if (cached && now - cached.ts < INVOICE_TTL_MS) {
+      setRawInvoices(cached.rows);
+      setInvoiceError(null);
+      setInvoiceLoading(false);
+      return;
+    }
+    if (typeof window !== "undefined" && !cached) {
+      try {
+        const raw = window.sessionStorage.getItem(`billing-invoices:${organizationId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { rows?: BillingInvoice[]; ts?: number };
+          if (Array.isArray(parsed?.rows) && parsed?.ts && now - parsed.ts < INVOICE_TTL_MS) {
+            invoiceCache.set(organizationId, { rows: parsed.rows, ts: parsed.ts });
+            setRawInvoices(parsed.rows);
+            setInvoiceError(null);
+            setInvoiceLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Ignore cache parse issues.
+      }
+    }
     let cancelled = false;
-    setInvoiceLoading(true);
+    if (rawInvoices.length === 0) setInvoiceLoading(true);
     setInvoiceError(null);
     getBillingInvoices(organizationId, 20)
       .then((res) => {
-        if (!cancelled) setRawInvoices(Array.isArray(res.invoices) ? res.invoices : []);
+        if (!cancelled) {
+          const rows = Array.isArray(res.invoices) ? res.invoices : [];
+          setRawInvoices(rows);
+          const entry = { rows, ts: Date.now() };
+          invoiceCache.set(organizationId, entry);
+          if (typeof window !== "undefined") {
+            try {
+              window.sessionStorage.setItem(`billing-invoices:${organizationId}`, JSON.stringify(entry));
+            } catch {
+              // Ignore storage quota errors.
+            }
+          }
+        }
       })
       .catch((e) => {
         if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices");
@@ -63,7 +108,7 @@ export default function BillingPage({
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, rawInvoices.length]);
 
   const invoices = useMemo<Invoice[]>(() => {
     return (rawInvoices || []).map((inv) => {
@@ -133,14 +178,14 @@ export default function BillingPage({
                 
                 {/* All Domains Dropdown */}
                 <div className="relative">
-                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
-                    <option>All Domains</option>
-                  </select>
-                  <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
-                      <path d="M1 1L5 5L9 1" stroke="#4B5563" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/dashboard/all-domain")}
+                    className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
+                    style={{ fontVariationSettings: "'opsz' 14" }}
+                  >
+                    {`All Domains (${domainCount})`}
+                  </button>
                 </div>
               </div>
             </div>
@@ -301,12 +346,20 @@ export default function BillingPage({
       {/* Footer Actions */}
       <div className=" pt-7 flex gap-4">
         <button
+          onClick={() =>
+            router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard")
+          }
           className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 active:bg-blue-800 text-white  py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={!canUpgrade}
         >
           {upgradeCta}
         </button>
-        <button className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 active:bg-gray-400 text-[#4B5563]  py-2 px-4 rounded-lg transition-colors cursor-pointer">
+        <button
+          onClick={() =>
+            router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard")
+          }
+          className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 active:bg-gray-400 text-[#4B5563]  py-2 px-4 rounded-lg transition-colors cursor-pointer"
+        >
           Cancel Subscription
         </button>
       </div>

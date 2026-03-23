@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  addCustomCookie,
   deleteScheduledScan,
   getScanHistory,
   getScheduledScans,
@@ -12,6 +13,7 @@ import {
   type ScheduledScan,
 } from '@/lib/client-api';
 import { ScheduleScanModal } from './ScheduleScanModal';
+import LoadingPopup from './component/LoadingPopup';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -116,7 +118,7 @@ function formatCookieDuration(expires: string | null) {
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
-  const { refresh } = useDashboardSession();
+  const { refresh, sites } = useDashboardSession();
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
@@ -125,6 +127,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [scanning, setScanning] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('necessary');
+  const [showAddCookie, setShowAddCookie] = useState(false);
+  const [savingCustomCookie, setSavingCustomCookie] = useState(false);
+  const [customCookieForm, setCustomCookieForm] = useState({
+    name: '',
+    domain: '',
+    duration: '',
+    scriptUrlPattern: '',
+    description: '',
+    category: 'necessary',
+  });
 
   const loadData = useCallback(async () => {
     if (!siteId) return;
@@ -181,6 +193,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   }, [cookiesByCategory]);
 
   const selectedCookies = cookiesByCategory[selectedCategory] || [];
+  const siteLabel = useMemo(() => {
+    const list = Array.isArray(sites) ? sites : [];
+    const site = list.find((s: any) => String(s?.id) === String(siteId));
+    return String(site?.name || site?.domain || "this site");
+  }, [siteId, sites]);
 
   const handleScanNow = async () => {
     if (!siteId || scanning) return;
@@ -207,6 +224,49 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     }
   };
 
+  const resetCustomCookieForm = () => {
+    setCustomCookieForm({
+      name: '',
+      domain: '',
+      duration: '',
+      scriptUrlPattern: '',
+      description: '',
+      category: selectedCategory || 'necessary',
+    });
+  };
+
+  const openAddCookie = () => {
+    resetCustomCookieForm();
+    setShowAddCookie(true);
+  };
+
+  const handleSaveCustomCookie = async () => {
+    if (!siteId) return;
+    if (!customCookieForm.name.trim() || !customCookieForm.domain.trim() || !customCookieForm.description.trim()) {
+      setError('Cookie ID, Domain and Description are required.');
+      return;
+    }
+    setError(null);
+    setSavingCustomCookie(true);
+    try {
+      await addCustomCookie({
+        siteId,
+        name: customCookieForm.name.trim(),
+        domain: customCookieForm.domain.trim(),
+        category: customCookieForm.category,
+        duration: customCookieForm.duration.trim(),
+        scriptUrlPattern: customCookieForm.scriptUrlPattern.trim(),
+        description: customCookieForm.description.trim(),
+      });
+      setShowAddCookie(false);
+      await loadData();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save cookie');
+    } finally {
+      setSavingCustomCookie(false);
+    }
+  };
+
   const statusBadge = (status: string) => {
     const ok = String(status).toLowerCase() === 'completed';
     return (
@@ -228,6 +288,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
+      <LoadingPopup
+        show={scanning || loading}
+        
+        title={scanning ? "Scanning..." : "Loading..."}
+        subtitle={
+          scanning
+            ? `Your site "${siteLabel}" is scanning`
+            : `Fetching scan data for "${siteLabel}"`
+        }
+      />
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
@@ -300,6 +370,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={openAddCookie}
               className="flex h-[42px] items-center gap-2 rounded-[11px] border border-[#007aff] px-4 font-['DM_Sans'] text-sm font-normal text-[#007aff] transition-colors hover:bg-blue-50"
               style={dm}
             >
@@ -354,9 +425,19 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               <ul className="mt-6 space-y-4">
                 {selectedCookies.map((c) => (
                   <li key={c.id} className="rounded-lg border border-[#e5e7eb] p-4">
-                    <p className="font-['DM_Sans'] text-sm font-semibold text-black" style={dm}>
-                      {c.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-['DM_Sans'] text-sm font-semibold text-black" style={dm}>
+                        {c.name}
+                      </p>
+                      {String(c.source || '').startsWith('user-rule:') ? (
+                        <span
+                          className="inline-flex h-5 items-center rounded-full bg-[#e6f1fd] px-2 text-[11px] font-medium text-[#007aff]"
+                          style={dm}
+                        >
+                          User-defined
+                        </span>
+                      ) : null}
+                    </div>
                     {c.provider ? (
                       <p className="mt-1 font-['DM_Sans'] text-xs text-[#64748b]" style={dm}>
                         Provider: {c.provider}
@@ -380,6 +461,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </p>
                 <button
                   type="button"
+                  onClick={openAddCookie}
                   className="mt-4 font-['DM_Sans'] text-sm font-medium text-[#007aff] hover:text-[#0066d6] hover:underline"
                   style={dm}
                 >
@@ -476,6 +558,75 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           void refresh({ showLoading: false });
         }}
       />
+
+      {showAddCookie ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-[760px] rounded-[12px] bg-white p-6">
+            <h3 className="mb-5 text-2xl font-semibold text-black" style={dm}>Add Cookie</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                value={customCookieForm.name}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, name: e.target.value }))}
+                placeholder="Cookie ID"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <input
+                value={customCookieForm.domain}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, domain: e.target.value }))}
+                placeholder="Domain"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <input
+                value={customCookieForm.duration}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, duration: e.target.value }))}
+                placeholder="Duration"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <select
+                value={customCookieForm.category}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, category: e.target.value }))}
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              >
+                {ALL_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORY_LABELS[cat] ?? cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              value={customCookieForm.scriptUrlPattern}
+              onChange={(e) => setCustomCookieForm((s) => ({ ...s, scriptUrlPattern: e.target.value }))}
+              placeholder="Script URL Pattern (optional)"
+              className="mt-3 h-11 w-full rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+            />
+            <textarea
+              value={customCookieForm.description}
+              onChange={(e) => setCustomCookieForm((s) => ({ ...s, description: e.target.value }))}
+              placeholder="Description"
+              rows={8}
+              className="mt-3 w-full rounded-md border border-[#cbd5e1] px-3 py-2 text-sm outline-none focus:border-[#007aff]"
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAddCookie(false)}
+                className="h-10 rounded-md border border-[#cbd5e1] px-6 text-sm text-[#1f2937]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveCustomCookie()}
+                disabled={savingCustomCookie}
+                className="h-10 rounded-md bg-[#007aff] px-6 text-sm text-white disabled:opacity-60"
+              >
+                {savingCustomCookie ? 'Saving...' : 'Save draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

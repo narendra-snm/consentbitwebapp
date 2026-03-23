@@ -6,15 +6,19 @@ export async function GET(request: NextRequest) {
     const cookie = request.headers.get("cookie") || "";
     const { searchParams } = new URL(request.url);
     const organizationId = (searchParams.get("organizationId") || "").trim();
+    const siteId = (searchParams.get("siteId") || "").trim();
 
     if (!organizationId) {
       return NextResponse.json({ error: "organizationId required" }, { status: 400 });
     }
 
-    const response = await serverFetch(
-      `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}`,
-      { method: "GET", cookies: cookie },
-    );
+    const query = siteId
+      ? `organizationId=${encodeURIComponent(organizationId)}&siteId=${encodeURIComponent(siteId)}`
+      : `organizationId=${encodeURIComponent(organizationId)}`;
+    const response = await serverFetch(`/api/billing/usage?${query}`, {
+      method: "GET",
+      cookies: cookie,
+    });
     const data = await response
       .json()
       .catch(async () => ({ error: await response.text() }));

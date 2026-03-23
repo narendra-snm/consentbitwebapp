@@ -8,7 +8,7 @@ import Header from "./components/header";
 import InstallConsentModal from "./components/InstallConsentModal";
 import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
 
 export default function DashboardPage() {
@@ -19,6 +19,12 @@ export default function DashboardPage() {
  const userEmail = user?.email ?? "";
  const showOnboarding = authenticated && (sites?.length || 0) === 0;
  const userName = useMemo(() => (userEmail ? userEmail.split("@")[0] : undefined), [userEmail]);
+ const [showInstallModal, setShowInstallModal] = useState(false);
+
+ const currentScriptUrl = useMemo(() => {
+   if (!activeSite?.id) return "";
+   return String(activeSite?.scriptUrl || `/client_data/${activeSite.id}/script.js`);
+ }, [activeSite]);
 
   // When sites exist, keep selected siteId in URL.
   useEffect(() => {
@@ -49,8 +55,14 @@ export default function DashboardPage() {
         siteDomain={activeSite?.domain}
         bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
       />
-      <SiteSummaryCards site={activeSite} />
+      <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={activeSiteId} />
+      <InstallConsentModal
+        open={showInstallModal}
+        scriptUrl={currentScriptUrl}
+        siteDomain={activeSite?.domain}
+        onClose={() => setShowInstallModal(false)}
+      />
       {/* <AddSiteModal open={true}  /> */}
       {/* {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />} */}
       {/* <InstallConsentModal open={true} /> */}

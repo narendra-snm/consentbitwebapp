@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import DatePicker from 'react-datepicker';
 import { createScheduledScan } from '@/lib/client-api';
+import LoadingPopup from './component/LoadingPopup';
 
 type Props = {
   isOpen: boolean;
@@ -57,7 +58,13 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
   const dm = { fontVariationSettings: "'opsz' 14" as const };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <>
+      <LoadingPopup
+        show={loading}
+        title="Scheduling scan..."
+        subtitle="Please wait while we save your scan schedule."
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div
         className="w-[min(100vw-2rem,400px)] max-h-[min(90vh,640px)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
         role="dialog"
@@ -156,5 +163,6 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
         </div>
       </div>
     </div>
+    </>
   );
 }
