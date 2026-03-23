@@ -1,0 +1,11 @@
+# Cloudflare Pages — Workers runtime (source of truth from Git)
+# https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+#
+# `nodejs_compat` is required for @cloudflare/next-on-pages (Next.js uses node:buffer, etc.).
+# Commit + push this file; redeploy. Use V2 build system on Pages.
+#
+# `name` must match Workers & Pages → project name exactly.
+name = "consentbitfrontend"
+pages_build_output_dir = ".vercel/output/static"
+compatibility_date = "2026-03-23"
+compatibility_flags = ["nodejs_compat"]
