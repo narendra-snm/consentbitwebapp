@@ -109,6 +109,7 @@ export default function page({ siteId }: { siteId: string }) {
 
   const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
+    console.log(effectivePlanId,"activeOrganizationId from container")
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const siteRef = useRef(site);
   siteRef.current = site;
@@ -578,7 +579,9 @@ export default function page({ siteId }: { siteId: string }) {
       setSavingContent(false);
     }
   };
-
+const [iabEnabled, setIabEnabled] = useState(false);
+const isToggleEnabled =
+  effectivePlanId === "growth" || effectivePlanId === "essential";
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_740px]">
       <Sidebar active={active} setActive={setActive} />
@@ -610,35 +613,72 @@ export default function page({ siteId }: { siteId: string }) {
             </div>
 
             {/* IAB Support Card */}
-            <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4">
-              <p className="font-semibold text-base text-black mb-4">
-                Support IAB TCF v2.3
-              </p>
+       
 
-              {/* Toggle 1 */}
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-black tracking-tight">
-                  Support Google's Additional Consent Mode
-                </p>
+<div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4">
+  <p className="font-semibold text-base text-black mb-4">
+    Support IAB TCF v2.3
+  </p>
 
-                <div className="relative">
-                  <div className="bg-[#d8d8d8] h-[22px] w-[42px] rounded-full"></div>
-                  <div className="absolute bg-white left-[3px] top-[2px] rounded-full w-[18px] h-[18px]"></div>
-                </div>
-              </div>
+  <div className="flex items-center justify-between">
+    <p className="text-xs text-black tracking-tight">
+      Enable IAB TCF Support
+    </p>
 
-              {/* Toggle 2 */}
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-black tracking-tight">
-                  Enable Google's Advertiser Consent Mode
-                </p>
+    {/* Toggle + Tooltip Wrapper */}
+    <div className="relative group">
+      
+      {/* Toggle */}
+      <div
+        className={`relative ${
+          !isToggleEnabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+        }`}
+        onClick={() => {
+          if (!isToggleEnabled) return;
+          setIabEnabled((prev) => !prev);
+        }}
+      >
+        <div
+          className={`h-[22px] w-[42px] rounded-full transition ${
+            iabEnabled ? "bg-[#007aff]" : "bg-[#d8d8d8]"
+          }`}
+        ></div>
 
-                <div className="relative">
-                  <div className="bg-[#d8d8d8] h-[22px] w-[42px] rounded-full"></div>
-                  <div className="absolute bg-white left-[3px] top-[2px] rounded-full w-[18px] h-[18px]"></div>
-                </div>
-              </div>
-            </div>
+        <div
+          className={`absolute top-[2px] rounded-full w-[18px] h-[18px] bg-white transition ${
+            iabEnabled ? "left-[21px]" : "left-[3px]"
+          }`}
+        ></div>
+      </div>
+
+      {/* Tooltip (only when disabled) */}
+     {!isToggleEnabled && (
+  <div className="absolute right-0 bottom-[120%] hidden group-hover:block z-50">
+    
+    <div className="w-[222px] bg-white rounded-xl shadow-xl border border-gray-200 p-2 pt-4">
+      
+      {/* Title */}
+      <p className="font-semibold   mb-1">
+        Upgrade to Pro
+      </p>
+
+      {/* Description */}
+      <p className="text-sm text-[#1A5EA1] leading-relaxed mb-3">
+        To enable this feature, please switch to the Essential or Growth plan.
+      </p>
+
+      {/* Button */}
+      <button className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
+        Get Pro Plan
+        <span>→</span>
+      </button>
+    </div>
+
+  </div>
+)}
+    </div>
+  </div>
+</div>
           </div>
         )}
         {active === "Content" && (
@@ -845,6 +885,7 @@ export default function page({ siteId }: { siteId: string }) {
         )}
       </div>
       <ConsentPreview
+      iabEnabled={iabEnabled}
         key={previewRevision}
         previewBannerType={previewBannerType}
         siteDomain={site?.domain ?? null}

@@ -8,13 +8,14 @@ import floatingBtnLogo from '@/public/asset/logo.webp';
 import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 import type { BannerLayoutValue } from './bannerAppearance';
 import { weightLabelToNumeric } from './bannerAppearance';
-
+import {CookieConsentBanner} from "./Iab"
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
 }
 
 export default function ConsentPreview({
+  iabEnabled,
   previewBannerType,
   siteDomain,
   consentType,
@@ -31,6 +32,7 @@ export default function ConsentPreview({
   /** Initial cookie banner layout (matches published embed: box / banner / popup). */
   initialLayout,
 }: {
+  iabEnabled: boolean;
   previewBannerType?: "gdpr" | "ccpa";
   siteDomain?: string | null;
   consentType?: 'gdpr' | 'ccpa' | 'both';
@@ -48,7 +50,7 @@ export default function ConsentPreview({
   publishSuccess?: boolean;
   /** Called when user closes the publish-success popup (backdrop or OK). */
   onDismissPublishSuccess?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment'>;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius'>;
   content?: {
     title?: string;
     message?: string;
@@ -376,8 +378,9 @@ export default function ConsentPreview({
           }`}
           style={bannerTypographyStyle}
         >
-          {modalView === 'main' ? (
+          {!iabEnabled && <>{  modalView === 'main' ? (
             <div
+            style={{borderRadius: `${initialLayout?.borderRadius}px` || "12px"}}
               className={
                 layoutPos === 'banner'
                   ? 'w-full shrink-0 self-stretch'
@@ -392,7 +395,7 @@ export default function ConsentPreview({
                   ? 'rounded-t-lg rounded-b-none border border-b-0 border-[#e2e8f0]'
                   : 'rounded-md border border-[#e2e8f0]'
               }`}
-              style={{ backgroundColor: colors.bannerBg }}
+              style={{ backgroundColor: colors.bannerBg,borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
             >
               {content?.closeButton ? (
                 <button
@@ -448,7 +451,7 @@ export default function ConsentPreview({
               ) : null}
 
               {selectedBannerType !== 'ccpa' ? (
-                <div className="flex gap-2" style={{justifyContent:`${alignment==="right"?"flex-end":alignment==="center"?"center":"flex-start"}`}}>
+                <div className="flex gap-2" style={{justifyContent:`${alignment==="right"?"flex-end":alignment==="center"?"center":"flex-start"}`, borderRadius: initialLayout?.borderRadius || 12}}>
                   {content?.customizeButton !== false ? (
                     <button
                       className="px-3 py-[2px] border text-[10px] rounded"
@@ -487,7 +490,7 @@ export default function ConsentPreview({
           {modalView === "gdpr-preferences" ? (
             <div
               className="rounded-md shadow-lg w-full p-5 border border-[#e2e8f0]"
-              style={{ backgroundColor: colors.bannerBg }}
+              style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
             >
               <div className="flex items-center justify-between mb-3">
                 <p style={headingStyle} className="text-[14px] tracking-tight">
@@ -679,7 +682,7 @@ export default function ConsentPreview({
           ) : (
             <div
               className="rounded-md shadow-lg w-full p-4 border border-[#e2e8f0]"
-              style={{ backgroundColor: colors.bannerBg }}
+              style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
             >
               <div className="flex items-center justify-between mb-3">
                 <p style={headingStyle} className="text-[13px] tracking-tight">
@@ -746,8 +749,20 @@ export default function ConsentPreview({
           )}
             </div>
             </div>
-          )}
-
+          )}</>}
+{iabEnabled && <CookieConsentBanner alignment={initialLayout?.alignment} device={device} config={{
+  bannerBg:colors.bannerBg || "#FFFFFF",
+  textColor:colors.textColor || "#000000",
+  headingColor: colors.headingColor || "#000000",
+  buttonColor:colors.buttonColor || "#FFFFFF",
+  buttonTextColor:colors.buttonTextColor || "#007AFF",
+  SecButtonColor:colors.SecButtonColor || "#007AFF",
+  SecButtonTextColor: colors.SecButtonTextColor || "#FFFFFF",
+  textAlign: alignment || "left",
+  fontWeight: "400",
+  borderRadius: initialLayout?.borderRadius || "12",
+  bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
+}} />}
           {/* Corner of the browser mock (default bottom-left; right when Position = bottom right) */}
           {floatingButton.enabled ? (
             <button
