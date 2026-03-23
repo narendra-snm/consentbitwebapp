@@ -1,6 +1,14 @@
 import { Globe, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
-export default function SiteSummaryCards({ site }: { site?: any | null }) {
+export default function SiteSummaryCards({
+  site,
+  onOpenInstall,
+}: {
+  site?: any | null;
+  onOpenInstall?: () => void;
+}) {
+  const siteId = site?.id ? String(site.id) : null;
   const formatDate = (value: any) => {
     if (!value) return "—";
     const d = new Date(value);
@@ -69,7 +77,11 @@ export default function SiteSummaryCards({ site }: { site?: any | null }) {
               )}
             </p>
 
-            <button className="text-blue-600 text-xs  font-medium mt-3.5">
+            <button
+              type="button"
+              onClick={onOpenInstall}
+              className="text-blue-600 text-xs  font-medium mt-3.5"
+            >
               Get your installation code ↓
             </button>
             </div>
@@ -106,13 +118,16 @@ export default function SiteSummaryCards({ site }: { site?: any | null }) {
         </div>
 
         {/* Footer */}
-        <div className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between">
+        <Link
+          href={siteId ? `/dashboard/${siteId}/cookie-banner` : "/dashboard"}
+          className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between"
+        >
           <span className="text-blue-600 text-sm font-medium">
             Customize cookie banner
           </span>
 
           <ArrowRight size={18} className="text-blue-600" />
-        </div>
+        </Link>
       </div>
 
       {/* RIGHT CARD */}
@@ -195,13 +210,16 @@ export default function SiteSummaryCards({ site }: { site?: any | null }) {
   </div>
 
   {/* Footer */}
-  <div className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between">
+  <Link
+    href={siteId ? `/dashboard/${siteId}/scan` : "/dashboard"}
+    className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between"
+  >
     <span className="text-blue-600 text-sm font-medium">
       Manage cookies
     </span>
 
     <ArrowRight size={18} className="text-blue-600" />
-  </div>
+  </Link>
 
 </div>
 

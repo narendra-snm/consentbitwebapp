@@ -4,7 +4,11 @@ import { createContext, useContext, useState } from "react";
 const AppContext = createContext();
 
 /** Mirrors cookie-banner `appearance` for preview (Layout / Colors / Type). */
-const defaultBannerLayout = { position: "box", alignment: "bottom-left" };
+const defaultBannerLayout = {
+  position: "box",
+  alignment: "bottom-left",
+  borderRadius: "12",
+};
 
 /** Keep in sync with `DEFAULT_APPEARANCE.colors` in `bannerAppearance.ts`. */
 const defaultColors = {

@@ -26,6 +26,7 @@ import {
 import { TRANSLATIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
+import InstallConsentModal from "../../../components/InstallConsentModal";
 
 /** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
 type RegulationSnapshot = {
@@ -47,6 +48,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [openAccordionKey, setOpenAccordionKey] = useState<
     "cookieNotice" | "preferenceBanner" | null
   >("cookieNotice");
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const [contentSettings, setContentSettings] = useState({
     title: "We value your privacy",
     acceptAll: "Accept",
@@ -97,6 +99,7 @@ export default function page({ siteId }: { siteId: string }) {
     setPreviewBannerLayout({
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
+      borderRadius: appearance.layout.borderRadius,
     });
   }, [
     appearance,
@@ -110,6 +113,11 @@ export default function page({ siteId }: { siteId: string }) {
   const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
+  const currentScriptUrl = useMemo(() => {
+    if (!site?.id) return "";
+    return String(site?.scriptUrl || `/client_data/${site.id}/script.js`);
+  }, [site]);
+
   const siteRef = useRef(site);
   siteRef.current = site;
 
@@ -858,12 +866,19 @@ export default function page({ siteId }: { siteId: string }) {
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
+        onNext={() => setShowInstallModal(true)}
         bothModeBannerType={
           consentType === "both" ? bothContentFocus : undefined
         }
         onBothModeBannerTypeChange={
           consentType === "both" ? setBothContentFocus : undefined
         }
+      />
+      <InstallConsentModal
+        open={showInstallModal}
+        scriptUrl={currentScriptUrl}
+        siteDomain={site?.domain}
+        onClose={() => setShowInstallModal(false)}
       />
     </div>
   );

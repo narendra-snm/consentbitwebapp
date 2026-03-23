@@ -298,9 +298,11 @@ export type BillingUsage = {
 
 export async function getBillingUsage(
   organizationId: string,
+  siteId?: string,
 ): Promise<BillingUsage> {
+  const siteParam = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
   const res = await fetch(
-    `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}`,
+    `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}${siteParam}`,
     { credentials: "include" },
   );
   const data = await res
@@ -310,6 +312,27 @@ export async function getBillingUsage(
   return data as BillingUsage;
 }
 // billing usage ends here
+
+// subscription cancel starts here
+export async function cancelSubscription(payload: {
+  subscriptionId?: string | null;
+  stripeSubscriptionId?: string | null;
+}): Promise<{ success: true; message?: string }> {
+  const res = await fetch("/api/subscriptions/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await res
+    .json()
+    .catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Cancel subscription failed: ${res.status}`);
+  }
+  return data as { success: true; message?: string };
+}
+// subscription cancel ends here
 
 // —— Cookie scan (site scanner) ——
 export type ScanHistoryRow = {
@@ -369,6 +392,26 @@ export async function getSiteCookies(siteId: string): Promise<{
   const res = await fetch(`/api/cookies?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
   const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
   if (!res.ok || !data.success) throw new Error(data.error || `Cookies failed: ${res.status}`);
+  return data;
+}
+
+export async function addCustomCookie(payload: {
+  siteId: string;
+  name: string;
+  domain?: string;
+  category: string;
+  duration?: string;
+  scriptUrlPattern?: string;
+  description?: string;
+}): Promise<{ success: boolean }> {
+  const res = await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  if (!res.ok || !data.success) throw new Error(data.error || `Add cookie failed: ${res.status}`);
   return data;
 }
 

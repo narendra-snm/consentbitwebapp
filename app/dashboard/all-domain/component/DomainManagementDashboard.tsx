@@ -1,6 +1,8 @@
 "use client";
-import { useState } from 'react';
-import { Copy, Trash2, MoreHorizontal, ChevronDown, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useDashboardSession } from '../../DashboardSessionProvider';
+import { cancelSubscription } from '@/lib/client-api';
 const svgPaths = {
 p10d33ac0: "M6.28298 3.04688L6.06631 6.40354C6.02964 6.92687 5.99964 7.33354 5.06964 7.33354H2.92964C1.99964 7.33354 1.96964 6.92687 1.93298 6.40354L1.71631 3.04688",
 p1b386300: "M3.27284 4.43681L3.20872 1.75H3.78582L3.72704 4.43681H3.27284ZM3.50261 5.6C3.39931 5.6 3.31381 5.56723 3.24613 5.5017C3.182 5.43253 3.14994 5.35061 3.14994 5.25596C3.14994 5.15766 3.182 5.07574 3.24613 5.01021C3.31381 4.94104 3.39931 4.90645 3.50261 4.90645C3.60236 4.90645 3.68429 4.94104 3.74842 5.01021C3.8161 5.07574 3.84994 5.15766 3.84994 5.25596C3.84994 5.35061 3.8161 5.43253 3.74842 5.5017C3.68429 5.56723 3.60236 5.6 3.50261 5.6Z",
@@ -14,27 +16,13 @@ p478eb80: "M7 1.99382C5.89 1.88382 4.77333 1.82715 3.66 1.82715C3 1.82715 2.34 1
 interface Domain {
   id: string;
   url: string;
-  status: 'Active' | 'Cancelled' | 'Canceling' | 'Expired';
-  billingPeriod: 'Yearly' | 'Monthly';
+  status: 'Active' | 'Inactive' | 'Expired';
+  billingPeriod: 'Yearly' | 'Monthly' | 'Free';
   expirationDate: string;
-  licenseKey: string;
   created: string;
+  subscriptionId: string | null;
+  stripeSubscriptionId: string | null;
 }
-
-const mockDomains: Domain[] = [
-  { id: '1', url: 'www.consentbit-test-dashboard.com/', status: 'Active', billingPeriod: 'Yearly', expirationDate: 'N/A', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '2', url: 'www.consentbit-test-dashboard.com/', status: 'Active', billingPeriod: 'Monthly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '3', url: 'www.consentbit-test-dashboard.com/', status: 'Active', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '4', url: 'www.consentbit-test-dashboard.com/', status: 'Cancelled', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '5', url: 'www.consentbit-test-dashboard.com/', status: 'Canceling', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '6', url: 'www.consentbit-test-dashboard.com/', status: 'Expired', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '7', url: 'www.consentbit-test-dashboard.com/', status: 'Expired', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '8', url: 'www.consentbit-test-dashboard.com/', status: 'Active', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '9', url: 'www.consentbit-test-dashboard.com/', status: 'Cancelled', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '10', url: 'www.consentbit-test-dashboard.com/', status: 'Canceling', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '11', url: 'www.consentbit-test-dashboard.com/', status: 'Expired', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-  { id: '12', url: 'www.consentbit-test-dashboard.com/', status: 'Expired', billingPeriod: 'Yearly', expirationDate: '12/12/26', licenseKey: 'KEY-GN5B-PUH8-7NLK', created: '12/12/26' },
-];
 
 const StatusBadge = ({ status }: { status: Domain['status'] }) => {
   const styles = {
@@ -43,12 +31,7 @@ const StatusBadge = ({ status }: { status: Domain['status'] }) => {
       text: 'text-[#118a41]',
       dotColor: '#118A41',
     },
-    Cancelled: {
-      bg: 'bg-[#f5b6b6]',
-      text: 'text-[#8a1111]',
-      dotColor: '#8A1111',
-    },
-    Canceling: {
+    Inactive: {
       bg: 'bg-[#f5b6b6]',
       text: 'text-[#8a1111]',
       dotColor: '#8A1111',
@@ -72,7 +55,7 @@ const StatusBadge = ({ status }: { status: Domain['status'] }) => {
       <p className={`${style.text} text-[10px] tracking-[-0.5px] whitespace-nowrap`} style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>
         {status}
       </p>
-      {status === 'Canceling' && (
+      {status === 'Inactive' && (
         <div className="w-[7px] h-[7px]">
           <svg className="block size-full" viewBox="0 0 7 7" fill="none">
             <circle cx="3.5" cy="3.5" r="3.25" stroke="#8A1111" strokeWidth="0.5" />
@@ -101,33 +84,103 @@ const FilterButton = ({ label }: { label: string }) => {
 
 const ThreeDotMenu = () => {
   return (
-    <button className="w-[17px] h-[3px] flex items-center justify-center">
+    <div className="w-[17px] h-[3px] flex items-center justify-center">
       <svg className="block size-full" viewBox="0 0 17 3" fill="none">
         <circle cx="1.5" cy="1.5" r="1.5" fill="#4B5563" />
         <circle cx="8.5" cy="1.5" r="1.5" fill="#4B5563" />
         <circle cx="15.5" cy="1.5" r="1.5" fill="#4B5563" />
       </svg>
-    </button>
-  );
-};
-
-const CopyIcon = () => {
-  return (
-    <svg className="block size-full" viewBox="0 0 9.80005 9.80005" fill="none">
-      <path d={svgPaths.p1ce1ca80} stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d={svgPaths.p1be9ec00} stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-    </svg>
+    </div>
   );
 };
 
 export function DomainManagementDashboard() {
+  const router = useRouter();
+  const { sites, loading, refresh } = useDashboardSession();
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const handleCopyKey = (key: string) => {
-    navigator.clipboard.writeText(key);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+  const rows = useMemo<Domain[]>(() => {
+    const list = Array.isArray(sites) ? sites : [];
+    return list.map((site: any) => {
+      const createdDate = site?.createdAt ?? site?.created_at;
+      const created = createdDate
+        ? new Date(createdDate).toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "2-digit",
+          })
+        : "-";
+      const verified = site?.verified === 1 || site?.verified === true;
+      const rawPlan =
+        site?.planId ??
+        site?.plan_id ??
+        site?.subscription_plan ??
+        site?.plan ??
+        "free";
+      const plan = String(rawPlan).toLowerCase();
+      const billingPeriod: Domain["billingPeriod"] = plan === "free" ? "Free" : "Monthly";
+      const subscriptionEnd =
+        site?.subscriptionCurrentPeriodEnd ??
+        site?.subscription_current_period_end ??
+        site?.currentPeriodEnd ??
+        site?.current_period_end ??
+        site?.nextRenewal ??
+        site?.next_renewal ??
+        null;
+      const cancelAtPeriodEnd =
+        Number(
+          site?.subscriptionCancelAtPeriodEnd ??
+            site?.subscription_cancel_at_period_end ??
+            site?.cancelAtPeriodEnd ??
+            site?.cancel_at_period_end ??
+            0,
+        ) === 1;
+      const status: Domain["status"] = !verified ? "Inactive" : cancelAtPeriodEnd ? "Expired" : "Active";
+      const expirationDate = subscriptionEnd
+        ? new Date(subscriptionEnd).toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "2-digit",
+          })
+        : "N/A";
+
+      return {
+        id: String(site?.id || ""),
+        url: String(site?.domain || site?.name || "—"),
+        status,
+        billingPeriod,
+        expirationDate,
+        created,
+        subscriptionId: site?.subscriptionId ? String(site.subscriptionId) : null,
+        stripeSubscriptionId: site?.stripeSubscriptionId ? String(site.stripeSubscriptionId) : null,
+      };
+    });
+  }, [sites]);
+
+  const handleCancelSubscription = async (domain: Domain) => {
+    if (domain.billingPeriod === "Free") return;
+    if (!domain.subscriptionId && !domain.stripeSubscriptionId) {
+      setActionError("No active subscription found for this site.");
+      return;
+    }
+    const ok = window.confirm("Cancel this subscription at period end?");
+    if (!ok) return;
+    setActionError(null);
+    setActionLoadingId(domain.id);
+    try {
+      await cancelSubscription({
+        subscriptionId: domain.subscriptionId,
+        stripeSubscriptionId: domain.stripeSubscriptionId,
+      });
+      await refresh({ showLoading: false });
+      setHoveredRow(null);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : "Failed to cancel subscription");
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   return (
@@ -152,27 +205,29 @@ export function DomainManagementDashboard() {
             </div>
           </button>
         </div>
+        {actionError ? (
+          <p className="mt-2 text-sm text-red-600">{actionError}</p>
+        ) : null}
       </div>
 
       {/* Table */}
       <div className="w-full">
         {/* Table Header */}
-        <div className="grid grid-cols-[219px_1fr_1fr_1fr_2fr_1fr_auto] gap-x-[20px] px-[23px] py-[18px] border-b border-[#9FBCE433] rounded-t-[10px] bg-[#F2F7FF]">
+        <div className="grid grid-cols-[219px_1fr_1fr_1fr_1fr_auto] gap-x-[20px] px-[23px] py-[18px] border-b border-[#9FBCE433] rounded-t-[10px] bg-[#F2F7FF]">
           <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>Active</div>
           <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Status</div>
           <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Billing Period</div>
           <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Expiration Date</div>
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>License Key</div>
           <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Created</div>
           <div className="w-[17px]"></div>
         </div>
 
         {/* Table Rows */}
         <div className="bg-[#fafbfc]">
-          {mockDomains.map((domain, index) => (
+          {rows.map((domain) => (
             <div
               key={domain.id}
-              className="grid grid-cols-[219px_1fr_1fr_1fr_2fr_1fr_auto] gap-x-[20px] px-[20px] py-[16px] border-b border-[#e5e7eb] relative group hover:bg-[#f5f7fa] transition-colors"
+              className="grid grid-cols-[219px_1fr_1fr_1fr_1fr_auto] gap-x-[20px] px-[20px] py-[16px] border-b border-[#e5e7eb] relative group hover:bg-[#f5f7fa] transition-colors"
               onMouseEnter={() => setHoveredRow(domain.id)}
               onMouseLeave={() => setHoveredRow(null)}
             >
@@ -200,21 +255,6 @@ export function DomainManagementDashboard() {
                 </span>
               </div>
 
-              {/* License Key */}
-              <div className="flex items-center gap-[8px]">
-                <span className="text-[#4b5563] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
-                  {domain.licenseKey}
-                </span>
-                <button
-                  onClick={() => handleCopyKey(domain.licenseKey)}
-                  className="bg-[#dee8f4] rounded-[3px] w-[16px] h-[16px] flex items-center justify-center flex-shrink-0 hover:bg-[#cdd9e8] transition-colors"
-                >
-                  <div className="w-[9.8px] h-[9.8px]">
-                    <CopyIcon />
-                  </div>
-                </button>
-              </div>
-
               {/* Created Date */}
               <div className="flex items-center">
                 <span className="text-[#4b5563] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
@@ -224,23 +264,22 @@ export function DomainManagementDashboard() {
 
               {/* Three Dot Menu */}
               <div className="flex items-center justify-end">
-                <ThreeDotMenu />
+                <button
+                  type="button"
+                  onClick={() => router.push(domain.id ? `/dashboard/${domain.id}` : "/dashboard")}
+                >
+                  <ThreeDotMenu />
+                </button>
               </div>
 
-              {/* Hover Menu - showing for one row as in Figma */}
-              {hoveredRow === domain.id && domain.id === '4' && (
+              {/* Hover Menu */}
+              {hoveredRow === domain.id && (
                 <div className="absolute right-[40px] top-[50%] transform -translate-y-1/2 bg-white shadow-lg rounded-[8px] py-[8px] px-[12px] z-10 border border-[#e5e7eb] min-w-[180px]">
-                  <button className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left">
-                    <div className="w-[16px] h-[16px] flex items-center justify-center">
-                      <div className="w-[9.8px] h-[9.8px]">
-                        <CopyIcon />
-                      </div>
-                    </div>
-                    <span className="text-[#4b5563] text-[14px] tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
-                      Copy License key
-                    </span>
-                  </button>
-                  <button className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left">
+                  <button
+                    type="button"
+                    onClick={() => router.push(domain.id ? `/dashboard/${domain.id}` : "/dashboard")}
+                    className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left"
+                  >
                     <div className="w-[16px] h-[16px] flex items-center justify-center">
                       <svg className="w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none">
                         <path d={svgPaths.p478eb80} stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.8" />
@@ -250,14 +289,36 @@ export function DomainManagementDashboard() {
                         <path d="M3.16699 4.16699H4.83366" stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
-                    <span className="text-[#d1d1d1] text-[14px] tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
-                      Delete Domain
+                    <span className="text-[#4b5563] text-[14px] tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                      Manage
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={domain.billingPeriod === "Free" || actionLoadingId === domain.id}
+                    onClick={() => void handleCancelSubscription(domain)}
+                    className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-[16px] h-[16px] flex items-center justify-center">
+                      <svg className="w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none">
+                        <path d={svgPaths.p478eb80} stroke="#8A1111" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.8" />
+                        <path d={svgPaths.p3d8089e4} stroke="#8A1111" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d={svgPaths.p10d33ac0} stroke="#8A1111" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-[#8A1111] text-[14px] tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                      {actionLoadingId === domain.id ? "Cancelling..." : "Cancel subscription"}
                     </span>
                   </button>
                 </div>
               )}
             </div>
           ))}
+          {!loading && rows.length === 0 ? (
+            <div className="px-[20px] py-[16px] text-sm text-[#6b7280]">
+              No domains found.
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

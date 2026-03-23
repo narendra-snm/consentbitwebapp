@@ -72,6 +72,14 @@ function pickOrganizationIdFromSite(site: unknown): string | null {
   return id || null;
 }
 
+function pickPlanIdFromSite(site: unknown): string | null {
+  if (!site || typeof site !== "object") return null;
+  const s = site as Record<string, unknown>;
+  const raw = s.planId ?? s.plan_id ?? s.subscription_plan ?? s.plan ?? null;
+  const plan = raw != null ? String(raw).trim() : "";
+  return plan || null;
+}
+
 export function DashboardSessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -128,17 +136,28 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
 
       const urlActive = pickActiveSiteIdFromPath(pathnameRef.current);
       const fallbackActive = sites?.[0]?.id ?? null;
-      const activeSiteId = urlActive || fallbackActive;
 
-      setState({
-        loading: false,
-        authenticated: true,
-        user: me?.user ?? null,
-        organizations: orgs,
-        sites,
-        effectivePlanId,
-        activeOrganizationId: activeOrgId,
-        activeSiteId: activeSiteId ? String(activeSiteId) : null,
+      setState((prev) => {
+        const prevActive = prev?.activeSiteId ? String(prev.activeSiteId) : null;
+        const prevActiveStillExists = prevActive
+          ? (sites || []).some((s: any) => String(s?.id) === prevActive)
+          : false;
+        const resolvedActiveSiteId = urlActive || (prevActiveStillExists ? prevActive : fallbackActive);
+        const activeSite =
+          (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
+        const activeSitePlanId = pickPlanIdFromSite(activeSite);
+        const resolvedPlanId = activeSitePlanId || effectivePlanId || "free";
+
+        return {
+          loading: false,
+          authenticated: true,
+          user: me?.user ?? null,
+          organizations: orgs,
+          sites,
+          effectivePlanId: resolvedPlanId,
+          activeOrganizationId: activeOrgId,
+          activeSiteId: resolvedActiveSiteId ? String(resolvedActiveSiteId) : null,
+        };
       });
     } catch (e) {
       console.error("[DashboardSession] refresh failed", e);
@@ -158,12 +177,20 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
     setState((s) => {
       if (!s.authenticated) return s;
       if (String(s.activeSiteId) === String(urlActive)) return s;
-      return { ...s, activeSiteId: String(urlActive) };
+      const nextSite =
+        (s.sites || []).find((site: any) => String(site?.id) === String(urlActive)) || null;
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "free";
+      return { ...s, activeSiteId: String(urlActive), effectivePlanId: nextPlanId };
     });
   }, [pathname]);
 
   const setActiveSiteId = useCallback((siteId: string | null) => {
-    setState((s) => ({ ...s, activeSiteId: siteId }));
+    setState((s) => {
+      const nextSite =
+        (s.sites || []).find((site: any) => String(site?.id) === String(siteId)) || null;
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "free";
+      return { ...s, activeSiteId: siteId, effectivePlanId: nextPlanId };
+    });
   }, []);
 
   const updateSiteInState = useCallback((patch: { id: string } & Record<string, any>) => {

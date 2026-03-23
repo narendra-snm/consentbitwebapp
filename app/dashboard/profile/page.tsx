@@ -6,6 +6,9 @@ import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, type BillingUsage } from "@/lib/client-api";
 
+const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
+const USAGE_TTL_MS = 60_000;
+
 const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
 };
@@ -13,6 +16,7 @@ const svgPaths = {
 type TabType = "general" | "billing" | "organizations" | "usage";
 
 type Organization = {
+  siteId?: string;
   siteUrl: string;
   siteName: string;
   createdDate: string;
@@ -61,7 +65,7 @@ const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId } =
+  const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId, activeSiteId } =
     useDashboardSession();
   const [activeTab, setActiveTab] = useState<TabType>("organizations");
   const isActive = (tab: TabType) => activeTab === tab;
@@ -87,7 +91,7 @@ export default function SettingsPage() {
         site?.planId ??
         site?.plan_id ??
         site?.subscription_plan ??
-        effectivePlanId;
+        site?.plan;
       const plan = toPlanLabel(rawPlan);
       const isPaid = plan !== "Free";
       const nextRenewal =
@@ -95,6 +99,7 @@ export default function SettingsPage() {
         undefined;
 
       return {
+        siteId: site?.id ? String(site.id) : undefined,
         siteUrl: String(site?.domain || "—"),
         siteName: String(site?.name || site?.domain || "—"),
         createdDate: fmtDate(site?.createdAt ?? site?.created_at),
@@ -103,27 +108,90 @@ export default function SettingsPage() {
         nextRenewal,
       };
     });
-  }, [sites, effectivePlanId]);
+  }, [sites]);
 
   const currentPlan = useMemo<PlanTier>(() => {
-    return toPlanLabel(effectivePlanId);
-  }, [effectivePlanId]);
-  const domainCount = useMemo(() => (Array.isArray(sites) ? sites.length : 0), [sites]);
+    const rows = Array.isArray(sites) ? sites : [];
+    const selectedSite =
+      rows.find((site: any) => String(site?.id) === String(activeSiteId)) || null;
+    const selectedSitePlan =
+      selectedSite?.planId ??
+      selectedSite?.plan_id ??
+      selectedSite?.subscription_plan ??
+      selectedSite?.plan;
+    return toPlanLabel(selectedSitePlan ?? effectivePlanId);
+  }, [activeSiteId, effectivePlanId, sites]);
+  const resolvedSiteId = useMemo(() => {
+    const rows = Array.isArray(sites) ? sites : [];
+    const selectedSite =
+      rows.find((site: any) => String(site?.id) === String(activeSiteId)) || rows[0] || null;
+    return selectedSite?.id ? String(selectedSite.id) : null;
+  }, [activeSiteId, sites]);
+  const domainCount = useMemo(() => {
+    const rows = Array.isArray(sites) ? sites : [];
+    const selectedSite =
+      rows.find((site: any) => String(site?.id) === String(resolvedSiteId)) || null;
+    return selectedSite ? 1 : 0;
+  }, [resolvedSiteId, sites]);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Prevent stale org/site usage from showing when site selection changes.
+    setUsage(null);
+  }, [resolvedSiteId]);
+
+  useEffect(() => {
+    // Fetch usage only when Billing/Usage tab is active.
+    if (activeTab !== "billing" && activeTab !== "usage") return;
     if (!activeOrganizationId) {
       setUsage(null);
       return;
     }
+    const cacheKey = `${activeOrganizationId}:${resolvedSiteId || "org"}`;
+    const mem = usageMemoryCache.get(cacheKey);
+    const now = Date.now();
+    if (mem && now - mem.ts < USAGE_TTL_MS) {
+      setUsage(mem.data);
+      setUsageError(null);
+      setUsageLoading(false);
+      return;
+    }
+    if (typeof window !== "undefined" && !mem) {
+      try {
+        const raw = window.sessionStorage.getItem(`billing-usage:${cacheKey}`);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { data?: BillingUsage; ts?: number };
+          if (parsed?.data && parsed?.ts && now - parsed.ts < USAGE_TTL_MS) {
+            usageMemoryCache.set(cacheKey, { data: parsed.data, ts: parsed.ts });
+            setUsage(parsed.data);
+            setUsageError(null);
+            setUsageLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Ignore cache parse issues.
+      }
+    }
     let cancelled = false;
-    setUsageLoading(true);
+    if (!usage) setUsageLoading(true);
     setUsageError(null);
-    getBillingUsage(activeOrganizationId)
+    getBillingUsage(activeOrganizationId, resolvedSiteId || undefined)
       .then((res) => {
-        if (!cancelled) setUsage(res);
+        if (!cancelled) {
+          setUsage(res);
+          const entry = { data: res, ts: Date.now() };
+          usageMemoryCache.set(cacheKey, entry);
+          if (typeof window !== "undefined") {
+            try {
+              window.sessionStorage.setItem(`billing-usage:${cacheKey}`, JSON.stringify(entry));
+            } catch {
+              // Ignore storage quota errors.
+            }
+          }
+        }
       })
       .catch((e) => {
         if (!cancelled) setUsageError(e?.message || "Failed to load usage");
@@ -134,7 +202,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, activeTab, resolvedSiteId, usage]);
 
   return (
     <div className="size-full bg-white">
@@ -232,7 +300,10 @@ export default function SettingsPage() {
                     Current Plan: {currentPlan}
                   </p>
                 </div>
-                <button className="bg-[#007aff] h-[36px] px-[11px] rounded-[8px] flex items-center justify-center">
+                <button
+                  onClick={() => router.push("/dashboard/all-domain")}
+                  className="bg-[#007aff] h-[36px] px-[11px] rounded-[8px] flex items-center justify-center"
+                >
                   <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Transfer Ownership</p>
                 </button>
               </div>
@@ -296,7 +367,12 @@ export default function SettingsPage() {
                         {org.nextRenewal ? (
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[14px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{org.nextRenewal}</p>
                         ) : (
-                          <button className="bg-[#007aff] h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center">
+                          <button
+                            onClick={() =>
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
+                            }
+                            className="bg-[#007aff] h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center"
+                          >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Start Trial</p>
                           </button>
                         )}
@@ -312,11 +388,21 @@ export default function SettingsPage() {
                           </svg>
                         </div>
                         {org.isPaid && (
-                          <button className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0">
+                          <button
+                            onClick={() =>
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
+                            }
+                            className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
+                          >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Change Plan</p>
                           </button>
                         )}
-                        <button className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0">
+                        <button
+                          onClick={() =>
+                            router.push(org.siteId ? `/dashboard/${org.siteId}` : activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard")
+                          }
+                          className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
+                        >
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Manage</p>
                         </button>
                       </div>
@@ -345,6 +431,7 @@ export default function SettingsPage() {
                 currentPlan={currentPlan}
                 domainCount={domainCount}
                 organizationId={activeOrganizationId}
+                activeSiteId={resolvedSiteId}
                 scansCount={usage?.scansUsed ?? 0}
                 pageViews={usage?.pageviewsUsed ?? 0}
               />

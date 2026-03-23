@@ -103,7 +103,7 @@ export default function PricingTable() {
         interval: billing === "yearly" ? "yearly" : "monthly",
         siteId,
         successUrl: origin
-          ? `${origin}/dashboard/${siteId}/upgrade?success=1`
+          ? `${origin}/dashboard/${siteId}?success=1`
           : undefined,
         cancelUrl: origin
           ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
@@ -174,7 +174,6 @@ export default function PricingTable() {
     recommended?: boolean;
   }) => {
     const isSelected = selected === plan;
-    const busy = checkoutLoading && selected === plan;
 
     return (
       <button
@@ -182,7 +181,6 @@ export default function PricingTable() {
         disabled={checkoutLoading}
         onClick={() => {
           setSelected(plan);
-          void checkoutWithPlan(plan);
         }}
         className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
         ${
@@ -193,7 +191,7 @@ export default function PricingTable() {
             : "bg-[#007aff]"
         }`}
       >
-        {busy ? "Redirecting…" : isSelected ? "Selected" : "Switch plan"}
+        {isSelected ? "Selected" : "Switch plan"}
       </button>
     );
   };

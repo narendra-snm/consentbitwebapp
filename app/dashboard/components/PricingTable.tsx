@@ -43,7 +43,7 @@ export function PricingTable({
         planId,
         interval: billingInterval === 'month' ? 'monthly' : 'yearly',
         siteId,
-        successUrl: origin ? `${origin}/dashboard/${siteId}/upgrade?success=1` : undefined,
+        successUrl: origin ? `${origin}/dashboard/${siteId}?success=1` : undefined,
         cancelUrl: origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined,
       });
       window.location.href = data.url;

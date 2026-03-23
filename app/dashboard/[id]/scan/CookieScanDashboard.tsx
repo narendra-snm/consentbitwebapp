@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  addCustomCookie,
   deleteScheduledScan,
   getScanHistory,
   getScheduledScans,
@@ -125,6 +126,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [scanning, setScanning] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('necessary');
+  const [showAddCookie, setShowAddCookie] = useState(false);
+  const [savingCustomCookie, setSavingCustomCookie] = useState(false);
+  const [customCookieForm, setCustomCookieForm] = useState({
+    name: '',
+    domain: '',
+    duration: '',
+    scriptUrlPattern: '',
+    description: '',
+    category: 'necessary',
+  });
 
   const loadData = useCallback(async () => {
     if (!siteId) return;
@@ -204,6 +215,49 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       void refresh({ showLoading: false });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to cancel schedule');
+    }
+  };
+
+  const resetCustomCookieForm = () => {
+    setCustomCookieForm({
+      name: '',
+      domain: '',
+      duration: '',
+      scriptUrlPattern: '',
+      description: '',
+      category: selectedCategory || 'necessary',
+    });
+  };
+
+  const openAddCookie = () => {
+    resetCustomCookieForm();
+    setShowAddCookie(true);
+  };
+
+  const handleSaveCustomCookie = async () => {
+    if (!siteId) return;
+    if (!customCookieForm.name.trim() || !customCookieForm.domain.trim() || !customCookieForm.description.trim()) {
+      setError('Cookie ID, Domain and Description are required.');
+      return;
+    }
+    setError(null);
+    setSavingCustomCookie(true);
+    try {
+      await addCustomCookie({
+        siteId,
+        name: customCookieForm.name.trim(),
+        domain: customCookieForm.domain.trim(),
+        category: customCookieForm.category,
+        duration: customCookieForm.duration.trim(),
+        scriptUrlPattern: customCookieForm.scriptUrlPattern.trim(),
+        description: customCookieForm.description.trim(),
+      });
+      setShowAddCookie(false);
+      await loadData();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save cookie');
+    } finally {
+      setSavingCustomCookie(false);
     }
   };
 
@@ -300,6 +354,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={openAddCookie}
               className="flex h-[42px] items-center gap-2 rounded-[11px] border border-[#007aff] px-4 font-['DM_Sans'] text-sm font-normal text-[#007aff] transition-colors hover:bg-blue-50"
               style={dm}
             >
@@ -380,6 +435,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </p>
                 <button
                   type="button"
+                  onClick={openAddCookie}
                   className="mt-4 font-['DM_Sans'] text-sm font-medium text-[#007aff] hover:text-[#0066d6] hover:underline"
                   style={dm}
                 >
@@ -476,6 +532,75 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           void refresh({ showLoading: false });
         }}
       />
+
+      {showAddCookie ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-[760px] rounded-[12px] bg-white p-6">
+            <h3 className="mb-5 text-2xl font-semibold text-black" style={dm}>Add Cookie</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                value={customCookieForm.name}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, name: e.target.value }))}
+                placeholder="Cookie ID"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <input
+                value={customCookieForm.domain}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, domain: e.target.value }))}
+                placeholder="Domain"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <input
+                value={customCookieForm.duration}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, duration: e.target.value }))}
+                placeholder="Duration"
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              />
+              <select
+                value={customCookieForm.category}
+                onChange={(e) => setCustomCookieForm((s) => ({ ...s, category: e.target.value }))}
+                className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+              >
+                {ALL_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORY_LABELS[cat] ?? cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              value={customCookieForm.scriptUrlPattern}
+              onChange={(e) => setCustomCookieForm((s) => ({ ...s, scriptUrlPattern: e.target.value }))}
+              placeholder="Script URL Pattern (optional)"
+              className="mt-3 h-11 w-full rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
+            />
+            <textarea
+              value={customCookieForm.description}
+              onChange={(e) => setCustomCookieForm((s) => ({ ...s, description: e.target.value }))}
+              placeholder="Description"
+              rows={8}
+              className="mt-3 w-full rounded-md border border-[#cbd5e1] px-3 py-2 text-sm outline-none focus:border-[#007aff]"
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAddCookie(false)}
+                className="h-10 rounded-md border border-[#cbd5e1] px-6 text-sm text-[#1f2937]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveCustomCookie()}
+                disabled={savingCustomCookie}
+                className="h-10 rounded-md bg-[#007aff] px-6 text-sm text-white disabled:opacity-60"
+              >
+                {savingCustomCookie ? 'Saving...' : 'Save draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
