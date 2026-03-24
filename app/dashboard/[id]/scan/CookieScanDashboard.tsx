@@ -291,11 +291,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
      {loading && <LoadingPopup
         show={scanning || loading}
         
-        title={scanning ? "Scanning..." : "Loading..."}
+        title={"Scanning..."}
         subtitle={
-          scanning
-            ? `Your site "${siteLabel}" is scanning`
-            : `Fetching scan data for "${siteLabel}"`
+          `Your site "${siteLabel}" is scanning`
         }
       />}
       {error ? (

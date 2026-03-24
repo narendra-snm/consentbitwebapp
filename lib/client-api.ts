@@ -423,12 +423,25 @@ export async function scanSiteNow(siteId: string): Promise<{
   scanDuration?: number;
   error?: string;
 }> {
-  const res = await fetch('/api/scan-site', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ siteId }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  let res: Response;
+  try {
+    res = await fetch('/api/scan-site', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ siteId }),
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    if ((err as { name?: string })?.name === 'AbortError') {
+      throw new Error('Scan request timed out. The site may be slow or blocking scan traffic. Please try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
   const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
   if (!res.ok || !data.success) throw new Error(data.error || `Scan failed: ${res.status}`);
   return data;
