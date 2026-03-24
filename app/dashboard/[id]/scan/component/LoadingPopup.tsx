@@ -62,6 +62,8 @@ import imgImage5 from "@/public/images/loading.png";
   title = "Scanning...",
   subtitle = "Please wait while we load data",
 }: LoadingPopupProps) {
+  if (!show) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -85,7 +87,7 @@ import imgImage5 from "@/public/images/loading.png";
           {/* Text Content */}
           <div className="absolute left-1/2 top-[175px] -translate-x-1/2 text-center">
             <p className=" font-semibold leading-[20px] text-black text-[16px] mb-2" style={{ fontVariationSettings: "'opsz' 14" }}>
-              Scanning...
+              {title}
             </p>
             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4b5563] text-[16px]" style={{ fontVariationSettings: "'opsz' 14" }}>
               {subtitle}
