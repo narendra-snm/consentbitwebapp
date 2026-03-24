@@ -288,7 +288,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
-      <LoadingPopup
+     {loading && <LoadingPopup
         show={scanning || loading}
         
         title={scanning ? "Scanning..." : "Loading..."}
@@ -297,7 +297,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             ? `Your site "${siteLabel}" is scanning`
             : `Fetching scan data for "${siteLabel}"`
         }
-      />
+      />}
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
