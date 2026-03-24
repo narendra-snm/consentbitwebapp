@@ -7,9 +7,10 @@ interface SidebarProps {
   
   active: string;
   setActive: (active: string) => void;
+  iabEnabled: boolean;
 }
 
-export function Sidebar({ active, setActive   }: SidebarProps) {
+export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
 
   const menuItems = [
     { name: "General", icon: "general" },
@@ -29,6 +30,7 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
           <button
             key={item.name}
             onClick={() => setActive(item.name)}
+            disabled={iabEnabled && item.name === "Content"}
             className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all
               
               ${isActive ? "bg-[#E6F1FD]" : "hover:bg-gray-50"}
@@ -107,6 +109,7 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
             <span
               className={`text-base font-medium tracking-tight
                 ${isActive ? "text-[#007AFF]" : "text-[#111827]"}
+                ${iabEnabled && item.name === "Content" ? "text-gray-400 cursor-not-allowed" : ""}
               `}
             >
               {item.name}
