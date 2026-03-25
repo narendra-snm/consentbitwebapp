@@ -7,7 +7,6 @@ import SiteSummaryCards from "../components/SiteSummaryCards";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
-
 export default function DashboardSitePage() {
   const params = useParams<{ id: string }>();
   const siteId = params?.id;
@@ -20,10 +19,7 @@ export default function DashboardSitePage() {
     const email = user?.email ?? "";
     return email ? email.split("@")[0] : undefined;
   }, [user?.email]);
-  const currentScriptUrl = useMemo(() => {
-    if (!activeSite?.id) return "";
-    return String(activeSite?.scriptUrl || `/client_data/${activeSite.id}/script.js`);
-  }, [activeSite]);
+  const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
 
   useEffect(() => {
     if (loading) return;
@@ -65,8 +61,10 @@ export default function DashboardSitePage() {
       <GettingStarted activeSiteId={siteId} />
       <InstallConsentModal
         open={showInstallModal}
-        scriptUrl={currentScriptUrl}
+        scriptUrl={rawInstallScriptUrl}
         siteDomain={activeSite?.domain}
+        siteId={siteId ? String(siteId) : undefined}
+        cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
       />
     </div>

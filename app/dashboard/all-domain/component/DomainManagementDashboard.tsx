@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 import { cancelSubscription } from '@/lib/client-api';
@@ -13,13 +13,18 @@ p478eb80: "M7 1.99382C5.89 1.88382 4.77333 1.82715 3.66 1.82715C3 1.82715 2.34 1
 }
 ;
 
+type SortKey = 'domain' | 'licenseKey' | 'status' | 'billing' | 'expiration' | 'created';
+
 interface Domain {
   id: string;
   url: string;
+  licenseKey: string;
   status: 'Active' | 'Inactive' | 'Expired';
   billingPeriod: 'Yearly' | 'Monthly' | 'Free';
   expirationDate: string;
   created: string;
+  createdSort: number;
+  expirationSort: number;
   subscriptionId: string | null;
   stripeSubscriptionId: string | null;
 }
@@ -67,20 +72,92 @@ const StatusBadge = ({ status }: { status: Domain['status'] }) => {
   );
 };
 
-const FilterButton = ({ label }: { label: string }) => {
+function SortableHeader({
+  label,
+  sortKey,
+  activeKey,
+  ascending,
+  onSort,
+  filterActive = false,
+  filterFocused = false,
+  onActivateFilter,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey | null;
+  ascending: boolean;
+  onSort: (key: SortKey) => void;
+  /** True when this column has a non-empty filter value. */
+  filterActive?: boolean;
+  /** True when the filter control below this column is focused. */
+  filterFocused?: boolean;
+  /** Focus the filter input/select for this column (e.g. after header click). */
+  onActivateFilter?: () => void;
+}) {
+  const sortActive = activeKey === sortKey;
+  const filterHighlight = filterActive || filterFocused;
+  const filterOnly = filterHighlight && !sortActive;
   return (
-    <button className="bg-[rgba(255,255,255,0.5)] border border-[rgba(139,119,249,0.3)] rounded-[50px] h-[38px] px-[19px] py-[13px] flex items-center gap-[40px]">
-      <span className="text-[#4b5563] text-[15px] tracking-[-0.75px] whitespace-nowrap" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>
-        {label}
+    <button
+      type="button"
+      onClick={() => {
+        onSort(sortKey);
+        onActivateFilter?.();
+      }}
+      className={`flex items-center justify-between gap-2 w-full text-left rounded-md px-2 py-1.5 -mx-2 transition-colors ${
+        sortActive
+          ? 'bg-[#e0edff] text-[#1d4ed8] ring-2 ring-[#93c5fd] shadow-sm'
+          : filterOnly
+            ? 'bg-[#fffbeb] text-[#92400e] ring-2 ring-[#fbbf24]'
+            : 'text-[#4b5563] hover:bg-white/90 ring-1 ring-transparent hover:ring-[#e5e7eb]'
+      }`}
+      style={{
+        fontFamily: 'DM Sans, sans-serif',
+        fontWeight: sortActive || filterOnly ? 600 : 500,
+        fontVariationSettings: "'opsz' 14",
+      }}
+    >
+      <span className="text-sm tracking-[-0.75px]">{label}</span>
+      <span
+        className={`text-xs tabular-nums shrink-0 ${sortActive ? 'text-[#1d4ed8]' : filterOnly ? 'text-[#b45309]' : 'text-[#9ca3af]'}`}
+        aria-hidden
+      >
+        {sortActive ? (ascending ? '↑' : '↓') : '↕'}
       </span>
-      <div className="flex items-center justify-center w-[14px] h-[9px]">
-        <div className="rotate-90">
-          <span className="text-[#4b5563] text-[15px] tracking-[-0.75px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>{'>'}</span>
-        </div>
-      </div>
     </button>
   );
-};
+}
+
+function LicenseKeyCell({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const v = value?.trim() || '';
+  const copy = async () => {
+    if (!v) return;
+    try {
+      await navigator.clipboard.writeText(v);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <span className="font-mono text-[11px] text-[#374151] break-all leading-snug tracking-tight">
+        {v || '—'}
+      </span>
+      {v ? (
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="text-[11px] text-[#2563eb] shrink-0 hover:underline pt-0.5"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 const ThreeDotMenu = () => {
   return (
@@ -94,17 +171,54 @@ const ThreeDotMenu = () => {
   );
 };
 
+const statusOrder: Record<Domain['status'], number> = {
+  Active: 0,
+  Inactive: 1,
+  Expired: 2,
+};
+
+const billingOrder: Record<Domain['billingPeriod'], number> = {
+  Free: 0,
+  Monthly: 1,
+  Yearly: 2,
+};
+
+const TABLE_GRID =
+  'grid grid-cols-[minmax(140px,1.3fr)_minmax(160px,1.1fr)_minmax(100px,0.75fr)_minmax(100px,0.85fr)_minmax(100px,0.85fr)_minmax(90px,0.7fr)_auto] gap-x-[16px]';
+
+const filterInputClass =
+  'w-full rounded-md border border-[#cbd5e1] bg-white px-2 py-1.5 text-xs text-[#374151] shadow-sm placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]';
+
 export function DomainManagementDashboard() {
   const router = useRouter();
   const { sites, loading, refresh } = useDashboardSession();
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>('created');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [filterDomain, setFilterDomain] = useState('');
+  const [filterLicense, setFilterLicense] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | Domain['status']>('all');
+  const [filterBilling, setFilterBilling] = useState<'all' | Domain['billingPeriod']>('all');
+  const [filterExpiration, setFilterExpiration] = useState<'all' | 'has' | 'na'>('all');
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortAsc((a) => !a);
+        return prev;
+      }
+      setSortAsc(true);
+      return key;
+    });
+  }, []);
 
   const rows = useMemo<Domain[]>(() => {
     const list = Array.isArray(sites) ? sites : [];
     return list.map((site: any) => {
       const createdDate = site?.createdAt ?? site?.created_at;
+      const createdTs = createdDate ? new Date(createdDate).getTime() : 0;
       const created = createdDate
         ? new Date(createdDate).toLocaleDateString("en-US", {
             month: "2-digit",
@@ -112,6 +226,15 @@ export function DomainManagementDashboard() {
             year: "2-digit",
           })
         : "-";
+      /** API adds `licenseKey` from Site.apiKey (see worker /api/sites). */
+      const licenseKey = String(
+        site?.licenseKey ??
+          site?.license_key ??
+          site?.apiKey ??
+          site?.apikey ??
+          site?.api_key ??
+          '',
+      ).trim();
       const verified = site?.verified === 1 || site?.verified === true;
       const rawPlan =
         site?.planId ??
@@ -138,6 +261,7 @@ export function DomainManagementDashboard() {
             0,
         ) === 1;
       const status: Domain["status"] = !verified ? "Inactive" : cancelAtPeriodEnd ? "Expired" : "Active";
+      const expTs = subscriptionEnd ? new Date(subscriptionEnd).getTime() : 0;
       const expirationDate = subscriptionEnd
         ? new Date(subscriptionEnd).toLocaleDateString("en-US", {
             month: "2-digit",
@@ -149,15 +273,80 @@ export function DomainManagementDashboard() {
       return {
         id: String(site?.id || ""),
         url: String(site?.domain || site?.name || "—"),
+        licenseKey,
         status,
         billingPeriod,
         expirationDate,
         created,
+        createdSort: createdTs,
+        expirationSort: expTs,
         subscriptionId: site?.subscriptionId ? String(site.subscriptionId) : null,
         stripeSubscriptionId: site?.stripeSubscriptionId ? String(site.stripeSubscriptionId) : null,
       };
     });
   }, [sites]);
+
+  const hasActiveFilters =
+    filterDomain.trim().length > 0 ||
+    filterLicense.trim().length > 0 ||
+    filterStatus !== 'all' ||
+    filterBilling !== 'all' ||
+    filterExpiration !== 'all';
+
+  const filteredRows = useMemo(() => {
+    const d = filterDomain.trim().toLowerCase();
+    const l = filterLicense.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (d && !row.url.toLowerCase().includes(d)) return false;
+      if (l && !row.licenseKey.toLowerCase().includes(l)) return false;
+      if (filterStatus !== 'all' && row.status !== filterStatus) return false;
+      if (filterBilling !== 'all' && row.billingPeriod !== filterBilling) return false;
+      if (filterExpiration === 'has' && row.expirationSort <= 0) return false;
+      if (filterExpiration === 'na' && row.expirationDate !== 'N/A') return false;
+      return true;
+    });
+  }, [rows, filterDomain, filterLicense, filterStatus, filterBilling, filterExpiration]);
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return filteredRows;
+    const next = [...filteredRows];
+    const dir = sortAsc ? 1 : -1;
+    next.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'domain':
+          cmp = a.url.localeCompare(b.url, undefined, { sensitivity: 'base' });
+          break;
+        case 'licenseKey':
+          cmp = a.licenseKey.localeCompare(b.licenseKey);
+          break;
+        case 'status':
+          cmp = statusOrder[a.status] - statusOrder[b.status];
+          break;
+        case 'billing':
+          cmp = billingOrder[a.billingPeriod] - billingOrder[b.billingPeriod];
+          break;
+        case 'expiration':
+          cmp = a.expirationSort - b.expirationSort;
+          break;
+        case 'created':
+          cmp = a.createdSort - b.createdSort;
+          break;
+        default:
+          cmp = 0;
+      }
+      return cmp * dir;
+    });
+    return next;
+  }, [filteredRows, sortAsc, sortKey]);
+
+  const clearFilters = useCallback(() => {
+    setFilterDomain('');
+    setFilterLicense('');
+    setFilterStatus('all');
+    setFilterBilling('all');
+    setFilterExpiration('all');
+  }, []);
 
   const handleCancelSubscription = async (domain: Domain) => {
     if (domain.billingPeriod === "Free") return;
@@ -190,20 +379,20 @@ export function DomainManagementDashboard() {
         <h1 className="text-[20px] tracking-[-1px] text-black mb-[21px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>
           All Domains
         </h1>
-        <div className="flex items-center gap-[11px]">
-          <FilterButton label="Active" />
-          <FilterButton label="Status" />
-          <FilterButton label="Billing Period" />
-          <FilterButton label="Expiration Date" />
-          <FilterButton label="Created" />
-          <button className="bg-[rgba(255,255,255,0.5)] border border-[rgba(139,119,249,0.3)] rounded-[50px] w-[38px] h-[38px] flex items-center justify-center">
-            <div className="rotate-45 flex items-center justify-center">
-              <svg className="w-[12px] h-[12px]" viewBox="0 0 13.5 13.5" fill="none">
-                <path d="M0.75 6.75H12.75" stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-                <path d="M6.75 12.75V0.75" stroke="#4B5563" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-              </svg>
-            </div>
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <p className="text-xs text-[#6b7280]" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+            <strong className="text-[#374151]">Sort:</strong> click a header (blue = active sort).{' '}
+            <strong className="text-[#374151]">Filter:</strong> use the row below or click a header to focus that column’s filter — amber = active filter column.
+          </p>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-xs font-medium text-[#2563eb] hover:underline shrink-0"
+            >
+              Clear filters
+            </button>
+          ) : null}
         </div>
         {actionError ? (
           <p className="mt-2 text-sm text-red-600">{actionError}</p>
@@ -212,29 +401,144 @@ export function DomainManagementDashboard() {
 
       {/* Table */}
       <div className="w-full">
-        {/* Table Header */}
-        <div className="grid grid-cols-[219px_1fr_1fr_1fr_1fr_auto] gap-x-[20px] px-[23px] py-[18px] border-b border-[#9FBCE433] rounded-t-[10px] bg-[#F2F7FF]">
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>Active</div>
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Status</div>
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Billing Period</div>
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Expiration Date</div>
-          <div className="text-[#4b5563] text-sm font-medium tracking-[-0.75px] " style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>Created</div>
-          <div className="w-[17px]"></div>
+        <div className="rounded-t-[10px] border border-[#cfe0fa] border-b-0 bg-[#F2F7FF] overflow-hidden">
+          <div className={`${TABLE_GRID} px-[23px] pt-[14px] pb-1 items-end`}>
+            <SortableHeader
+              label="Domain"
+              sortKey="domain"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterDomain.trim().length > 0}
+              filterFocused={filterFocusKey === 'domain'}
+              onActivateFilter={() => domainFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="License key"
+              sortKey="licenseKey"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterLicense.trim().length > 0}
+              filterFocused={filterFocusKey === 'licenseKey'}
+              onActivateFilter={() => licenseFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="Status"
+              sortKey="status"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterStatus !== 'all'}
+              filterFocused={filterFocusKey === 'status'}
+              onActivateFilter={() => statusFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="Billing"
+              sortKey="billing"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterBilling !== 'all'}
+              filterFocused={filterFocusKey === 'billing'}
+              onActivateFilter={() => billingFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="Expiration"
+              sortKey="expiration"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterExpiration !== 'all'}
+              filterFocused={filterFocusKey === 'expiration'}
+              onActivateFilter={() => expirationFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="Created"
+              sortKey="created"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={false}
+            />
+            <div className="w-[17px]" aria-hidden />
+          </div>
+          <div className={`${TABLE_GRID} px-[23px] pb-3 pt-1 items-center`}>
+            <input
+              type="search"
+              value={filterDomain}
+              onChange={(e) => setFilterDomain(e.target.value)}
+              placeholder="Filter domain…"
+              className={filterInputClass}
+              aria-label="Filter by domain"
+            />
+            <input
+              type="search"
+              value={filterLicense}
+              onChange={(e) => setFilterLicense(e.target.value)}
+              placeholder="Filter license…"
+              className={filterInputClass}
+              aria-label="Filter by license key"
+            />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              className={filterInputClass}
+              aria-label="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Expired">Expired</option>
+            </select>
+            <select
+              ref={billingFilterRef}
+              value={filterBilling}
+              onChange={(e) => setFilterBilling(e.target.value as typeof filterBilling)}
+              onFocus={() => setFilterFocusKey('billing')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'billing' ? null : k))}
+              className={filterInputClass}
+              aria-label="Filter by billing"
+            >
+              <option value="all">All billing</option>
+              <option value="Free">Free</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Yearly">Yearly</option>
+            </select>
+            <select
+              ref={expirationFilterRef}
+              value={filterExpiration}
+              onChange={(e) => setFilterExpiration(e.target.value as typeof filterExpiration)}
+              onFocus={() => setFilterFocusKey('expiration')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'expiration' ? null : k))}
+              className={filterInputClass}
+              aria-label="Filter by expiration"
+            >
+              <option value="all">All</option>
+              <option value="has">Has end date</option>
+              <option value="na">N/A only</option>
+            </select>
+            <div className="min-w-0" aria-hidden />
+            <div className="w-[17px]" aria-hidden />
+          </div>
         </div>
 
         {/* Table Rows */}
-        <div className="bg-[#fafbfc]">
-          {rows.map((domain) => (
+        <div className="bg-[#fafbfc] border border-t-0 border-[#e5e7eb] rounded-b-[10px] overflow-hidden">
+          {sortedRows.map((domain) => (
             <div
               key={domain.id}
-              className="grid grid-cols-[219px_1fr_1fr_1fr_1fr_auto] gap-x-[20px] px-[20px] py-[16px] border-b border-[#e5e7eb] relative group hover:bg-[#f5f7fa] transition-colors"
+              className={`${TABLE_GRID} px-[20px] py-[16px] border-b border-[#e5e7eb] last:border-b-0 relative group hover:bg-[#f5f7fa] transition-colors`}
               onMouseEnter={() => setHoveredRow(domain.id)}
               onMouseLeave={() => setHoveredRow(null)}
             >
               {/* Domain URL */}
-              <div className="text-[#4b5563] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+              <div className="text-[#4b5563] text-sm font-medium tracking-[-0.7px] min-w-0 break-all" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
                 {domain.url}
               </div>
+
+              {/* License key (API key) */}
+              <LicenseKeyCell value={domain.licenseKey} />
 
               {/* Status Badge */}
               <div className="flex items-center">
@@ -314,7 +618,7 @@ export function DomainManagementDashboard() {
               )}
             </div>
           ))}
-          {!loading && rows.length === 0 ? (
+          {!loading && sortedRows.length === 0 ? (
             <div className="px-[20px] py-[16px] text-sm text-[#6b7280]">
               No domains found.
             </div>

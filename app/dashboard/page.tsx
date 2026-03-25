@@ -10,21 +10,35 @@ import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
 import { useEffect, useMemo, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
-
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
  const { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, refresh } = useDashboardSession();
  const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || null;
  const userEmail = user?.email ?? "";
- const showOnboarding = authenticated && (sites?.length || 0) === 0;
+ /**
+  * First-time wizard must stay mounted after firstSetup creates a site. Otherwise refresh()
+  * makes sites.length > 0, showOnboarding flips false, and the payment + install steps vanish.
+  */
+ const [wizardSticky, setWizardSticky] = useState(false);
+ /** User chose "Skip to Dashboard" — hide wizard even if they never created a site. */
+ const [wizardSkipped, setWizardSkipped] = useState(false);
+ useEffect(() => {
+   if (loading || !authenticated) return;
+   if ((sites?.length || 0) === 0) {
+     setWizardSticky(true);
+   }
+ }, [loading, authenticated, sites?.length]);
+
+ const showOnboarding =
+   authenticated &&
+   !wizardSkipped &&
+   (((sites?.length || 0) === 0) || wizardSticky);
  const userName = useMemo(() => (userEmail ? userEmail.split("@")[0] : undefined), [userEmail]);
  const [showInstallModal, setShowInstallModal] = useState(false);
 
- const currentScriptUrl = useMemo(() => {
-   if (!activeSite?.id) return "";
-   return String(activeSite?.scriptUrl || `/client_data/${activeSite.id}/script.js`);
- }, [activeSite]);
+ /** Raw URL from API (`Site.embedScriptUrl`); modal resolves to absolute — keeps snippet identical to stored value. */
+ const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
 
   // When sites exist, keep selected siteId in URL.
   useEffect(() => {
@@ -38,7 +52,14 @@ export default function DashboardPage() {
   }, [activeSiteId, authenticated, loading, pathname, router, showOnboarding]);
 
   const handleWizardComplete = async () => {
+    setWizardSticky(false);
+    setWizardSkipped(false);
     await refresh();
+  };
+
+  const dismissOnboardingWizard = () => {
+    setWizardSticky(false);
+    setWizardSkipped(true);
   };
 
 
@@ -59,8 +80,10 @@ export default function DashboardPage() {
       <GettingStarted activeSiteId={activeSiteId} />
       <InstallConsentModal
         open={showInstallModal}
-        scriptUrl={currentScriptUrl}
+        scriptUrl={rawInstallScriptUrl}
         siteDomain={activeSite?.domain}
+        siteId={activeSite?.id ? String(activeSite.id) : undefined}
+        cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
       />
       {/* <AddSiteModal open={true}  /> */}
@@ -82,7 +105,14 @@ export default function DashboardPage() {
           className="h-6"
         />
 
-        <button   onClick={() => router.push("/dashboard")}  className=" cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium ">
+        <button
+          type="button"
+          onClick={() => {
+            dismissOnboardingWizard();
+            router.push("/dashboard");
+          }}
+          className=" cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium "
+        >
         Skip to Dashboard → 
         </button>
       </div>

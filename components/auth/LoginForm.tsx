@@ -81,7 +81,7 @@ export function LoginForm() {
         <button 
         disabled={loading}
         className="w-full mb-5 bg-[#2C3E8F] hover:bg-[#24347a] text-white py-6 rounded-md transition">
-          {loading ? (step === 1 ? 'Sending code…' : 'Verifying…') : (step === 1 ? 'Send code' : 'Verify & Login')}
+          {loading ? (step === 1 ? 'Sending code…' : 'Verifying…') : (step === 1 ? 'Login ' : 'Verify & Login')}
         </button>
 
         {/* Footer Text */}

@@ -27,6 +27,7 @@ import { TRANSLATIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
+import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 
 /** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
 type RegulationSnapshot = {
@@ -39,9 +40,13 @@ export default function page({ siteId }: { siteId: string }) {
   const router = useRouter();
   const [updatingRegulation, setUpdatingRegulation] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
+  /** Which action triggered the in-flight persist (for button labels). */
+  const [persistKind, setPersistKind] = useState<"save" | "publish" | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const dismissSaveSuccess = useCallback(() => setSaveSuccess(false), []);
 
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
@@ -116,7 +121,7 @@ export default function page({ siteId }: { siteId: string }) {
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const currentScriptUrl = useMemo(() => {
     if (!site?.id) return "";
-    return String(site?.scriptUrl || `/client_data/${site.id}/script.js`);
+    return resolveInstallScriptUrl(site?.scriptUrl, site.id, site?.cdnScriptId);
   }, [site]);
 
   const siteRef = useRef(site);
@@ -466,73 +471,98 @@ export default function page({ siteId }: { siteId: string }) {
     publishSuccess,
   ]);
 
-  const canPublish =
-    Boolean(site?.id) &&
-    !loading &&
-    (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty);
+  useEffect(() => {
+    if (
+      saveSuccess &&
+      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty)
+    ) {
+      setSaveSuccess(false);
+    }
+  }, [
+    contentDirty,
+    floatingDirty,
+    appearanceDirty,
+    bothFocusDirty,
+    regulationDirty,
+    saveSuccess,
+  ]);
 
-  const handlePublishChanges = async () => {
-    if (!site?.id) return;
-    try {
-      setSavingContent(true);
-      setPublishError(null);
-      setPublishSuccess(false);
-      await saveBannerCustomization({
-        siteId: String(site.id),
-        customization: {
-          ...(customizationBase || {}),
-          position: appearance.layout.alignment,
-          backgroundColor: appearance.colors.bannerBg,
-          textColor: appearance.colors.textColor,
-          headingColor: appearance.colors.headingColor,
-          acceptButtonBg: appearance.colors.buttonColor,
-          acceptButtonText: appearance.colors.buttonTextColor,
-          customiseButtonBg: appearance.colors.preferencesButtonBg,
-          customiseButtonText: appearance.colors.preferencesButtonText,
-          saveButtonBg: appearance.colors.savePreferencesButtonBg,
-          saveButtonText: appearance.colors.savePreferencesButtonText,
-          bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
-          privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
-          translations: {
-            ...((customizationBase && customizationBase.translations) || {}),
-            en: {
-              ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
-              title: contentSettings.title,
-              acceptAll: contentSettings.acceptAll,
-              description: contentSettings.gdpr.message,
-              ccpaDescription: contentSettings.ccpa.message,
-              rejectAll: contentSettings.gdpr.rejectAll,
-              customise: contentSettings.preferencesLabel,
-              doNotSell: contentSettings.ccpa.doNotSellLabel,
-              cookiePreferences: contentSettings.preferenceTitle,
-              managePreferences: contentSettings.preferenceMessage,
-              optOutPreference: contentSettings.ccpa.optOutTitle,
-              ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
-              saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
-              closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
-              rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
-              customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
-              cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
-              floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
-              floatingButtonPosition: floatingButton.position,
-              bannerFontFamily: appearance.type.font,
-              bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
-              bannerTextAlign: appearance.type.alignment,
-              bannerLayoutVisual: appearance.layout.position,
-              bannerEntranceAnimation: appearance.layout.animation,
-            },
-          },
+  const hasUnsavedChanges =
+    contentDirty ||
+    floatingDirty ||
+    appearanceDirty ||
+    bothFocusDirty ||
+    regulationDirty;
+
+  const applyPersistSuccessState = useCallback(() => {
+    setLastSavedContentSettings(contentSettings);
+    setLastSavedFloatingButton(floatingButton);
+    setLastSavedAppearance(appearance);
+    setLastPublishedBothFocus(bothContentFocus);
+    if (currentRegulationSnapshot) {
+      setLastPublishedRegulation(currentRegulationSnapshot);
+    }
+    setCustomizationBase((prev: any) => ({
+      ...(prev || {}),
+      position: appearance.layout.alignment,
+      backgroundColor: appearance.colors.bannerBg,
+      textColor: appearance.colors.textColor,
+      headingColor: appearance.colors.headingColor,
+      acceptButtonBg: appearance.colors.buttonColor,
+      acceptButtonText: appearance.colors.buttonTextColor,
+      customiseButtonBg: appearance.colors.preferencesButtonBg,
+      customiseButtonText: appearance.colors.preferencesButtonText,
+      saveButtonBg: appearance.colors.savePreferencesButtonBg,
+      saveButtonText: appearance.colors.savePreferencesButtonText,
+      bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+      privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
+      translations: {
+        ...((prev && prev.translations) || {}),
+        en: {
+          ...(((prev && prev.translations && prev.translations.en) || {})),
+          title: contentSettings.title,
+          acceptAll: contentSettings.acceptAll,
+          description: contentSettings.gdpr.message,
+          ccpaDescription: contentSettings.ccpa.message,
+          rejectAll: contentSettings.gdpr.rejectAll,
+          customise: contentSettings.preferencesLabel,
+          doNotSell: contentSettings.ccpa.doNotSellLabel,
+          cookiePreferences: contentSettings.preferenceTitle,
+          managePreferences: contentSettings.preferenceMessage,
+          optOutPreference: contentSettings.ccpa.optOutTitle,
+          ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
+          saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
+          closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
+          rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
+          customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
+          cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
+          floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
+          floatingButtonPosition: floatingButton.position,
+          bannerFontFamily: appearance.type.font,
+          bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
+          bannerTextAlign: appearance.type.alignment,
+          bannerLayoutVisual: appearance.layout.position,
+          bannerEntranceAnimation: appearance.layout.animation,
         },
-      });
-      setLastSavedContentSettings(contentSettings);
-      setLastSavedFloatingButton(floatingButton);
-      setLastSavedAppearance(appearance);
-      setLastPublishedBothFocus(bothContentFocus);
-      if (currentRegulationSnapshot) {
-        setLastPublishedRegulation(currentRegulationSnapshot);
-      }
-      setCustomizationBase((prev: any) => ({
-        ...(prev || {}),
+      },
+    }));
+    setPreviewRevision((r) => r + 1);
+    void refresh({ showLoading: false });
+  }, [
+    appearance,
+    bothContentFocus,
+    contentSettings,
+    currentRegulationSnapshot,
+    floatingButton,
+    refresh,
+  ]);
+
+  const persistBannerCustomization = async () => {
+    if (!site?.id) return;
+    await saveBannerCustomization({
+      siteId: String(site.id),
+      customization: {
+        ...(customizationBase || {}),
         position: appearance.layout.alignment,
         backgroundColor: appearance.colors.bannerBg,
         textColor: appearance.colors.textColor,
@@ -546,9 +576,9 @@ export default function page({ siteId }: { siteId: string }) {
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
-          ...((prev && prev.translations) || {}),
+          ...((customizationBase && customizationBase.translations) || {}),
           en: {
-            ...(((prev && prev.translations && prev.translations.en) || {})),
+            ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
             title: contentSettings.title,
             acceptAll: contentSettings.acceptAll,
             description: contentSettings.gdpr.message,
@@ -574,10 +604,42 @@ export default function page({ siteId }: { siteId: string }) {
             bannerEntranceAnimation: appearance.layout.animation,
           },
         },
-      }));
-      setPreviewRevision((r) => r + 1);
+      },
+    });
+    applyPersistSuccessState();
+  };
+
+  const handleSaveChanges = async () => {
+    if (!site?.id || !hasUnsavedChanges) return;
+    try {
+      setPersistKind("save");
+      setSavingContent(true);
+      setPublishError(null);
+      setSaveSuccess(false);
+      setPublishSuccess(false);
+      await persistBannerCustomization();
+      setSaveSuccess(true);
+    } catch (e) {
+      console.error("[cookie-banner] failed to save banner customization", e);
+      setPublishError(
+        e instanceof Error ? e.message : "Could not save changes. Try again.",
+      );
+    } finally {
+      setSavingContent(false);
+      setPersistKind(null);
+    }
+  };
+
+  const handlePublishChanges = async () => {
+    if (!site?.id) return;
+    try {
+      setPersistKind("publish");
+      setSavingContent(true);
+      setPublishError(null);
+      setPublishSuccess(false);
+      setSaveSuccess(false);
+      await persistBannerCustomization();
       setPublishSuccess(true);
-      void refresh({ showLoading: false });
     } catch (e) {
       console.error("[cookie-banner] failed to publish banner customization", e);
       setPublishError(
@@ -585,8 +647,15 @@ export default function page({ siteId }: { siteId: string }) {
       );
     } finally {
       setSavingContent(false);
+      setPersistKind(null);
     }
   };
+
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const id = window.setTimeout(() => setSaveSuccess(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [saveSuccess]);
 const [iabEnabled, setIabEnabled] = useState(false);
 const isToggleEnabled =
   effectivePlanId === "growth" || effectivePlanId === "essential";
@@ -892,6 +961,7 @@ const isToggleEnabled =
           />
         )}
       </div>
+      {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
       <ConsentPreview
       iabEnabled={iabEnabled}
         key={previewRevision}
@@ -901,9 +971,16 @@ const isToggleEnabled =
         initialLayout={appearance.layout}
         content={contentForPreview}
         floatingButton={floatingButton}
+        onSaveChanges={handleSaveChanges}
+        saveDisabled={
+          !site?.id || savingContent || !hasUnsavedChanges
+        }
+        saveBusy={savingContent && persistKind === "save"}
+        saveSuccess={saveSuccess}
+        onDismissSaveSuccess={dismissSaveSuccess}
         onPublishChanges={handlePublishChanges}
-        isPublishing={savingContent}
-        canPublish={canPublish}
+        publishBusy={savingContent && persistKind === "publish"}
+        publishDisabled={!site?.id || savingContent}
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
@@ -919,6 +996,8 @@ const isToggleEnabled =
         open={showInstallModal}
         scriptUrl={currentScriptUrl}
         siteDomain={site?.domain}
+        siteId={siteId}
+        cdnScriptId={site?.cdnScriptId ? String(site.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
       />
     </div>

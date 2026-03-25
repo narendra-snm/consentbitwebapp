@@ -1,7 +1,7 @@
 "use client";
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { getBannerLanguage, getTranslation } from "./translations";
 import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
@@ -21,9 +21,14 @@ export default function ConsentPreview({
   consentType,
   content,
   floatingButton = { enabled: true, position: 'left' as const },
+  onSaveChanges,
+  saveDisabled = true,
+  saveBusy = false,
+  saveSuccess = false,
+  onDismissSaveSuccess,
   onPublishChanges,
-  isPublishing = false,
-  canPublish = false,
+  publishBusy = false,
+  publishDisabled = false,
   publishError = null,
   publishSuccess = false,
   onDismissPublishSuccess,
@@ -42,11 +47,18 @@ export default function ConsentPreview({
   onBothModeBannerTypeChange?: (next: 'gdpr' | 'ccpa') => void;
   /** Floating reopen / preferences control in the browser mock */
   floatingButton?: { enabled: boolean; position: 'left' | 'right' };
-  /** Persist banner + floating settings to backend (same payload as dashboard save). */
+  /** Persist recent editor changes to the server (draft save; use when you have unpublished edits). */
+  onSaveChanges?: () => void | Promise<void>;
+  /** When true, Save is not clickable (no pending edits or request in flight). */
+  saveDisabled?: boolean;
+  saveSuccess?: boolean;
+  onDismissSaveSuccess?: () => void;
+  /** Push live to the embed (same API as save; shows success dialog). Available even when nothing changed (re-publish). */
   onPublishChanges?: () => void | Promise<void>;
-  isPublishing?: boolean;
-  /** True when there are unpublished draft changes (content, floating button, layout, colors, type). */
-  canPublish?: boolean;
+  saveBusy?: boolean;
+  publishBusy?: boolean;
+  /** When true, Publish is not clickable (e.g. no site or save/publish request in flight). */
+  publishDisabled?: boolean;
   publishError?: string | null;
   publishSuccess?: boolean;
   /** Called when user closes the publish-success popup (backdrop or OK). */
@@ -343,16 +355,44 @@ export default function ConsentPreview({
           </button>
 
           <div className="flex flex-col items-end gap-1">
-            <button
-              type="button"
-              disabled={!canPublish || isPublishing}
-              onClick={() => {
-                void onPublishChanges?.();
-              }}
-              className="px-4 h-9 bg-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {isPublishing ? 'Publishing…' : 'Publish Changes'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title="Save your current customization to the server"
+                disabled={saveDisabled}
+                onClick={() => {
+                  void onSaveChanges?.();
+                }}
+                className="px-4 h-9 border border-[#d1d5db] bg-white text-[#374151] text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {saveBusy ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                title="Publish live to your banner script (you can publish anytime)"
+                disabled={publishDisabled}
+                onClick={() => {
+                  void onPublishChanges?.();
+                }}
+                className="px-4 h-9 bg-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {publishBusy ? 'Publishing…' : 'Publish Changes'}
+              </button>
+            </div>
+            {saveSuccess ? (
+              <p className="text-xs text-[#15803d] max-w-[260px] text-right" role="status">
+                Changes saved.
+                {onDismissSaveSuccess ? (
+                  <button
+                    type="button"
+                    className="ml-2 underline text-[#166534]"
+                    onClick={() => onDismissSaveSuccess()}
+                  >
+                    Dismiss
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
             {publishError ? (
               <p className="text-xs text-red-600 max-w-[220px] text-right" role="alert">
                 {publishError}
@@ -394,22 +434,29 @@ export default function ConsentPreview({
         >
           {!iabEnabled && <>{  modalView === 'main' ? (
             <div
-            style={{borderRadius: `${initialLayout?.borderRadius}px` || "12px"}}
               className={
                 layoutPos === 'banner'
-                  ? 'w-full shrink-0 self-stretch'
+                  ? 'w-full max-w-[360px] shrink-0 self-stretch sm:mx-auto'
                   : layoutPos === 'popup'
                     ? 'w-full max-w-[360px] shrink-0 self-center'
                     : `w-full max-w-[360px] shrink-0 ${layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'}`
               }
+              style={
+                {
+                  borderRadius: `${initialLayout?.borderRadius}px` || '12px',
+                } as CSSProperties
+              }
             >
             <div
-              className={`shadow-lg w-full p-4 relative ${
+              className={`shadow-lg w-full min-w-0 p-4 relative ${
                 layoutPos === 'banner'
                   ? 'rounded-t-lg rounded-b-none border border-b-0 border-[#e2e8f0]'
                   : 'rounded-md border border-[#e2e8f0]'
               }`}
-              style={{ backgroundColor: colors.bannerBg,borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
+              style={{
+                backgroundColor: colors.bannerBg,
+                borderRadius: `${initialLayout?.borderRadius}px` || '12px',
+              }}
             >
               {content?.closeButton ? (
                 <button
@@ -499,11 +546,11 @@ export default function ConsentPreview({
             </div>
             </div>
           ) : (
-            <div className="flex w-full shrink-0 justify-center px-1">
-            <div className="w-full max-w-[360px]">
+            <div className="flex w-full min-w-0 shrink-0 justify-center px-1">
+            <div className="w-full max-w-[360px] min-h-0">
           {modalView === "gdpr-preferences" ? (
             <div
-              className="rounded-md shadow-lg w-full p-5 border border-[#e2e8f0]"
+              className="rounded-md shadow-lg w-full min-w-0 p-5 border border-[#e2e8f0]"
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -695,7 +742,7 @@ export default function ConsentPreview({
             </div>
           ) : (
             <div
-              className="rounded-md shadow-lg w-full p-4 border border-[#e2e8f0]"
+              className="rounded-md shadow-lg w-full min-w-0 p-4 border border-[#e2e8f0]"
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius}px` || "12px" }}
             >
               <div className="flex items-center justify-between mb-3">

@@ -5,6 +5,7 @@ import { Globe, Check, Copy, Share2 } from "lucide-react";
 import Image from "next/image";
 import { PricingTable } from "./PricingTable";
 import { firstSetup, verifyScript } from "@/lib/client-api";
+import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 
@@ -19,7 +20,12 @@ export default function StepWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [siteData, setSiteData] = useState<{ scriptUrl?: string; siteId?: string; domain?: string } | null>(null);
+  const [siteData, setSiteData] = useState<{
+    scriptUrl?: string;
+    siteId?: string;
+    cdnScriptId?: string;
+    domain?: string;
+  } | null>(null);
 
   const nextStep = () => {
     setStep((prev) => prev + 1);
@@ -128,8 +134,12 @@ function StepOne({
     try {
       const result = await firstSetup({ websiteUrl: domain.trim() });
       onSetupComplete({
-        scriptUrl: result?.scriptUrl ?? result?.site?.scriptUrl,
+        scriptUrl:
+          result?.site?.embedScriptUrl ??
+          result?.scriptUrl ??
+          result?.site?.scriptUrl,
         siteId: result?.siteId ?? result?.site?.id,
+        cdnScriptId: result?.site?.cdnScriptId,
         domain: domain.trim(),
       });
       void refresh({ showLoading: false });
@@ -249,7 +259,12 @@ function StepThree({
   siteData,
   onWizardComplete,
 }: {
-  siteData: { scriptUrl?: string; siteId?: string; domain?: string } | null;
+  siteData: {
+    scriptUrl?: string;
+    siteId?: string;
+    cdnScriptId?: string;
+    domain?: string;
+  } | null;
   onWizardComplete?: () => void;
 }) {
   const router = useRouter();
@@ -259,9 +274,13 @@ function StepThree({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
 
-  const scriptUrl = siteData?.scriptUrl || (siteData?.siteId ? `/client_data/${siteData.siteId}/script.js` : '');
+  const scriptUrl = resolveInstallScriptUrl(
+    siteData?.scriptUrl,
+    siteData?.siteId ?? null,
+    siteData?.cdnScriptId ?? null,
+  );
   const codeSnippet = scriptUrl
-    ? `<!-- Start ConsentBit banner --> <script id="consentbit" src="${scriptUrl}" async></script> <!-- End ConsentBit banner -->`
+    ? `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${scriptUrl}" async></script>\n<!-- End ConsentBit banner -->`
     : `<!-- Start ConsentBit banner --> <script id="consentbit" src="YOUR_SCRIPT_URL" async></script> <!-- End ConsentBit banner -->`;
 
   const normalizePublicUrl = (value: string) => {
@@ -293,6 +312,9 @@ function StepThree({
       if (res.found) {
         setVerified(true);
       } else {
+        if (typeof window !== 'undefined' && res && typeof res === 'object' && 'debug' in res && res.debug) {
+          console.warn('[ConsentBit] Verify script — not found. Debug from worker:', res.debug);
+        }
         setVerifyError('Script not found on your site yet. Please publish the changes and try again.');
       }
     } catch (e: unknown) {
