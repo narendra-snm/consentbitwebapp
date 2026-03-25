@@ -288,14 +288,14 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
-      <LoadingPopup
-        show={scanning}
+     {loading && <LoadingPopup
+        show={scanning || loading}
         
         title={"Scanning..."}
         subtitle={
           `Your site "${siteLabel}" is scanning`
         }
-      />
+      />}
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}

@@ -661,7 +661,7 @@ const isToggleEnabled =
   effectivePlanId === "growth" || effectivePlanId === "essential";
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_740px]">
-      <Sidebar active={active} setActive={setActive} />
+      <Sidebar active={active} setActive={setActive} iabEnabled={iabEnabled} />
       <div className="w-full h-screen overflow-y-scroll px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
         {active === "General" && (

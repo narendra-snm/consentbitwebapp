@@ -45,14 +45,14 @@ export function SignupForm() {
     
     return (
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 w-full">
       {error && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       )}
       {/* Login Section */}
-      <div className="flex flex-col items-center w-full max-w-[463px]">
+      <div className="flex flex-col items-center w-full max-w-[463px] mx-auto">
 
         {/* Title */}
         <h1 className="text-[40px] font-normal text-[#2C3E8F] mb-6">
