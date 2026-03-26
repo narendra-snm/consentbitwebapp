@@ -202,6 +202,13 @@ export function DomainManagementDashboard() {
   const [filterStatus, setFilterStatus] = useState<'all' | Domain['status']>('all');
   const [filterBilling, setFilterBilling] = useState<'all' | Domain['billingPeriod']>('all');
   const [filterExpiration, setFilterExpiration] = useState<'all' | 'has' | 'na'>('all');
+  const [filterFocusKey, setFilterFocusKey] = useState<SortKey | null>(null);
+
+  const domainFilterRef = useRef<HTMLInputElement>(null);
+  const licenseFilterRef = useRef<HTMLInputElement>(null);
+  const statusFilterRef = useRef<HTMLSelectElement>(null);
+  const billingFilterRef = useRef<HTMLSelectElement>(null);
+  const expirationFilterRef = useRef<HTMLSelectElement>(null);
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -465,24 +472,33 @@ export function DomainManagementDashboard() {
           </div>
           <div className={`${TABLE_GRID} px-[23px] pb-3 pt-1 items-center`}>
             <input
+              ref={domainFilterRef}
               type="search"
               value={filterDomain}
               onChange={(e) => setFilterDomain(e.target.value)}
+              onFocus={() => setFilterFocusKey('domain')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'domain' ? null : k))}
               placeholder="Filter domain…"
               className={filterInputClass}
               aria-label="Filter by domain"
             />
             <input
+              ref={licenseFilterRef}
               type="search"
               value={filterLicense}
               onChange={(e) => setFilterLicense(e.target.value)}
+              onFocus={() => setFilterFocusKey('licenseKey')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'licenseKey' ? null : k))}
               placeholder="Filter license…"
               className={filterInputClass}
               aria-label="Filter by license key"
             />
             <select
+              ref={statusFilterRef}
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              onFocus={() => setFilterFocusKey('status')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'status' ? null : k))}
               className={filterInputClass}
               aria-label="Filter by status"
             >

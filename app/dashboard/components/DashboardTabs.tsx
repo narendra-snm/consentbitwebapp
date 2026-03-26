@@ -54,7 +54,7 @@ export default function DashboardTabs() {
 
   return (
     <div className="w-full flex justify-center mt-4.5">
-      <div className="flex items-center bg-[#F1F5F9] rounded-xl">
+      <div className="flex items-center bg-[#F1F5F9] rounded-xl ">
         {tabs.map((tab) => {
           const Icon = tab.icon;
 
@@ -69,7 +69,7 @@ export default function DashboardTabs() {
               key={tab.name}
               href={href}
               className={`
-                flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all
+                flex items-center hover:bg-gray-50 gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all
                 ${
                   isActive
                     ? "bg-[#6790EA1A] text-[#007AFF] border-b-2 border-[#007AFF]"

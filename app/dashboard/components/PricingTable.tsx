@@ -6,14 +6,27 @@ export function PricingTable({
   onclick,
   organizationId,
   siteId,
+  pendingDomain,
 }: {
-  onclick: () => void;
+  onclick: () => void | Promise<void>;
   organizationId?: string | null;
-  /** Required for Stripe tier checkout (Basic/Essential/Growth) */
+  /** Already-created siteId, or null if site is created on plan selection */
   siteId?: string | null;
+  /** Domain entered in Step 1 — used to create the site when siteId is not yet set */
+  pendingDomain?: string | null;
 }) {
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [loadingPlan, setLoadingPlan] = useState<null | 'basic' | 'essential' | 'growth'>(null);
+  const [freeLoading, setFreeLoading] = useState(false);
+
+  async function handleFreeClick() {
+    setFreeLoading(true);
+    try {
+      await onclick();
+    } finally {
+      setFreeLoading(false);
+    }
+  }
 
   const prices = useMemo(() => {
     const monthly = { basic: 9, essential: 20, growth: 56 };
@@ -31,22 +44,28 @@ export function PricingTable({
       alert('Organization not loaded. Please refresh and try again.');
       return;
     }
-    if (!siteId) {
-      alert('Select or create a site first so we can attach the subscription.');
+    if (!pendingDomain && !siteId) {
+      alert('No domain found. Please go back and enter your domain.');
       return;
     }
     try {
       setLoadingPlan(planId);
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const domain = pendingDomain ?? '';
+      // Do NOT create the site before checkout — site is created after successful payment
       const data = await createCheckoutSession({
         organizationId,
         planId,
         interval: billingInterval === 'month' ? 'monthly' : 'yearly',
-        siteId,
-        successUrl: origin ? `${origin}/dashboard/${siteId}?success=1` : undefined,
-        cancelUrl: origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined,
+        siteId: siteId ?? null,
+        siteName: domain || null,
+        siteDomain: domain || null,
+        successUrl: domain
+          ? `${origin}/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}`
+          : `${origin}/dashboard/${siteId}?success=1`,
+        cancelUrl: `${origin}/dashboard`,
       });
-      window.location.href = data.url;
+      window.open(data.url, '_blank');
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Checkout failed');
     } finally {
@@ -89,13 +108,19 @@ export function PricingTable({
             {/* Header Row */}
             <div></div>
 
-            <PlanHeader title="Free" price="$0" button="Take this plan" onClick={onclick} />
+            <PlanHeader
+              title="Free"
+              price="$0"
+              button={freeLoading ? 'Setting up…' : 'Take this plan'}
+              disabled={freeLoading || loadingPlan !== null}
+              onClick={handleFreeClick}
+            />
             <PlanHeader
               title="Basic"
               price={`$${prices.basic}`}
               button={loadingPlan === 'basic' ? 'Redirecting…' : '14 day free trial'}
               primary
-              disabled={!organizationId || !siteId || loadingPlan !== null}
+              disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('basic')}
             />
             <PlanHeader
@@ -103,7 +128,7 @@ export function PricingTable({
               price={`$${prices.essential}`}
               button={loadingPlan === 'essential' ? 'Redirecting…' : '14 day free trial'}
               highlight
-              disabled={!organizationId || !siteId || loadingPlan !== null}
+              disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('essential')}
             />
             <PlanHeader
@@ -111,7 +136,7 @@ export function PricingTable({
               price={`$${prices.growth}`}
               button={loadingPlan === 'growth' ? 'Redirecting…' : '14 day free trial'}
               primary
-              disabled={!organizationId || !siteId || loadingPlan !== null}
+              disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('growth')}
             />
 

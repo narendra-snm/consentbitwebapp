@@ -70,26 +70,24 @@ import imgImage5 from "@/public/images/loading.png";
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       
       {/* Modal Container */}
-      <div className="relative w-[503px] h-[302px]">
-        <div className="absolute bg-white h-full w-full rounded-[20px] shadow-lg">
+      <div className="relative w-[320px] h-[200px]">
+        <div className="absolute bg-white h-full w-full rounded-[16px] shadow-lg flex flex-col items-center justify-center gap-3">
           {/* Loading Animation */}
-          <div className="absolute left-1/2 top-[58px] -translate-x-1/2">
-            <div className="relative w-[131px] h-[112px] rounded-[20px] overflow-hidden animate-pulse">
-              <img 
-                alt="Loading animation" 
-                className="absolute   max-w-none top-2] animate-spin" 
-                src={imgImage5.src}
-                style={{ animationDuration: '2s' }}
-              />
-            </div>
+          <div className="relative w-[72px] h-[62px] rounded-[12px] overflow-hidden animate-pulse">
+            <img
+              alt="Loading animation"
+              className="absolute max-w-none animate-spin"
+              src={imgImage5.src}
+              style={{ animationDuration: '2s', width: '72px', height: '72px' }}
+            />
           </div>
-          
+
           {/* Text Content */}
-          <div className="absolute left-1/2 top-[175px] -translate-x-1/2 text-center">
-            <p className=" font-semibold leading-[20px] text-black text-[16px] mb-2" style={{ fontVariationSettings: "'opsz' 14" }}>
+          <div className="text-center">
+            <p className="font-semibold text-[14px] leading-[18px] text-black mb-1">
               {title}
             </p>
-            <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4b5563] text-[16px]" style={{ fontVariationSettings: "'opsz' 14" }}>
+            <p className="font-normal text-[13px] leading-normal text-[#4b5563]">
               {subtitle}
             </p>
           </div>

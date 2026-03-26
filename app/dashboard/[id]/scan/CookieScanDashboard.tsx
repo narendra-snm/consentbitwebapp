@@ -117,12 +117,21 @@ function formatCookieDuration(expires: string | null) {
 
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
+/** Module-level cache — survives tab switches (component unmount/remount). */
+type ScanCache = {
+  scanHistory: ScanHistoryRow[];
+  cookiesByCategory: Record<string, ScanCookie[]>;
+  scheduledScans: ScheduledScan[];
+};
+const scanDataCache: Record<string, ScanCache> = {};
+
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const { refresh, sites } = useDashboardSession();
-  const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
-  const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
-  const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = scanDataCache[siteId];
+  const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>(cached?.scanHistory ?? []);
+  const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>(cached?.cookiesByCategory ?? {});
+  const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>(cached?.scheduledScans ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -138,9 +147,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     category: 'necessary',
   });
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showLoader = true) => {
     if (!siteId) return;
-    setLoading(true);
+    if (showLoader) setLoading(true);
     setError(null);
     try {
       const [historyData, cookiesData, scheduledData] = await Promise.all([
@@ -148,27 +157,28 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         getSiteCookies(siteId),
         getScheduledScans(siteId).catch(() => ({ success: true as const, scheduledScans: [] as ScheduledScan[] })),
       ]);
-      setScanHistory(historyData.scans || []);
+      const history = historyData.scans || [];
       const byCat = cookiesData.cookiesByCategory || {};
+      const scheduled = scheduledData.scheduledScans || [];
+      setScanHistory(history);
       setCookiesByCategory(byCat);
-      setScheduledScans(scheduledData.scheduledScans || []);
-
+      setScheduledScans(scheduled);
+      // Save to cache so re-mounting the tab skips the loading popup
+      scanDataCache[siteId] = { scanHistory: history, cookiesByCategory: byCat, scheduledScans: scheduled };
       const firstWithCookies = ALL_CATEGORIES.find((c) => (byCat[c]?.length ?? 0) > 0);
       setSelectedCategory(firstWithCookies ?? 'necessary');
     } catch (e: unknown) {
       console.error('[CookieScanDashboard]', e);
       setError(e instanceof Error ? e.message : 'Failed to load scan data');
-      setScanHistory([]);
-      setCookiesByCategory({});
-      setScheduledScans([]);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, [siteId]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    // If we already have cached data, refresh silently in the background
+    loadData(!scanDataCache[siteId]);
+  }, [loadData, siteId]);
 
   const lastSuccessfulScan = useMemo(() => {
     const completed = scanHistory.filter((s) => String(s.scanStatus).toLowerCase() === 'completed');
@@ -205,7 +215,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     setError(null);
     try {
       await scanSiteNow(siteId);
-      await loadData();
+      await loadData(true);
       void refresh({ showLoading: false });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Scan failed');
@@ -288,14 +298,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
-     {loading && <LoadingPopup
-        show={scanning || loading}
-        
-        title={"Scanning..."}
-        subtitle={
-          `Your site "${siteLabel}" is scanning`
-        }
-      />}
+      <LoadingPopup
+        show={loading || scanning}
+        title={scanning ? 'Scanning…' : 'Loading…'}
+        subtitle={scanning ? `Scanning "${siteLabel}" for cookies` : `Fetching scan data for "${siteLabel}"`}
+      />
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
@@ -387,8 +394,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-[261px_1fr] gap-[45px]">
-          <div className="space-y-[15px]">
+        <div className="grid grid-cols-[200px_1fr] gap-[28px]">
+          <div className="space-y-1">
             {ALL_CATEGORIES.map((cat) => {
               const count = categoryCounts[cat] ?? 0;
               const active = selectedCategory === cat;
@@ -397,12 +404,12 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`w-full rounded-2xl py-[17px] px-3 text-left ${
+                  className={`w-full rounded-lg py-[7px] px-3 text-left ${
                     active ? 'bg-[#f1f5f9]' : 'bg-transparent'
                   }`}
                 >
                   <p
-                    className={`font-['DM_Sans'] text-base ${active ? 'font-medium text-black' : 'font-normal text-[#111827]'}`}
+                    className={`font-['DM_Sans'] text-sm ${active ? 'font-medium text-black' : 'font-normal text-[#111827]'}`}
                     style={dm}
                   >
                     {CATEGORY_LABELS[cat] ?? cat} ({count} Cookie{count !== 1 ? 's' : ''})
@@ -413,16 +420,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
 
           <div>
-            <h3 className="mb-[21px] font-['DM_Sans'] text-xl font-semibold leading-5 text-black" style={dm}>
+            <h3 className="mb-2 font-['DM_Sans'] text-base font-semibold leading-5 text-black" style={dm}>
               {CATEGORY_LABELS[selectedCategory] ?? selectedCategory}
             </h3>
-            <p className="font-['DM_Sans'] text-base font-normal leading-normal text-[#4b5563]" style={dm}>
+            <p className="font-['DM_Sans'] text-sm font-normal leading-normal text-[#4b5563]" style={dm}>
               {CATEGORY_DESCRIPTIONS[selectedCategory] ?? 'No description available.'}
             </p>
             {selectedCookies.length > 0 ? (
-              <ul className="mt-6 space-y-4">
+              <ul className="mt-3 space-y-2">
                 {selectedCookies.map((c) => (
-                  <li key={c.id} className="rounded-lg border border-[#e5e7eb] p-4">
+                  <li key={c.id} className="rounded-lg border border-[#e5e7eb] p-3">
                     <div className="flex items-center gap-2">
                       <p className="font-['DM_Sans'] text-sm font-semibold text-black" style={dm}>
                         {c.name}
@@ -453,14 +460,14 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 ))}
               </ul>
             ) : (
-              <div className="mt-6">
-                <p className="font-['DM_Sans'] text-sm text-[#64748b]" style={dm}>
+              <div className="mt-3">
+                <p className="font-['DM_Sans'] text-xs text-[#64748b]" style={dm}>
                   No cookies in this category. Run a scan to discover cookies.
                 </p>
                 <button
                   type="button"
                   onClick={openAddCookie}
-                  className="mt-4 font-['DM_Sans'] text-sm font-medium text-[#007aff] hover:text-[#0066d6] hover:underline"
+                  className="mt-2 font-['DM_Sans'] text-xs font-medium text-[#007aff] hover:text-[#0066d6] hover:underline"
                   style={dm}
                 >
                   + Add Cookie
@@ -471,80 +478,66 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         </div>
       </div>
 
-      <div>
+      <div className="pb-10">
         <h2 className="mb-[18px] font-['DM_Sans'] text-[25px] font-semibold tracking-tight text-black" style={dm}>
           Scan History
         </h2>
-        <div className="w-full overflow-x-auto">
-          <div className="min-w-[900px]">
-            <div className="grid h-[46px] grid-cols-[260px_140px_160px_140px_140px_140px_1fr] items-center gap-4 rounded-[5px] border-b border-[#9fbce4] bg-[#f2f7ff] px-6">
-              {['Scan Date (UTC ± 00:00)', 'Scan Status', 'Urls Scanned', 'Categories', 'Cookies', 'Scripts', ''].map(
-                (label) => (
-                  <div
-                    key={label || 'sp'}
-                    className="font-['DM_Sans'] text-sm font-medium tracking-tight text-[#0a091f]"
-                    style={dm}
-                  >
-                    {label}
-                  </div>
-                ),
-              )}
-            </div>
-            {loading ? (
-              <div className="px-6 py-8 font-['DM_Sans'] text-sm text-[#4b5563]" style={dm}>
-                Loading history…
-              </div>
-            ) : scanHistory.length === 0 ? (
-              <div className="px-6 py-8 text-center">
-                <p className="mb-4 font-['DM_Sans'] text-sm text-[#4b5563]" style={dm}>
-                  No scan history yet.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleScanNow}
-                  disabled={scanning}
-                  className="rounded-lg bg-[#007aff] px-4 py-2 font-['DM_Sans'] text-sm text-white hover:bg-[#0066d6] disabled:opacity-50"
-                  style={dm}
-                >
-                  {scanning ? 'Scanning…' : 'Scan Now'}
-                </button>
-              </div>
-            ) : (
-              scanHistory.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid h-[50px] grid-cols-[260px_140px_160px_140px_140px_140px_1fr] items-center gap-4 border-b border-[#9fbce4] bg-white px-6"
-                >
-                  <div className="font-['DM_Sans'] text-sm font-medium tracking-tight text-[#0a091f]" style={dm}>
-                    {formatTableDate(row.createdAt)}
-                  </div>
-                  <div>{statusBadge(row.scanStatus)}</div>
-                  <div className="font-['DM_Sans'] text-sm font-normal tracking-tight text-[#0a091f]" style={dm}>
-                    {row.scanUrl ? '1' : '—'}
-                  </div>
-                  <div className="font-['DM_Sans'] text-sm font-normal text-[#0a091f]" style={dm}>
-                    —
-                  </div>
-                  <div className="font-['DM_Sans'] text-sm font-normal text-[#0a091f]" style={dm}>
-                    {row.cookiesFound ?? '—'}
-                  </div>
-                  <div className="font-['DM_Sans'] text-sm font-normal text-[#0a091f]" style={dm}>
-                    {row.scriptsFound ?? '—'}
-                  </div>
-                  <div className="font-['DM_Sans'] text-sm font-medium tracking-tight text-[#007aff]" style={dm}>
-                    {row.scanUrl ? (
-                      <span className="truncate" title={row.scanUrl}>
-                        {row.scanUrl}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+        {!loading && scanHistory.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <p className="font-['DM_Sans'] text-sm text-[#4b5563]" style={dm}>
+              No scan history yet. Run your first scan to discover cookies.
+            </p>
+            <button
+              type="button"
+              onClick={handleScanNow}
+              disabled={scanning}
+              className="rounded-lg bg-[#007aff] px-5 py-2 font-['DM_Sans'] text-sm font-medium text-white hover:bg-[#0066d6] disabled:opacity-50"
+              style={dm}
+            >
+              {scanning ? 'Scanning…' : 'Scan Now'}
+            </button>
           </div>
+        ) : (
+        <div className="w-full rounded-[5px] border border-[#9fbce4] overflow-hidden">
+          {/* Header */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center h-[40px] bg-[#f2f7ff] px-4 gap-3">
+            {['Scan Date (UTC)', 'Status', 'URLs', 'Categories', 'Cookies', 'Scripts', 'URL'].map((label) => (
+              <div key={label} className="font-['DM_Sans'] text-xs font-semibold text-[#0a091f]" style={dm}>
+                {label}
+              </div>
+            ))}
+          </div>
+          {/* Rows */}
+          {loading ? (
+            <div className="px-4 py-6 font-['DM_Sans'] text-sm text-[#4b5563]" style={dm}>Loading history…</div>
+          ) : (
+            scanHistory.map((row, i) => (
+              <div
+                key={row.id}
+                className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center h-[44px] px-4 gap-3 ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
+              >
+                <div className="font-['DM_Sans'] text-xs text-[#0a091f] truncate" style={dm}>
+                  {formatTableDate(row.createdAt)}
+                </div>
+                <div>{statusBadge(row.scanStatus)}</div>
+                <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                  {row.scanUrl ? '1' : '—'}
+                </div>
+                <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>—</div>
+                <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                  {row.cookiesFound ?? '—'}
+                </div>
+                <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                  {row.scriptsFound ?? '—'}
+                </div>
+                <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>
+                  {row.scanUrl || '—'}
+                </div>
+              </div>
+            ))
+          )}
         </div>
+        )}
       </div>
 
       <ScheduleScanModal

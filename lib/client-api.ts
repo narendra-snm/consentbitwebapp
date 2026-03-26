@@ -1,4 +1,12 @@
 
+/** Parse a fetch response safely — reads body once, handles HTML error pages from Cloudflare/Workers. */
+async function parseApiResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  try { return JSON.parse(text); } catch {
+    return { success: false, error: text.trimStart().startsWith('<') ? `Server error (${res.status}). Please try again.` : text || `Request failed: ${res.status}` };
+  }
+}
+
 /** Hash password for sending to server (never send plain password in request body). */
 export async function hashPasswordForRequest(email: string, password: string): Promise<string> {
   const e = email.trim().toLowerCase();
@@ -50,7 +58,7 @@ export async function requestVerificationCode(payload: {
       name: payload.name,
     }),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Request code failed: ${res.status}`);
   return data as { success: true; requestId: string; expiresAt: string; code?: string };
 }
@@ -70,8 +78,12 @@ export async function verifyVerificationCode(payload: {
       code: payload.code.trim(),
     }),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
+  // Cache dashboard data so the provider renders instantly after navigation
+  if (data.dashboardInit?.authenticated) {
+    try { sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit)); } catch {}
+  }
   return data;
 }
 // Passwordless OTP auth ends here
@@ -119,7 +131,13 @@ export async function signup(payload: SignupPayload) {
 export async function getMe() {
   const res = await fetch('/api/auth/me', { credentials: 'include' });
   if (!res.ok) return { authenticated: false, user: null, organizations: [] };
-  return res.json(); // { authenticated, user, organizations }
+  return res.json();
+}
+
+export async function getDashboardInit() {
+  const res = await fetch('/api/auth/dashboard-init', { credentials: 'include' });
+  if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: 'free' };
+  return res.json(); // { authenticated, user, organizations, sites, effectivePlanId }
 }
 //me endpoint ends here
 //profile update starts here
@@ -193,9 +211,11 @@ export async function updateSiteBannerSettings(payload: {
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res
-    .json()
-    .catch(async () => ({ success: false, error: await res.text() }));
+  const text = await res.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch {
+    data = { success: false, error: text.trimStart().startsWith('<') ? `Server error (${res.status}). Please try again.` : text };
+  }
   if (!res.ok || !data.success) throw new Error(data.error || `Update site failed: ${res.status}`);
   return data as { success: true; site?: any };
 }
@@ -206,9 +226,7 @@ export async function getBannerCustomization(siteId: string) {
   const res = await fetch(`/api/banner-customization?siteId=${encodeURIComponent(siteId)}`, {
     credentials: 'include',
   });
-  const data = await res
-    .json()
-    .catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Get customization failed: ${res.status}`);
   return data as { success: true; customization: any | null };
 }
@@ -220,9 +238,7 @@ export async function saveBannerCustomization(payload: { siteId: string; customi
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res
-    .json()
-    .catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Save customization failed: ${res.status}`);
   return data as { success: true };
 }
@@ -250,7 +266,7 @@ export async function createCheckoutSession(
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Checkout failed: ${res.status}`);
   return data as { success: true; url: string; sessionId?: string };
 }
@@ -324,9 +340,7 @@ export async function cancelSubscription(payload: {
     credentials: "include",
     body: JSON.stringify(payload),
   });
-  const data = await res
-    .json()
-    .catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) {
     throw new Error(data.error || `Cancel subscription failed: ${res.status}`);
   }
@@ -379,7 +393,7 @@ export type ScheduledScan = {
 
 export async function getScanHistory(siteId: string): Promise<{ success: boolean; scans: ScanHistoryRow[] }> {
   const res = await fetch(`/api/scan-history?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Scan history failed: ${res.status}`);
   return data;
 }
@@ -390,7 +404,7 @@ export async function getSiteCookies(siteId: string): Promise<{
   cookiesByCategory: Record<string, ScanCookie[]>;
 }> {
   const res = await fetch(`/api/cookies?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Cookies failed: ${res.status}`);
   return data;
 }
@@ -410,7 +424,7 @@ export async function addCustomCookie(payload: {
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Add cookie failed: ${res.status}`);
   return data;
 }
@@ -442,7 +456,7 @@ export async function scanSiteNow(siteId: string): Promise<{
   } finally {
     clearTimeout(timeout);
   }
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Scan failed: ${res.status}`);
   return data;
 }
@@ -452,7 +466,7 @@ export async function getScheduledScans(siteId: string): Promise<{
   scheduledScans?: ScheduledScan[];
 }> {
   const res = await fetch(`/api/scheduled-scan?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Scheduled scans failed: ${res.status}`);
   return data;
 }
@@ -468,7 +482,7 @@ export async function createScheduledScan(
     credentials: 'include',
     body: JSON.stringify({ siteId, scheduledAt, frequency }),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Schedule failed: ${res.status}`);
   return data;
 }
@@ -478,7 +492,7 @@ export async function deleteScheduledScan(id: string): Promise<{ success: boolea
     method: 'DELETE',
     credentials: 'include',
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Delete schedule failed: ${res.status}`);
   return data;
 }
@@ -542,7 +556,7 @@ export async function getConsentHistory(
     `/api/consent-history?siteId=${encodeURIComponent(siteId)}&limit=${limit}&offset=${offset}`,
     { credentials: 'include' },
   );
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
   return data;
 }
@@ -555,7 +569,7 @@ export async function verifyScript(payload: { publicUrl: string; scriptUrl: stri
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(async () => ({ success: false, error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Verify failed: ${res.status}`);
   return data as { success: true; found: boolean; siteId?: string | null; debug?: any };
 }

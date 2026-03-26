@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getConsentHistory,
   type ConsentLog,
@@ -11,6 +11,9 @@ import {
 import LoadingPopup from '../scan/component/LoadingPopup';
 
 const dm = { fontVariationSettings: "'opsz' 14" as const };
+
+/** Module-level cache — survives tab switches (component unmount/remount). */
+const consentLogCache: Record<string, ConsentHistoryResponse> = {};
 
 function normalizeCategories(categories: ConsentLog['categories']): ConsentLog['categories'] {
   if (!categories || typeof categories !== 'object') return categories;
@@ -84,28 +87,37 @@ const CONSENT_ROW_START = 166;
 const CONSENT_ROW_STEP = 30;
 
 export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; siteDomain: string }) {
-  const [data, setData] = useState<ConsentHistoryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ConsentHistoryResponse | null>(consentLogCache[siteId] ?? null);
+  const [loading, setLoading] = useState(!consentLogCache[siteId]);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(async (showLoader: boolean) => {
     let cancelled = false;
-    setLoading(true);
+    if (showLoader) setLoading(true);
+    else setRefreshing(true);
     setLoadError(null);
-    getConsentHistory(siteId, 200, 0)
-      .then((res) => {
-        if (!cancelled) setData(res);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const res = await getConsentHistory(siteId, 200, 0);
+      if (!cancelled) {
+        setData(res);
+        consentLogCache[siteId] = res;
+      }
+    } catch (err: unknown) {
+      if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+    return () => { cancelled = true; };
   }, [siteId]);
+
+  useEffect(() => {
+    const cleanup = fetchData(!consentLogCache[siteId]);
+    return () => { void cleanup; };
+  }, [fetchData, siteId]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -138,14 +150,32 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
     <>
       <LoadingPopup
         show={loading}
-        title="Loading..."
-        subtitle={`Loading consent logs for "${displayDomain}"`}
+        title="Loading…"
+        subtitle={`Fetching consent logs for "${displayDomain}"`}
       />
       {loadError ? (
         <div className="mx-auto mb-2 max-w-[1139px] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {loadError}
         </div>
       ) : null}
+      {/* Refresh button */}
+      <div className="mx-auto mb-3 max-w-[1139px] flex justify-end">
+        <button
+          type="button"
+          onClick={() => void fetchData(false)}
+          disabled={refreshing || loading}
+          className="flex items-center gap-1.5 rounded-lg border border-[#007aff] px-3 py-1.5 text-xs font-medium text-[#007aff] hover:bg-blue-50 disabled:opacity-50 transition-colors"
+          style={dm}
+        >
+          <svg
+            width="13" height="13" viewBox="0 0 16 16" fill="none"
+            className={refreshing ? 'animate-spin' : ''}
+          >
+            <path d="M13.65 2.35A8 8 0 1 0 15 8h-2a6 6 0 1 1-1.06-3.39L10 6h5V1l-1.35 1.35Z" fill="#007aff"/>
+          </svg>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
       <div
         className="relative mx-auto mt-5 max-w-[1139px]"
         style={{ fontFamily: "'DM Sans', sans-serif", minHeight: containerHeight }}
@@ -181,7 +211,8 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
         : {loading ? '…' : `${cookieCount} Cookie${cookieCount !== 1 ? 's' : ''}`}
       </p>
 
-      {/* Column headers */}
+      {/* Column headers — only when there are rows */}
+      {consentRows.length > 0 && <>
       <p
         className="absolute left-[28px] top-[137px] whitespace-nowrap font-medium leading-[normal] tracking-[-0.32px] text-[16px] text-[#007aff]"
         style={dm}
@@ -206,63 +237,15 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
       >
         Analytics / Marketing / Preferences
       </p>
+      </>}
 
       {/* Consent rows */}
-      {loading ? (
-        <>
-          <p
-            className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            …
-          </p>
-          <p
-            className="absolute left-[259px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            …
-          </p>
-          <p
-            className="absolute left-[426px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            …
-          </p>
-          <p
-            className="absolute left-[600px] w-[537px] font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            …
-          </p>
-        </>
-      ) : consentRows.length === 0 ? (
-        <>
-          <p
-            className="absolute left-[28px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            —
-          </p>
-          <p
-            className="absolute left-[259px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            —
-          </p>
-          <p
-            className="absolute left-[426px] whitespace-nowrap font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            —
-          </p>
-          <p
-            className="absolute left-[600px] w-[537px] font-medium leading-[normal] text-[15px] text-[#4b5563]"
-            style={{ ...dm, top: `${CONSENT_ROW_START}px` }}
-          >
-            —
-          </p>
-        </>
-      ) : (
+      {!loading && consentRows.length === 0 ? (
+        <div className="absolute left-0 right-0 flex flex-col items-center gap-2 pt-16 text-center" style={{ top: '116px' }}>
+          <p className="text-sm text-[#4b5563]" style={dm}>No consent logs yet.</p>
+          <p className="text-xs text-[#9ca3af]" style={dm}>Consent events will appear here once visitors interact with your banner.</p>
+        </div>
+      ) : consentRows.length > 0 ? (
         consentRows.map((row, i) => {
           const top = CONSENT_ROW_START + i * CONSENT_ROW_STEP;
           return (
@@ -295,8 +278,10 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
             </div>
           );
         })
-      )}
+      ) : null}
 
+      {/* Only show cookie inventory section when there are consent rows or cookies */}
+      {(!loading && (consentRows.length > 0 || cookies.length > 0)) && <>
       <HLine left={0} top={consentSectionLineTop} width={1137} />
 
       {/* Cookie inventory header */}
@@ -342,14 +327,7 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
       <HLine left={28} top={cookieTableLineTop} width={1111} />
 
-      {loading ? (
-        <p
-          className="absolute left-[28px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
-          style={{ ...dm, top: `${cookieRowStart}px` }}
-        >
-          Loading cookies…
-        </p>
-      ) : cookies.length === 0 ? (
+      {cookies.length === 0 ? (
         <p
           className="absolute left-[28px] max-w-[1000px] font-medium leading-[normal] text-[16px] text-[#4b5563]"
           style={{ ...dm, top: `${cookieRowStart}px` }}
@@ -395,13 +373,14 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
         })
       )}
 
-      {!loading && cookies.length > 0 ? (
+      {cookies.length > 0 ? (
         <HLine
           left={28}
           top={cookieRowStart + (cookies.length - 1) * COOKIE_ROW_STEP + LINE_AFTER_ROW}
           width={1111}
         />
       ) : null}
+      </>}
     </div>
     </>
   );

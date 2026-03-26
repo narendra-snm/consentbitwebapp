@@ -15,6 +15,7 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
+import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -38,7 +39,6 @@ type RegulationSnapshot = {
 export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
   const router = useRouter();
-  const [updatingRegulation, setUpdatingRegulation] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
   /** Which action triggered the in-flight persist (for button labels). */
   const [persistKind, setPersistKind] = useState<"save" | "publish" | null>(null);
@@ -249,33 +249,24 @@ export default function page({ siteId }: { siteId: string }) {
       return;
     }
 
-    // Free-plan UX: update preview immediately on dropdown change,
-    // even if the backend roundtrip is slow.
-    if (isFreePlan) {
-      setFreePreviewBannerType(next.bannerType);
-    }
+    // Update local state immediately — preview is driven by local state, not backend.
+    setFreePreviewBannerType(next.bannerType);
+    updateSiteInState({
+      id: String(site.id),
+      banner_type: next.bannerType,
+      region_mode: next.regionMode,
+    });
 
-    try {
-      setUpdatingRegulation(true);
-      await updateSiteBannerSettings({
-        name: String(site.name || site.domain || ''),
-        domain: String(site.domain || ''),
-        organizationId: String(activeOrganizationId),
-        bannerType: next.bannerType,
-        regionMode: next.regionMode,
-      });
-
-      updateSiteInState({
-        id: String(site.id),
-        banner_type: next.bannerType,
-        region_mode: next.regionMode,
-      });
-      void refresh({ showLoading: false });
-    } catch (e) {
-      console.error("[cookie-banner] failed to update banner settings", e);
-    } finally {
-      setUpdatingRegulation(false);
-    }
+    // Persist to backend in the background; UI doesn't wait or revert on failure.
+    updateSiteBannerSettings({
+      name: String(site.name || site.domain || ''),
+      domain: String(site.domain || ''),
+      organizationId: String(activeOrganizationId),
+      bannerType: next.bannerType,
+      regionMode: next.regionMode,
+    }).catch((e) => {
+      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
+    });
   };
 
   useEffect(() => {
@@ -676,7 +667,7 @@ const isToggleEnabled =
                   site={site}
                   // Only disable dropdown while we're actively saving banner settings.
                   // Session-level loading can cause the whole dropdown to appear "stuck disabled".
-                  loading={updatingRegulation}
+                  loading={false}
                   effectivePlanId={effectivePlanId}
                   onChange={handleRegulationChange}
                 />
@@ -760,69 +751,7 @@ const isToggleEnabled =
         )}
         {active === "Content" && (
           <>
-            <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mb-4.25">
-              <p className="font-semibold text-base text-black mb-3">
-                Content settings
-              </p>
-              <p className="text-[13px] leading-snug text-[#6b7280] mb-3">
-                The consent template  is chosen under{" "}
-                <span className="font-medium text-[#374151]">General</span>.
-                {consentType === "both" ? (
-                  <>
-                    {" "}
-                    Below, choose which set of copy you are editing.
-                  </>
-                ) : (
-                  <>
-                    {" "}
-                    You are editing{" "}
-                    <span className="font-medium text-[#374151]">
-                      {activeContentBannerType === "ccpa" ? "CCPA" : "GDPR"}
-                    </span>{" "}
-                    content only.
-                  </>
-                )}
-              </p>
-              {consentType === "both" ? (
-                <div className="flex rounded-lg border border-[#e5e5e5] overflow-hidden mb-3 max-w-[409px]">
-                  <button
-                    type="button"
-                    onClick={() => setBothContentFocus("gdpr")}
-                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                      bothContentFocus === "gdpr"
-                        ? "bg-[#007aff] text-white"
-                        : "bg-white text-[#374151] hover:bg-gray-50"
-                    }`}
-                  >
-                    GDPR content
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBothContentFocus("ccpa")}
-                    className={`flex-1 py-2.5 text-sm font-medium transition-colors border-l border-[#e5e5e5] ${
-                      bothContentFocus === "ccpa"
-                        ? "bg-[#007aff] text-white"
-                        : "bg-white text-[#374151] hover:bg-gray-50"
-                    }`}
-                  >
-                    CCPA content
-                  </button>
-                </div>
-              ) : null}
-              {/* <div className="mb-2 rounded-md border border-[#e5e7eb] bg-white px-3 py-2">
-                <p className="text-xs text-[#6b7280] leading-snug">
-                  Edits stay in draft until you click{" "}
-                  <span className="font-medium text-[#374151]">Publish Changes</span> in the
-                  preview column. That saves content, floating button, layout, colors, and
-                  typography together.
-                </p>
-                {contentDirty || floatingDirty || appearanceDirty ? (
-                  <p className="text-xs text-amber-700 font-medium mt-1.5">Unpublished changes</p>
-                ) : (
-                  <p className="text-xs text-[#15803d] mt-1.5">Published — no pending edits</p>
-                )}
-              </div> */}
-            </div>
+            
             <CookieNoticeAccordion2
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
@@ -942,7 +871,12 @@ const isToggleEnabled =
               value={floatingButton}
               onChange={setFloatingButton}
             />
-            
+
+            <BannerLinkSection
+              effectivePlanId={effectivePlanId}
+              consentType={consentType}
+            />
+
           </>
         )}
         {active === "Layout" && (

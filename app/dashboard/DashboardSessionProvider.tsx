@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getMe, getSites } from "@/lib/client-api";
+import { getDashboardInit } from "@/lib/client-api";
 
 type DashboardSessionState = {
   loading: boolean;
@@ -80,31 +80,68 @@ function pickPlanIdFromSite(site: unknown): string | null {
   return plan || null;
 }
 
-export function DashboardSessionProvider({ children }: { children: React.ReactNode }) {
+export function DashboardSessionProvider({
+  children,
+  initialData,
+}: {
+  children: React.ReactNode;
+  initialData?: any;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   /** Latest path without putting `pathname` in `refresh` deps (avoids refetch on every tab switch). */
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  /** True when state was seeded from sessionStorage or SSR — data is fresh, skip initial fetch. */
+  const skipInitialRefresh = useRef(false);
 
-  const [state, setState] = useState<DashboardSessionState>({
-    loading: true,
-    authenticated: false,
-    user: null,
-    organizations: [],
-    sites: [],
-    effectivePlanId: "free",
-    activeOrganizationId: null,
-    activeSiteId: null,
+  const [state, setState] = useState<DashboardSessionState>(() => {
+    // sessionStorage cache takes priority (set by verifyVerificationCode after login/signup)
+    const ssData = (() => {
+      try {
+        const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('dashboardInit') : null;
+        if (raw) { sessionStorage.removeItem('dashboardInit'); return JSON.parse(raw); }
+      } catch {}
+      return null;
+    })();
+    const seed = ssData ?? initialData;
+    if (seed?.authenticated) {
+      skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
+      const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];
+      const sites = Array.isArray(seed.sites) ? seed.sites : [];
+      const activeOrgId = pickOrganizationIdFromMe(orgs) || (sites.length > 0 ? pickOrganizationIdFromSite(sites[0]) : null);
+      const activeSite = sites[0] ?? null;
+      const activeSitePlanId = pickPlanIdFromSite(activeSite);
+      return {
+        loading: false,
+        authenticated: true,
+        user: seed.user ?? null,
+        organizations: orgs,
+        sites,
+        effectivePlanId: activeSitePlanId || seed.effectivePlanId || "free",
+        activeOrganizationId: activeOrgId,
+        activeSiteId: activeSite?.id ? String(activeSite.id) : null,
+      };
+    }
+    return {
+      loading: true,
+      authenticated: false,
+      user: null,
+      organizations: [],
+      sites: [],
+      effectivePlanId: "free",
+      activeOrganizationId: null,
+      activeSiteId: null,
+    };
   });
 
   const refresh = useCallback(async (opts?: DashboardRefreshOptions) => {
     const showLoading = opts?.showLoading !== false;
     if (showLoading) setState((s) => ({ ...s, loading: true }));
     try {
-      const me = await getMe();
-      const authenticated = Boolean(me?.authenticated);
-      const orgs = Array.isArray(me?.organizations) ? me.organizations : [];
+      const data = await getDashboardInit();
+      const authenticated = Boolean(data?.authenticated);
+      const orgs = Array.isArray(data?.organizations) ? data.organizations : [];
 
       if (!authenticated) {
         setState({
@@ -121,14 +158,8 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
       }
 
       let activeOrgId = pickOrganizationIdFromMe(orgs);
-
-      // If /me didn't include an org id, load sites without organizationId — the Worker
-      // resolves the org from the session (getOrCreateOrganizationForUser) and we infer id from Site rows.
-      let sitesRes = activeOrgId
-        ? await getSites(activeOrgId)
-        : await getSites();
-      let sites = sitesRes?.success ? sitesRes.sites || [] : [];
-      let effectivePlanId = sitesRes?.effectivePlanId || "free";
+      let sites = Array.isArray(data?.sites) ? data.sites : [];
+      let effectivePlanId = data?.effectivePlanId || "free";
 
       if (!activeOrgId && sites.length > 0) {
         activeOrgId = pickOrganizationIdFromSite(sites[0]);
@@ -151,7 +182,7 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
         return {
           loading: false,
           authenticated: true,
-          user: me?.user ?? null,
+          user: data?.user ?? null,
           organizations: orgs,
           sites,
           effectivePlanId: resolvedPlanId,
@@ -165,10 +196,11 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
     }
   }, []);
 
-  // Fetch user + sites once on mount (and when `refresh` is explicitly called elsewhere).
+  // Only fetch on mount when we don't already have fresh data (sessionStorage / SSR initialData).
   useEffect(() => {
+    if (skipInitialRefresh.current) return;
     void refresh();
-  }, [refresh]);
+  }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
   useEffect(() => {

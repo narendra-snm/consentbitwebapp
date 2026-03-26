@@ -54,7 +54,10 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
     if (!site?.id) return;
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
-    router.push(`/dashboard/${site.id}`);
+    // Preserve current tab/sub-route when switching sites
+    const currentSubPath = pathParts.slice(2).join('/');
+    const targetPath = currentSubPath ? `/dashboard/${site.id}/${currentSubPath}` : `/dashboard/${site.id}`;
+    router.push(targetPath);
   };
 
   return (

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { firstSetup } from "@/lib/client-api";
+import { firstSetup, createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../DashboardSessionProvider";
 const svgPaths = {
 p131d6680: "M11.8618 9.49625C11.5149 8.89875 10.9993 7.20813 10.9993 5C10.9993 3.67392 10.4725 2.40215 9.53481 1.46447C8.59713 0.526784 7.32536 0 5.99928 0C4.67319 0 3.40142 0.526784 2.46374 1.46447C1.52606 2.40215 0.999276 3.67392 0.999276 5C0.999276 7.20875 0.483026 8.89875 0.136151 9.49625C0.0475697 9.64815 0.000609559 9.82073 5.89435e-06 9.99657C-0.000597771 10.1724 0.0451765 10.3453 0.132712 10.4978C0.220248 10.6503 0.34645 10.777 0.498591 10.8652C0.650732 10.9534 0.823433 10.9999 0.999276 11H3.5499C3.66526 11.5645 3.97204 12.0718 4.41836 12.4361C4.86468 12.8004 5.42314 12.9994 5.99928 12.9994C6.57542 12.9994 7.13387 12.8004 7.58019 12.4361C8.02651 12.0718 8.33329 11.5645 8.44865 11H10.9993C11.1751 10.9998 11.3477 10.9532 11.4997 10.865C11.6518 10.7768 11.7779 10.65 11.8654 10.4975C11.9528 10.345 11.9986 10.1722 11.9979 9.99641C11.9973 9.82062 11.9503 9.64811 11.8618 9.49625ZM5.99928 12C5.68916 11.9999 5.3867 11.9037 5.13352 11.7246C4.88035 11.5455 4.6889 11.2924 4.58553 11H7.41303C7.30965 11.2924 7.11821 11.5455 6.86503 11.7246C6.61185 11.9037 6.30939 11.9999 5.99928 12ZM0.999276 10C1.48053 9.1725 1.99928 7.255 1.99928 5C1.99928 3.93913 2.4207 2.92172 3.17085 2.17157C3.92099 1.42143 4.93841 1 5.99928 1C7.06014 1 8.07756 1.42143 8.8277 2.17157C9.57785 2.92172 9.99928 3.93913 9.99928 5C9.99928 7.25312 10.5168 9.17062 10.9993 10H0.999276Z",
@@ -126,12 +126,15 @@ const plans: PricingPlan[] = [
 
 export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
-  const { refresh, activeSiteId, sites } = useDashboardSession();
+  const { refresh, activeSiteId, activeOrganizationId, sites } = useDashboardSession();
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const checkoutTab = useRef<Window | null>(null);
   const hasExistingFreeSite = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
     return rows.some((site: any) => {
@@ -146,41 +149,78 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   }, [sites]);
   const freeSiteLimitReached = selectedPlan === "free" && hasExistingFreeSite;
 
-  const upgradeHref = useMemo(
-    () => (activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard"),
-    [activeSiteId],
-  );
+  // Poll for checkout tab closure
+  useEffect(() => {
+    if (!checkoutPending) return;
+    const timer = setInterval(() => {
+      if (checkoutTab.current?.closed) {
+        clearInterval(timer);
+        setCheckoutPending(false);
+        setSubmitting(false);
+        void refresh({ showLoading: false });
+        onClose?.();
+      }
+    }, 800);
+    return () => clearInterval(timer);
+  }, [checkoutPending, refresh, onClose]);
 
-  async function handleAddSite() {
-    if (!selectedPlan) {
-      setError("Please select a plan.");
+  function handleCancelCheckout() {
+    if (checkoutTab.current && !checkoutTab.current.closed) {
+      checkoutTab.current.close();
+    }
+    checkoutTab.current = null;
+    setCheckoutPending(false);
+    setSubmitting(false);
+  }
+
+  function normalizeDomain(raw: string): string {
+    return raw.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+  }
+
+  async function handlePlanAction(planId: PlanType) {
+    if (planId === "free" && hasExistingFreeSite) {
+      setSubmitError("Free plan allows only one site. Upgrade to add more sites.");
       return;
     }
-    if (freeSiteLimitReached) {
-      setError("Free plan allows only one site. Upgrade to add more sites.");
-      return;
-    }
-    const domain = websiteUrl.trim();
+    setSelectedPlan(planId);
+    const domain = normalizeDomain(websiteUrl);
     if (!domain) {
-      setError("Please enter website URL.");
+      setUrlError("Please enter a valid website URL.");
       return;
     }
-    setError(null);
+    setUrlError(null);
+    setSubmitError(null);
     setSubmitting(true);
     try {
-      const result = await firstSetup({ websiteUrl: domain });
-      const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
-      await refresh({ showLoading: false });
-      onClose?.();
-      if (newSiteId) {
-        const q = selectedPlan !== "free" ? `?plan=${encodeURIComponent(selectedPlan)}` : "";
-        router.push(`/dashboard/${newSiteId}/upgrade${q}`);
+      if (planId === "free") {
+        const result = await firstSetup({ websiteUrl: domain });
+        const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
+        await refresh({ showLoading: false });
+        onClose?.();
+        router.push(newSiteId ? `/dashboard/${newSiteId}` : "/dashboard");
       } else {
-        router.push("/dashboard");
+        if (!activeOrganizationId) {
+          setSubmitError("Organization not loaded. Please refresh and try again.");
+          setSubmitting(false);
+          return;
+        }
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const data = await createCheckoutSession({
+          organizationId: activeOrganizationId,
+          planId: planId as "basic" | "essential" | "growth",
+          interval: billingPeriod === "yearly" ? "yearly" : "monthly",
+          siteId: null,
+          siteName: domain,
+          siteDomain: domain,
+          successUrl: `${origin}/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}`,
+          cancelUrl: `${origin}/dashboard`,
+        });
+        const tab = window.open(data.url, '_blank');
+        checkoutTab.current = tab;
+        setCheckoutPending(true);
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to add website");
-    } finally {
+      setSubmitError(e instanceof Error ? e.message : "Failed to add website");
       setSubmitting(false);
     }
   }
@@ -192,6 +232,36 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       
       {/* Modal */}
       <div className="relative bg-white rounded-[10px] max-w-[1136px] shadow-xl max-h-[90vh] overflow-y-auto ">
+        {submitting && (
+          <div className="absolute inset-0 bg-white/75 z-50 flex flex-col items-center justify-center rounded-[10px] gap-3">
+            <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-sm text-[#007AFF] font-medium">
+              {selectedPlan === "free" ? "Setting up your site…" : "Redirecting to checkout…"}
+            </p>
+          </div>
+        )}
+        {/* Checkout pending full-page overlay */}
+        {checkoutPending && (
+          <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm">
+            <svg className="animate-spin h-10 w-10 text-[#007AFF] mb-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-[#231d4f] font-semibold text-lg mb-1">Complete your payment in the new tab</p>
+            <p className="text-gray-500 text-sm mb-7">Waiting for confirmation from Stripe…</p>
+            <button
+              type="button"
+              onClick={handleCancelCheckout}
+              className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-[#e6f1fd] h-[67px] rounded-t-[10px] px-[28px] flex items-center justify-between">
           <p className="font-semibold leading-[20px] text-[#111827] text-[16px]" style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -209,25 +279,22 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           {/* Website URL Section */}
           <div className="mt-[26px] grid grid-cols-[1fr_1fr] gap-4">
             <div className="flex items-center gap-7">
-              <label className=" font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px] block " style={{ fontVariationSettings: "'opsz' 14" }}>
+              <label className=" font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px] block min-w-[100px]" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Website URL *
               </label>
               <div className="relative w-full max-w-[402px]">
                 <input
                   type="text"
                   value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  onChange={(e) => { setWebsiteUrl(e.target.value); if (urlError) setUrlError(null); }}
                   placeholder="acme.com"
-                  className="w-full h-[48px] bg-white border border-[#e5e5e5] rounded-lg px-[18px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff]"
+                  className={`w-full h-[48px] bg-white border rounded-lg px-[18px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] ${urlError ? "border-[#b91c1c]" : "border-[#e5e5e5]"}`}
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
+                {urlError && <p className="mt-1.5 text-xs text-[#b91c1c] flex items-center gap-1"><span>⚠</span>{urlError}</p>}
               </div>
             </div>
-            <div className="flex items-center">
-              <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] opacity-60 text-[#161616] text-[14px] tracking-[-0.28px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-                Add a new website to your organization. Enter your website URL. You can configure banner settings in the Cookie Banner tab.
-              </p>
-            </div>
+            
           </div>
 
           {/* Divider */}
@@ -281,7 +348,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                 : plan.price;
 
               return (
-                <div key={plan.id} className="relative z-20">
+                <div key={plan.id} className={`relative z-20 ${!(hasExistingFreeSite && plan.id === "free") ? "hover:scale-105 transition-transform duration-300 ease-out" : ""}`}>
                   {/* Recommended Badge */}
                   {plan.isRecommended && (
                     <div className="absolute -top-[21px] left-1/2 -translate-x-1/2 z-10 w-full">
@@ -294,12 +361,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                   )}
 
                   {/* Card */}
-                  <div 
+                  <div
+                      onClick={() => { if (!(hasExistingFreeSite && plan.id === "free")) setSelectedPlan(plan.id as PlanType); }}
                     className={`relative rounded-[8px] border ${
                       plan.isRecommended 
                         ? "border-[#e5e5e5] bg-[#f0fff1]" 
                         : "border-[#e5e5e5] bg-[#e6f1fd]"
-                    } ${selectedPlan != null && selectedPlan === plan.id ? "ring-2 ring-[#007aff] border-[#007aff]" : ""} ${
+                    } ${selectedPlan != null && selectedPlan === plan.id ? "ring-2 ring-[#007aff] border-[#007aff]" : !(hasExistingFreeSite && plan.id === "free") ? "hover:border-gray-300 hover:ring-1 hover:ring-gray-200 cursor-pointer" : "cursor-not-allowed"} ${
                       hasExistingFreeSite && plan.id === "free" ? "opacity-60" : ""
                     }`}
                   >
@@ -340,12 +408,14 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     <div className="px-[12px] pb-[27px]">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (hasExistingFreeSite && plan.id === "free") return;
-                          setSelectedPlan(plan.id);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!(hasExistingFreeSite && plan.id === "free")) {
+                            void handlePlanAction(plan.id as PlanType);
+                          }
                         }}
                         disabled={hasExistingFreeSite && plan.id === "free"}
-                        className="px-4.5 h-[44px] rounded-[8px] flex items-center justify-center"
+                        className="px-4.5 h-[44px] rounded-[8px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed w-full"
                         style={{ backgroundColor: plan.buttonColor }}
                       >
                         <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[15px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -367,19 +437,11 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
               );
             })}
           </div>
-          {error ? (
-            <p className="mt-8 text-sm text-[#b91c1c]">{error}</p>
-          ) : null}
-          <div className="mt-6 flex justify-end">
-            <button
-              type="button"
-              onClick={handleAddSite}
-              disabled={submitting || freeSiteLimitReached}
-              className="h-[44px] px-6 rounded-[8px] bg-[#007aff] text-white text-sm font-medium disabled:opacity-60"
-            >
-              {submitting ? "Adding..." : "Add new site"}
-            </button>
-          </div>
+          {submitError && (
+            <div className="mt-4 flex justify-end">
+              <p className="text-xs text-[#b91c1c] flex items-center gap-1"><span>⚠</span>{submitError}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
