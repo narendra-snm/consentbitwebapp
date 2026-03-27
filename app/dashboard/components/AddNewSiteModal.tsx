@@ -205,9 +205,9 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="px-[28px] pb-[60px]">
+        <div className=" pb-[60px]">
           {/* Website URL Section */}
-          <div className="mt-[26px] grid grid-cols-[1fr_1fr] gap-4">
+          <div className="mt-[26px] grid grid-cols-[1fr_1fr] gap-4 px-[28px]">
             <div className="flex items-center gap-7">
               <label className=" font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px] block " style={{ fontVariationSettings: "'opsz' 14" }}>
                 Website URL *
@@ -234,27 +234,27 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           <div className="h-[1px] bg-black/10 my-[32px]" />
 
           {/* Choose Pricing Plan Section */}
-          <div className="mb-[28px] flex items-center gap-3.25">
+          <div className="mb-[28px] flex items-center gap-3.25 px-[28px]">
             <p className=" font-semibold leading-[normal] text-[#161616] text-sm tracking-[-0.28px]" style={{ fontVariationSettings: "'opsz' 14" }}>
               Choose Pricing plan
             </p>
 
             {/* Billing Toggle */}
-       <div className="relative h-[44px] w-[225px] flex rounded-[22px] bg-[#f1f5f9] overflow-hidden">
+       <div className="relative h-[44px] w-[255px] flex rounded-[22px] bg-[#f1f5f9] overflow-hidden">
 
   {/* Sliding pill */}
   <div
     className={`absolute top-0 h-full bg-[#007aff] rounded-[22px] shadow-[0px_5px_7px_0px_rgba(82,67,194,0.23)] transition-all duration-300 ${
       billingPeriod === "monthly"
-        ? "left-0 w-[90px]"       // adjust based on monthly content
-        : "left-[90px] right-0"   // fills remaining
+        ? "left-0 w-[100px]"       // adjust based on monthly content
+        : "left-[100px] right-0"   // fills remaining
     }`}
   />
 
   {/* Monthly */}
   <button
     onClick={() => setBillingPeriod("monthly")}
-    className={`z-10 px-4 flex items-center justify-center font-extrabold text-[14px] pr-0 whitespace-nowrap ${
+    className={`z-10 pl-[23px]  flex items-center justify-center font-extrabold text-[14px] pr-0 whitespace-nowrap ${
       billingPeriod === "monthly" ? "text-white" : "text-[#848199] "
     }`}
   >
@@ -274,7 +274,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           </div>
 
           {/* Pricing Cards Grid */}
-          <div className="grid grid-cols-4 gap-[25px] relative">
+          <div className="grid grid-cols-4 gap-[25px] relative px-[28px]">
             {plans.map((plan) => {
               const displayPrice = billingPeriod === "yearly" && plan.price > 0 
                 ? Math.floor(plan.price * 0.8) 
@@ -295,7 +295,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
                   {/* Card */}
                   <div 
-                    className={`relative rounded-[8px] border ${
+                    className={`relative rounded-[8px] border z-20 ${
                       plan.isRecommended 
                         ? "border-[#e5e5e5] bg-[#f0fff1]" 
                         : "border-[#e5e5e5] bg-[#e6f1fd]"
@@ -304,17 +304,17 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     }`}
                   >
                     {/* Header */}
-                <div className="bg-white border-b border-[#e5e5e5] rounded-t-[8px] px-[12px] py-[16px] pt-[21px] h-[69px] flex items-center justify-between">
+                <div className="bg-white border-b border-[#e5e5e5] rounded-t-[8px] px-[12px] py-[23px] pt-[21px] h-[69px] flex items-center justify-between">
   <p className={`font-bold leading-[normal] text-[#007aff] tracking-[-${plan.id === "free" ? "0.9" : "0.8"}px]`} style={{ fontVariationSettings: "'opsz' 14" }}>
     {plan.name}
   </p>
   <div className="flex items-end gap-[2px]">
-    <p className="font-medium leading-tight text-[#231d4f] text-[36px] tracking-[-2px]" style={{ fontVariationSettings: "'opsz' 14" }}>
+   {displayPrice > 0 && ( <><p className="font-medium leading-tight text-[#231d4f] text-[36px] tracking-[-2px]" style={{ fontVariationSettings: "'opsz' 14" }}>
       ${displayPrice}
     </p>
     <p className="font-medium leading-normal text-[#848199] text-base uppercase pb-[2px]" style={{ fontVariationSettings: "'opsz' 14" }}>
       /m
-    </p>
+    </p></>)}
   </div>
 </div>
 
@@ -327,7 +327,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     { label: "Compliance", value: plan.compliance, muted: plan.iabTcf === "NIL" },
   ].map(({ label, value, muted }) => (
     <div key={label}>
-      <p className="font-normal leading-[normal] text-[#161616] text-[11px] tracking-[-0.22px] mb-[4px]" style={{ fontVariationSettings: "'opsz' 9" }}>
+      <p className="font-normal leading-[normal] text-[#000000]/70 text-[12px] tracking-[-0.22px] mb-[4px]" style={{ fontVariationSettings: "'opsz' 9" }}>
         {label}
       </p>
       <p className={`font-bold leading-[normal] text-[17px] ${muted ? "text-[#8e8e8e]" : "text-[#5243c2]"}`} style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -337,7 +337,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   ))}
 </div>
                     {/* Button */}
-                    <div className="px-[12px] pb-[27px]">
+                    <div className="px-[12px] pb-[37px]">
                       <button
                         type="button"
                         onClick={() => {
@@ -356,8 +356,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
                     {/* Additional Note */}
                     {plan.additionalNote && (
-                      <div className="absolute -bottom-[24px] left-0 right-0 px-[12px]">
-                        <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#161616] text-[11px] tracking-[-0.22px] text-center" style={{ fontVariationSettings: "'opsz' 9" }}>
+                      <div className="absolute -bottom-[24px] left-0 right-0 ">
+                        <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4B5563] text-[13px] tracking-[-0.22px] text-left" style={{ fontVariationSettings: "'opsz' 9" }}>
                           {plan.additionalNote}
                         </p>
                       </div>
@@ -368,9 +368,10 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
             })}
           </div>
           {error ? (
-            <p className="mt-8 text-sm text-[#b91c1c]">{error}</p>
-          ) : null}
-          <div className="mt-6 flex justify-end">
+            <p className="mt-8 text-sm text-[#b91c1c] px-[28px]">{error}</p>
+          ) :             <p className="mt-8 text-sm text-[#b91c1c] invisible">hi</p>
+}
+          <div className="mt-6 flex justify-end px-[28px]">
             <button
               type="button"
               onClick={handleAddSite}

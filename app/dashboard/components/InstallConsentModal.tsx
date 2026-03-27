@@ -148,7 +148,7 @@ export default function InstallConsentModal({
 
       <div className="relative flex max-h-[95vh] w-full max-w-[1007px] flex-col rounded-[10px] bg-white shadow-xl">
         <div className="flex items-center justify-between bg-[#E6F1FD] px-7 py-6">
-          <h2 className="text-sm font-semibold">Install ConsentBit on your website</h2>
+          <h2 className="text-base font-semibold text-[#111827]">Install ConsentBit on your website</h2>
           <button type="button" onClick={onClose} className="rounded p-1 hover:bg-black/5" aria-label="Close">
             <X size={18} className="text-gray-600" />
           </button>
@@ -200,25 +200,29 @@ export default function InstallConsentModal({
             <img src="/images/allplatform.svg" alt="Supported platforms" />
           </div>
 
-          <h3 className="mb-2.5 font-bold">Step 3: Verify your installation.</h3>
+          <h3 className="mb-2.5 font-bold">Step 2: Verify your installation.</h3>
           <p className="mb-2 text-xs">Enter your website domain</p>
 
-          <div className="mb-2.25 flex flex-wrap items-center gap-2">
+          <div className="mb-2.25 flex flex-wrap items-center gap-2 w-fit relative">
             <input
               type="text"
               value={publicUrl}
               onChange={(e) => setPublicUrl(e.target.value)}
               placeholder={siteDomain || "yoursite.com"}
               disabled={verifying}
-              className="h-12 w-[min(100%,319px)] rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-12 w-full min-w-[319px] max-w-[319px] pr-[70px] rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <div
-              className={`flex h-10 w-10 items-center justify-center rounded-md text-white ${
-                verified ? "bg-emerald-500" : "bg-slate-300"
+              className={`flex h-9 w-12.5 items-center justify-center rounded-md absolute top-[50%] transform -translate-y-1/2 right-1.5 ${
+                verified ? "bg-emerald-500 text-[#2EC04F]" : "bg-slate-300 text-slate-300"
               }`}
               title={verified ? "Verified" : "Not verified yet"}
             >
-              <Check size={16} />
+            <svg width="50" height="36" viewBox="0 0 50 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="50" height="36" rx="5" fill="currentColor"/>
+<path d="M18.267 18.7468L22.6662 23.4874C22.866 23.7028 23.2074 23.7003 23.4041 23.4821L32.5738 13.3075" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>
+
             </div>
           </div>
 

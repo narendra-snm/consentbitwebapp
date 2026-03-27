@@ -379,7 +379,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             </button>
             <button
               type="button"
-              className="h-[42px] rounded-[11px] border-2 border-[rgba(46,192,79,0.1)] bg-[#2ec04f] px-[11px] font-['DM_Sans'] text-sm font-medium text-white transition-colors hover:bg-[#26a342]"
+              className="h-[42px] rounded-[11px] border-2  bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] px-[11px] font-['DM_Sans'] text-sm font-medium text-white transition-colors hover:bg-[#26a342]"
               style={dm}
             >
               Publish Changes

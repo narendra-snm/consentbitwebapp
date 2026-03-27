@@ -80,7 +80,7 @@ export default function SiteSummaryCards({
             <button
               type="button"
               onClick={onOpenInstall}
-              className="text-blue-600 text-xs  font-medium mt-3.5"
+              className="text-[#007AFF] text-xs  font-medium mt-3.5"
             >
               Get your installation code ↓
             </button>
@@ -122,7 +122,7 @@ export default function SiteSummaryCards({
           href={siteId ? `/dashboard/${siteId}/cookie-banner` : "/dashboard"}
           className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between"
         >
-          <span className="text-blue-600 text-sm font-medium">
+          <span className="text-[#007AFF] text-sm font-medium">
             Customize cookie banner
           </span>
 
@@ -199,7 +199,7 @@ export default function SiteSummaryCards({
         <p className="text-[#4B5563]">Next scan</p>
         <p className="mt-1 text-sm text-[#161616]">
           Not scheduled{" "}
-          <span className="text-blue-600 cursor-pointer">
+          <span className="text-[#007AFF] underline cursor-pointer">
             Schedule Now
           </span>
         </p>
@@ -214,7 +214,7 @@ export default function SiteSummaryCards({
     href={siteId ? `/dashboard/${siteId}/scan` : "/dashboard"}
     className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between"
   >
-    <span className="text-blue-600 text-sm font-medium">
+    <span className="text-[#007AFF] text-sm ">
       Manage cookies
     </span>
 

@@ -46,11 +46,11 @@ export function SignupForm() {
     return (
 
       <form onSubmit={handleSubmit} className="space-y-4 w-full">
-      {error && (
+      {/* {error && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
-      )}
+      )} */}
       {/* Login Section */}
       <div className="flex flex-col items-center w-full max-w-[463px] mx-auto">
 
@@ -88,7 +88,7 @@ export function SignupForm() {
           </div>
         )}
         {/* Button */}
-        <button className="w-full mb-5 bg-[#2C3E8F] hover:bg-[#24347a] text-white py-6 rounded-md transition"
+        <button className="w-full mb-5 bg-[#262E84] hover:bg-[#24347a] text-white py-6 rounded-md transition"
         disabled={loading}>
         {loading ? (step === 1 ? 'Sending code…' : 'Verifying…') : (step === 1 ? 'Send code' : 'Verify & Sign Up')}
         </button>
@@ -101,6 +101,9 @@ export function SignupForm() {
          href="/login" className="text-sm text-[#262E84] text-center mt-3">
          Login?
         </Link>
+        <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 mt-2 w-full text-sm text-rose-700 ${error ? 'visible' : 'invisible'}`}>
+          {error || 'Placeholder for error message'}
+        </div>
       </div>
       </form>
     )

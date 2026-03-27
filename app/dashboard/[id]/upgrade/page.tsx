@@ -4,8 +4,9 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import { Playwrite_NG_Modern } from "next/font/google";
 
-type Plan = "basic" | "essential" | "growth" | null;
+type Plan = "basic" | "essential" | "growth" | "free" | null;
 
 export default function PricingTable() {
   const params = useParams();
@@ -35,13 +36,13 @@ export default function PricingTable() {
     <button
       type="button"
       disabled
-      className="bg-gray-400 text-white px-6 py-2 rounded-lg cursor-default w-full max-w-[200px]"
+      className="bg-gray-400 text-[15px] text-white px-6 py-2 rounded-lg cursor-default  max-w-[200px]"
     >
       Current Plan
     </button>
   );
 
-  const prices = { basic: 9, essential: 20, growth: 56 };
+  const prices = {free: 0, basic: 9, essential: 20, growth: 56 };
 
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
@@ -79,7 +80,7 @@ export default function PricingTable() {
 
   const total = calculateTotal();
 
-  async function checkoutWithPlan(plan: "basic" | "essential" | "growth") {
+  async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
     if (sessionLoading) {
       alert("Please wait — loading your account.");
       return;
@@ -145,7 +146,7 @@ export default function PricingTable() {
 
       {plan && (
         <>
-          <div className="text-[#007aff] text-sm mt-1">
+          <div className={`text-[#007aff] text-sm mt-1 ${plan === "free" ? "invisible" : "visible"}`}>
             14 days trial period
           </div>
 
@@ -197,15 +198,15 @@ export default function PricingTable() {
   };
 
   return (
-    <div className="flex justify-center w-full">
+    <div className="flex justify-center w-full border-t border-[#000000]/10">
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
         {/* HEADER */}
-        <div className="flex gap-8 items-center  px-9 py-3.5 pt-7 mt-2 border-t border-[#000000]/10">
+        <div className="flex gap-8 items-center  px-9 py-3.5 pt-7 mt-2 ">
           <div className="text-xl font-semibold ">
             Chose your Payment Plan
           </div>
-          <div className="flex bg-[#f1f5f9] rounded-[22px] p-1 gap-1">
+          <div className="flex bg-[#f1f5f9] rounded-[22px] p-1 gap-2.25">
             <button
               onClick={() => setBilling("monthly")}
               className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] ${
@@ -233,11 +234,11 @@ export default function PricingTable() {
         </div>
 
         {/* PLANS GRID */}
-        <div className="grid grid-cols-[200px_220px_220px_316px_260px] px-6">
+        <div className="grid grid-cols-[200px_200px_220px_316px_1fr] px-6">
 
           <div></div>
 
-          <PlanHeader name="Free" />
+          <PlanHeader name="Free" plan="free" />
 
           <PlanHeader name="Basic" plan="basic" />
 
@@ -254,7 +255,7 @@ export default function PricingTable() {
               "100",
               "750",
               "5000 scans",
-              "10000 pageviews/m + $.49 extra",
+              "10000 pageviews/m ",
             ]}
           />
 
@@ -262,9 +263,9 @@ export default function PricingTable() {
             label="No of Page views"
             values={[
               "7500",
-              "100,000 page views/m",
-              "500,000 pageviews/m + $.49",
-              "2 Million pageviews/m + $.39",
+              "100,000 pageviews/m",
+              "500,000 pageviews/m ",
+              "2 Million pageviews/m ",
             ]}
           />
 
@@ -284,9 +285,9 @@ export default function PricingTable() {
           />
 
           {/* BUTTONS — "Current Plan" sits under the column that matches effectivePlanId (not always Free). */}
-          <div></div>
+          <div className="p-4 border-t border-[#000000]/10"></div>
 
-          <div className="p-4">
+          <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "free" ? (
               <CurrentPlanButton />
             ) : (
@@ -294,7 +295,7 @@ export default function PricingTable() {
             )}
           </div>
 
-          <div className="p-4">
+          <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "basic" ? (
               <CurrentPlanButton />
             ) : (
@@ -302,7 +303,7 @@ export default function PricingTable() {
             )}
           </div>
 
-          <div className="p-4 bg-[#f0fff1] border-x border-[rgba(164,191,166,0.3)] border-b rounded-b-[20px]">
+          <div className="p-4 px-8 pb-8 bg-[#f0fff1] border-x border-[rgba(164,191,166,0.3)] border-b rounded-b-[20px] border-t border-t-[#000000]/10">
             {currentTier === "essential" ? (
               <CurrentPlanButton />
             ) : (
@@ -310,7 +311,7 @@ export default function PricingTable() {
             )}
           </div>
 
-          <div className="p-4 pl-[50px]">
+          <div className="p-4 pl-[50px] border-t border-[#000000]/10">
             {currentTier === "growth" ? (
               <CurrentPlanButton />
             ) : (
@@ -321,7 +322,7 @@ export default function PricingTable() {
         </div>
 
         {/* BOTTOM */}
-        <div className="grid grid-cols-[430px_1fr] gap-4 p-6">
+        <div className="grid grid-cols-[430px_1fr] gap-4 p-6 pt-15.5">
 
           {/* PROMO */}
           <div className="bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white">
@@ -333,7 +334,7 @@ export default function PricingTable() {
               <input
                 value={promoInput}
                 onChange={(e) => setPromoInput(e.target.value)}
-                className="flex-1 px-4 py-3 outline-none"
+                className="flex-1 px-4 py-3 outline-none bg-white"
               />
 
               <button
@@ -346,7 +347,7 @@ export default function PricingTable() {
             </div>
 
             {promoOn && (
-              <div className="mt-3 text-sm font-medium">
+              <div className="mt-3 text-[17px] font-medium text-[#111827]">
                 Promo applied. You pay ${total}
               </div>
             )}
@@ -384,7 +385,7 @@ export default function PricingTable() {
                   }
                   void checkoutWithPlan(selected);
                 }}
-                className="bg-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                className="bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {checkoutLoading ? "Redirecting…" : "Proceed to pay"}
               </button>
@@ -408,27 +409,31 @@ function Feature({
 }) {
   return (
     <>
-      <div className="p-4 border-t border-[#000000]/10 text-[15px] text-[#111827]">
+      <div className="p- py-5.5 border-t border-[#000000]/10 text-[17px] flex items-center ">
         {label}
       </div>
 
       {values.map((v, i) => (
         <div
           key={i}
-          className={`p-4 border-t border-[#000000]/10  text-[15px] font-bold text-[#5243c2] ${
+          className={`p-4 border-t flex flex-col justify-center border-[#000000]/10  text-[17px] font-bold text-[#5243c2] ${
             i === 2
-              ? "bg-[#F0FFF1] border-l border-r border-[#A4BFA64D]"
-              : "text-[#5243c2]"
+              ? "bg-[#F0FFF1] border-l border-r border-[#A4BFA64D] px-8"
+              : "text-[#5243c2] "
           }
           ${
             i === 3
-              ? "pl-[50px]"
+              ? "pl-[50px] pr-0"
               : ""
           }
           
           `}
         >
-          {v}
+         <p><span className={`${v==="NIL" ? "text-[#8E8E8E]" : ""}  ${(i===0 || i===1) && label==="Compliance" ? "text-[#8E8E8E]" : ""}`}>{v}</span></p> 
+         {i === 2 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 page views</p>)}
+         {i === 3 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.39 for additional 10000 page views</p>)}
+         {i === 3 && label === "No of scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 page views</p>)}
+
         </div>
       ))}
     </>

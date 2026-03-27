@@ -147,14 +147,14 @@ export default function BillingPage({
           {/* Left Column - Invoices */}
           <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
             {/* Header with Filters */}
-            <div className="flex items-center justify-between mb-[30px]">
+            <div className="flex items-center justify-between mb-[20px]">
               <p className=" font-semibold leading-[20px] text-[16px] text-black tracking-[-1px]" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Invoices
               </p>
               <div className="flex items-center gap-[12px]">
                 {/* Year Dropdown */}
                 <div className="relative">
-                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
                     <option>Year</option>
                   </select>
                   <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
@@ -166,7 +166,7 @@ export default function BillingPage({
                 
                 {/* Month Dropdown */}
                 <div className="relative">
-                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <select disabled className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-black outline-none cursor-pointer disabled:opacity-60" style={{ fontVariationSettings: "'opsz' 14" }}>
                     <option>Month</option>
                   </select>
                   <div className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none">
@@ -181,7 +181,7 @@ export default function BillingPage({
                   <button
                     type="button"
                     onClick={() => router.push("/dashboard/all-domain")}
-                    className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
+                    className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
                     {`All Domains (${domainCount})`}
@@ -191,7 +191,7 @@ export default function BillingPage({
             </div>
 
             {/* Table Header */}
-            <div className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] mb-[16px]">
+            <div className="grid grid-cols-[100px_150px_90px_120px_90px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Issue Date
               </p>
@@ -212,7 +212,7 @@ export default function BillingPage({
             {/* Table Rows */}
             <div className="space-y-[20px]">
               {invoices.map((invoice, index) => (
-                <div key={index} className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] items-center">
+                <div key={index} className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
                   {/* Issue Date */}
                   <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                     {invoice.date}
@@ -285,7 +285,7 @@ export default function BillingPage({
                 <p className="text-sm text-[#b91c1c]">{invoiceError}</p>
               ) : null}
               {!invoiceLoading && !invoiceError && invoices.length === 0 ? (
-                <p className="text-sm text-[#6b7280]">No invoices found.</p>
+                <p className="text-sm text-[#6b7280] pb-4">No invoices found.</p>
               ) : null}
             </div>
           </div>

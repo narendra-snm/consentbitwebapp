@@ -34,7 +34,7 @@ export default function StepWizard({
   return (
     <div className={`${step===3 || step===2? '':'bg-white p-8 shadow-lg '}  transition-all duration-500 ease-in-out rounded-[28px]   w-full ${step === 2 ? 'max-w-[1292px]' : step === 3 ? 'max-w-[785px]' : 'max-w-[635px]'} min-h-[513px]`}>
       {/* Title */}
-      <h2 className={`text-center text-2xl font-semibold mb-8 text-black font-s ${step===3?'mb-10':'my-10'}`}>
+      <h2 className={`text-center text-2xl font-semibold  text-black font-s ${step===3?'mb-10':'my-10.5'}`}>
         Add your first domain
       </h2>
 
@@ -42,7 +42,7 @@ export default function StepWizard({
       <div className="max-w-[478px] mx-auto">
         <div className="grid grid-cols-3 items-start mb-18 relative">
           <StepCircle number={1} label="Domain" active={step >= 1} completed={step > 1} align="start" />
-          <StepCircle number={2} label="Compliance" active={step >= 2} completed={step > 2} align="center" />
+          <StepCircle number={2} label="Select your plan" active={step >= 2} completed={step > 2} align="center" />
           <StepCircle number={3} label="Confirm" active={step >= 3} completed={step === 3} align="end" />
         </div>
 
@@ -92,23 +92,23 @@ function StepCircle({
     <div className={`flex flex-col ${alignment}`}>
       {/* line */}
       {number !== 3 && (
-        <div className="absolute top-4 w-full h-[2px] bg-gray-300 z-0" />
+        <div className="absolute top-4 w-full h-[1px] bg-gray-300 z-0" />
       )}
 
       {/* circle */}
       <div
-        className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-semibold text-lg mb-2 transition-all duration-300 ease-in-out ${
+        className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-semibold text-lg mb-3 transition-all duration-300 ease-in-out ${
           completed
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
             : active
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
-            : "bg-[#F5F0F0] text-[#007AFF]"
+            : "bg-[#ffffff] text-[#007AFF]"
         }`}
       >
         {completed ? <Check className="w-5 h-5" /> : number}
       </div>
 
-      <span className="text-xs text-gray-700">{label}</span>
+      <span className="text-lg font-medium ">{label}</span>
     </div>
   );
 }
@@ -154,7 +154,7 @@ function StepOne({
   return (
     <>
       <div className="mb-3.5">
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex justify-between items-center mb-3.5">
           <label className="text-[15px] text-black ">Domain*</label>
           <span className="text-[15px] text-[#00000050]">What is your sites domain?</span>
         </div>
@@ -167,6 +167,11 @@ function StepOne({
             placeholder="Yoursite.com"
             className="placeholder:text-[#000000] placeholder:text-base w-full px-4 py-3.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          <div className="absolute top-1/2 -translate-y-1/2 right-3"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="24" height="24" rx="12" fill="#E6F1FD"/>
+<path d="M9.25181 12.3047L10.8273 14.0025C11.0271 14.2178 11.3686 14.2153 11.5652 13.9971L15.0913 10.0846" stroke="#007AFF" stroke-linecap="round"/>
+</svg>
+</div>
         </div>
         {error && (
           <p className="mt-2 text-sm text-red-600">{error}</p>

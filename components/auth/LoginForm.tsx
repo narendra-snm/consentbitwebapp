@@ -45,15 +45,11 @@ export function LoginForm() {
     return (
 
       <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {error}
-        </div>
-      )}
+      
            <div className="flex flex-col items-center w-full max-w-[463px]">
 
         {/* Title */}
-        <h1 className="text-[40px] font-normal text-[#2C3E8F] mb-6">
+        <h1 className="text-[40px] font-normal text-[#262E84] mb-6">
           Log In
         </h1>
 
@@ -66,7 +62,7 @@ export function LoginForm() {
           disabled={loading || step === 2}
           className="w-full border text-lg border-gray-300 rounded-[9px] px-4 py-4 bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#262E84] placeholder:text-[#262E84]"
         />
-    
+     
         {/* Helper Text */}
         <p className="text-sm text-[#262E84] text-center mt-5 mb-10 ">
           *Please use the exact mail as the webflow native app/iframe native app
@@ -80,7 +76,7 @@ export function LoginForm() {
         {/* Button */}
         <button 
         disabled={loading}
-        className="w-full mb-5 bg-[#2C3E8F] hover:bg-[#24347a] text-white py-6 rounded-md transition">
+        className="w-full mb-5 bg-[#262E84] hover:bg-[#24347a] text-white py-6 rounded-md transition">
           {loading ? (step === 1 ? 'Sending code…' : 'Verifying…') : (step === 1 ? 'Login ' : 'Verify & Login')}
         </button>
 
@@ -91,6 +87,9 @@ export function LoginForm() {
         <Link href="/signup" className="text-sm text-[#262E84] text-center mt-3">
          Sign Up?
         </Link>
+        <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 mt-2 w-full text-sm text-rose-700 ${error ? 'visible' : 'invisible'}`}>
+          {error || 'Placeholder for error message'}
+        </div>
       </div>
       </form>
     )

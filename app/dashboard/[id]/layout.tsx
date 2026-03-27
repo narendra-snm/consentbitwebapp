@@ -15,7 +15,7 @@ export default function layout({children}:{children:React.ReactNode}) {
     <>
       
 <Header/>
-      <div className="max-w-[1148px] mx-auto pb-4">
+      <div className="max-w-[1148px] mx-auto pb-4.25">
       <DashboardTabs/>
       
       </div>

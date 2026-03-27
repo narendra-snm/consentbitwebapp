@@ -255,7 +255,7 @@ export default function ConsentPreview({
         {isFreeForced ? (
           <div className="flex items-center gap-4">
             <div
-              className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
+              className={`h-[30px] rounded-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
               aria-label={
                 selectedBannerType === "gdpr" ? "GDPR tab" : "CCPA tab"
               }
@@ -270,7 +270,7 @@ export default function ConsentPreview({
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className={`h-[30px] rounded-t-md px-3 flex items-center ${
+              className={`h-[30px] rounded-md px-3 flex items-center ${
                 selectedBannerType === "gdpr"
                   ? "bg-[#edeefc] border-b-2 border-[#007aff]"
                   : "text-[#007aff]"
@@ -288,7 +288,7 @@ export default function ConsentPreview({
             </button>
             <button
               type="button"
-              className={`h-[30px] rounded-t-md px-3 flex items-center ${
+              className={`h-[30px] rounded-md px-3 flex items-center ${
                 selectedBannerType === "ccpa"
                   ? "bg-[#edeefc] border-b-2 border-[#007aff]"
                   : "text-[#111827]"
@@ -309,7 +309,7 @@ export default function ConsentPreview({
           // Non-free with single regulation: show one tab.
           <div className="flex items-center gap-4">
             <div
-              className={`h-[30px] rounded-t-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
+              className={`h-[30px] rounded-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
               aria-label={
                 selectedBannerType === "gdpr" ? "GDPR tab" : "CCPA tab"
               }
@@ -374,7 +374,7 @@ export default function ConsentPreview({
                 onClick={() => {
                   void onPublishChanges?.();
                 }}
-                className="px-4 h-9 bg-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                className="px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
               >
                 {publishBusy ? 'Publishing…' : 'Publish Changes'}
               </button>
@@ -854,7 +854,7 @@ export default function ConsentPreview({
       </div>
 
       {/* Device Selector */}
-      <div className="flex gap-6 mt-6 items-center">
+      <div className="flex gap-6 mt-6 mb-4 items-center">
         <button
           type="button"
           className="flex items-center gap-2"

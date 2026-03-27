@@ -25,16 +25,16 @@ export default function BannerControl({ value, onChange }: Props) {
   };
 
   return (
-    <div className="max-w-[454px] space-y-6 rounded-lg bg-white p-6">
+    <div className="max-w-[454px] space-y-6 rounded-lg bg-white  ">
       <div className="space-y-3 mb-[50px]">
-        <h3 className="text-sm font-semibold text-gray-900">Banner position</h3>
+        <h3 className=" font-semibold pb-1">Banner position</h3>
         <div className="flex items-end gap-8">
           {positions.map((pos) => (
             <button
               key={pos.id}
               type="button"
               onClick={() => patch({ position: pos.id })}
-              className="relative flex flex-col items-center gap-2 focus:outline-none"
+              className="relative flex flex-col items-start gap-2 focus:outline-none"
               aria-label={`Select ${pos.label} position`}
             >
               {position === pos.id && (
@@ -76,7 +76,7 @@ export default function BannerControl({ value, onChange }: Props) {
                   <rect x="27" y="23" width="47" height="19" rx="2" fill="#007AFF" />
                 </svg>
               )}
-              <span className="text-sm text-gray-700">{pos.label}</span>
+              <span className="text-sm text-[#111827] ml-1">{pos.label}</span>
             </button>
           ))}
         </div>
@@ -90,7 +90,7 @@ export default function BannerControl({ value, onChange }: Props) {
       {position === 'box' && (
       <div className="space-y-3 mb-[37px]">
         <h3 className=" font-semibold text-gray-900">Alignment</h3>
-        <p className="text-xs text-[#6b7280]">Corner position for the box layout only.</p>
+        {/* <p className="text-xs text-[#6b7280]">Corner position for the box layout only.</p> */}
 
         <div className="flex items-center gap-10">
           {(['bottom-left', 'bottom-right'] as const).map((a) => {
@@ -122,23 +122,23 @@ export default function BannerControl({ value, onChange }: Props) {
       )}
 
       <div className="rounded-xl border border-gray-200 bg-[#F9F9FA] p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Border Radious</h3>
+        <h3 className=" font-semibold ">Border Radious</h3>
         <input
           type="number"
           min={0}
           value={borderRadius}
           onChange={(e) => patch({ borderRadius: e.target.value })}
-          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500"
+          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
           placeholder="12"
         />
       </div>
 
       <div className="rounded-xl border border-[#E5E5E5] bg-[#F9F9FA] p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Animation</h3>
+        <h3 className=" font-semibold ">Animation</h3>
         <select
           value={animation}
           onChange={(e) => patch({ animation: e.target.value })}
-          className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500"
+          className="w-full rounded-lg border border-[#E5E5E5] pr-10 bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
         >
           {animations.map((anim) => (
             <option key={anim} value={anim.toLowerCase().replace(' ', '-')}>
