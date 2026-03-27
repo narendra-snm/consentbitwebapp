@@ -1,7 +1,7 @@
 "use client";
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getBannerLanguage, getTranslation } from "./translations";
 import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
@@ -190,6 +190,11 @@ export default function ConsentPreview({
 
   type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
   const [modalView, setModalView] = useState<ModalView>("main");
+  const previewAreaRef = useRef<HTMLDivElement | null>(null);
+  const initialBannerRef = useRef<HTMLDivElement | null>(null);
+  /** How many px we need to lift the floating button to clear the banner. */
+  const [floatingClearancePx, setFloatingClearancePx] = useState(0);
+  const [floatingAnchor, setFloatingAnchor] = useState<{ left: number; top: number } | null>(null);
 
   /** GDPR preference panel: which accordion row is expanded (+ / −) */
   const [prefExpanded, setPrefExpanded] = useState<string | null>(null);
@@ -205,6 +210,72 @@ export default function ConsentPreview({
   useEffect(() => {
     if (modalView !== 'gdpr-preferences') setPrefExpanded(null);
   }, [modalView]);
+
+  // Measure banner position so the floating button can be offset to avoid overlap.
+  useEffect(() => {
+    if (modalView !== 'main') {
+      setFloatingClearancePx(0);
+      setFloatingAnchor(null);
+      return;
+    }
+    const el = initialBannerRef.current;
+    const container = previewAreaRef.current;
+    if (!container) return;
+    if (!el) return;
+    const measure = () => {
+      const bannerRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      // When banner is in a bottom corner, place floating control directly under the banner.
+      if ((layoutAlign === 'bottom-left' || layoutAlign === 'bottom-right') && layoutPos !== 'banner') {
+        const top = Math.round(bannerRect.bottom - containerRect.top + 10);
+        if (layoutAlign === 'bottom-right') {
+          // Keep the icon under the banner's right edge.
+          const right = Math.round(containerRect.right - bannerRect.right + 6);
+          const left = Math.round(containerRect.width - right - 40); // 40px icon
+          setFloatingAnchor({ left: Math.max(6, left), top: Math.max(6, top) });
+        } else {
+          const left = Math.round(bannerRect.left - containerRect.left + 6);
+          setFloatingAnchor({ left: Math.max(6, left), top: Math.max(6, top) });
+        }
+      } else {
+        setFloatingAnchor(null);
+      }
+      // Only lift the button if it would overlap the banner at its default position.
+      // Default floating button is 40px tall and sits 16px from bottom.
+      const baseBottom = 16;
+      const btnH = 40;
+      const gap = 12;
+      const btnBottom = containerRect.bottom - baseBottom;
+      const btnTop = btnBottom - btnH;
+      const bannerTop = bannerRect.top;
+      const bannerBottom = bannerRect.bottom;
+      const overlapsVertically = btnBottom > bannerTop && btnTop < bannerBottom;
+      if (!overlapsVertically) {
+        setFloatingClearancePx(0);
+        return;
+      }
+      // Lift enough so button bottom is above banner top (with gap).
+      const lift = Math.round(btnBottom - (bannerTop - gap));
+      setFloatingClearancePx(Number.isFinite(lift) ? Math.max(0, lift) : 0);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    ro?.observe(container);
+    return () => ro?.disconnect();
+  }, [modalView, selectedBannerType, layoutPos, layoutAlign, device]);
+
+  const floatingOffsetPx = useMemo(() => {
+    // Only offset when the initial banner is visible and bottom-aligned.
+    if (modalView !== 'main') return 0;
+    const bottomAligned =
+      layoutAlign === 'bottom-left' ||
+      layoutAlign === 'bottom-right' ||
+      layoutAlign === 'bottom';
+    if (!bottomAligned) return 0;
+    if (!floatingClearancePx) return 0;
+    return floatingClearancePx;
+  }, [floatingClearancePx, layoutAlign, modalView]);
 
   const toggleSwitch = (on: boolean, onToggle: () => void) => (
     <button
@@ -429,6 +500,7 @@ export default function ConsentPreview({
           @keyframes cbPreviewFadeIn { from { opacity: 0; } to { opacity: 1; } }
         `}</style>
         <div
+          ref={previewAreaRef}
           className={`relative bg-gray-100 flex-1 flex flex-col min-h-0 overflow-y-auto p-6 pb-5 ${
             modalView === 'main' ? 'justify-end' : 'justify-center'
           }`}
@@ -437,6 +509,7 @@ export default function ConsentPreview({
           {!iabEnabled && <>{  modalView === 'main' ? (
             <div
               key={bannerAnimation}
+              ref={initialBannerRef}
               className={
                 layoutPos === 'banner'
                   ? 'absolute bottom-0 left-0 right-0'
@@ -554,7 +627,7 @@ export default function ConsentPreview({
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
             >
               <div className="flex items-center justify-between mb-3">
-                <p style={headingStyle} className="text-[14px] tracking-tight">
+                <p style={headingStyle} className="flex-1 text-[14px] tracking-tight">
                   {content?.preferenceTitle || t("cookiePreferences")}
                 </p>
                 {content?.closeButton ? (
@@ -747,7 +820,7 @@ export default function ConsentPreview({
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
             >
               <div className="flex items-center justify-between mb-3">
-                <p style={headingStyle} className="text-[13px] tracking-tight">
+                <p style={headingStyle} className="flex-1 text-[13px] tracking-tight">
                   {content?.ccpaOptOutTitle || t("optOutPreference")}
                 </p>
                 {content?.closeButton ? (
@@ -832,6 +905,13 @@ export default function ConsentPreview({
               className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#007aff]/50 focus:ring-offset-2 focus:ring-offset-gray-100 ${
                 floatingButton.position === 'right' ? 'right-4' : 'left-4'
               }`}
+              style={
+                floatingAnchor
+                  ? ({ left: `${floatingAnchor.left}px`, top: `${floatingAnchor.top}px`, bottom: 'auto', right: 'auto' } as CSSProperties)
+                  : floatingOffsetPx
+                    ? ({ bottom: `calc(1rem + ${floatingOffsetPx}px)` } as CSSProperties)
+                    : undefined
+              }
               onClick={openPreferences}
               aria-label={
                 content?.preferencesLabel ||

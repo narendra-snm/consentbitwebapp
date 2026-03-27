@@ -135,7 +135,7 @@ export async function getMe() {
 }
 
 export async function getDashboardInit() {
-  const res = await fetch('/api/auth/dashboard-init', { credentials: 'include' });
+  const res = await fetch('/api/auth/dashboard-init', { credentials: 'include', cache: 'no-store' });
   if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: 'free' };
   return res.json(); // { authenticated, user, organizations, sites, effectivePlanId }
 }
@@ -174,7 +174,14 @@ export async function firstSetup(payload: {
   if (!res.ok) {
     const errorText = await res.text();
     console.error('firstSetup: Error response:', errorText);
-    throw new Error(`Setup failed: ${res.status} - ${errorText}`);
+    let message = errorText;
+    try {
+      const parsed = JSON.parse(errorText) as { error?: string; message?: string };
+      message = parsed?.error || parsed?.message || message;
+    } catch {
+      // non-json response
+    }
+    throw new Error(message || `Setup failed: ${res.status}`);
   }
   
   return res.json();

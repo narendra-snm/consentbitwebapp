@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Home, Cookie, ScanLine, FileText, Box } from "lucide-react";
 import { useDashboardSession } from "../DashboardSessionProvider";
 
@@ -40,17 +40,21 @@ const tabs = [
 export default function DashboardTabs() {
   const pathname = usePathname();
   const { activeSiteId } = useDashboardSession();
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
 
   const basePath = useMemo(() => {
     const segs = (pathname || "").split("/").filter(Boolean);
-    if (activeSiteId && !RESERVED_DASHBOARD_SEGMENTS.has(String(activeSiteId))) {
-      return `/dashboard/${activeSiteId}`;
+    // Before hydration, derive siteId from the URL only (matches server render)
+    const resolvedId = hydrated ? activeSiteId : null;
+    if (resolvedId && !RESERVED_DASHBOARD_SEGMENTS.has(String(resolvedId))) {
+      return `/dashboard/${resolvedId}`;
     }
     if (segs[0] === "dashboard" && segs[1] && !RESERVED_DASHBOARD_SEGMENTS.has(segs[1])) {
       return `/dashboard/${segs[1]}`;
     }
     return "/dashboard";
-  }, [pathname, activeSiteId]);
+  }, [pathname, activeSiteId, hydrated]);
 
   return (
     <div className="w-full flex justify-center mt-4.5">

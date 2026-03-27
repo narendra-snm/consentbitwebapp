@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import Accordion from "./ui/Accordion";
 
+const LIMITS = { title: 60, message: 320, button: 40 } as const;
+
+function clampLen(value: string, max: number): string {
+  const s = value ?? "";
+  return s.length > max ? s.slice(0, max) : s;
+}
+
 export default function PreferenceBannerAccordion({
   variant = "gdpr",
   isOpen,
@@ -62,8 +69,9 @@ export default function PreferenceBannerAccordion({
             <input
               type="text"
               value={settings.title}
+              maxLength={LIMITS.title}
               onChange={(e) => {
-                const nextTitle = e.target.value;
+                const nextTitle = clampLen(e.target.value, LIMITS.title);
                 update("title", nextTitle);
                 onChange?.({
                   title: nextTitle,
@@ -72,7 +80,7 @@ export default function PreferenceBannerAccordion({
                     variant === "ccpa" ? settings.savePreferences : undefined,
                 });
               }}
-              className="w-full h-12 px-4 bg-white border-[3px] border-[rgba(0,122,255,0.1)] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -89,8 +97,9 @@ export default function PreferenceBannerAccordion({
             <textarea
               rows={variant === "ccpa" ? 8 : 6}
               value={settings.overview}
+              maxLength={LIMITS.message}
               onChange={(e) => {
-                const v = e.target.value;
+                const v = clampLen(e.target.value, LIMITS.message);
                 update("overview", v);
                 onChange?.({
                   title: settings.title,
@@ -99,7 +108,7 @@ export default function PreferenceBannerAccordion({
                     variant === "ccpa" ? settings.savePreferences : undefined,
                 });
               }}
-              className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal"
+              className="w-full p-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -118,18 +127,17 @@ export default function PreferenceBannerAccordion({
             <input
               type="text"
               value={settings.savePreferences}
+              maxLength={LIMITS.button}
               onChange={(e) => {
-                const v = e.target.value;
+                const v = clampLen(e.target.value, LIMITS.button);
                 update("savePreferences", v);
-                if (variant === "ccpa") {
-                  onChange?.({
-                    title: settings.title,
-                    message: settings.overview,
-                    saveButtonLabel: v,
-                  });
-                }
+                onChange?.({
+                  title: settings.title,
+                  message: settings.overview,
+                  saveButtonLabel: v,
+                });
               }}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>

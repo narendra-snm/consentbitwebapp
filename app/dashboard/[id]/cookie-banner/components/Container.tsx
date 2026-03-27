@@ -65,11 +65,13 @@ export default function page({ siteId }: { siteId: string }) {
     rejectButton: true,
     customizeButton: true,
     cookiePolicyLink: true,
+    cookiePolicyLabel: "Privacy Policy",
     privacyPolicyUrl: "",
     gdpr: {
       message:
         "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
       rejectAll: "Reject",
+      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
     },
     ccpa: {
       message:
@@ -114,6 +116,9 @@ export default function page({ siteId }: { siteId: string }) {
     setPreviewAlignment,
     setPreviewBannerLayout,
   ]);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
@@ -306,12 +311,14 @@ export default function page({ siteId }: { siteId: string }) {
             typeof en.cookiePolicyLinkEnabled === "boolean"
               ? en.cookiePolicyLinkEnabled
               : String(en.cookiePolicyLinkEnabled ?? "1") !== "0",
+          cookiePolicyLabel: en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
             message:
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: en.rejectAll || "Reject",
+            saveMyPreferencesLabel: en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
           },
           ccpa: {
             message:
@@ -373,11 +380,13 @@ export default function page({ siteId }: { siteId: string }) {
           rejectButton: true,
           customizeButton: true,
           cookiePolicyLink: true,
+          cookiePolicyLabel: "Privacy Policy",
           privacyPolicyUrl: "",
           gdpr: {
             message:
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: "Reject",
+            saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
           },
           ccpa: {
             message:
@@ -525,7 +534,8 @@ export default function page({ siteId }: { siteId: string }) {
           managePreferences: contentSettings.preferenceMessage,
           optOutPreference: contentSettings.ccpa.optOutTitle,
           ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
-          saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
+          saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+          privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
           closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
           rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
           customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -584,7 +594,7 @@ export default function page({ siteId }: { siteId: string }) {
             managePreferences: contentSettings.preferenceMessage,
             optOutPreference: contentSettings.ccpa.optOutTitle,
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
-            saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
+            saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
             customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -772,6 +782,7 @@ const isToggleEnabled =
                 rejectButton: contentSettings.rejectButton,
                 customizeButton: contentSettings.customizeButton,
                 cookiePolicyLink: contentSettings.cookiePolicyLink,
+                cookiePolicyLabel: contentSettings.cookiePolicyLabel,
                 url: contentSettings.privacyPolicyUrl,
                 rejectAll:
                   activeContentBannerType === "gdpr"
@@ -794,6 +805,7 @@ const isToggleEnabled =
                       rejectButton: next.rejectButton,
                       customizeButton: next.customizeButton,
                       cookiePolicyLink: next.cookiePolicyLink,
+                      cookiePolicyLabel: next.cookiePolicyLabel,
                       privacyPolicyUrl: next.url,
                       gdpr: {
                         ...prev.gdpr,
@@ -811,6 +823,7 @@ const isToggleEnabled =
                     rejectButton: next.rejectButton,
                     customizeButton: next.customizeButton,
                     cookiePolicyLink: next.cookiePolicyLink,
+                    cookiePolicyLabel: next.cookiePolicyLabel,
                     privacyPolicyUrl: next.url,
                     ccpa: {
                       ...prev.ccpa,
@@ -832,6 +845,7 @@ const isToggleEnabled =
                   ? {
                       title: contentSettings.preferenceTitle,
                       message: contentSettings.preferenceMessage,
+                      saveButtonLabel: contentSettings.gdpr.saveMyPreferencesLabel,
                     }
                   : {
                       title: contentSettings.ccpa.optOutTitle,
@@ -847,6 +861,11 @@ const isToggleEnabled =
                         ...prev,
                         preferenceTitle: next.title,
                         preferenceMessage: next.message,
+                        gdpr: {
+                          ...prev.gdpr,
+                          saveMyPreferencesLabel:
+                            next.saveButtonLabel ?? prev.gdpr.saveMyPreferencesLabel,
+                        },
                       }
                     : {
                         ...prev,
@@ -917,7 +936,7 @@ const isToggleEnabled =
         onDismissSaveSuccess={dismissSaveSuccess}
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
-        publishDisabled={!site?.id || savingContent}
+        publishDisabled={!mounted || !site?.id || savingContent}
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}

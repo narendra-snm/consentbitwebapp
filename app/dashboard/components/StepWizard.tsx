@@ -149,17 +149,32 @@ function StepOne({
   userName?: string;
   onSetupComplete: (data: { domain: string }) => void;
 }) {
+  const { sites } = useDashboardSession();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function normalizeDomain(raw: string): string {
-    return raw.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+    const v = raw.trim();
+    if (!v) return "";
+    const noProto = v.replace(/^https?:\/\//i, "");
+    const noWww = noProto.replace(/^www\./i, "");
+    // Remove path/query/hash if present
+    const hostOnly = noWww.split("/")[0].split("?")[0].split("#")[0];
+    return hostOnly.replace(/\.+$/, "").toLowerCase();
   }
 
   function handleNext() {
     const cleanDomain = normalizeDomain(domain);
     if (!cleanDomain) {
       setError('Please enter a valid domain');
+      return;
+    }
+    const existing = (Array.isArray(sites) ? sites : []).some((s: any) => {
+      const d = normalizeDomain(String(s?.domain || s?.name || ""));
+      return d && d === cleanDomain;
+    });
+    if (existing) {
+      setError("This domain is already added in your account. Please open it from the dashboard.");
       return;
     }
     setError(null);

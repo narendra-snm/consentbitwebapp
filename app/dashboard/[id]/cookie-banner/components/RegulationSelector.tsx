@@ -83,8 +83,9 @@ export function RegulationSelector({
           onClick={() => { setOpen(!open); setShowUpgrade(false); }}
           className="w-full h-12 px-4 flex items-center justify-between bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
           style={{ fontVariationSettings: "'opsz' 14" }}
+          suppressHydrationWarning
         >
-          {value}
+          <span suppressHydrationWarning>{value}</span>
           <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
 
