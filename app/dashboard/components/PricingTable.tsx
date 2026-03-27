@@ -61,11 +61,11 @@ export function PricingTable({
         siteName: domain || null,
         siteDomain: domain || null,
         successUrl: domain
-          ? `${origin}/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}`
-          : `${origin}/dashboard/${siteId}?success=1`,
+          ? `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`
+          : `${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`,
         cancelUrl: `${origin}/dashboard`,
       });
-      window.open(data.url, '_blank');
+      window.location.assign(data.url);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Checkout failed');
     } finally {

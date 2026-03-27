@@ -1,6 +1,5 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
-import AddSiteModal from "./components/AddSiteModal";
 import ComplianceAlert from "./components/ComplianceAlert";
 import DashboardTabs from "./components/DashboardTabs";
 import GettingStarted from "./components/GettingStarted";
@@ -47,19 +46,63 @@ export default function DashboardPage() {
    scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string;
  } | null>(null);
  const [pendingPostSetupDomain, setPendingPostSetupDomain] = useState<string | null>(null);
+ const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(null);
+
+ const normalizeDomain = (raw: string) =>
+   String(raw || "")
+     .trim()
+     .replace(/^https?:\/\//i, "")
+     .replace(/^www\./i, "")
+     .split("/")[0]
+     .split("?")[0]
+     .split("#")[0]
+     .replace(/\.+$/, "")
+     .toLowerCase();
 
  // Detect ?postSetup=1&domain=X on return from Stripe payment
  useEffect(() => {
    const params = new URLSearchParams(window.location.search);
    if (params.get('postSetup') === '1') {
-     const domain = params.get('domain') ?? '';
-     if (domain) {
-       setPendingPostSetupDomain(domain);
-       setWizardSkipped(true);
-       window.history.replaceState({}, '', '/dashboard');
-     }
+      const domain = params.get('domain') ?? '';
+      const siteId = params.get('siteId') ?? '';
+      if (domain) setPendingPostSetupDomain(normalizeDomain(domain));
+      if (siteId) setPendingPostSetupSiteId(String(siteId));
+      if (domain || siteId) {
+        setWizardSkipped(true);
+        window.history.replaceState({}, '', '/dashboard');
+      }
    }
  }, []);
+
+  // Also accept post-setup signal from the Stripe success tab (window.postMessage or storage event).
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (ev.origin !== window.location.origin) return;
+      const data = ev.data as any;
+      if (data?.type === "CONSENTBIT_POST_SETUP") {
+        if (data?.domain) setPendingPostSetupDomain(normalizeDomain(String(data.domain)));
+        if (data?.siteId) setPendingPostSetupSiteId(String(data.siteId));
+        setWizardSkipped(true);
+      }
+    }
+    function onStorage(ev: StorageEvent) {
+      if (ev.key !== "cb_post_setup" || !ev.newValue) return;
+      try {
+        const parsed = JSON.parse(ev.newValue) as { domain?: string; siteId?: string };
+        if (parsed?.domain) setPendingPostSetupDomain(normalizeDomain(parsed.domain));
+        if (parsed?.siteId) setPendingPostSetupSiteId(String(parsed.siteId));
+        if (parsed?.domain || parsed?.siteId) {
+          setWizardSkipped(true);
+        }
+      } catch {}
+    }
+    window.addEventListener("message", onMessage);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
  // Once authenticated, create the site and show install code
  useEffect(() => {
@@ -76,6 +119,26 @@ export default function DashboardPage() {
      void refresh({ showLoading: false });
    }).catch(console.error);
  }, [pendingPostSetupDomain, loading, authenticated, refresh]);
+
+  // If we returned from Stripe with a siteId (upgrade / existing site), show its install code in the wizard UI.
+  useEffect(() => {
+    if (!pendingPostSetupSiteId || loading || !authenticated) return;
+    const id = String(pendingPostSetupSiteId);
+    const match = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === id);
+    if (match?.scriptUrl) {
+      setPostSetupInstall({
+        scriptUrl: String(match.scriptUrl),
+        siteId: String(match.id),
+        siteDomain: String(match.domain || ''),
+        cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
+      });
+      setPendingPostSetupSiteId(null);
+    } else {
+      // Keep `pendingPostSetupSiteId` set so when `refresh()` updates `sites`,
+      // this effect reruns and picks up the scriptUrl.
+      void refresh({ showLoading: false });
+    }
+  }, [pendingPostSetupSiteId, loading, authenticated, refresh, sites]);
 
  /** Raw URL from API (`Site.embedScriptUrl`); modal resolves to absolute — keeps snippet identical to stored value. */
  const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
@@ -105,8 +168,26 @@ export default function DashboardPage() {
 
 
 
-  // Show skeleton until hydrated (prevents server/client mismatch), while loading, or during post-payment setup
-  if (!hydrated || loading || pendingPostSetupDomain) {
+  // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton
+  if (hydrated && (pendingPostSetupDomain || pendingPostSetupSiteId)) {
+    return (
+      <div className="min-h-screen bg-[#E6F1FD] flex flex-col">
+        <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10 rounded-t-xl">
+          <img src="/images/ConsentBit-logo-Dark.png" alt="logo" className="h-6" />
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <p className="text-[#374151] text-sm font-medium">Setting up your site…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show skeleton until hydrated (prevents server/client mismatch) or while session loads
+  if (!hydrated || loading) {
     return (
       <>
         <Header />
@@ -128,17 +209,52 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
-          {pendingPostSetupDomain && (
-            <div className="flex items-center justify-center gap-2 mt-6 text-sm text-gray-500">
-              <svg className="animate-spin h-4 w-4 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Setting up your site…
-            </div>
-          )}
         </div>
       </>
+    );
+  }
+
+  // Post-payment: show the same 3-step wizard Confirm UI (not the dashboard cards)
+  if (authenticated && postSetupInstall) {
+    return (
+      <div className="min-h-screen bg-[#E6F1FD] pb-4">
+        <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
+          <img
+            src="/images/ConsentBit-logo-Dark.png"
+            alt="logo"
+            className="h-6"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setPostSetupInstall(null);
+              const target = postSetupInstall?.siteId ? `/dashboard/${postSetupInstall.siteId}` : "/dashboard";
+              router.replace(target);
+            }}
+            className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
+          >
+            Skip to Dashboard →
+          </button>
+        </div>
+        <div className="flex justify-center mt-20 px-4">
+          <StepWizard
+            userName={userName}
+            organizationId={activeOrganizationId}
+            initialStep={3}
+            initialSelectedPlan={'paid'}
+            initialSiteData={{
+              scriptUrl: postSetupInstall.scriptUrl,
+              siteId: postSetupInstall.siteId,
+              cdnScriptId: postSetupInstall.cdnScriptId,
+              domain: postSetupInstall.siteDomain,
+            }}
+            onWizardComplete={async () => {
+              setPostSetupInstall(null);
+              await refresh({ showLoading: false });
+            }}
+          />
+        </div>
+      </div>
     );
   }
 

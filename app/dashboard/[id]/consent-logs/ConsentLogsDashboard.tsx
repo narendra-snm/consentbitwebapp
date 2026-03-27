@@ -175,10 +175,13 @@ const CONSENT_ROW_START = 166;
 const CONSENT_ROW_STEP = 30;
 
 export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; siteDomain: string }) {
+  const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const fetchData = useCallback(async (showLoader: boolean) => {
     let cancelled = false;
@@ -224,7 +227,7 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   // Site label comes from parent (session); do not hide it while consent API loads
-  const displayDomain = siteDomain?.trim() || '—';
+  const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';
 
   const buildProofHtml = useCallback((rows: ConsentLog[]) => {
     const domain = displayDomain;
