@@ -21,6 +21,8 @@ export default function DashboardPage() {
   * First-time wizard must stay mounted after firstSetup creates a site. Otherwise refresh()
   * makes sites.length > 0, showOnboarding flips false, and the payment + install steps vanish.
   */
+ const [hydrated, setHydrated] = useState(false);
+ useEffect(() => setHydrated(true), []);
  const [wizardSticky, setWizardSticky] = useState(false);
  /** User chose "Skip to Dashboard" — hide wizard even if they never created a site. */
  const [wizardSkipped, setWizardSkipped] = useState(false);
@@ -103,8 +105,8 @@ export default function DashboardPage() {
 
 
 
-  // Show skeleton while loading or while post-payment site setup is in progress
-  if (loading || pendingPostSetupDomain) {
+  // Show skeleton until hydrated (prevents server/client mismatch), while loading, or during post-payment setup
+  if (!hydrated || loading || pendingPostSetupDomain) {
     return (
       <>
         <Header />

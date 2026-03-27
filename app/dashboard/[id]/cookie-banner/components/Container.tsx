@@ -142,10 +142,13 @@ export default function page({ siteId }: { siteId: string }) {
 
   // Free-plan preview should follow the dropdown selection immediately.
   // (Sometimes site state updates lag, so relying only on `site` can make preview look stale.)
-  const [freePreviewBannerType, setFreePreviewBannerType] = useState<'gdpr' | 'ccpa'>(() => {
-    const initialBannerType = site?.banner_type === 'ccpa' || site?.region_mode === 'ccpa' ? 'ccpa' : 'gdpr';
-    return initialBannerType;
-  });
+  const [freePreviewBannerType, setFreePreviewBannerType] = useState<'gdpr' | 'ccpa'>('gdpr');
+  // Sync freePreviewBannerType from site data once it loads (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    if (site?.banner_type === 'ccpa' || site?.region_mode === 'ccpa') {
+      setFreePreviewBannerType('ccpa');
+    }
+  }, [site?.banner_type, site?.region_mode]);
 
   // For the free plan we always force the preview to match the single selected banner.
   const previewBannerType = useMemo<'gdpr' | 'ccpa' | undefined>(() => {

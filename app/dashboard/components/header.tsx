@@ -8,7 +8,8 @@ import AddNewSiteModal from "./AddNewSiteModal";
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const domainRef = useRef<any>(null);
   const notifRef = useRef<any>(null);
 
@@ -35,6 +36,10 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
   });
 
   // Close dropdown when clicking outside
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
   useEffect(() => {
     function handleClick(e: any) {
       if (!domainRef.current?.contains(e.target)) setDomainOpen(false);
@@ -78,6 +83,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
           <button
             onClick={() => setDomainOpen(!domainOpen)}
             className="border-2 border-[#E6F1FD] bg-[#E6F1FD] rounded-md px-3 py-2 text-sm"
+            suppressHydrationWarning
           >
             {displayDomain}
           </button>
@@ -142,6 +148,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
               else router.push("/dashboard");
             }}
             className="px-3 py-1 bg-[#E6F1FD] text-[#007AFF]"
+            suppressHydrationWarning
           >
             {planLabel}
           </button>
@@ -156,6 +163,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
             else router.push("/dashboard");
           }}
           className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-sm"
+          suppressHydrationWarning
         >
           {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
         </button>
@@ -167,7 +175,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
         <button
           type="button"
           onClick={logout}
-          disabled={loading}
+          disabled={!hydrated || loading}
           className="px-3 py-3.5 rounded-lg bg-white border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
         >
           Logout

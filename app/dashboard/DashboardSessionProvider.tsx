@@ -40,6 +40,27 @@ const DashboardSessionContext = createContext<DashboardSessionApi | null>(null);
 /** Must match DashboardTabs — these segments are not site ids. */
 const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
 
+const SESSION_CACHE_KEY = "cbSessionCache";
+const SESSION_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+
+function readSessionCache(): any | null {
+  try {
+    const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SESSION_CACHE_KEY) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: any; ts: number };
+    if (Date.now() - parsed.ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(SESSION_CACHE_KEY); return null; }
+    return parsed.data;
+  } catch { return null; }
+}
+
+function writeSessionCache(data: any) {
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    }
+  } catch { /* ignore quota errors */ }
+}
+
 function pickActiveSiteIdFromPath(pathname: string | null): string | null {
   const parts = (pathname || "").split("/").filter(Boolean);
   if (parts[0] !== "dashboard") return null;
@@ -96,7 +117,7 @@ export function DashboardSessionProvider({
   const skipInitialRefresh = useRef(false);
 
   const [state, setState] = useState<DashboardSessionState>(() => {
-    // sessionStorage cache takes priority (set by verifyVerificationCode after login/signup)
+    // 1. One-time post-login seed (set by verifyVerificationCode)
     const ssData = (() => {
       try {
         const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('dashboardInit') : null;
@@ -104,7 +125,8 @@ export function DashboardSessionProvider({
       } catch {}
       return null;
     })();
-    const seed = ssData ?? initialData;
+    // 2. Persistent session cache (written after every successful refresh)
+    const seed = ssData ?? initialData ?? readSessionCache();
     if (seed?.authenticated) {
       skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
       const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];
@@ -144,6 +166,13 @@ export function DashboardSessionProvider({
       const orgs = Array.isArray(data?.organizations) ? data.organizations : [];
 
       if (!authenticated) {
+        // Clear stale cache so next login starts fresh
+        try {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.removeItem(SESSION_CACHE_KEY);
+            sessionStorage.removeItem("dashboardInit");
+          }
+        } catch { /* ignore */ }
         setState({
           loading: false,
           authenticated: false,
@@ -179,7 +208,7 @@ export function DashboardSessionProvider({
         const activeSitePlanId = pickPlanIdFromSite(activeSite);
         const resolvedPlanId = activeSitePlanId || effectivePlanId || "free";
 
-        return {
+        const next = {
           loading: false,
           authenticated: true,
           user: data?.user ?? null,
@@ -189,6 +218,11 @@ export function DashboardSessionProvider({
           activeOrganizationId: activeOrgId,
           activeSiteId: resolvedActiveSiteId ? String(resolvedActiveSiteId) : null,
         };
+
+        // Persist to sessionStorage so next page visit loads instantly without a fetch
+        writeSessionCache(next);
+
+        return next;
       });
     } catch (e) {
       console.error("[DashboardSession] refresh failed", e);
@@ -238,6 +272,13 @@ export function DashboardSessionProvider({
     } catch (e) {
       console.error("[DashboardSession] logout failed", e);
     } finally {
+      // Clear all session caches so stale data never appears after logout
+      try {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem(SESSION_CACHE_KEY);
+          sessionStorage.removeItem("dashboardInit");
+        }
+      } catch { /* ignore */ }
       setState({
         loading: false,
         authenticated: false,

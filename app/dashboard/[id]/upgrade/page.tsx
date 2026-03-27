@@ -45,7 +45,7 @@ export default function PricingTable() {
 
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
-  const [promoInput, setPromoInput] = useState("TESTWEB");
+  const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [awaitingPayment, setAwaitingPayment] = useState(false);
@@ -209,6 +209,31 @@ export default function PricingTable() {
 
   return (
     <div className="flex justify-center w-full">
+      {/* Awaiting payment overlay */}
+      {awaitingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <div className="relative w-[360px] rounded-[16px] bg-white p-8 shadow-lg text-center">
+            <div className="mb-4 flex justify-center">
+              <div className="h-10 w-10 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
+            </div>
+            <p className="text-base font-semibold text-black mb-1">Waiting for payment…</p>
+            <p className="text-sm text-[#4b5563] mb-5">Complete the checkout in the new tab. This page will update automatically once payment is confirmed.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setAwaitingPayment(false);
+                if (typeof window !== "undefined" && (window as any).__cbPollId) {
+                  clearInterval((window as any).__cbPollId);
+                }
+              }}
+              className="text-sm text-[#007aff] underline"
+            >
+              Cancel / I already paid
+            </button>
+          </div>
+        </div>
+      )}
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
         {/* HEADER */}

@@ -233,11 +233,11 @@ export default function ConsentPreview({
   const getDeviceFrameClasses = () => {
     switch (device) {
       case "tablet":
-        return "w-[768px] max-w-full h-[500px]";
+        return "w-[820px] max-w-full h-[500px]";
       case "mobile":
         return "w-[390px] max-w-full h-[680px]";
       default:
-        return 'w-full h-[444px]';
+        return 'w-[1139px] max-w-full h-[444px]';
     }
   };
 
@@ -889,7 +889,7 @@ export default function ConsentPreview({
             className="text-base"
             style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}
           >
-            Tab
+            Tablet
           </p>
         </button>
         <button
