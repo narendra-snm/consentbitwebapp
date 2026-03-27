@@ -13,14 +13,14 @@ p478eb80: "M7 1.99382C5.89 1.88382 4.77333 1.82715 3.66 1.82715C3 1.82715 2.34 1
 }
 ;
 
-type SortKey = 'domain' | 'licenseKey' | 'status' | 'billing' | 'expiration' | 'created';
+type SortKey = 'domain' | 'status' | 'plan' | 'billing' | 'expiration' | 'created';
 
 interface Domain {
   id: string;
   url: string;
-  licenseKey: string;
+  plan: string;
   status: 'Active' | 'Inactive' | 'Expired';
-  billingPeriod: 'Yearly' | 'Monthly' | 'Free';
+  billingPeriod: 'Yearly' | 'Monthly' | null;
   expirationDate: string;
   created: string;
   createdSort: number;
@@ -87,11 +87,8 @@ function SortableHeader({
   activeKey: SortKey | null;
   ascending: boolean;
   onSort: (key: SortKey) => void;
-  /** True when this column has a non-empty filter value. */
   filterActive?: boolean;
-  /** True when the filter control below this column is focused. */
   filterFocused?: boolean;
-  /** Focus the filter input/select for this column (e.g. after header click). */
   onActivateFilter?: () => void;
 }) {
   const sortActive = activeKey === sortKey;
@@ -128,37 +125,6 @@ function SortableHeader({
   );
 }
 
-function LicenseKeyCell({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  const v = value?.trim() || '';
-  const copy = async () => {
-    if (!v) return;
-    try {
-      await navigator.clipboard.writeText(v);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
-  return (
-    <div className="flex items-start gap-2 min-w-0">
-      <span className="font-mono text-[11px] text-[#374151] break-all leading-snug tracking-tight">
-        {v || '—'}
-      </span>
-      {v ? (
-        <button
-          type="button"
-          onClick={() => void copy()}
-          className="text-[11px] text-[#2563eb] shrink-0 hover:underline pt-0.5"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 const ThreeDotMenu = () => {
   return (
     <div className="w-[17px] h-[3px] flex items-center justify-center">
@@ -177,14 +143,20 @@ const statusOrder: Record<Domain['status'], number> = {
   Expired: 2,
 };
 
-const billingOrder: Record<Domain['billingPeriod'], number> = {
-  Free: 0,
-  Monthly: 1,
-  Yearly: 2,
+const planOrder: Record<string, number> = {
+  free: 0,
+  basic: 1,
+  essential: 2,
+  growth: 3,
+};
+
+const billingOrder: Record<string, number> = {
+  Monthly: 0,
+  Yearly: 1,
 };
 
 const TABLE_GRID =
-  'grid grid-cols-[minmax(140px,1.3fr)_minmax(160px,1.1fr)_minmax(100px,0.75fr)_minmax(100px,0.85fr)_minmax(100px,0.85fr)_minmax(90px,0.7fr)_auto] gap-x-[16px]';
+  'grid grid-cols-[minmax(160px,1.5fr)_minmax(90px,0.7fr)_minmax(100px,0.8fr)_minmax(100px,0.75fr)_minmax(100px,0.75fr)_minmax(90px,0.7fr)_auto] gap-x-[16px]';
 
 const filterInputClass =
   'w-full rounded-md border border-[#cbd5e1] bg-white px-2 py-1.5 text-xs text-[#374151] shadow-sm placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]';
@@ -195,13 +167,20 @@ export function DomainManagementDashboard() {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey | null>('created');
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortAsc, setSortAsc] = useState(false);
   const [filterDomain, setFilterDomain] = useState('');
-  const [filterLicense, setFilterLicense] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | Domain['status']>('all');
-  const [filterBilling, setFilterBilling] = useState<'all' | Domain['billingPeriod']>('all');
+  const [filterPlan, setFilterPlan] = useState<'all' | string>('all');
+  const [filterBilling, setFilterBilling] = useState<'all' | 'Monthly' | 'Yearly'>('all');
   const [filterExpiration, setFilterExpiration] = useState<'all' | 'has' | 'na'>('all');
+  const [filterFocusKey, setFilterFocusKey] = useState<SortKey | null>(null);
+
+  const domainFilterRef = useRef<HTMLInputElement>(null);
+  const statusFilterRef = useRef<HTMLSelectElement>(null);
+  const planFilterRef = useRef<HTMLSelectElement>(null);
+  const billingFilterRef = useRef<HTMLSelectElement>(null);
+  const expirationFilterRef = useRef<HTMLSelectElement>(null);
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -226,15 +205,7 @@ export function DomainManagementDashboard() {
             year: "2-digit",
           })
         : "-";
-      /** API adds `licenseKey` from Site.apiKey (see worker /api/sites). */
-      const licenseKey = String(
-        site?.licenseKey ??
-          site?.license_key ??
-          site?.apiKey ??
-          site?.apikey ??
-          site?.api_key ??
-          '',
-      ).trim();
+
       const verified = site?.verified === 1 || site?.verified === true;
       const rawPlan =
         site?.planId ??
@@ -242,8 +213,26 @@ export function DomainManagementDashboard() {
         site?.subscription_plan ??
         site?.plan ??
         "free";
-      const plan = String(rawPlan).toLowerCase();
-      const billingPeriod: Domain["billingPeriod"] = plan === "free" ? "Free" : "Monthly";
+      const planLower = String(rawPlan).toLowerCase();
+      const planDisplay =
+        planLower === 'basic' ? 'Basic' :
+        planLower === 'essential' ? 'Essential' :
+        planLower === 'growth' ? 'Growth' :
+        'Free';
+
+      const rawInterval =
+        site?.interval ??
+        site?.billing_interval ??
+        site?.subscriptionInterval ??
+        site?.subscription_interval ??
+        null;
+      const billingPeriod: Domain["billingPeriod"] =
+        planLower === 'free'
+          ? null
+          : String(rawInterval || '').toLowerCase() === 'yearly'
+            ? 'Yearly'
+            : 'Monthly';
+
       const subscriptionEnd =
         site?.subscriptionCurrentPeriodEnd ??
         site?.subscription_current_period_end ??
@@ -273,7 +262,7 @@ export function DomainManagementDashboard() {
       return {
         id: String(site?.id || ""),
         url: String(site?.domain || site?.name || "—"),
-        licenseKey,
+        plan: planDisplay,
         status,
         billingPeriod,
         expirationDate,
@@ -288,24 +277,26 @@ export function DomainManagementDashboard() {
 
   const hasActiveFilters =
     filterDomain.trim().length > 0 ||
-    filterLicense.trim().length > 0 ||
     filterStatus !== 'all' ||
+    filterPlan !== 'all' ||
     filterBilling !== 'all' ||
     filterExpiration !== 'all';
 
   const filteredRows = useMemo(() => {
     const d = filterDomain.trim().toLowerCase();
-    const l = filterLicense.trim().toLowerCase();
     return rows.filter((row) => {
       if (d && !row.url.toLowerCase().includes(d)) return false;
-      if (l && !row.licenseKey.toLowerCase().includes(l)) return false;
       if (filterStatus !== 'all' && row.status !== filterStatus) return false;
-      if (filterBilling !== 'all' && row.billingPeriod !== filterBilling) return false;
+      if (filterPlan !== 'all' && row.plan !== filterPlan) return false;
+      if (filterBilling !== 'all') {
+        if (filterBilling === 'Monthly' && row.billingPeriod !== 'Monthly') return false;
+        if (filterBilling === 'Yearly' && row.billingPeriod !== 'Yearly') return false;
+      }
       if (filterExpiration === 'has' && row.expirationSort <= 0) return false;
       if (filterExpiration === 'na' && row.expirationDate !== 'N/A') return false;
       return true;
     });
-  }, [rows, filterDomain, filterLicense, filterStatus, filterBilling, filterExpiration]);
+  }, [rows, filterDomain, filterStatus, filterPlan, filterBilling, filterExpiration]);
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return filteredRows;
@@ -317,14 +308,14 @@ export function DomainManagementDashboard() {
         case 'domain':
           cmp = a.url.localeCompare(b.url, undefined, { sensitivity: 'base' });
           break;
-        case 'licenseKey':
-          cmp = a.licenseKey.localeCompare(b.licenseKey);
-          break;
         case 'status':
           cmp = statusOrder[a.status] - statusOrder[b.status];
           break;
+        case 'plan':
+          cmp = (planOrder[a.plan.toLowerCase()] ?? 99) - (planOrder[b.plan.toLowerCase()] ?? 99);
+          break;
         case 'billing':
-          cmp = billingOrder[a.billingPeriod] - billingOrder[b.billingPeriod];
+          cmp = (billingOrder[a.billingPeriod ?? ''] ?? -1) - (billingOrder[b.billingPeriod ?? ''] ?? -1);
           break;
         case 'expiration':
           cmp = a.expirationSort - b.expirationSort;
@@ -342,14 +333,14 @@ export function DomainManagementDashboard() {
 
   const clearFilters = useCallback(() => {
     setFilterDomain('');
-    setFilterLicense('');
     setFilterStatus('all');
+    setFilterPlan('all');
     setFilterBilling('all');
     setFilterExpiration('all');
   }, []);
 
   const handleCancelSubscription = async (domain: Domain) => {
-    if (domain.billingPeriod === "Free") return;
+    if (domain.billingPeriod === null) return;
     if (!domain.subscriptionId && !domain.stripeSubscriptionId) {
       setActionError("No active subscription found for this site.");
       return;
@@ -379,12 +370,8 @@ export function DomainManagementDashboard() {
         <h1 className="text-[20px] tracking-[-1px] text-black mb-[21px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontVariationSettings: "'opsz' 14" }}>
           All Domains
         </h1>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <p className="text-xs text-[#6b7280]" style={{ fontFamily: 'DM Sans, sans-serif' }}>
-            <strong className="text-[#374151]">Sort:</strong> click a header (blue = active sort).{' '}
-            <strong className="text-[#374151]">Filter:</strong> use the row below or click a header to focus that column’s filter — amber = active filter column.
-          </p>
-          {hasActiveFilters ? (
+        {hasActiveFilters ? (
+          <div className="flex justify-end mb-3">
             <button
               type="button"
               onClick={clearFilters}
@@ -392,8 +379,8 @@ export function DomainManagementDashboard() {
             >
               Clear filters
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         {actionError ? (
           <p className="mt-2 text-sm text-red-600">{actionError}</p>
         ) : null}
@@ -402,6 +389,7 @@ export function DomainManagementDashboard() {
       {/* Table */}
       <div className="w-full">
         <div className="rounded-t-[10px] border border-[#cfe0fa] border-b-0 bg-[#F2F7FF] overflow-hidden">
+          {/* Header row */}
           <div className={`${TABLE_GRID} px-[23px] pt-[14px] pb-1 items-end`}>
             <SortableHeader
               label="Domain"
@@ -414,16 +402,6 @@ export function DomainManagementDashboard() {
               onActivateFilter={() => domainFilterRef.current?.focus()}
             />
             <SortableHeader
-              label="License key"
-              sortKey="licenseKey"
-              activeKey={sortKey}
-              ascending={sortAsc}
-              onSort={handleSort}
-              filterActive={filterLicense.trim().length > 0}
-              filterFocused={filterFocusKey === 'licenseKey'}
-              onActivateFilter={() => licenseFilterRef.current?.focus()}
-            />
-            <SortableHeader
               label="Status"
               sortKey="status"
               activeKey={sortKey}
@@ -432,6 +410,16 @@ export function DomainManagementDashboard() {
               filterActive={filterStatus !== 'all'}
               filterFocused={filterFocusKey === 'status'}
               onActivateFilter={() => statusFilterRef.current?.focus()}
+            />
+            <SortableHeader
+              label="Plan"
+              sortKey="plan"
+              activeKey={sortKey}
+              ascending={sortAsc}
+              onSort={handleSort}
+              filterActive={filterPlan !== 'all'}
+              filterFocused={filterFocusKey === 'plan'}
+              onActivateFilter={() => planFilterRef.current?.focus()}
             />
             <SortableHeader
               label="Billing"
@@ -463,26 +451,26 @@ export function DomainManagementDashboard() {
             />
             <div className="w-[17px]" aria-hidden />
           </div>
+
+          {/* Filter row */}
           <div className={`${TABLE_GRID} px-[23px] pb-3 pt-1 items-center`}>
             <input
+              ref={domainFilterRef}
               type="search"
               value={filterDomain}
               onChange={(e) => setFilterDomain(e.target.value)}
+              onFocus={() => setFilterFocusKey('domain')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'domain' ? null : k))}
               placeholder="Filter domain…"
               className={filterInputClass}
               aria-label="Filter by domain"
             />
-            <input
-              type="search"
-              value={filterLicense}
-              onChange={(e) => setFilterLicense(e.target.value)}
-              placeholder="Filter license…"
-              className={filterInputClass}
-              aria-label="Filter by license key"
-            />
             <select
+              ref={statusFilterRef}
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              onFocus={() => setFilterFocusKey('status')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'status' ? null : k))}
               className={filterInputClass}
               aria-label="Filter by status"
             >
@@ -490,6 +478,21 @@ export function DomainManagementDashboard() {
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
               <option value="Expired">Expired</option>
+            </select>
+            <select
+              ref={planFilterRef}
+              value={filterPlan}
+              onChange={(e) => setFilterPlan(e.target.value)}
+              onFocus={() => setFilterFocusKey('plan')}
+              onBlur={() => setFilterFocusKey((k) => (k === 'plan' ? null : k))}
+              className={filterInputClass}
+              aria-label="Filter by plan"
+            >
+              <option value="all">All plans</option>
+              <option value="Free">Free</option>
+              <option value="Basic">Basic</option>
+              <option value="Essential">Essential</option>
+              <option value="Growth">Growth</option>
             </select>
             <select
               ref={billingFilterRef}
@@ -501,7 +504,6 @@ export function DomainManagementDashboard() {
               aria-label="Filter by billing"
             >
               <option value="all">All billing</option>
-              <option value="Free">Free</option>
               <option value="Monthly">Monthly</option>
               <option value="Yearly">Yearly</option>
             </select>
@@ -537,31 +539,35 @@ export function DomainManagementDashboard() {
                 {domain.url}
               </div>
 
-              {/* License key (API key) */}
-              <LicenseKeyCell value={domain.licenseKey} />
-
               {/* Status Badge */}
               <div className="flex items-center">
                 <StatusBadge status={domain.status} />
               </div>
 
+              {/* Plan */}
+              <div className="flex items-center">
+                <span className="text-[#5c7cfa] text-sm tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                  {domain.plan}
+                </span>
+              </div>
+
               {/* Billing Period */}
               <div className="flex items-center">
-                <span className="text-[#5c7cfa] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
-                  {domain.billingPeriod}
+                <span className="text-[#4b5563] text-sm tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                  {domain.billingPeriod ?? '—'}
                 </span>
               </div>
 
               {/* Expiration Date */}
               <div className="flex items-center">
-                <span className="text-[#4b5563] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                <span className="text-[#4b5563] text-sm tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
                   {domain.expirationDate}
                 </span>
               </div>
 
               {/* Created Date */}
               <div className="flex items-center">
-                <span className="text-[#4b5563] text-sm font-medium tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
+                <span className="text-[#4b5563] text-sm tracking-[-0.7px]" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
                   {domain.created}
                 </span>
               </div>
@@ -599,7 +605,7 @@ export function DomainManagementDashboard() {
                   </button>
                   <button
                     type="button"
-                    disabled={domain.billingPeriod === "Free" || actionLoadingId === domain.id}
+                    disabled={domain.billingPeriod === null || actionLoadingId === domain.id}
                     onClick={() => void handleCancelSubscription(domain)}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >

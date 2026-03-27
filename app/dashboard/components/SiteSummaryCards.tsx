@@ -199,9 +199,9 @@ export default function SiteSummaryCards({
         <p className="text-[#4B5563]">Next scan</p>
         <p className="mt-1 text-sm text-[#161616]">
           Not scheduled{" "}
-          <span className="text-[#007AFF] underline cursor-pointer">
+          <Link href={siteId ? `/dashboard/${siteId}/scan` : "/dashboard"} className="text-[#007AFF] underline hover:underline">
             Schedule Now
-          </span>
+          </Link>
         </p>
       </div>
 

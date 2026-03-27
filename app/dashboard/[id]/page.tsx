@@ -4,10 +4,11 @@ import ComplianceAlert from "../components/ComplianceAlert";
 import GettingStarted from "../components/GettingStarted";
 import InstallConsentModal from "../components/InstallConsentModal";
 import SiteSummaryCards from "../components/SiteSummaryCards";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
-export default function DashboardSitePage() {
+
+function DashboardSitePageInner() {
   const params = useParams<{ id: string }>();
   const siteId = params?.id;
   const router = useRouter();
@@ -68,5 +69,13 @@ export default function DashboardSitePage() {
         onClose={() => setShowInstallModal(false)}
       />
     </div>
+  );
+}
+
+export default function DashboardSitePage() {
+  return (
+    <Suspense>
+      <DashboardSitePageInner />
+    </Suspense>
   );
 }

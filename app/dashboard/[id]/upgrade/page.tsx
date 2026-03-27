@@ -46,9 +46,10 @@ export default function PricingTable() {
 
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
-  const [promoInput, setPromoInput] = useState("TESTWEB");
+  const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
 
   const getPrice = (plan: keyof typeof prices) => {
     const mp = prices[plan];
@@ -110,7 +111,17 @@ export default function PricingTable() {
           ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
           : undefined,
       });
-      window.location.href = url;
+      // Open Stripe in a new tab; show waiting overlay on this page
+      window.open(url, "_blank");
+      setAwaitingPayment(true);
+      // Poll for plan upgrade — refresh every 3s until plan changes or user dismisses
+      const poll = setInterval(async () => {
+        await refresh({ showLoading: false });
+      }, 3000);
+      // Stop polling after 10 minutes
+      setTimeout(() => { clearInterval(poll); setAwaitingPayment(false); }, 10 * 60 * 1000);
+      // Store poll id so cancel button can clear it
+      (window as any).__cbPollId = poll;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not start checkout.");
     } finally {
@@ -199,6 +210,31 @@ export default function PricingTable() {
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
+      {/* Awaiting payment overlay */}
+      {awaitingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <div className="relative w-[360px] rounded-[16px] bg-white p-8 shadow-lg text-center">
+            <div className="mb-4 flex justify-center">
+              <div className="h-10 w-10 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
+            </div>
+            <p className="text-base font-semibold text-black mb-1">Waiting for payment…</p>
+            <p className="text-sm text-[#4b5563] mb-5">Complete the checkout in the new tab. This page will update automatically once payment is confirmed.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setAwaitingPayment(false);
+                if (typeof window !== "undefined" && (window as any).__cbPollId) {
+                  clearInterval((window as any).__cbPollId);
+                }
+              }}
+              className="text-sm text-[#007aff] underline"
+            >
+              Cancel / I already paid
+            </button>
+          </div>
+        </div>
+      )}
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
         {/* HEADER */}
@@ -325,21 +361,39 @@ export default function PricingTable() {
         <div className="grid grid-cols-[430px_1fr] gap-4 p-6 pt-15.5">
 
           {/* PROMO */}
-          <div className="bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white">
+          <div className={`bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white ${!selected ? 'opacity-50' : ''}`}>
 
-            <div className="text-lg font-semibold mb-4">Promo code</div>
+            <div className="text-lg font-semibold mb-1">Promo code</div>
+            {!selected && (
+              <p className="text-xs text-[#6b7280] mb-3">Select a plan to apply a promo code.</p>
+            )}
+            {selected && <div className="mb-4" />}
 
             <div className="flex border rounded-lg overflow-hidden">
 
-              <input
-                value={promoInput}
-                onChange={(e) => setPromoInput(e.target.value)}
-                className="flex-1 px-4 py-3 outline-none bg-white"
-              />
+              <div className="relative flex-1">
+                <input
+                  value={promoInput}
+                  onChange={(e) => { setPromoInput(e.target.value); setPromoOn(false); }}
+                  disabled={!selected}
+                  className="w-full px-4 py-3 pr-8 outline-none disabled:cursor-not-allowed bg-white"
+                  placeholder="Enter promo code"
+                />
+                {promoInput && (
+                  <button
+                    type="button"
+                    onClick={() => { setPromoOn(false); setPromoInput(''); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
 
               <button
                 onClick={applyPromo}
-                className="bg-[#007aff] text-white px-4"
+                disabled={!selected}
+                className="bg-[#007aff] text-white px-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Apply
               </button>
@@ -347,7 +401,7 @@ export default function PricingTable() {
             </div>
 
             {promoOn && (
-              <div className="mt-3 text-[17px] font-medium text-[#111827]">
+              <div className="mt-3 text-[17px] font-medium text-[#111827] text-[#15803d]">
                 Promo applied. You pay ${total}
               </div>
             )}

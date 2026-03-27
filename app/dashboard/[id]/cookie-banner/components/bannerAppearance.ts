@@ -2,7 +2,7 @@
 
 export type BannerLayoutValue = {
   /** Visual style in the editor (not all are used by the live embed yet). */
-  position: 'box' | 'banner' | 'popup';
+  position: 'box' | 'banner' | 'bottom-center';
   /** Maps to DB `position` (bottom-left | bottom-right). */
   alignment: 'bottom-left' | 'bottom-right';
   /** Border radius in px (stored as rem in DB). */
@@ -52,9 +52,9 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     buttonColor: '#0284c7',
     buttonTextColor: '#ffffff',
     preferencesButtonBg: '#ffffff',
-    preferencesButtonText: '#334155',
+    preferencesButtonText: '#0284c7',
     savePreferencesButtonBg: '#ffffff',
-    savePreferencesButtonText: '#334155',
+    savePreferencesButtonText: '#0284c7',
   },
   type: {
     font: 'Inter',
@@ -125,7 +125,7 @@ export function normalizeTextAlign(
   return 'left';
 }
 
-const LAYOUT_VISUAL = ['box', 'banner', 'popup'] as const;
+const LAYOUT_VISUAL = ['box', 'banner', 'bottom-center', 'popup'] as const;
 
 export function appearanceFromCustomization(
   customization: Record<string, unknown> | null | undefined,
@@ -141,8 +141,10 @@ export function appearanceFromCustomization(
   const en = (customization as { translations?: { en?: Record<string, string> } }).translations?.en || {};
 
   const visualRaw = String(en.bannerLayoutVisual || 'box').toLowerCase();
-  const position = LAYOUT_VISUAL.includes(visualRaw as (typeof LAYOUT_VISUAL)[number])
-    ? (visualRaw as AppearanceState['layout']['position'])
+  // Coerce legacy 'popup' saved value to the new 'bottom-center' option.
+  const visualNorm = visualRaw === 'popup' ? 'bottom-center' : visualRaw;
+  const position = LAYOUT_VISUAL.includes(visualNorm as (typeof LAYOUT_VISUAL)[number])
+    ? (visualNorm as AppearanceState['layout']['position'])
     : 'box';
 
   const layout: BannerLayoutValue = {

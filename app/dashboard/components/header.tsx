@@ -8,7 +8,8 @@ import AddNewSiteModal from "./AddNewSiteModal";
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const domainRef = useRef<any>(null);
   const notifRef = useRef<any>(null);
 
@@ -36,6 +37,10 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
     function handleClick(e: any) {
       if (!domainRef.current?.contains(e.target)) setDomainOpen(false);
       if (!notifRef.current?.contains(e.target)) setNotifOpen(false);
@@ -54,7 +59,10 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
     if (!site?.id) return;
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
-    router.push(`/dashboard/${site.id}`);
+    // Preserve current tab/sub-route when switching sites
+    const currentSubPath = pathParts.slice(2).join('/');
+    const targetPath = currentSubPath ? `/dashboard/${site.id}/${currentSubPath}` : `/dashboard/${site.id}`;
+    router.push(targetPath);
   };
 
   return (
@@ -75,6 +83,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
           <button
             onClick={() => setDomainOpen(!domainOpen)}
             className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm"
+            suppressHydrationWarning
           >
             {displayDomain} 
             <svg width="10" height="5" viewBox="0 0 10 5" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -143,6 +152,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
               else router.push("/dashboard");
             }}
             className="px-3 py-1 bg-[#E6F1FD] text-[#007AFF]"
+            suppressHydrationWarning
           >
             {planLabel}
           </button>
@@ -157,6 +167,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
             else router.push("/dashboard");
           }}
           className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
+          suppressHydrationWarning
         >
           {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
         </button>
@@ -168,7 +179,7 @@ const [addSiteOpen, setAddSiteOpen] = useState(false);
         <button
           type="button"
           onClick={logout}
-          disabled={loading}
+          disabled={!hydrated || loading}
           className="px-3 py-3.5 rounded-lg bg-white border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
         >
           Logout

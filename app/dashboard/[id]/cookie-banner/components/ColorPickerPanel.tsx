@@ -130,7 +130,7 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
           Buttons colors
         </h3>
 
-        <p className="text-xs text-[#6B7280] mb-3">Accept all</p>
+        <p className="text-xs text-[#6B7280] mb-3">Accept/Reject/Cancel</p>
         <div className="space-y-4 mb-6">
           <ColorInput
             label="Background"
@@ -146,7 +146,7 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
         </div>
 
         <p className="text-xs text-[#6B7280] mb-3">
-          Preferences &amp; save (opens cookie settings, save in panel)
+          Preferences
         </p>
         <div className="space-y-4">
           <ColorInput

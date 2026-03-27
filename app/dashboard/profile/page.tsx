@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
@@ -67,6 +67,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId, activeSiteId } =
     useDashboardSession();
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const isActive = (tab: TabType) => activeTab === tab;
 
@@ -136,73 +140,87 @@ export default function SettingsPage() {
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
+  // true once a background pre-fetch has been attempted (success or silent fail)
+  const usagePrefetchedRef = useRef(false);
 
-  useEffect(() => {
-    // Prevent stale org/site usage from showing when site selection changes.
-    setUsage(null);
-  }, [resolvedSiteId]);
+  const fetchUsage = useCallback(
+    async (orgId: string, siteId: string | null, { silent = false } = {}) => {
+      const cacheKey = `${orgId}:${siteId || "org"}`;
+      const now = Date.now();
 
-  useEffect(() => {
-    // Fetch usage only when Billing/Usage tab is active.
-    if (activeTab !== "billing" && activeTab !== "usage") return;
-    if (!activeOrganizationId) {
-      setUsage(null);
-      return;
-    }
-    const cacheKey = `${activeOrganizationId}:${resolvedSiteId || "org"}`;
-    const mem = usageMemoryCache.get(cacheKey);
-    const now = Date.now();
-    if (mem && now - mem.ts < USAGE_TTL_MS) {
-      setUsage(mem.data);
-      setUsageError(null);
-      setUsageLoading(false);
-      return;
-    }
-    if (typeof window !== "undefined" && !mem) {
-      try {
-        const raw = window.sessionStorage.getItem(`billing-usage:${cacheKey}`);
-        if (raw) {
-          const parsed = JSON.parse(raw) as { data?: BillingUsage; ts?: number };
-          if (parsed?.data && parsed?.ts && now - parsed.ts < USAGE_TTL_MS) {
-            usageMemoryCache.set(cacheKey, { data: parsed.data, ts: parsed.ts });
-            setUsage(parsed.data);
-            setUsageError(null);
-            setUsageLoading(false);
-            return;
-          }
-        }
-      } catch {
-        // Ignore cache parse issues.
+      // 1. Memory cache hit
+      const mem = usageMemoryCache.get(cacheKey);
+      if (mem && now - mem.ts < USAGE_TTL_MS) {
+        setUsage(mem.data);
+        setUsageError(null);
+        return;
       }
-    }
-    let cancelled = false;
-    if (!usage) setUsageLoading(true);
-    setUsageError(null);
-    getBillingUsage(activeOrganizationId, resolvedSiteId || undefined)
-      .then((res) => {
-        if (!cancelled) {
-          setUsage(res);
-          const entry = { data: res, ts: Date.now() };
-          usageMemoryCache.set(cacheKey, entry);
-          if (typeof window !== "undefined") {
-            try {
-              window.sessionStorage.setItem(`billing-usage:${cacheKey}`, JSON.stringify(entry));
-            } catch {
-              // Ignore storage quota errors.
+
+      // 2. sessionStorage hit
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.sessionStorage.getItem(`billing-usage:${cacheKey}`);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { data?: BillingUsage; ts?: number };
+            if (parsed?.data && parsed?.ts && now - parsed.ts < USAGE_TTL_MS) {
+              usageMemoryCache.set(cacheKey, { data: parsed.data, ts: parsed.ts });
+              setUsage(parsed.data);
+              setUsageError(null);
+              return;
             }
           }
+        } catch { /* ignore */ }
+      }
+
+      // 3. Network fetch
+      if (!silent) {
+        setUsageLoading(true);
+        setUsageError(null);
+      }
+
+      try {
+        const res = await getBillingUsage(orgId, siteId || undefined);
+        setUsage(res);
+        setUsageError(null);
+        const entry = { data: res, ts: Date.now() };
+        usageMemoryCache.set(cacheKey, entry);
+        try { window.sessionStorage.setItem(`billing-usage:${cacheKey}`, JSON.stringify(entry)); } catch { /* ignore */ }
+      } catch (e) {
+        if (!silent) {
+          setUsageError((e as Error)?.message || "Failed to load usage");
         }
-      })
-      .catch((e) => {
-        if (!cancelled) setUsageError(e?.message || "Failed to load usage");
-      })
-      .finally(() => {
-        if (!cancelled) setUsageLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeOrganizationId, activeTab, resolvedSiteId, usage]);
+        // silent failures are swallowed — user will see a retry button when they open the tab
+      } finally {
+        if (!silent) setUsageLoading(false);
+      }
+    },
+    [],
+  );
+
+  // Background pre-fetch on mount (silent — no error shown)
+  useEffect(() => {
+    if (!activeOrganizationId || usagePrefetchedRef.current) return;
+    usagePrefetchedRef.current = true;
+    void fetchUsage(activeOrganizationId, resolvedSiteId, { silent: true });
+  }, [activeOrganizationId, resolvedSiteId, fetchUsage]);
+
+  // When user opens the Usage tab: if we have no data yet, fetch visibly
+  useEffect(() => {
+    if (activeTab !== "usage" || !activeOrganizationId || usage !== null) return;
+    void fetchUsage(activeOrganizationId, resolvedSiteId);
+  }, [activeTab, activeOrganizationId, resolvedSiteId, usage, fetchUsage]);
+
+  // Keep first server+client paint identical to avoid hydration mismatch while session cache hydrates.
+  if (!hydrated || loading) {
+    return (
+      <div className="size-full bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-[3px] border-[#007AFF] border-t-transparent animate-spin" />
+          <p className="text-[14px] text-[#6b7280] font-medium">Loading profile…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="size-full bg-white">
@@ -300,12 +318,6 @@ export default function SettingsPage() {
                     Current Plan: {currentPlan}
                   </p>
                 </div>
-                {/* <button
-                  onClick={() => router.push("/dashboard/all-domain")}
-                  className="bg-[#007aff] h-[36px] px-[11px] rounded-[8px] flex items-center justify-center"
-                >
-                  <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Transfer Ownership</p>
-                </button> */}
               </div>
 
               {/* Organizations Table */}
@@ -380,13 +392,6 @@ export default function SettingsPage() {
 
                       {/* Action Buttons */}
                       <div className="flex items-center justify-end gap-[10px]">
-                        <div className="w-[4px] h-[18px] shrink-0">
-                          <svg className="block size-full" fill="none" viewBox="0 0 4 18">
-                            <circle cx="2" cy="2" fill="#007AFF" r="2" />
-                            <circle cx="2" cy="9" fill="#007AFF" r="2" />
-                            <circle cx="2" cy="16" fill="#007AFF" r="2" />
-                          </svg>
-                        </div>
                         {org.isPaid && (
                           <button
                             onClick={() =>
@@ -426,7 +431,7 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "billing" && (
-            <div className="text-center">
+            <div className="text-left">
               <BillingPage
                 currentPlan={currentPlan}
                 domainCount={domainCount}
@@ -434,6 +439,13 @@ export default function SettingsPage() {
                 activeSiteId={resolvedSiteId}
                 scansCount={usage?.scansUsed ?? 0}
                 pageViews={usage?.pageviewsUsed ?? 0}
+                userName={accountOwnerName}
+                userEmail={accountOwnerEmail}
+                sites={(Array.isArray(sites) ? sites : []).map((s: any) => ({
+                  id: String(s.id || ""),
+                  domain: String(s.domain || ""),
+                  name: String(s.name || s.domain || ""),
+                }))}
               />
             </div>
           )}
@@ -442,9 +454,26 @@ export default function SettingsPage() {
             <div className="max-w-[980px] bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] p-6 text-left">
               <p className="font-semibold text-[18px] text-black mb-4">Usage Overview</p>
               {usageLoading ? (
-                <p className="text-sm text-[#6b7280]">Loading usage...</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin" />
+                  <p className="text-sm text-[#6b7280]">Loading usage…</p>
+                </div>
               ) : usageError ? (
-                <p className="text-sm text-[#b91c1c]">{usageError}</p>
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-[#b91c1c]">{usageError}</p>
+                  <button
+                    onClick={() => {
+                      if (!activeOrganizationId) return;
+                      usagePrefetchedRef.current = false;
+                      setUsageError(null);
+                      setUsage(null);
+                      void fetchUsage(activeOrganizationId, resolvedSiteId);
+                    }}
+                    className="self-start bg-[#007AFF] text-white text-sm font-medium px-4 py-2 rounded-[6px]"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white border border-[#e5e5e5] rounded-lg p-4">

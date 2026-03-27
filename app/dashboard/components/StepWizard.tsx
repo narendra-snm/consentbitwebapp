@@ -19,7 +19,9 @@ export default function StepWizard({
   onWizardComplete?: () => void;
 }) {
   const router = useRouter();
+  const { refresh } = useDashboardSession();
   const [step, setStep] = useState(1);
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [siteData, setSiteData] = useState<{
     scriptUrl?: string;
     siteId?: string;
@@ -29,6 +31,25 @@ export default function StepWizard({
 
   const nextStep = () => {
     setStep((prev) => prev + 1);
+  };
+
+  // Called when user picks the Free plan — create site now then advance
+  const handleFreePlan = async () => {
+    if (!siteData?.domain) return;
+    setSetupError(null);
+    try {
+      const result = await firstSetup({ websiteUrl: siteData.domain });
+      setSiteData({
+        scriptUrl: result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl,
+        siteId: result?.siteId ?? result?.site?.id,
+        cdnScriptId: result?.site?.cdnScriptId,
+        domain: siteData.domain,
+      });
+      void refresh({ showLoading: false });
+      setStep(3);
+    } catch (err: unknown) {
+      setSetupError(err instanceof Error ? err.message : 'Setup failed');
+    }
   };
 
   return (
@@ -57,11 +78,17 @@ export default function StepWizard({
         {/* {step === 2 && <StepTwo nextStep={nextStep} />} */}
       </div>
       {step === 2 && (
-        <PricingTable
-          onclick={() => setStep(3)}
-          organizationId={organizationId}
-          siteId={siteData?.siteId ?? null}
-        />
+        <>
+          {setupError && (
+            <p className="text-center text-sm text-red-600 mb-3">{setupError}</p>
+          )}
+          <PricingTable
+            onclick={handleFreePlan}
+            organizationId={organizationId}
+            siteId={siteData?.siteId ?? null}
+            pendingDomain={siteData?.domain ?? null}
+          />
+        </>
       )}
       {step === 3 && <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />}
     </div>
@@ -120,35 +147,39 @@ function StepOne({
 }: {
   nextStep: () => void;
   userName?: string;
-  onSetupComplete: (data: { scriptUrl?: string; siteId?: string; domain?: string }) => void;
+  onSetupComplete: (data: { domain: string }) => void;
 }) {
-  const { refresh } = useDashboardSession();
+  const { sites } = useDashboardSession();
   const [domain, setDomain] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleNext() {
-    if (!domain.trim()) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const result = await firstSetup({ websiteUrl: domain.trim() });
-      onSetupComplete({
-        scriptUrl:
-          result?.site?.embedScriptUrl ??
-          result?.scriptUrl ??
-          result?.site?.scriptUrl,
-        siteId: result?.siteId ?? result?.site?.id,
-        cdnScriptId: result?.site?.cdnScriptId,
-        domain: domain.trim(),
-      });
-      void refresh({ showLoading: false });
-      nextStep();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Setup failed');
-    } finally {
-      setLoading(false);
+  function normalizeDomain(raw: string): string {
+    const v = raw.trim();
+    if (!v) return "";
+    const noProto = v.replace(/^https?:\/\//i, "");
+    const noWww = noProto.replace(/^www\./i, "");
+    // Remove path/query/hash if present
+    const hostOnly = noWww.split("/")[0].split("?")[0].split("#")[0];
+    return hostOnly.replace(/\.+$/, "").toLowerCase();
+  }
+
+  function handleNext() {
+    const cleanDomain = normalizeDomain(domain);
+    if (!cleanDomain) {
+      setError('Please enter a valid domain');
+      return;
     }
+    const existing = (Array.isArray(sites) ? sites : []).some((s: any) => {
+      const d = normalizeDomain(String(s?.domain || s?.name || ""));
+      return d && d === cleanDomain;
+    });
+    if (existing) {
+      setError("This domain is already added in your account. Please open it from the dashboard.");
+      return;
+    }
+    setError(null);
+    onSetupComplete({ domain: cleanDomain });
+    nextStep();
   }
 
   return (
@@ -178,17 +209,13 @@ function StepOne({
         )}
       </div>
 
-      <div className="flex justify-between items-center">
-        <p className="text-[15px] text-[#00000050] ">
-          Do not include 'https://www'
-        </p>
+      <div className="flex justify-end items-center">
         <button
           onClick={handleNext}
-          disabled={loading || !domain.trim()}
+          disabled={!domain.trim()}
           className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2"
         >
-          {loading ? 'Setting up…' : 'Next'}
-          {!loading && <span>→</span>}
+          Next <span>→</span>
         </button>
       </div>
     </>

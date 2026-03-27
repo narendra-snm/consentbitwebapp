@@ -7,7 +7,7 @@ type Position = BannerLayoutValue['position'];
 const positions: Array<{ id: Position; label: string }> = [
   { id: 'box', label: 'Box' },
   { id: 'banner', label: 'Banner' },
-  { id: 'popup', label: 'Popup' },
+  { id: 'bottom-center', label: 'Bottom Center' },
 ];
 
 const animations = ['Fade In', 'Slide Up', 'Slide Down', 'Zoom In'];
@@ -70,21 +70,16 @@ export default function BannerControl({ value, onChange }: Props) {
                   <path d="M85 13L86.6464 14.6464C86.8417 14.8417 87.1583 14.8417 87.3536 14.6464L91 11" stroke="white" strokeLinecap="round" />
                 </svg>
               )}
-              {pos.id === 'popup' && (
+              {pos.id === 'bottom-center' && (
                 <svg width="100" height="64" viewBox="0 0 100 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <rect x="0.5" y="0.5" width="99" height="63" rx="3.5" fill="white" stroke="#E5E5E5" />
-                  <rect x="27" y="23" width="47" height="19" rx="2" fill="#007AFF" />
+                  <rect x="15" y="38" width="70" height="21" rx="2" fill="#007AFF" />
                 </svg>
               )}
               <span className="text-sm text-[#111827] ml-1">{pos.label}</span>
             </button>
           ))}
         </div>
-        <p className="text-xs text-[#6b7280] leading-relaxed">
-          <strong>Box</strong> — compact card in a corner (choose left or right).{' '}
-          <strong>Banner</strong> — full-width bar fixed to the bottom of the screen.{' '}
-          <strong>Popup</strong> — centered modal-style banner.
-        </p>
       </div>
 
       {position === 'box' && (

@@ -2,6 +2,18 @@
 
 import Accordion from "./ui/Accordion";
 import ToggleSwitch from "./ui/ToggleSwitch";
+
+const LIMITS = {
+  title: 60,
+  message: 320,
+  button: 30,
+  policyLabel: 35,
+} as const;
+
+function clampLen(value: string, max: number): string {
+  const s = value ?? "";
+  return s.length > max ? s.slice(0, max) : s;
+}
 const svgPaths =  {
 p10f04680: "M1.00001 1.00001L4.84084 5.19456C5.23724 5.62746 5.91949 5.62746 6.31588 5.19457L10.1567 1.00001",
 p1382e600: "M16.2 0H1.8C0.8073 0 0 0.797333 0 1.77778V14.2222C0 15.2027 0.8073 16 1.8 16H16.2C17.1927 16 18 15.2027 18 14.2222V1.77778C18 0.797333 17.1927 0 16.2 0ZM1.8 14.2222V3.55556H16.2L16.2018 14.2222H1.8Z",
@@ -18,6 +30,7 @@ type CookieNoticeSettings = {
   customizeButton: boolean;
   customizeLabel: string;
   cookiePolicyLink: boolean;
+  cookiePolicyLabel: string;
   url: string;
 };
 
@@ -45,6 +58,7 @@ export function CookieNoticeAccordion2({
     customizeButton: true,
     customizeLabel: 'Preferences',
     cookiePolicyLink: true,
+    cookiePolicyLabel: 'Privacy Policy',
     url: 'https.link.com',
     ...(value || {}),
   };
@@ -73,8 +87,9 @@ export function CookieNoticeAccordion2({
               <input
                 type="text"
                 value={settings.title}
-                onChange={(e) => update({ title: e.target.value })}
-                className="w-full h-12 px-4 bg-white border-[3px] border-[rgba(0,122,255,0.1)] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+                maxLength={LIMITS.title}
+                onChange={(e) => update({ title: clampLen(e.target.value, LIMITS.title) })}
+                className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
             </div>
@@ -101,9 +116,10 @@ export function CookieNoticeAccordion2({
                 <div className="relative">
                   <textarea
                     value={settings.message}
-                    onChange={(e) => update({ message: e.target.value })}
+                    maxLength={LIMITS.message}
+                    onChange={(e) => update({ message: clampLen(e.target.value, LIMITS.message) })}
                     rows={5}
-                    className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal"
+                    className="w-full p-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   />
                   <button className="absolute bottom-3 right-3 text-gray-400">
@@ -187,8 +203,9 @@ export function CookieNoticeAccordion2({
                 <input
                   type="text"
                   value={settings.acceptAll}
-                  onChange={(e) => update({ acceptAll: e.target.value })}
-                  className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+                  maxLength={LIMITS.button}
+                  onChange={(e) => update({ acceptAll: clampLen(e.target.value, LIMITS.button) })}
+                  className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -212,8 +229,9 @@ export function CookieNoticeAccordion2({
                 <input
                   type="text"
                   value={settings.rejectAll || ''}
-                  onChange={(e) => update({ rejectAll: e.target.value })}
-                  className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+                  maxLength={LIMITS.button}
+                  onChange={(e) => update({ rejectAll: clampLen(e.target.value, LIMITS.button) })}
+                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -240,8 +258,9 @@ export function CookieNoticeAccordion2({
                 <input
                   type="text"
                   value={settings.doNotSellLabel || ''}
-                  onChange={(e) => update({ doNotSellLabel: e.target.value })}
-                  className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+                  maxLength={60}
+                  onChange={(e) => update({ doNotSellLabel: clampLen(e.target.value, 60) })}
+                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -265,8 +284,9 @@ export function CookieNoticeAccordion2({
                 <input
                   type="text"
                   value={settings.customizeLabel}
-                  onChange={(e) => update({ customizeLabel: e.target.value })}
-                  className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+                  maxLength={LIMITS.button}
+                  onChange={(e) => update({ customizeLabel: clampLen(e.target.value, LIMITS.button) })}
+                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -288,15 +308,14 @@ export function CookieNoticeAccordion2({
                   onChange={() => toggleSwitch("cookiePolicyLink")}
                 />
               </div>
-              {bannerType === "gdpr" ? (
-                <input
-                  type="text"
-                  value="Policy"
-                  readOnly
-                  className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
-                  style={{ fontVariationSettings: "'opsz' 14" }}
-                />
-              ) : null}
+              <input
+                type="text"
+                value={settings.cookiePolicyLabel}
+                maxLength={LIMITS.policyLabel}
+                onChange={(e) => update({ cookiePolicyLabel: clampLen(e.target.value, LIMITS.policyLabel) })}
+                className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
+                style={{ fontVariationSettings: "'opsz' 14" }}
+              />
             </div>
 
             <div className="space-y-2">

@@ -17,7 +17,7 @@ export default function ComplianceAlert({
   if (!visible) return null;
 
   return (
-    <div className="w-full  ">
+    <div className="w-full  mt-4.25">
 
       {/* Greeting */}
       <p className="text-[17px]  ">
@@ -25,7 +25,7 @@ export default function ComplianceAlert({
         </p>
       <p className="text-[17px] text-[#4B5563] mb-5">
         You are currently viewing the dashboard for{" "}
-        <span className="text-[#0777E6] font-medium cursor-pointer hover:underline">
+        <span className="text-blue-600 font-medium cursor-pointer hover:underline">
           {siteDomain || "—"}
         </span>
       </p>

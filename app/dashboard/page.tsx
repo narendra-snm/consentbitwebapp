@@ -10,6 +10,7 @@ import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
 import { useEffect, useMemo, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
+import { firstSetup } from "@/lib/client-api";
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
@@ -20,6 +21,8 @@ export default function DashboardPage() {
   * First-time wizard must stay mounted after firstSetup creates a site. Otherwise refresh()
   * makes sites.length > 0, showOnboarding flips false, and the payment + install steps vanish.
   */
+ const [hydrated, setHydrated] = useState(false);
+ useEffect(() => setHydrated(true), []);
  const [wizardSticky, setWizardSticky] = useState(false);
  /** User chose "Skip to Dashboard" — hide wizard even if they never created a site. */
  const [wizardSkipped, setWizardSkipped] = useState(false);
@@ -34,8 +37,45 @@ export default function DashboardPage() {
    authenticated &&
    !wizardSkipped &&
    (((sites?.length || 0) === 0) || wizardSticky);
- const userName = useMemo(() => (userEmail ? userEmail.split("@")[0] : undefined), [userEmail]);
+ const userName = useMemo(() => {
+   const name = user?.name?.trim();
+   if (name) return name.charAt(0).toUpperCase() + name.slice(1);
+   return userEmail || undefined;
+ }, [user?.name, userEmail]);
  const [showInstallModal, setShowInstallModal] = useState(false);
+ const [postSetupInstall, setPostSetupInstall] = useState<{
+   scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string;
+ } | null>(null);
+ const [pendingPostSetupDomain, setPendingPostSetupDomain] = useState<string | null>(null);
+
+ // Detect ?postSetup=1&domain=X on return from Stripe payment
+ useEffect(() => {
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('postSetup') === '1') {
+     const domain = params.get('domain') ?? '';
+     if (domain) {
+       setPendingPostSetupDomain(domain);
+       setWizardSkipped(true);
+       window.history.replaceState({}, '', '/dashboard');
+     }
+   }
+ }, []);
+
+ // Once authenticated, create the site and show install code
+ useEffect(() => {
+   if (!pendingPostSetupDomain || loading || !authenticated) return;
+   const domain = pendingPostSetupDomain;
+   setPendingPostSetupDomain(null);
+   firstSetup({ websiteUrl: domain }).then((result) => {
+     const siteId = result?.siteId ?? result?.site?.id;
+     const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
+     const cdnScriptId = result?.site?.cdnScriptId;
+     if (siteId && scriptUrl) {
+       setPostSetupInstall({ scriptUrl, siteId, siteDomain: domain, cdnScriptId });
+     }
+     void refresh({ showLoading: false });
+   }).catch(console.error);
+ }, [pendingPostSetupDomain, loading, authenticated, refresh]);
 
  /** Raw URL from API (`Site.embedScriptUrl`); modal resolves to absolute — keeps snippet identical to stored value. */
  const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
@@ -54,7 +94,7 @@ export default function DashboardPage() {
   const handleWizardComplete = async () => {
     setWizardSticky(false);
     setWizardSkipped(false);
-    await refresh();
+    await refresh({ showLoading: false });
   };
 
   const dismissOnboardingWizard = () => {
@@ -65,7 +105,44 @@ export default function DashboardPage() {
 
 
 
-  if (!loading && authenticated && !showOnboarding) {
+  // Show skeleton until hydrated (prevents server/client mismatch), while loading, or during post-payment setup
+  if (!hydrated || loading || pendingPostSetupDomain) {
+    return (
+      <>
+        <Header />
+        <div className="max-w-[1148px] mx-auto pb-4">
+          <DashboardTabs />
+          {/* Skeleton cards */}
+          <div className="grid grid-cols-2 gap-6 mt-4 animate-pulse">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+            </div>
+          </div>
+          <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
+          {pendingPostSetupDomain && (
+            <div className="flex items-center justify-center gap-2 mt-6 text-sm text-gray-500">
+              <svg className="animate-spin h-4 w-4 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Setting up your site…
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  if (authenticated && !showOnboarding) {
     return (
       <>
       <Header/>
@@ -86,12 +163,16 @@ export default function DashboardPage() {
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
       />
-      
-      {/* <AddSiteModal open={true}  /> */}
-      {/* {<AddNewSiteModal onClose={() => router.push("/dashboard/one")} />} */}
-      {/* <InstallConsentModal open={true} /> */}
+      {/* Post-payment: show install code after successful Stripe checkout */}
+      <InstallConsentModal
+        open={postSetupInstall !== null}
+        scriptUrl={postSetupInstall?.scriptUrl ?? ''}
+        siteDomain={postSetupInstall?.siteDomain}
+        siteId={postSetupInstall?.siteId}
+        cdnScriptId={postSetupInstall?.cdnScriptId}
+        onClose={() => setPostSetupInstall(null)}
+      />
       </div>
-      
       </>
     );
   }
@@ -105,27 +186,27 @@ export default function DashboardPage() {
           alt="logo"
           className="h-6"
         />
-
         <button
           type="button"
           onClick={() => {
             dismissOnboardingWizard();
-            router.push("/dashboard");
+            const target = activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard";
+            router.replace(target);
           }}
-          className=" cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium "
+          className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
         >
-        Skip to Dashboard → 
+          Skip to Dashboard →
         </button>
       </div>
 
       {/* Wizard */}
       {authenticated && showOnboarding && (
         <div className="flex justify-center mt-20">
-                    <StepWizard
-                      onWizardComplete={handleWizardComplete}
-                      organizationId={activeOrganizationId}
-                      userName={userName}
-                    />
+          <StepWizard
+            onWizardComplete={handleWizardComplete}
+            organizationId={activeOrganizationId}
+            userName={userName}
+          />
         </div>
       )}
     </div>

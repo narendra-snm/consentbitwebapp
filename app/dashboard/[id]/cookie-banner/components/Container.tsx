@@ -15,6 +15,7 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
+import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -38,7 +39,6 @@ type RegulationSnapshot = {
 export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
   const router = useRouter();
-  const [updatingRegulation, setUpdatingRegulation] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
   /** Which action triggered the in-flight persist (for button labels). */
   const [persistKind, setPersistKind] = useState<"save" | "publish" | null>(null);
@@ -65,11 +65,13 @@ export default function page({ siteId }: { siteId: string }) {
     rejectButton: true,
     customizeButton: true,
     cookiePolicyLink: true,
+    cookiePolicyLabel: "Privacy Policy",
     privacyPolicyUrl: "",
     gdpr: {
       message:
         "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
       rejectAll: "Reject",
+      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
     },
     ccpa: {
       message:
@@ -115,6 +117,9 @@ export default function page({ siteId }: { siteId: string }) {
     setPreviewBannerLayout,
   ]);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
     console.log(effectivePlanId,"activeOrganizationId from container")
@@ -142,10 +147,13 @@ export default function page({ siteId }: { siteId: string }) {
 
   // Free-plan preview should follow the dropdown selection immediately.
   // (Sometimes site state updates lag, so relying only on `site` can make preview look stale.)
-  const [freePreviewBannerType, setFreePreviewBannerType] = useState<'gdpr' | 'ccpa'>(() => {
-    const initialBannerType = site?.banner_type === 'ccpa' || site?.region_mode === 'ccpa' ? 'ccpa' : 'gdpr';
-    return initialBannerType;
-  });
+  const [freePreviewBannerType, setFreePreviewBannerType] = useState<'gdpr' | 'ccpa'>('gdpr');
+  // Sync freePreviewBannerType from site data once it loads (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    if (site?.banner_type === 'ccpa' || site?.region_mode === 'ccpa') {
+      setFreePreviewBannerType('ccpa');
+    }
+  }, [site?.banner_type, site?.region_mode]);
 
   // For the free plan we always force the preview to match the single selected banner.
   const previewBannerType = useMemo<'gdpr' | 'ccpa' | undefined>(() => {
@@ -249,33 +257,24 @@ export default function page({ siteId }: { siteId: string }) {
       return;
     }
 
-    // Free-plan UX: update preview immediately on dropdown change,
-    // even if the backend roundtrip is slow.
-    if (isFreePlan) {
-      setFreePreviewBannerType(next.bannerType);
-    }
+    // Update local state immediately — preview is driven by local state, not backend.
+    setFreePreviewBannerType(next.bannerType);
+    updateSiteInState({
+      id: String(site.id),
+      banner_type: next.bannerType,
+      region_mode: next.regionMode,
+    });
 
-    try {
-      setUpdatingRegulation(true);
-      await updateSiteBannerSettings({
-        name: String(site.name || site.domain || ''),
-        domain: String(site.domain || ''),
-        organizationId: String(activeOrganizationId),
-        bannerType: next.bannerType,
-        regionMode: next.regionMode,
-      });
-
-      updateSiteInState({
-        id: String(site.id),
-        banner_type: next.bannerType,
-        region_mode: next.regionMode,
-      });
-      void refresh({ showLoading: false });
-    } catch (e) {
-      console.error("[cookie-banner] failed to update banner settings", e);
-    } finally {
-      setUpdatingRegulation(false);
-    }
+    // Persist to backend in the background; UI doesn't wait or revert on failure.
+    updateSiteBannerSettings({
+      name: String(site.name || site.domain || ''),
+      domain: String(site.domain || ''),
+      organizationId: String(activeOrganizationId),
+      bannerType: next.bannerType,
+      regionMode: next.regionMode,
+    }).catch((e) => {
+      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
+    });
   };
 
   useEffect(() => {
@@ -312,12 +311,14 @@ export default function page({ siteId }: { siteId: string }) {
             typeof en.cookiePolicyLinkEnabled === "boolean"
               ? en.cookiePolicyLinkEnabled
               : String(en.cookiePolicyLinkEnabled ?? "1") !== "0",
+          cookiePolicyLabel: en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
             message:
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: en.rejectAll || "Reject",
+            saveMyPreferencesLabel: en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
           },
           ccpa: {
             message:
@@ -379,11 +380,13 @@ export default function page({ siteId }: { siteId: string }) {
           rejectButton: true,
           customizeButton: true,
           cookiePolicyLink: true,
+          cookiePolicyLabel: "Privacy Policy",
           privacyPolicyUrl: "",
           gdpr: {
             message:
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: "Reject",
+            saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
           },
           ccpa: {
             message:
@@ -531,7 +534,8 @@ export default function page({ siteId }: { siteId: string }) {
           managePreferences: contentSettings.preferenceMessage,
           optOutPreference: contentSettings.ccpa.optOutTitle,
           ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
-          saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
+          saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+          privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
           closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
           rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
           customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -590,7 +594,7 @@ export default function page({ siteId }: { siteId: string }) {
             managePreferences: contentSettings.preferenceMessage,
             optOutPreference: contentSettings.ccpa.optOutTitle,
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
-            saveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
+            saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
             customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -676,7 +680,7 @@ const isToggleEnabled =
                   site={site}
                   // Only disable dropdown while we're actively saving banner settings.
                   // Session-level loading can cause the whole dropdown to appear "stuck disabled".
-                  loading={updatingRegulation}
+                  loading={false}
                   effectivePlanId={effectivePlanId}
                   onChange={handleRegulationChange}
                 />
@@ -760,69 +764,7 @@ const isToggleEnabled =
         )}
         {active === "Content" && (
           <>
-            <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mb-4.25">
-              <p className="font-semibold text-base text-black mb-3">
-                Content settings
-              </p>
-              <p className="text-[13px] leading-snug text-[#6b7280] mb-3">
-                The consent template  is chosen under{" "}
-                <span className="font-medium text-[#374151]">General</span>.
-                {consentType === "both" ? (
-                  <>
-                    {" "}
-                    Below, choose which set of copy you are editing.
-                  </>
-                ) : (
-                  <>
-                    {" "}
-                    You are editing{" "}
-                    <span className="font-medium text-[#374151]">
-                      {activeContentBannerType === "ccpa" ? "CCPA" : "GDPR"}
-                    </span>{" "}
-                    content only.
-                  </>
-                )}
-              </p>
-              {consentType === "both" ? (
-                <div className="flex rounded-lg border border-[#e5e5e5] overflow-hidden mb-3 max-w-[409px]">
-                  <button
-                    type="button"
-                    onClick={() => setBothContentFocus("gdpr")}
-                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                      bothContentFocus === "gdpr"
-                        ? "bg-[#007aff] text-white"
-                        : "bg-white text-[#374151] hover:bg-gray-50"
-                    }`}
-                  >
-                    GDPR content
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBothContentFocus("ccpa")}
-                    className={`flex-1 py-2.5 text-sm font-medium transition-colors border-l border-[#e5e5e5] ${
-                      bothContentFocus === "ccpa"
-                        ? "bg-[#007aff] text-white"
-                        : "bg-white text-[#374151] hover:bg-gray-50"
-                    }`}
-                  >
-                    CCPA content
-                  </button>
-                </div>
-              ) : null}
-              {/* <div className="mb-2 rounded-md border border-[#e5e7eb] bg-white px-3 py-2">
-                <p className="text-xs text-[#6b7280] leading-snug">
-                  Edits stay in draft until you click{" "}
-                  <span className="font-medium text-[#374151]">Publish Changes</span> in the
-                  preview column. That saves content, floating button, layout, colors, and
-                  typography together.
-                </p>
-                {contentDirty || floatingDirty || appearanceDirty ? (
-                  <p className="text-xs text-amber-700 font-medium mt-1.5">Unpublished changes</p>
-                ) : (
-                  <p className="text-xs text-[#15803d] mt-1.5">Published — no pending edits</p>
-                )}
-              </div> */}
-            </div>
+            
             <CookieNoticeAccordion2
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
@@ -840,6 +782,7 @@ const isToggleEnabled =
                 rejectButton: contentSettings.rejectButton,
                 customizeButton: contentSettings.customizeButton,
                 cookiePolicyLink: contentSettings.cookiePolicyLink,
+                cookiePolicyLabel: contentSettings.cookiePolicyLabel,
                 url: contentSettings.privacyPolicyUrl,
                 rejectAll:
                   activeContentBannerType === "gdpr"
@@ -862,6 +805,7 @@ const isToggleEnabled =
                       rejectButton: next.rejectButton,
                       customizeButton: next.customizeButton,
                       cookiePolicyLink: next.cookiePolicyLink,
+                      cookiePolicyLabel: next.cookiePolicyLabel,
                       privacyPolicyUrl: next.url,
                       gdpr: {
                         ...prev.gdpr,
@@ -879,6 +823,7 @@ const isToggleEnabled =
                     rejectButton: next.rejectButton,
                     customizeButton: next.customizeButton,
                     cookiePolicyLink: next.cookiePolicyLink,
+                    cookiePolicyLabel: next.cookiePolicyLabel,
                     privacyPolicyUrl: next.url,
                     ccpa: {
                       ...prev.ccpa,
@@ -900,6 +845,7 @@ const isToggleEnabled =
                   ? {
                       title: contentSettings.preferenceTitle,
                       message: contentSettings.preferenceMessage,
+                      saveButtonLabel: contentSettings.gdpr.saveMyPreferencesLabel,
                     }
                   : {
                       title: contentSettings.ccpa.optOutTitle,
@@ -915,6 +861,11 @@ const isToggleEnabled =
                         ...prev,
                         preferenceTitle: next.title,
                         preferenceMessage: next.message,
+                        gdpr: {
+                          ...prev.gdpr,
+                          saveMyPreferencesLabel:
+                            next.saveButtonLabel ?? prev.gdpr.saveMyPreferencesLabel,
+                        },
                       }
                     : {
                         ...prev,
@@ -942,7 +893,12 @@ const isToggleEnabled =
               value={floatingButton}
               onChange={setFloatingButton}
             />
-            
+
+            <BannerLinkSection
+              effectivePlanId={effectivePlanId}
+              consentType={consentType}
+            />
+
           </>
         )}
         {active === "Layout" && (
@@ -980,7 +936,7 @@ const isToggleEnabled =
         onDismissSaveSuccess={dismissSaveSuccess}
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
-        publishDisabled={!site?.id || savingContent}
+        publishDisabled={!mounted || !site?.id || savingContent}
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
