@@ -193,9 +193,6 @@ export default function ConsentPreview({
   const previewAreaRef = useRef<HTMLDivElement | null>(null);
   const initialBannerRef = useRef<HTMLDivElement | null>(null);
   /** How many px we need to lift the floating button to clear the banner. */
-  const [floatingClearancePx, setFloatingClearancePx] = useState(0);
-  const [floatingAnchor, setFloatingAnchor] = useState<{ left: number; top: number } | null>(null);
-
   /** GDPR preference panel: which accordion row is expanded (+ / −) */
   const [prefExpanded, setPrefExpanded] = useState<string | null>(null);
   const [prefMarketing, setPrefMarketing] = useState(false);
@@ -210,72 +207,6 @@ export default function ConsentPreview({
   useEffect(() => {
     if (modalView !== 'gdpr-preferences') setPrefExpanded(null);
   }, [modalView]);
-
-  // Measure banner position so the floating button can be offset to avoid overlap.
-  useEffect(() => {
-    if (modalView !== 'main') {
-      setFloatingClearancePx(0);
-      setFloatingAnchor(null);
-      return;
-    }
-    const el = initialBannerRef.current;
-    const container = previewAreaRef.current;
-    if (!container) return;
-    if (!el) return;
-    const measure = () => {
-      const bannerRect = el.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      // When banner is in a bottom corner, place floating control directly under the banner.
-      if ((layoutAlign === 'bottom-left' || layoutAlign === 'bottom-right') && layoutPos !== 'banner') {
-        const top = Math.round(bannerRect.bottom - containerRect.top + 10);
-        if (layoutAlign === 'bottom-right') {
-          // Keep the icon under the banner's right edge.
-          const right = Math.round(containerRect.right - bannerRect.right + 6);
-          const left = Math.round(containerRect.width - right - 40); // 40px icon
-          setFloatingAnchor({ left: Math.max(6, left), top: Math.max(6, top) });
-        } else {
-          const left = Math.round(bannerRect.left - containerRect.left + 6);
-          setFloatingAnchor({ left: Math.max(6, left), top: Math.max(6, top) });
-        }
-      } else {
-        setFloatingAnchor(null);
-      }
-      // Only lift the button if it would overlap the banner at its default position.
-      // Default floating button is 40px tall and sits 16px from bottom.
-      const baseBottom = 16;
-      const btnH = 40;
-      const gap = 12;
-      const btnBottom = containerRect.bottom - baseBottom;
-      const btnTop = btnBottom - btnH;
-      const bannerTop = bannerRect.top;
-      const bannerBottom = bannerRect.bottom;
-      const overlapsVertically = btnBottom > bannerTop && btnTop < bannerBottom;
-      if (!overlapsVertically) {
-        setFloatingClearancePx(0);
-        return;
-      }
-      // Lift enough so button bottom is above banner top (with gap).
-      const lift = Math.round(btnBottom - (bannerTop - gap));
-      setFloatingClearancePx(Number.isFinite(lift) ? Math.max(0, lift) : 0);
-    };
-    measure();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
-    ro?.observe(container);
-    return () => ro?.disconnect();
-  }, [modalView, selectedBannerType, layoutPos, layoutAlign, device]);
-
-  const floatingOffsetPx = useMemo(() => {
-    // Only offset when the initial banner is visible and bottom-aligned.
-    if (modalView !== 'main') return 0;
-    const bottomAligned =
-      layoutAlign === 'bottom-left' ||
-      layoutAlign === 'bottom-right' ||
-      layoutAlign === 'bottom';
-    if (!bottomAligned) return 0;
-    if (!floatingClearancePx) return 0;
-    return floatingClearancePx;
-  }, [floatingClearancePx, layoutAlign, modalView]);
 
   const toggleSwitch = (on: boolean, onToggle: () => void) => (
     <button
@@ -506,118 +437,128 @@ export default function ConsentPreview({
           }`}
           style={bannerTypographyStyle}
         >
-          {!iabEnabled && <>{  modalView === 'main' ? (
-            <div
-              key={bannerAnimation}
-              ref={initialBannerRef}
-              className={
-                layoutPos === 'banner'
-                  ? 'absolute bottom-0 left-0 right-0'
-                  : layoutPos === 'bottom-center'
-                    ? 'w-full max-w-[360px] shrink-0 self-center'
-                    : `w-full max-w-[360px] shrink-0 ${layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'}`
-              }
-              style={previewAnimStyle}
-            >
-            <div
-              className={`shadow-lg w-full min-w-0 p-4 relative ${
-                layoutPos === 'banner'
-                  ? 'border-t border-x border-[#e2e8f0]'
-                  : 'rounded-md border border-[#e2e8f0]'
-              }`}
-              style={{
-                backgroundColor: colors.bannerBg,
-                borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
-              }}
-            >
-              {content?.closeButton ? (
-                <button
-                  type="button"
-                  className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100"
-                  aria-label="Close banner preview"
-                >
-                  ×
-                </button>
-              ) : null}
-              <p
-                style={headingStyle}
-                className="text-[15px] font-bold tracking-tight mb-2"
+          {!iabEnabled && <>{  modalView === 'main' ? (() => {
+            // Banner card — shared across all layouts
+            const bannerCard = (
+              <div
+                ref={initialBannerRef}
+                className={`shadow-lg min-w-0 p-4 relative rounded-md border border-[#e2e8f0] ${
+                  layoutPos === 'banner' ? 'w-full' : 'flex-1'
+                }`}
+                style={{
+                  backgroundColor: colors.bannerBg,
+                  borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
+                  ...previewAnimStyle,
+                }}
               >
-                {content?.title || t('title')}
-              </p>
-
-              <p
-                style={bodyTextStyle}
-                className="text-[11px] tracking-tight mb-2"
-              >
-                {(content?.message != null && content.message !== ''
-                  ? content.message
-                  : null) ??
-                  (selectedBannerType === "ccpa"
-                  ? t("ccpaDescription")
-                  : t("description"))}
-                {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
-                  <>
-                    {' '}
-                    <a
-                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#007aff] underline"
-                    >
-                      {t('privacyPolicy')}
-                    </a>
-                  </>
+                {content?.closeButton ? (
+                  <button type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
                 ) : null}
-              </p>
-
-              {selectedBannerType === 'ccpa' ? (
-                <div className="mt-2">
-                  {content?.rejectButton !== false ? (
-                    <button
-                      type="button"
-                      className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left"
-                      onClick={() => setModalView('ccpa-optout')}
-                    >
-                      {content?.doNotSellLabel || t('doNotSell')}
-                    </button>
+                <p style={headingStyle} className="text-[15px] font-bold tracking-tight mb-2">
+                  {content?.title || t('title')}
+                </p>
+                <p style={bodyTextStyle} className="text-[11px] tracking-tight mb-2">
+                  {(content?.message != null && content.message !== '' ? content.message : null) ??
+                    (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
+                  {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
+                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{t('privacyPolicy')}</a></>
                   ) : null}
+                </p>
+                {selectedBannerType === 'ccpa' ? (
+                  <div className="mt-2">
+                    {content?.rejectButton !== false ? (
+                      <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left" onClick={() => setModalView('ccpa-optout')}>
+                        {content?.doNotSellLabel || t('doNotSell')}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 justify-end mt-3">
+                    {content?.customizeButton !== false ? (
+                      <button className="px-3 py-1 border text-[11px] rounded" onClick={openPreferences} type="button" style={preferenceStyle}>
+                        {content?.preferencesLabel || t('preferences')}
+                      </button>
+                    ) : null}
+                    {content?.rejectButton !== false ? (
+                      <button className="px-3 py-1 border text-[11px] rounded" type="button" style={acceptRejectStyle}>
+                        {content?.rejectAll || t('rejectAll')}
+                      </button>
+                    ) : null}
+                    <button className="px-3 py-1 border text-[11px] rounded" type="button" style={acceptRejectStyle}>
+                      {content?.acceptAll || t('acceptAll') || 'Ok, Got it'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+
+            // Floating icon button
+            const floatingIcon = floatingButton.enabled ? (
+              <button
+                key="float-icon"
+                type="button"
+                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white shadow-md cursor-pointer hover:opacity-90"
+                onClick={openPreferences}
+                aria-label={content?.preferencesLabel || t('preferences')}
+              >
+                <Image src={floatingBtnLogo} alt="" width={28} height={28} draggable={false}
+                  className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain select-none drop-shadow-md" sizes="28px" />
+              </button>
+            ) : null;
+
+            // Full-width banner: icon sits at the bottom corner; banner renders on top of it
+            if (layoutPos === 'banner') {
+              return (
+                <div key={bannerAnimation} className="absolute bottom-0 left-0 right-0">
+                  {floatingButton.enabled && (
+                    <div className={`absolute bottom-2 z-0 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
+                      {floatingIcon}
+                    </div>
+                  )}
+                  <div className="relative z-10">
+                    {bannerCard}
+                  </div>
                 </div>
-              ) : (
-                <div className="flex gap-2 justify-end mt-3">
-                  {content?.customizeButton !== false ? (
-                    <button
-                      className="px-3 py-1 border text-[11px] rounded"
-                      onClick={openPreferences}
-                      type="button"
-                      style={preferenceStyle}
-                    >
-                      {content?.preferencesLabel || t("preferences")}
-                    </button>
-                  ) : null}
+              );
+            }
 
-                  {content?.rejectButton !== false ? (
-                    <button
-                      className="px-3 py-1 border text-[11px] rounded"
-                      type="button"
-                      style={acceptRejectStyle}
-                    >
-                      {content?.rejectAll || t('rejectAll')}
-                    </button>
-                  ) : null}
+            // Box / bottom-center layouts
+            // Check if icon and banner are on the same corner (would overlap)
+            const iconOnLeft = floatingButton.position === 'left';
+            const bannerOnLeft = layoutAlign !== 'bottom-right';
+            const sameSide = floatingButton.enabled && (iconOnLeft === bannerOnLeft) && layoutPos !== 'bottom-center';
 
-                  <button
-                    className="px-3 py-1 border text-[11px] rounded"
-                    type="button"
-                    style={acceptRejectStyle}
-                  >
-                    {content?.acceptAll || t('acceptAll') || 'Ok, Got it'}
-                  </button>
+            if (sameSide) {
+              // Flex row: icon beside banner on the same side
+              return (
+                <div
+                  key={bannerAnimation}
+                  className={`flex items-end gap-2 w-full max-w-[420px] shrink-0 ${layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'}`}
+                >
+                  {iconOnLeft && floatingIcon}
+                  {bannerCard}
+                  {!iconOnLeft && floatingIcon}
                 </div>
-              )}
-            </div>
-            </div>
-          ) : (
+              );
+            }
+
+            // Different corners — banner at its position, icon absolute at its corner
+            return (
+              <div
+                key={bannerAnimation}
+                className={`w-full max-w-[360px] shrink-0 ${
+                  layoutPos === 'bottom-center' ? 'self-center' : layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'
+                }`}
+              >
+                {bannerCard}
+                {floatingButton.enabled && (
+                  <div className={`absolute bottom-4 ${floatingButton.position === 'right' ? 'right-4' : 'left-4'}`}>
+                    {floatingIcon}
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
             <div className="flex w-full min-w-0 shrink-0 justify-center px-1">
             <div className="w-full max-w-[360px] min-h-0">
           {modalView === "gdpr-preferences" ? (
@@ -898,37 +839,18 @@ export default function ConsentPreview({
   borderRadius: initialLayout?.borderRadius || "12",
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
-          {/* Corner of the browser mock (default bottom-left; right when Position = bottom right) */}
-          {floatingButton.enabled ? (
+          {/* Floating icon when preference panel is open (banner not visible) */}
+          {floatingButton.enabled && modalView !== 'main' ? (
             <button
               type="button"
-              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#007aff]/50 focus:ring-offset-2 focus:ring-offset-gray-100 ${
+              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white p-0 cursor-pointer shadow-md hover:opacity-90 focus:outline-none ${
                 floatingButton.position === 'right' ? 'right-4' : 'left-4'
               }`}
-              style={
-                floatingAnchor
-                  ? ({ left: `${floatingAnchor.left}px`, top: `${floatingAnchor.top}px`, bottom: 'auto', right: 'auto' } as CSSProperties)
-                  : floatingOffsetPx
-                    ? ({ bottom: `calc(1rem + ${floatingOffsetPx}px)` } as CSSProperties)
-                    : undefined
-              }
               onClick={openPreferences}
-              aria-label={
-                content?.preferencesLabel ||
-                (selectedBannerType === 'ccpa'
-                  ? content?.doNotSellLabel || t('doNotSell')
-                  : t('preferences'))
-              }
+              aria-label={content?.preferencesLabel || t('preferences')}
             >
-              <Image
-                src={floatingBtnLogo}
-                alt=""
-                width={floatingBtnLogo.width}
-                height={floatingBtnLogo.height}
-                draggable={false}
-                className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain object-center select-none drop-shadow-md"
-                sizes="28px"
-              />
+              <Image src={floatingBtnLogo} alt="" width={floatingBtnLogo.width} height={floatingBtnLogo.height} draggable={false}
+                className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain object-center select-none drop-shadow-md" sizes="28px" />
             </button>
           ) : null}
         </div>

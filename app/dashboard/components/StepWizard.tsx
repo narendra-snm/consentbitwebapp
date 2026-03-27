@@ -13,21 +13,33 @@ export default function StepWizard({
   userName,
   organizationId,
   onWizardComplete,
+  initialStep,
+  initialSelectedPlan,
+  initialSiteData,
 }: {
   userName?: string;
   organizationId?: string | null;
   onWizardComplete?: () => void;
+  initialStep?: 1 | 2 | 3;
+  initialSelectedPlan?: 'free' | 'paid' | null;
+  initialSiteData?: {
+    scriptUrl?: string;
+    siteId?: string;
+    cdnScriptId?: string;
+    domain?: string;
+  } | null;
 }) {
   const router = useRouter();
   const { refresh } = useDashboardSession();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<1 | 2 | 3>(initialStep ?? 1);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'free' | 'paid' | null>(initialSelectedPlan ?? null);
   const [siteData, setSiteData] = useState<{
     scriptUrl?: string;
     siteId?: string;
     cdnScriptId?: string;
     domain?: string;
-  } | null>(null);
+  } | null>(initialSiteData ?? null);
 
   const nextStep = () => {
     setStep((prev) => prev + 1);
@@ -37,6 +49,7 @@ export default function StepWizard({
   const handleFreePlan = async () => {
     if (!siteData?.domain) return;
     setSetupError(null);
+    setSelectedPlan('free');
     try {
       const result = await firstSetup({ websiteUrl: siteData.domain });
       setSiteData({
@@ -56,7 +69,9 @@ export default function StepWizard({
     <div className={`${step===3 || step===2? '':'bg-white p-8 shadow-lg '}  transition-all duration-500 ease-in-out rounded-[28px]   w-full ${step === 2 ? 'max-w-[1292px]' : step === 3 ? 'max-w-[785px]' : 'max-w-[635px]'} min-h-[513px]`}>
       {/* Title */}
       <h2 className={`text-center text-2xl font-semibold  text-black font-s ${step===3?'mb-10':'my-10.5'}`}>
-        Add your first domain
+        {step === 3
+          ? (selectedPlan === 'free' ? 'Verify your installation' : 'Get your installation code')
+          : 'Add your first domain'}
       </h2>
 
       {/* Step Indicator */}
@@ -90,7 +105,36 @@ export default function StepWizard({
           />
         </>
       )}
-      {step === 3 && <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />}
+      {step === 3 && (
+        selectedPlan === 'free' ? (
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 justify-center items-start">
+            <div className="w-full lg:max-w-[720px]">
+              <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />
+            </div>
+            <div className="w-full lg:w-[270px]">
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-[#111827] mb-2">Upgrade to Basic plan</p>
+                <p className="text-xs text-[#6b7280] leading-relaxed mb-3">
+                  To enable more domains and advanced compliance, upgrade your plan anytime.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = siteData?.siteId;
+                    if (id) router.push(`/dashboard/${id}/upgrade`);
+                    else router.push('/dashboard');
+                  }}
+                  className="w-full h-[40px] flex items-center justify-center bg-[#007AFF] hover:bg-blue-700 text-white text-[13px] font-semibold rounded-md transition"
+                >
+                  Upgrade Plan Now →
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />
+        )
+      )}
     </div>
   );
 }

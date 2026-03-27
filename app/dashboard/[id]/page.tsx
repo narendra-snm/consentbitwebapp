@@ -16,6 +16,8 @@ function DashboardSitePageInner() {
   const { loading, authenticated, user, sites, setActiveSiteId, refresh } = useDashboardSession();
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const userName = useMemo(() => {
     const email = user?.email ?? "";
     return email ? email.split("@")[0] : undefined;
@@ -49,7 +51,8 @@ function DashboardSitePageInner() {
     };
   }, [refresh, router, searchParams, setActiveSiteId, siteId]);
 
-  if (loading) return null;
+  // Avoid SSR/CSR mismatches in this client page (Suspense + session state).
+  if (!hydrated || loading) return null;
 
   return (
     <div className="max-w-[1148px] mx-auto pb-4">
