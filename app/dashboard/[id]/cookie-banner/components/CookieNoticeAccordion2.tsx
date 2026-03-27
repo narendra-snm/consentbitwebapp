@@ -237,7 +237,7 @@ export function CookieNoticeAccordion2({
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-6">
                   <label
                     className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
                     style={{ fontVariationSettings: "'opsz' 14" }}

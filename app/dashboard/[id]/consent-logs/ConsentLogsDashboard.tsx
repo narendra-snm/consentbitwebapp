@@ -157,23 +157,6 @@ function displayStatus(status: string | null) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function HLine({ left, top, width }: { left: number; top: number; width: number }) {
-  return (
-    <div className="absolute h-0" style={{ left: `${left}px`, top: `${top}px`, width: `${width}px` }}>
-      <div className="absolute inset-[-1px_0_0_0]">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox={`0 0 ${width} 1`}>
-          <line opacity="0.1" stroke="black" x2={width} y1="0.5" y2="0.5" />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-const COOKIE_ROW_STEP = 62;
-const LINE_AFTER_ROW = 40;
-const CONSENT_ROW_START = 166;
-const CONSENT_ROW_STEP = 30;
-
 export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; siteDomain: string }) {
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
@@ -426,5 +409,80 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
         </div>
       </div>
     </>
+  );
+}
+
+// Consent Row Components
+function ConsentRow({ row }: { row: ConsentLog }) {
+  return (
+    <div className="flex items-start gap-20 text-sm font-medium text-[#4b5563]">
+      <span className="w-[231px] whitespace-nowrap">{formatTimeUtc(row.createdAt)}</span>
+      <span className="w-[167px] whitespace-nowrap">{displayStatus(row.status)}</span>
+      <span className="w-[174px] whitespace-nowrap">{row.consentMethod?.trim() || '—'}</span>
+      <span className="w-[537px] truncate" title={categoriesSummary(row.categories)}>
+        {categoriesSummary(row.categories)}
+      </span>
+    </div>
+  );
+}
+
+function ConsentRowPlaceholder() {
+  return (
+    <div className="flex items-start gap-20 text-sm font-medium text-[#4b5563]">
+      <span className="w-[231px] whitespace-nowrap">…</span>
+      <span className="w-[167px] whitespace-nowrap">…</span>
+      <span className="w-[174px] whitespace-nowrap">…</span>
+      <span className="w-[537px]">…</span>
+    </div>
+  );
+}
+
+function ConsentRowEmpty() {
+  return (
+    <div className="flex items-start gap-20 text-sm font-medium text-[#4b5563]">
+      <span className="w-[231px] whitespace-nowrap">—</span>
+      <span className="w-[167px] whitespace-nowrap">—</span>
+      <span className="w-[174px] whitespace-nowrap">—</span>
+      <span className="w-[537px]">—</span>
+    </div>
+  );
+}
+
+// Cookie Row Components
+function CookieRow({ cookie, isLast }: { cookie: ConsentLogCookie; isLast: boolean }) {
+  return (
+    <div className="flex items-start gap-8 border-b border-black/10 pb-5 last:border-b-0 last:pb-0">
+      <span className="w-[231px] whitespace-nowrap text-base font-medium text-[#4b5563]">
+        {cookie.name || '—'}
+      </span>
+      <span className="w-[182px] whitespace-nowrap text-base font-medium text-[#4b5563]">
+        {cookie.category || '—'}
+      </span>
+      <span 
+        className="w-[159px] max-w-[140px] truncate text-base font-medium text-[#4b5563]" 
+        title={cookie.provider ?? ''}
+      >
+        {cookie.provider?.trim() || '—'}
+      </span>
+      <span className="w-[537px] text-sm font-medium text-[#4b5563]">
+        {cookie.description?.trim() || '—'}
+      </span>
+    </div>
+  );
+}
+
+function CookieRowLoading() {
+  return (
+    <div className="text-base font-medium text-[#4b5563]">
+      Loading cookies…
+    </div>
+  );
+}
+
+function CookieRowEmpty() {
+  return (
+    <div className="max-w-[1000px] text-base font-medium text-[#4b5563]">
+      No cookies recorded yet. Run a scan to populate.
+    </div>
   );
 }

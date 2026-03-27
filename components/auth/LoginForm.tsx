@@ -111,19 +111,17 @@ export function LoginForm() {
               : step === 1 ? 'Login' : 'Verify & Login'}
           </button>
 
-          {/* Error — min-h reserves space so nothing shifts when error appears */}
-          <div className="w-full mt-3 min-h-[40px]">
-            {error && (
-              <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </div>
-            )}
-          </div>
-
-          <Link href="/signup" className="text-sm text-[#262E84] text-center mt-1">
-            Sign Up?
-          </Link>
+        {/* Footer Text */}
+        {/* <p className="text-sm text-[#262E84] text-center mt-3">
+          Please check your Email Inbox
+        </p> */}
+        <Link href="/signup" className="text-sm text-[#262E84] text-center mt-3">
+         Sign Up?
+        </Link>
+        <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 mt-2 w-full text-sm text-rose-700 ${error ? 'visible' : 'invisible'}`}>
+          {error || 'Placeholder for error message'}
         </div>
+      </div>
       </form>
     )
 }

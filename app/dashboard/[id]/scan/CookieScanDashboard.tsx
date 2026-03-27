@@ -489,7 +489,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               type="button"
               onClick={() => void handlePublishRules()}
               disabled={publishingRules || !hasDraftRules}
-              className="h-[42px] rounded-[11px] border-2 border-[rgba(46,192,79,0.1)] bg-[#2ec04f] px-[11px] font-['DM_Sans'] text-sm font-medium text-white transition-colors hover:bg-[#26a342] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-[42px] rounded-[11px] border-2  bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] px-[11px] font-['DM_Sans'] text-sm font-medium text-white transition-colors hover:bg-[#26a342] disabled:opacity-50 disabled:cursor-not-allowed"
               style={dm}
             >
               {publishingRules ? 'Publishing…' : 'Publish Changes'}
@@ -497,7 +497,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-[200px_1fr] gap-[28px]">
+        <div className="grid grid-cols-[261px_1fr] gap-[28px]">
           <div className="space-y-1">
             {ALL_CATEGORIES.map((cat) => {
               const count = categoryCounts[cat] ?? 0;
@@ -506,13 +506,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => { setSelectedCategory(cat); setCookiePage(1); }}
-                  className={`w-full rounded-lg py-[7px] px-3 text-left ${
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`w-full rounded-2xl py-[17px] px-3 text-left ${
                     active ? 'bg-[#f1f5f9]' : 'bg-transparent'
                   }`}
                 >
                   <p
-                    className={`font-['DM_Sans'] text-sm ${active ? 'font-medium text-black' : 'font-normal text-[#111827]'}`}
+                    className={`font-['DM_Sans'] text-base ${active ? 'font-medium text-black' : 'font-normal text-[#111827]'}`}
                     style={dm}
                   >
                     {CATEGORY_LABELS[cat] ?? cat} ({count} Cookie{count !== 1 ? 's' : ''})

@@ -8,7 +8,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
       {/* ITEM 1 */}
       <div className="pr-6 flex flex-col">
         <div>
-          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-3 py-1 rounded-full ">
+          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
             Get Started
           </span>
 
@@ -21,7 +21,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
           </p>
         </div>
 
-        <div className="flex items-center gap-3 pt-5.75">
+        <div className="flex items-center gap-3 pt-5.75 mt-auto">
           <a
             href="https://docs.consentbit.com"
             target="_blank"
@@ -49,7 +49,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
       {/* ITEM 2 */}
       <div className="px-6 flex flex-col">
         <div>
-          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-3 py-1 rounded-full font-medium">
+          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
             Suggestion
           </span>
 
@@ -82,15 +82,15 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
       {/* ITEM 3 */}
       <div className="px-6 flex flex-col">
         <div>
-          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-3 py-1 rounded-full font-medium">
+          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
             Suggestion
           </span>
 
-          <h3 className="mt-3 font-semibold text-gray-900">
+          <h3 className="mt-3 font-semibold ">
             Customize your banner design
           </h3>
 
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm  mt-1">
             Customize colors, buttons, and layout to make your consent banner match your brand.
           </p>
         </div>
@@ -114,15 +114,15 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
       {/* ITEM 4 */}
       <div className="pl-6 flex flex-col">
         <div>
-          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-3 py-1 rounded-full font-medium">
+          <span className="text-xs bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
             Suggestion
           </span>
 
-          <h3 className="mt-3 font-semibold text-gray-900">
+          <h3 className="mt-3 font-semibold ">
             Pick a plan
           </h3>
 
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm  mt-1">
             Choose a subscription plan to continue using all features.
           </p>
         </div>

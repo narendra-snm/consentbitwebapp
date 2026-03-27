@@ -254,7 +254,7 @@ export async function saveBannerCustomization(payload: { siteId: string; customi
 // payments starts here — matches consent-manager tier checkout (planId + interval + siteId)
 export type CreateCheckoutPayload = {
   organizationId: string;
-  planId: 'basic' | 'essential' | 'growth';
+  planId: 'basic' | 'essential' | 'growth' | 'free';
   interval: 'monthly' | 'yearly';
   siteId?: string | null;
   siteName?: string | null;

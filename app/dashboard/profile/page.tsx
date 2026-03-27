@@ -263,43 +263,43 @@ export default function SettingsPage() {
           </button>
 
           {/* Billing Tab */}
-          <button onClick={() => setActiveTab("billing")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("billing") ? "bg-[#e6f1fd]" : ""}`}>
+          <button onClick={() => setActiveTab("billing")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("billing") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("billing") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
             <div className="size-[24px]">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.37 8.88086H17.62" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6.38 8.88086L7.13 9.63086L9.38 7.38086" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12.37 15.8809H17.62" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6.38 15.8809L7.13 16.6309L9.38 14.3809" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12.37 8.88086H17.62" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6.38 8.88086L7.13 9.63086L9.38 7.38086" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12.37 15.8809H17.62" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6.38 15.8809L7.13 16.6309L9.38 14.3809" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <p className={`text-[16px] tracking-[-0.48px] ${isActive("billing") ? "text-[#007aff]" : "text-[#111827]"}`}>Billing</p>
           </button>
 
           {/* Organizations Tab */}
-          <button onClick={() => setActiveTab("organizations")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("organizations") ? "bg-[#e6f1fd]" : ""}`}>
+          <button onClick={() => setActiveTab("organizations")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("organizations") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("organizations") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
             <div className="size-[24px]">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" stroke="#292D32" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M5 22H7C9 22 10 21 10 19V17C10 15 9 14 7 14H5C3 14 2 15 2 17V19C2 21 3 22 5 22Z" stroke="#292D32" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6 10C8.20914 10 10 8.20914 10 6C10 3.79086 8.20914 2 6 2C3.79086 2 2 3.79086 2 6C2 8.20914 3.79086 10 6 10Z" stroke="#292D32" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M18 22C20.2091 22 22 20.2091 22 18C22 15.7909 20.2091 14 18 14C15.7909 14 14 15.7909 14 18C14 20.2091 15.7909 22 18 22Z" stroke="#292D32" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5 22H7C9 22 10 21 10 19V17C10 15 9 14 7 14H5C3 14 2 15 2 17V19C2 21 3 22 5 22Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6 10C8.20914 10 10 8.20914 10 6C10 3.79086 8.20914 2 6 2C3.79086 2 2 3.79086 2 6C2 8.20914 3.79086 10 6 10Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M18 22C20.2091 22 22 20.2091 22 18C22 15.7909 20.2091 14 18 14C15.7909 14 14 15.7909 14 18C14 20.2091 15.7909 22 18 22Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <p className={`text-[16px] tracking-[-0.48px] ${isActive("organizations") ? "text-[#007aff]" : "text-[#111827]"}`}>Organizations</p>
           </button>
 
           {/* Usage Overview Tab */}
-          <button onClick={() => setActiveTab("usage")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("usage") ? "bg-[#e6f1fd]" : ""}`}>
+          <button onClick={() => setActiveTab("usage")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("usage") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("usage") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
             <div className="size-[24px]">
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11 0.25C16.9273 0.25 21.75 5.07267 21.75 11C21.75 16.9273 16.9273 21.75 11 21.75C5.07267 21.75 0.25 16.9273 0.25 11C0.25 5.07267 5.07267 0.25 11 0.25ZM9.86914 2.02832C5.41332 2.58827 1.9502 6.39266 1.9502 11C1.9502 15.9902 6.00983 20.0498 11 20.0498C12.3113 20.0485 13.6067 19.7606 14.7949 19.2061L15.0508 19.0869L14.9014 18.8467L10.2793 11.4512L10.2783 11.4502C10.282 11.456 10.2818 11.4586 10.2764 11.4443C10.2749 11.4405 10.2695 11.4248 10.2656 11.415C10.2609 11.403 10.2546 11.3872 10.2461 11.3701L10.2441 11.3672L10.2051 11.2783C10.1823 11.2181 10.1658 11.1556 10.1572 11.0918L10.1504 10.9951V1.99219L9.86914 2.02832ZM12.7734 12.2324L16.3447 17.9482L16.4951 18.1885L16.7148 18.0098C18.5154 16.5416 19.6816 14.4359 19.9717 12.1309L20.0078 11.8496H12.5342L12.7734 12.2324ZM11.8496 10.1504H20.0078L19.9717 9.86816C19.7178 7.87751 18.8106 6.0274 17.3916 4.6084C15.9726 3.18939 14.1225 2.28216 12.1318 2.02832L11.8496 1.99219V10.1504Z" fill="#292D32" stroke="white" strokeWidth="0.5" />
+                <path d="M11 0.25C16.9273 0.25 21.75 5.07267 21.75 11C21.75 16.9273 16.9273 21.75 11 21.75C5.07267 21.75 0.25 16.9273 0.25 11C0.25 5.07267 5.07267 0.25 11 0.25ZM9.86914 2.02832C5.41332 2.58827 1.9502 6.39266 1.9502 11C1.9502 15.9902 6.00983 20.0498 11 20.0498C12.3113 20.0485 13.6067 19.7606 14.7949 19.2061L15.0508 19.0869L14.9014 18.8467L10.2793 11.4512L10.2783 11.4502C10.282 11.456 10.2818 11.4586 10.2764 11.4443C10.2749 11.4405 10.2695 11.4248 10.2656 11.415C10.2609 11.403 10.2546 11.3872 10.2461 11.3701L10.2441 11.3672L10.2051 11.2783C10.1823 11.2181 10.1658 11.1556 10.1572 11.0918L10.1504 10.9951V1.99219L9.86914 2.02832ZM12.7734 12.2324L16.3447 17.9482L16.4951 18.1885L16.7148 18.0098C18.5154 16.5416 19.6816 14.4359 19.9717 12.1309L20.0078 11.8496H12.5342L12.7734 12.2324ZM11.8496 10.1504H20.0078L19.9717 9.86816C19.7178 7.87751 18.8106 6.0274 17.3916 4.6084C15.9726 3.18939 14.1225 2.28216 12.1318 2.02832L11.8496 1.99219V10.1504Z" fill="currentColor" stroke="white" strokeWidth="0.5" />
               </svg>
             </div>
-            <p className={`text-[16px] tracking-[-0.48px] ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
+            <p className={`text-[16px] text-left tracking-[-0.48px] ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
           </button>
         </div>
 
@@ -321,7 +321,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Organizations Table */}
-              <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] max-w-[1165px]">
+              <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] ">
                 {/* Table Header */}
                 <div className="px-[13px] py-[20px] border-b border-black/10">
                   <div className="flex items-center justify-between mb-[29px]">

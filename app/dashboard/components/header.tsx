@@ -82,17 +82,21 @@ export default function Header() {
         <div ref={domainRef} className="relative flex items-center gap-2">
           <button
             onClick={() => setDomainOpen(!domainOpen)}
-            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] rounded-md px-3 py-2 text-sm"
+            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm"
             suppressHydrationWarning
           >
-            {displayDomain}
+            {displayDomain} 
+            <svg width="10" height="5" viewBox="0 0 10 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 0.5L3.26857 3.16493C4.04299 3.91036 5.26812 3.91036 6.04254 3.16493L8.81111 0.5" stroke="black" stroke-linecap="round"/>
+</svg>
+
           </button>
 
           <button onClick={() =>{ 
             setAddSiteOpen(true)
             setDomainOpen(false)
 
-          }}  className="w-8 cursor-pointer h-8 flex items-center justify-center rounded-md bg-[#E6F1FD] text-[#007AFF]">
+          }}  className="w-9 cursor-pointer h-9 flex items-center justify-center rounded-md bg-[#E6F1FD] text-[#007AFF]">
             <Plus size={16} />
           </button>
 
@@ -110,9 +114,9 @@ export default function Header() {
                 </div>
               ))}
 
-              <div className="border-t" />
+              <div className="border-t border-[#00000010]" />
 
-              <div className="flex justify-between px-4 py-3 text-sm">
+              <div className="flex justify-between px-4 py-3 text-[15px] font-medium">
                 <button className="text-[#007AFF] cursor-pointer" onClick={()=>router.push("/dashboard/all-domain")}>View All →</button>
                 <button className="text-[#007AFF] cursor-pointer" onClick={() =>{ 
             setAddSiteOpen(true)
@@ -137,7 +141,7 @@ export default function Header() {
       <div className="flex items-center gap-4">
         {/* PLAN */}
         <div className="flex items-center text-xs bg-[#E6F1FD] border border-[#E6F1FD] rounded-lg overflow-hidden">
-          <span className="px-2 py-3.5 bg-gray-100 text-gray-600">
+          <span className="px-2 py-3.5 bg-[#ffffff] ">
             Current Plan :
           </span>
           <button
@@ -162,7 +166,7 @@ export default function Header() {
             if (id) router.push(`/dashboard/${id}/upgrade`);
             else router.push("/dashboard");
           }}
-          className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-sm"
+          className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
           suppressHydrationWarning
         >
           {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}

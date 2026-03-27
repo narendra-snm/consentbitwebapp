@@ -67,13 +67,13 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
 
     return (
       <div className="flex items-center justify-between">
-        <label className="text-sm text-[#374151]">{label}</label>
+        <label className="text-sm text-[#111827]">{label}</label>
 
         <div className="relative">
           <button
             type="button"
             onClick={() => setOpen(!open)}
-            className="flex items-center w-[150px] h-[36px] bg-[#F3F4F6] border border-[#E5E5E5] rounded-lg overflow-hidden"
+            className="flex items-center w-[150px] h-[36px] bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg overflow-hidden"
           >
             <div
               className="w-[42px] h-full"
@@ -100,7 +100,7 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
   return (
     <div className="w-full max-w-[454px] space-y-4">
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
-        <h3 className="text-base font-semibold text-[#111827] mb-5">
+        <h3 className="text-base font-semibold  mb-5">
           General Colors
         </h3>
 
@@ -126,7 +126,7 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
       </div>
 
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
-        <h3 className="text-base font-semibold text-[#111827] mb-5">
+        <h3 className="text-base font-semibold  mb-5">
           Buttons colors
         </h3>
 

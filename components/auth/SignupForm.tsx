@@ -117,7 +117,7 @@ export function SignupForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#2C3E8F] hover:bg-[#24347a] text-white py-6 rounded-md transition disabled:opacity-70"
+          className="w-full bg-[#262E84] hover:bg-[#24347a] text-white py-6 rounded-md transition disabled:opacity-70"
         >
           {loading
             ? step === 1 ? 'Sending code…' : 'Verifying…'
@@ -136,6 +136,9 @@ export function SignupForm() {
         <Link href="/login" className="text-sm text-[#262E84] text-center mt-1">
           Login?
         </Link>
+        <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 mt-2 w-full text-sm text-rose-700 ${error ? 'visible' : 'invisible'}`}>
+          {error || 'Placeholder for error message'}
+        </div>
       </div>
     </form>
   );

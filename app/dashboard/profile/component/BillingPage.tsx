@@ -343,7 +343,7 @@ export default function BillingPage({
       {/* Left Column - Invoices */}
       <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
         {/* Header with Filters */}
-        <div className="flex items-center justify-between mb-[30px]">
+        <div className="flex items-center justify-between mb-[20px]">
           <p className="font-semibold leading-[20px] text-[16px] text-black tracking-[-1px]" style={{ fontVariationSettings: "'opsz' 14" }}>
             Invoices
           </p>
@@ -353,7 +353,7 @@ export default function BillingPage({
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-black outline-none cursor-pointer"
+                className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-black outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 <option value="all">Year</option>
@@ -371,7 +371,7 @@ export default function BillingPage({
               <select
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
-                className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-black outline-none cursor-pointer"
+                className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-black outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 <option value="all">Month</option>
@@ -389,7 +389,7 @@ export default function BillingPage({
               <select
                 value={filterDomain}
                 onChange={(e) => setFilterDomain(e.target.value)}
-                className="appearance-none bg-white border border-[#e5e5e5] rounded-[5px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
+                className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 <option value="all">All Domains ({domainCount})</option>
@@ -406,17 +406,29 @@ export default function BillingPage({
           </div>
         </div>
 
-        {/* Table Header */}
-        <div className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] mb-[16px]">
-          {["Issue Date", "Invoice Number", "Amount", "Payment Method", "Status"].map((h) => (
-            <p key={h} className="font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{h}</p>
-          ))}
-        </div>
+            {/* Table Header */}
+            <div className="grid grid-cols-[100px_150px_90px_120px_90px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Issue Date
+              </p>
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Invoice Number
+              </p>
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Amount
+              </p>
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Payment Method
+              </p>
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Status
+              </p>
+            </div>
 
         {/* Table Rows */}
         <div className="space-y-[20px] pb-6">
           {invoices.map((invoice, index) => (
-            <div key={index} className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] items-center">
+            <div key={index} className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.date}</p>
 
               <div className="flex items-center gap-[6px]">

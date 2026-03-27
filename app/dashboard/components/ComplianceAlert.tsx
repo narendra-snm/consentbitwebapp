@@ -17,21 +17,18 @@ export default function ComplianceAlert({
   if (!visible) return null;
 
   return (
-    <div className="w-full mt-4.25">
+    <div className="w-full  mt-4.25">
 
       {/* Greeting */}
-      <div className="flex items-center gap-2.5 mb-5">
-        <p className="text-[18px] font-semibold text-[#111827]">
-          Hi, {userName || "there"}!
+      <p className="text-[17px]  ">
+        Hi {userName || "there"}! <br />
         </p>
-        <span className="text-[#D1D5DB] text-lg select-none">|</span>
-        <p className="text-[14px] text-[#6B7280]">
-          Viewing dashboard for{" "}
-          <span className="text-[#007AFF] font-semibold hover:underline cursor-pointer">
-            {siteDomain || "—"}
-          </span>
-        </p>
-      </div>
+      <p className="text-[17px] text-[#4B5563] mb-5">
+        You are currently viewing the dashboard for{" "}
+        <span className="text-blue-600 font-medium cursor-pointer hover:underline">
+          {siteDomain || "—"}
+        </span>
+      </p>
 
       {/* Alert Box */}
       <div className="flex items-start justify-between relative pr-13.5 bg-[#FFEFEF] border border-[#FFEFEF] rounded-[10px] p-4">
@@ -51,7 +48,7 @@ export default function ComplianceAlert({
               Compliance alert: Cookie banner {bannerActive ? "active" : "missing"}
             </p>
 
-            <p className="text-sm text-[#AC2734] mt-1 max-w-[808px] font-semibold">
+            <p className="text-sm text-[#AC2734] mt-1 max-w-[808px] font-medium">
               Your site currently sets no cookies, but future updates or
               third-party tools could introduce them without warning. This can
               put you at risk of non-compliance with US state privacy laws.
@@ -63,16 +60,16 @@ export default function ComplianceAlert({
         <div className="flex items-center gap-4">
 
           {/* Button */}
-          <button className="bg-[#007AFF] py-2 px-2.5 mt-2 hover:bg-blue-700 text-white text-sm  rounded-md font-medium">
+          <button className="bg-[#007AFF] py-2 px-2.5 mt-2 hover:bg-blue-700 text-white text-[15px] rounded-md ">
             {bannerActive ? "Review banner settings" : "Enable consent banner"}
           </button>
 
           {/* Close */}
           <button
             onClick={() => setVisible(false)}
-            className="text-gray-400 hover:text-gray-600 absolute top-2 right-2"
+            className="text-gray-400 hover:text-gray-600 absolute top-6 right-2.75"
           >
-            <X size={16} />
+            <X size={16} className="text-[#2B2B2B]"/>
           </button>
 
         </div>
