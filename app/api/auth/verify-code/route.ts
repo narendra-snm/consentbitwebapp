@@ -6,6 +6,13 @@ export const runtime = 'edge';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log('[Next proxy][verify-code] body received', {
+      emailPresent: Boolean(body?.email),
+      purpose: body?.purpose,
+      codeLen: String(body?.code || '').length,
+      origin: request.headers.get('origin') || null,
+      referer: request.headers.get('referer') || null,
+    });
 
     const workerRes = await serverFetch('/api/auth/verify-code', {
       method: 'POST',
@@ -17,6 +24,7 @@ export async function POST(request: Request) {
     const payload = contentType.toLowerCase().includes('application/json')
       ? await workerRes.json().catch(async () => ({ success: false, error: await workerRes.text() }))
       : { success: false, error: await workerRes.text() };
+    console.log('[Next proxy][verify-code] worker response', { status: workerRes.status, success: payload?.success });
 
     const res = NextResponse.json(payload, { status: workerRes.status });
 

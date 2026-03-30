@@ -20,6 +20,8 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const otpWrapRef = useRef<HTMLDivElement | null>(null);
+  const urlWantsVerify = (searchParams?.get("step") || "").toLowerCase() === "verify";
+  const effectiveStep: 1 | 2 = urlWantsVerify ? 2 : step;
 
   // Allow deep-link / refresh into OTP step: /signup?step=verify&email=...
   useEffect(() => {
@@ -37,18 +39,21 @@ export function SignupForm() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (step !== 2) return;
+    if (effectiveStep !== 2) return;
     // Ensure the OTP UI is visible even on small viewports
     window.setTimeout(() => {
       otpWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 0);
-  }, [step]);
+  }, [effectiveStep]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    try {
+      console.debug('[SignupForm] submit', { effectiveStep, emailPresent: Boolean(email), namePresent: Boolean(name) });
+    } catch {}
 
     // Client-side validation — no API call made for invalid/empty inputs
-    if (step === 1) {
+    if (effectiveStep === 1) {
       if (!name.trim()) {
         setError('Please enter your name.');
         return;
@@ -71,8 +76,11 @@ export function SignupForm() {
     setError(null);
     setLoading(true);
     try {
-      if (step === 1) {
+      if (effectiveStep === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
+        try {
+          console.debug('[SignupForm] request-code ok, switching to step=verify');
+        } catch {}
         setStep(2);
         // Persist step in URL so the OTP screen reliably shows (even after reload)
         router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}`);
@@ -84,12 +92,12 @@ export function SignupForm() {
       const msg =
         err instanceof Error
           ? err.message
-          : step === 1
+          : effectiveStep === 1
           ? 'Failed to send code. Please try again.'
           : 'Signup failed. Please try again.';
 
       // If the email already exists, send them to login (common confusion).
-      if (step === 1 && /already exists|log in instead/i.test(msg)) {
+      if (effectiveStep === 1 && /already exists|log in instead/i.test(msg)) {
         router.push(`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
         return;
       }
@@ -114,7 +122,7 @@ export function SignupForm() {
           placeholder="Name"
           value={name}
           onChange={e => { setName(e.target.value); setError(null); }}
-          disabled={loading || step === 2}
+          disabled={loading || effectiveStep === 2}
           className="w-full border text-lg mb-10 border-gray-300 rounded-[9px] px-4 py-4 bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#262E84] placeholder:text-[#262E84]"
         />
 
@@ -124,19 +132,19 @@ export function SignupForm() {
           placeholder="Email ID"
           value={email}
           onChange={e => { setEmail(e.target.value); setError(null); }}
-          disabled={loading || step === 2}
+          disabled={loading || effectiveStep === 2}
           className="w-full border mb-10 text-lg border-gray-300 rounded-[9px] px-4 py-4 bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#262E84] placeholder:text-[#262E84]"
         />
 
         {/* Helper Text */}
         <p className="text-sm text-[#262E84] text-center mb-10">
-          {step === 1
+          {effectiveStep === 1
             ? '*Please use the exact mail as the webflow native app/iframe native app'
             : `A verification code has been sent to ${email}. Please check your inbox.`}
         </p>
 
         {/* Verification Code */}
-        {step === 2 && (
+        {effectiveStep === 2 && (
           <div ref={otpWrapRef} className="mb-10">
             <OtpInput
               value={code}
@@ -154,8 +162,8 @@ export function SignupForm() {
           className="w-full bg-[#262E84] hover:bg-[#24347a] text-white py-6 rounded-md transition disabled:opacity-70"
         >
           {loading
-            ? step === 1 ? 'Sending code…' : 'Verifying…'
-            : step === 1 ? 'Send code' : 'Verify & Sign Up'}
+            ? effectiveStep === 1 ? 'Sending code…' : 'Verifying…'
+            : effectiveStep === 1 ? 'Send code' : 'Verify & Sign Up'}
         </button>
 
         {/* Error — min-h reserves space so nothing shifts when error appears */}

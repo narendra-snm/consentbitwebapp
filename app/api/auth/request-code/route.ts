@@ -10,6 +10,8 @@ export async function POST(request: Request) {
       emailPresent: Boolean(body?.email),
       purpose: body?.purpose,
       namePresent: Boolean(body?.name),
+      origin: request.headers.get('origin') || null,
+      referer: request.headers.get('referer') || null,
     });
 
     const workerRes = await serverFetch('/api/auth/request-code', {
@@ -19,6 +21,10 @@ export async function POST(request: Request) {
     });
 
     const text = await workerRes.text().catch(() => '');
+    console.log('[Next proxy][request-code] worker raw snippet', {
+      status: workerRes.status,
+      body: String(text || '').slice(0, 180),
+    });
     const data = (() => {
       try {
         return JSON.parse(text);
