@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";         
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
@@ -18,6 +18,15 @@ export function SignupForm() {
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const otpWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (step !== 2) return;
+    // Ensure the OTP UI is visible even on small viewports
+    window.setTimeout(() => {
+      otpWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  }, [step]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,13 +63,20 @@ export function SignupForm() {
         router.push('/dashboard');
       }
     } catch (err: unknown) {
-      setError(
+      const msg =
         err instanceof Error
           ? err.message
           : step === 1
           ? 'Failed to send code. Please try again.'
-          : 'Signup failed. Please try again.'
-      );
+          : 'Signup failed. Please try again.';
+
+      // If the email already exists, send them to login (common confusion).
+      if (step === 1 && /already exists|log in instead/i.test(msg)) {
+        router.push(`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        return;
+      }
+
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -103,7 +119,7 @@ export function SignupForm() {
 
         {/* Verification Code */}
         {step === 2 && (
-          <div className="mb-10">
+          <div ref={otpWrapRef} className="mb-10">
             <OtpInput
               value={code}
               onChange={val => { setCode(val); setError(null); }}
@@ -136,9 +152,6 @@ export function SignupForm() {
         <Link href="/login" className="text-sm text-[#262E84] text-center mt-1">
           Login?
         </Link>
-        <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 mt-2 w-full text-sm text-rose-700 ${error ? 'visible' : 'invisible'}`}>
-          {error || 'Placeholder for error message'}
-        </div>
       </div>
     </form>
   );
