@@ -49,7 +49,7 @@ export function SignupForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      console.debug('[SignupForm] submit', { effectiveStep, emailPresent: Boolean(email), namePresent: Boolean(name) });
+      console.log('[SignupForm] submit', { effectiveStep, emailPresent: Boolean(email), namePresent: Boolean(name) });
     } catch {}
 
     // Client-side validation — no API call made for invalid/empty inputs
@@ -79,7 +79,7 @@ export function SignupForm() {
       if (effectiveStep === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
         try {
-          console.debug('[SignupForm] request-code ok, switching to step=verify');
+          console.log('[SignupForm] request-code ok, switching to step=verify');
         } catch {}
         setStep(2);
         // Persist step in URL so the OTP screen reliably shows (even after reload)
@@ -89,6 +89,9 @@ export function SignupForm() {
         router.push('/dashboard');
       }
     } catch (err: unknown) {
+      try {
+        console.log('[SignupForm] submit failed', err);
+      } catch {}
       const msg =
         err instanceof Error
           ? err.message

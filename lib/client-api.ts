@@ -78,6 +78,18 @@ export async function requestVerificationCode(payload: {
     }),
   });
   const data = await parseApiResponse(res);
+  try {
+    console.log('[requestVerificationCode] response', {
+      status: res.status,
+      ok: res.ok,
+      keys: data && typeof data === 'object' ? Object.keys(data) : null,
+      success: data?.success,
+      hasRequestId: typeof data?.requestId === 'string',
+      hasExpiresAt: typeof data?.expiresAt === 'string',
+      hasEnvelope: typeof data?.d === 'string',
+      error: data?.error,
+    });
+  } catch {}
   const success =
     Boolean(data?.success) ||
     (res.ok && (typeof data?.requestId === 'string' || typeof data?.expiresAt === 'string' || typeof data?.code === 'string'));
