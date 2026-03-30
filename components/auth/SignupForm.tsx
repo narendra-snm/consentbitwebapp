@@ -22,6 +22,9 @@ export function SignupForm() {
   const otpWrapRef = useRef<HTMLDivElement | null>(null);
   const urlWantsVerify = (searchParams?.get("step") || "").toLowerCase() === "verify";
   const effectiveStep: 1 | 2 = urlWantsVerify ? 2 : step;
+  const debugEnabled = (searchParams?.get("debug") || "") === "1";
+  const [debugLine, setDebugLine] = useState<string>("");
+  const PENDING_KEY = "cb_signup_pending_otp";
 
   // Allow deep-link / refresh into OTP step: /signup?step=verify&email=...
   useEffect(() => {
@@ -38,6 +41,29 @@ export function SignupForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Production-safe fallback: if the app remounts and URL params are lost/stripped,
+  // restore Step 2 from sessionStorage (valid for ~15 minutes).
+  useEffect(() => {
+    if (urlWantsVerify) return; // URL is the strongest signal
+    try {
+      const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(PENDING_KEY) : null;
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { email?: string; name?: string; ts?: number };
+      const ts = Number(parsed?.ts || 0);
+      if (!ts || Date.now() - ts > 15 * 60 * 1000) {
+        sessionStorage.removeItem(PENDING_KEY);
+        return;
+      }
+      if (parsed?.email && !email) setEmail(String(parsed.email));
+      if (parsed?.name && !name) setName(String(parsed.name));
+      setStep(2);
+      if (debugEnabled) setDebugLine("restored step=2 from sessionStorage");
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debugEnabled, urlWantsVerify]);
+
   useEffect(() => {
     if (effectiveStep !== 2) return;
     // Ensure the OTP UI is visible even on small viewports
@@ -51,6 +77,7 @@ export function SignupForm() {
     try {
       console.log('[SignupForm] submit', { effectiveStep, emailPresent: Boolean(email), namePresent: Boolean(name) });
     } catch {}
+    if (debugEnabled) setDebugLine(`submit fired; step=${effectiveStep}; urlStep=${urlWantsVerify ? "verify" : "none"}`);
 
     // Client-side validation — no API call made for invalid/empty inputs
     if (effectiveStep === 1) {
@@ -75,17 +102,26 @@ export function SignupForm() {
 
     setError(null);
     setLoading(true);
+    if (debugEnabled) setDebugLine(`request started; step=${effectiveStep}`);
     try {
       if (effectiveStep === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
         try {
           console.log('[SignupForm] request-code ok, switching to step=verify');
         } catch {}
+        if (debugEnabled) setDebugLine(`request-code ok; navigating to step=verify`);
         setStep(2);
+        try {
+          sessionStorage.setItem(
+            PENDING_KEY,
+            JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim(), ts: Date.now() }),
+          );
+        } catch {}
         // Persist step in URL so the OTP screen reliably shows (even after reload)
-        router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}`);
+        router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}${debugEnabled ? "&debug=1" : ""}`);
       } else {
         await verifyVerificationCode({ email, purpose: 'signup', code });
+        try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         router.push('/dashboard');
       }
     } catch (err: unknown) {
@@ -105,6 +141,7 @@ export function SignupForm() {
         return;
       }
 
+      if (debugEnabled) setDebugLine(`request failed: ${msg}`);
       setError(msg);
     } finally {
       setLoading(false);
@@ -181,6 +218,17 @@ export function SignupForm() {
         <Link href="/login" className="text-sm text-[#262E84] text-center mt-1">
           Login?
         </Link>
+
+        {debugEnabled && (
+          <div className="w-full mt-3 rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-[11px] text-slate-700">
+            <div><strong>Debug</strong></div>
+            <div>effectiveStep: {effectiveStep}</div>
+            <div>url step=verify: {urlWantsVerify ? "true" : "false"}</div>
+            <div>loading: {loading ? "true" : "false"}</div>
+            <div>line: {debugLine || "—"}</div>
+            <div>url: {typeof window !== "undefined" ? window.location.href : "—"}</div>
+          </div>
+        )}
       </div>
     </form>
   );
