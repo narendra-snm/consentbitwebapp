@@ -116,7 +116,11 @@ export async function verifyVerificationCode(payload: {
   if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
   // Cache dashboard data so the provider renders instantly after navigation
   if (data.dashboardInit?.authenticated) {
-    try { sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit)); } catch {}
+    try {
+      sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit));
+      // Used by DashboardSessionProvider to avoid showing stale cached data from another user.
+      sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    } catch {}
   }
   return data;
 }
@@ -323,6 +327,8 @@ export type BillingInvoice = {
   created: string | null;
   hostedInvoiceUrl: string | null;
   invoicePdf: string | null;
+  /** Site whose Stripe subscription produced this invoice, when known */
+  siteId?: string | null;
 };
 
 export async function getBillingInvoices(
@@ -333,9 +339,7 @@ export async function getBillingInvoices(
     `/api/billing/invoices?organizationId=${encodeURIComponent(organizationId)}&limit=${limit}`,
     { credentials: "include" },
   );
-  const data = await res
-    .json()
-    .catch(async () => ({ error: await res.text(), invoices: [] }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || `Billing invoices failed: ${res.status}`);
   return data as { invoices: BillingInvoice[] };
 }
@@ -362,9 +366,7 @@ export async function getBillingUsage(
     `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}${siteParam}`,
     { credentials: "include" },
   );
-  const data = await res
-    .json()
-    .catch(async () => ({ error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || `Billing usage failed: ${res.status}`);
   return data as BillingUsage;
 }
@@ -430,6 +432,8 @@ export type ScanHistoryRow = {
   scanUrl: string | null;
   scriptsFound: number;
   cookiesFound: number;
+  /** Distinct cookie category keys for this scan (e.g. analytics, necessary). */
+  categories?: string[];
   scanDuration: number | null;
   scanStatus: string;
   createdAt: string;

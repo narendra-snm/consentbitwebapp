@@ -42,6 +42,7 @@ const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
 
 const SESSION_CACHE_KEY = "cbSessionCache";
 const SESSION_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+const LAST_USER_KEY = "cbLastUserEmail";
 
 function readSessionCache(): any | null {
   try {
@@ -49,7 +50,14 @@ function readSessionCache(): any | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { data: any; ts: number };
     if (Date.now() - parsed.ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(SESSION_CACHE_KEY); return null; }
-    return parsed.data;
+    const cached = parsed.data;
+    // Prevent "previous user flashes": only use cached dashboard data if it matches
+    // the last authenticated email we recorded for this browser session.
+    const lastEmail =
+      typeof sessionStorage !== "undefined" ? (sessionStorage.getItem(LAST_USER_KEY) || "").trim().toLowerCase() : "";
+    const cachedEmail = String(cached?.user?.email || "").trim().toLowerCase();
+    if (lastEmail && cachedEmail && lastEmail !== cachedEmail) return null;
+    return cached;
   } catch { return null; }
 }
 
@@ -57,6 +65,8 @@ function writeSessionCache(data: any) {
   try {
     if (typeof sessionStorage !== "undefined") {
       sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+      const email = String(data?.user?.email || "").trim().toLowerCase();
+      if (email) sessionStorage.setItem(LAST_USER_KEY, email);
     }
   } catch { /* ignore quota errors */ }
 }
@@ -172,6 +182,7 @@ export function DashboardSessionProvider({
           if (typeof sessionStorage !== "undefined") {
             sessionStorage.removeItem(SESSION_CACHE_KEY);
             sessionStorage.removeItem("dashboardInit");
+            sessionStorage.removeItem("cbLastUserEmail");
           }
         } catch { /* ignore */ }
         setState({
@@ -231,10 +242,12 @@ export function DashboardSessionProvider({
     }
   }, []);
 
-  // Only fetch on mount when we don't already have fresh data (sessionStorage / SSR initialData).
+  // Always reconcile with the server on mount. Seeded/cached sessions used to skip this entirely,
+  // so fields like `pagesScanned` from dashboard-init never arrived (UI showed "—").
   useEffect(() => {
-    if (skipInitialRefresh.current) return;
-    void refresh();
+    const silent = skipInitialRefresh.current;
+    skipInitialRefresh.current = false;
+    void refresh({ showLoading: !silent });
   }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
@@ -278,6 +291,7 @@ export function DashboardSessionProvider({
         if (typeof sessionStorage !== "undefined") {
           sessionStorage.removeItem(SESSION_CACHE_KEY);
           sessionStorage.removeItem("dashboardInit");
+          sessionStorage.removeItem("cbLastUserEmail");
         }
       } catch { /* ignore */ }
       setState({

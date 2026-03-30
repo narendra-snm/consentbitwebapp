@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   addCustomCookieRule,
   deleteCustomCookieRule,
@@ -63,6 +64,25 @@ const ALL_CATEGORIES = [
 
 /** Plus icon in Add Cookie button (original scan UI) */
 const ICON_PLUS = 'M3.13333 8V0H4.85V8H3.13333ZM0 4.88889V3.11111H8V4.88889H0Z';
+
+/** Wall-clock in the user’s browser timezone (for scan times chosen in the schedule UI). */
+function formatLocalDateTime(dateString: string) {
+  try {
+    const d = new Date(dateString);
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZoneName: 'short',
+    });
+  } catch {
+    return dateString;
+  }
+}
 
 function formatDateUtc(dateString: string) {
   try {
@@ -141,13 +161,24 @@ function writeScanCache(siteId: string, data: ScanCache) {
 }
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
-  const { refresh, sites, effectivePlanId, activeOrganizationId } = useDashboardSession();
+  const router = useRouter();
+  const { refresh, sites, effectivePlanId, activeOrganizationId, loading: sessionLoading, authenticated } =
+    useDashboardSession();
+  const siteList = useMemo(() => (Array.isArray(sites) ? sites : []), [sites]);
+  const siteKnown = useMemo(
+    () => siteList.some((s: any) => String(s?.id) === String(siteId)),
+    [siteList, siteId],
+  );
+  const sitesRef = useRef(siteList);
+  sitesRef.current = siteList;
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
   const [customRules, setCustomRules] = useState<CustomCookieRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Validation / save errors for the Add Cookie modal only (not the page banner). */
+  const [addCookieError, setAddCookieError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const scanningRef = useRef(false); // ref guard prevents double-invocation from stale closure
 
@@ -168,6 +199,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   const hasDraftRules = useMemo(() => customRules.some((r) => r.published === 0), [customRules]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  /** No sites on account, or URL site id not in session — show dialog instead of a page error strip. */
+  const [showNoSiteModal, setShowNoSiteModal] = useState(false);
   const [scanLimitReached, setScanLimitReached] = useState(false);
   const [bottomTab, setBottomTab] = useState<'history' | 'rules'>('history');
   const [historyPage, setHistoryPage] = useState(1);
@@ -202,7 +235,14 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       setSelectedCategory(firstWithCookies ?? 'necessary');
     } catch (e: unknown) {
       console.error('[CookieScanDashboard]', e);
-      setError(e instanceof Error ? e.message : 'Failed to load scan data');
+      const msg = e instanceof Error ? e.message : 'Failed to load scan data';
+      const list = Array.isArray(sitesRef.current) ? sitesRef.current : [];
+      const ok = list.some((s: any) => String(s?.id) === String(siteId));
+      if (list.length === 0 || !ok) {
+        setShowNoSiteModal(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -224,7 +264,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     }
   }, [loadData, siteId]);
 
-
+  useEffect(() => {
+    if (sessionLoading || !authenticated) return;
+    const list = Array.isArray(sites) ? sites : [];
+    const ok = list.some((s: any) => String(s?.id) === String(siteId));
+    if (list.length === 0 || !ok) {
+      setShowNoSiteModal(true);
+    } else {
+      setShowNoSiteModal(false);
+    }
+  }, [sessionLoading, authenticated, sites, siteId]);
 
   const lastSuccessfulScan = useMemo(() => {
     const completed = scanHistory.filter((s) => String(s.scanStatus).toLowerCase() === 'completed');
@@ -259,6 +308,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   const handleScanNow = async () => {
     if (!siteId || scanningRef.current) return;
+    if (!sessionLoading && authenticated && (siteList.length === 0 || !siteKnown)) {
+      setShowNoSiteModal(true);
+      return;
+    }
     scanningRef.current = true;
     setScanning(true);
     setError(null);
@@ -338,16 +391,17 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   const openAddCookie = () => {
     resetCustomCookieForm();
+    setAddCookieError(null);
     setShowAddCookie(true);
   };
 
   const handleSaveCustomCookie = async () => {
     if (!siteId) return;
     if (!customCookieForm.name.trim() || !customCookieForm.domain.trim()) {
-      setError('Cookie ID and Domain are required.');
+      setAddCookieError('Cookie ID and Domain are required.');
       return;
     }
-    setError(null);
+    setAddCookieError(null);
     setSavingCustomCookie(true);
     try {
       await addCustomCookieRule({
@@ -360,12 +414,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         description: customCookieForm.description.trim() || undefined,
       });
       setShowAddCookie(false);
+      setAddCookieError(null);
       setCustomCookieForm({ name: '', domain: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
       // Refresh rules list only (lightweight)
       const rulesData = await getCustomCookieRules(siteId).catch(() => ({ rules: [] as CustomCookieRule[] }));
       setCustomRules(rulesData.rules || []);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to save rule');
+      setAddCookieError(e instanceof Error ? e.message : 'Failed to save rule');
     } finally {
       setSavingCustomCookie(false);
     }
@@ -430,6 +485,47 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         />
       )}
 
+      {showNoSiteModal ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            role="alertdialog"
+            aria-labelledby="no-site-title"
+            aria-describedby="no-site-desc"
+          >
+            <h2 id="no-site-title" className="font-['DM_Sans'] text-lg font-semibold text-[#0a091f]" style={dm}>
+              {siteList.length === 0 ? 'Add a site first' : 'Site not available'}
+            </h2>
+            <p id="no-site-desc" className="mt-3 font-['DM_Sans'] text-sm leading-relaxed text-[#4b5563]" style={dm}>
+              {siteList.length === 0
+                ? 'You need to add a website to your account before you can run cookie scans.'
+                : 'This scan page does not match any site in your account. Open a site from the dashboard or add a new site.'}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNoSiteModal(false)}
+                className="rounded-lg border border-[#e5e7eb] px-4 py-2 font-['DM_Sans'] text-sm text-[#374151] hover:bg-[#f9fafb]"
+                style={dm}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoSiteModal(false);
+                  router.push('/dashboard');
+                }}
+                className="rounded-lg bg-[#007aff] px-4 py-2 font-['DM_Sans'] text-sm font-medium text-white hover:bg-[#0066d6]"
+                style={dm}
+              >
+                Go to dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Scanning overlay popup */}
       {scanning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -454,7 +550,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         </div>
       )}
 
-      {error ? (
+      {error && !showNoSiteModal ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
 
@@ -465,7 +561,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               Last successful scan
             </h3>
             <p className="font-['DM_Sans'] text-base font-normal text-[#4b5563]" style={dm}>
-              {loading ? 'Loading…' : lastSuccessfulScan ? formatDateUtc(lastSuccessfulScan.createdAt) : 'No scans yet'}
+              {loading ? 'Loading…' : lastSuccessfulScan ? formatLocalDateTime(lastSuccessfulScan.createdAt) : 'No scans yet'}
             </p>
           </div>
           {scanLimitReached ? (
@@ -484,9 +580,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             </div>
           ) : (
             <button
+              id="cookie-scan-primary-cta"
               type="button"
               onClick={handleScanNow}
-              disabled={scanning}
+              disabled={scanning || showNoSiteModal}
               className="h-10 rounded-lg bg-[#007aff] px-8 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
               style={dm}
             >
@@ -503,7 +600,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             {nextScheduledScan ? (
               <div>
                 <p className="font-['DM_Sans'] text-base font-normal text-[#4b5563]" style={dm}>
-                  {formatDateUtc(nextScheduledScan.nextRunAt || nextScheduledScan.scheduledAt)}
+                  {formatLocalDateTime(nextScheduledScan.nextRunAt || nextScheduledScan.scheduledAt)}
                 </p>
                 <p className="mt-0.5 font-['DM_Sans'] text-xs text-[#4b5563]" style={dm}>
                   {nextScheduledScan.frequency}
@@ -526,7 +623,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           <button
             type="button"
             onClick={() => setShowSchedule(true)}
-            className="h-10 rounded-lg bg-[#007aff] px-4 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6]"
+            disabled={showNoSiteModal}
+            className="h-10 rounded-lg bg-[#007aff] px-4 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
             style={dm}
           >
             Schedule Scan
@@ -706,18 +804,30 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           <>
             {!loading && scanHistory.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10">
-                <p className="font-['DM_Sans'] text-sm text-[#4b5563]" style={dm}>
-                  No scan history yet. Run your first scan to discover cookies.
+                <p className="font-['DM_Sans'] text-sm text-[#4b5563] text-center max-w-md" style={dm}>
+                  No scan history yet. Run your first scan using the{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-[#007aff] underline hover:text-[#0066d6]"
+                    onClick={() => document.getElementById('cookie-scan-primary-cta')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                  >
+                    Scan Now
+                  </button>{' '}
+                  button at the top of this page
+                  {scanLimitReached ? (
+                    <>
+                      {' '}
+                      (or{' '}
+                      <button type="button" className="font-medium text-[#f59e0b] underline" onClick={() => setShowUpgradeModal(true)}>
+                        upgrade your plan
+                      </button>
+                      {' '}
+                      if you have reached your scan limit).
+                    </>
+                  ) : (
+                    '.'
+                  )}
                 </p>
-                <button
-                  type="button"
-                  onClick={scanLimitReached ? () => setShowUpgradeModal(true) : handleScanNow}
-                  disabled={scanning}
-                  className={`rounded-lg px-5 py-2 font-['DM_Sans'] text-sm font-medium text-white disabled:opacity-50 ${scanLimitReached ? 'bg-[#f59e0b] hover:bg-[#d97706]' : 'bg-[#007aff] hover:bg-[#0066d6]'}`}
-                  style={dm}
-                >
-                  {scanning ? 'Scanning…' : scanLimitReached ? 'Upgrade Plan' : 'Scan Now'}
-                </button>
               </div>
             ) : (
               <div className="w-full rounded-[5px] border border-[#9fbce4] overflow-hidden">
@@ -739,7 +849,19 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f] truncate" style={dm}>{formatTableDate(row.createdAt)}</div>
                         <div>{statusBadge(row.scanStatus)}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
-                        <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>—</div>
+                        <div
+                          className="font-['DM_Sans'] text-xs text-[#0a091f] truncate min-w-0"
+                          style={dm}
+                          title={
+                            row.categories?.length
+                              ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
+                              : ''
+                          }
+                        >
+                          {row.categories?.length
+                            ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
+                            : '—'}
+                        </div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.cookiesFound ?? '—'}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scriptsFound ?? '—'}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
@@ -865,6 +987,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-[760px] rounded-[12px] bg-white p-6">
             <h3 className="mb-5 text-2xl font-semibold text-black" style={dm}>Add Cookie</h3>
+            {addCookieError ? (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                {addCookieError}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
                 <label className="font-['DM_Sans'] text-xs font-medium text-[#374151]" style={dm}>
@@ -872,7 +999,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </label>
                 <input
                   value={customCookieForm.name}
-                  onChange={(e) => setCustomCookieForm((s) => ({ ...s, name: e.target.value }))}
+                  onChange={(e) => {
+                    setAddCookieError(null);
+                    setCustomCookieForm((s) => ({ ...s, name: e.target.value }));
+                  }}
                   placeholder="e.g. _ga"
                   className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
                 />
@@ -883,7 +1013,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </label>
                 <input
                   value={customCookieForm.domain}
-                  onChange={(e) => setCustomCookieForm((s) => ({ ...s, domain: e.target.value }))}
+                  onChange={(e) => {
+                    setAddCookieError(null);
+                    setCustomCookieForm((s) => ({ ...s, domain: e.target.value }));
+                  }}
                   placeholder="e.g. google.com"
                   className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
                 />
@@ -942,7 +1075,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             <div className="mt-4 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowAddCookie(false)}
+                onClick={() => {
+                  setShowAddCookie(false);
+                  setAddCookieError(null);
+                }}
                 className="h-10 rounded-md border border-[#cbd5e1] px-6 text-sm text-[#1f2937]"
               >
                 Cancel

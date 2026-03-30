@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Copy, Share2, Check } from "lucide-react";
+import { X, Copy, Check } from "lucide-react";
 import { verifyScript } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 
@@ -91,21 +91,6 @@ export default function InstallConsentModal({
     }
   };
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "ConsentBit installation code",
-          text: installCode,
-        });
-        return;
-      }
-    } catch {
-      /* user cancelled or share failed */
-    }
-    await handleCopy();
-  };
-
   const handleVerify = async () => {
     setVerifyError(null);
     setVerified(false);
@@ -178,14 +163,6 @@ export default function InstallConsentModal({
             >
               {copied ? "Copied!" : "Copy code"}
               <Copy size={14} className="ml-2" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleShare()}
-              className="flex items-center gap-2 rounded-md bg-[#E6F1FD] px-2.75 py-3.5 text-xs hover:bg-gray-200"
-            >
-              Send code to a team mate
-              <Share2 size={14} />
             </button>
           </div>
 

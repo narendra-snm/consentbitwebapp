@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
@@ -133,15 +133,11 @@ export default function SettingsPage() {
   }, [activeSiteId, sites]);
   const domainCount = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
-    const selectedSite =
-      rows.find((site: any) => String(site?.id) === String(resolvedSiteId)) || null;
-    return selectedSite ? 1 : 0;
-  }, [resolvedSiteId, sites]);
+    return rows.length;
+  }, [sites]);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
-  // true once a background pre-fetch has been attempted (success or silent fail)
-  const usagePrefetchedRef = useRef(false);
 
   const fetchUsage = useCallback(
     async (orgId: string, siteId: string | null, { silent = false } = {}) => {
@@ -197,18 +193,13 @@ export default function SettingsPage() {
     [],
   );
 
-  // Background pre-fetch on mount (silent — no error shown)
+  // Refetch when org, selected site (header dropdown), or tab changes — previously we only prefetched
+  // once and only loaded when usage was null, so switching sites never updated the numbers.
   useEffect(() => {
-    if (!activeOrganizationId || usagePrefetchedRef.current) return;
-    usagePrefetchedRef.current = true;
-    void fetchUsage(activeOrganizationId, resolvedSiteId, { silent: true });
-  }, [activeOrganizationId, resolvedSiteId, fetchUsage]);
-
-  // When user opens the Usage tab: if we have no data yet, fetch visibly
-  useEffect(() => {
-    if (activeTab !== "usage" || !activeOrganizationId || usage !== null) return;
-    void fetchUsage(activeOrganizationId, resolvedSiteId);
-  }, [activeTab, activeOrganizationId, resolvedSiteId, usage, fetchUsage]);
+    if (!activeOrganizationId) return;
+    const silent = activeTab !== "usage";
+    void fetchUsage(activeOrganizationId, resolvedSiteId, { silent });
+  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
 
   // Keep first server+client paint identical to avoid hydration mismatch while session cache hydrates.
   if (!hydrated || loading) {
@@ -464,9 +455,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => {
                       if (!activeOrganizationId) return;
-                      usagePrefetchedRef.current = false;
                       setUsageError(null);
-                      setUsage(null);
                       void fetchUsage(activeOrganizationId, resolvedSiteId);
                     }}
                     className="self-start bg-[#007AFF] text-white text-sm font-medium px-4 py-2 rounded-[6px]"

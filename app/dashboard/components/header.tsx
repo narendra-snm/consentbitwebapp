@@ -29,11 +29,7 @@ export default function Header() {
   })();
   const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
 
-  const notifications = new Array(7).fill({
-    title: "Lorem ipsum dolor sit amet",
-    desc: "Your Exotic Veggie Platter is on the menu. Get excited!",
-    time: "2 days ago",
-  });
+  const notifications: { title: string; desc: string; time: string }[] = [];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -172,9 +168,6 @@ export default function Header() {
           {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
         </button>
 
-        {/* SETTINGS */}
-        <img src="/images/Button.svg" className="mt-1 cursor-pointer" />
-
         {/* LOGOUT */}
         <button
           type="button"
@@ -201,32 +194,29 @@ export default function Header() {
               </div> */}
 
               <div className="max-h-[700px] overflow-y-auto">
-                {notifications.map((n, i) => (
-                  <div
-                    key={i}
-                    className="flex gap-3 px-5 py-4 border-b border-[#F3F4F6] last:border-none hover:bg-[#F9FAFB] transition-colors"
-                  >
-                    {/* Red dot on left */}
-                    <div className="flex items-start pt-1">
-                      <span className="w-2 h-2 rounded-full bg-[#F97373]" />
-                    </div>
-
-                    {/* Text */}
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <p className="text-sm font-semibold text-gray-900 leading-snug">
-                          {n.title}
-                        </p>
-                        <span className="text-xs text-gray-400 whitespace-nowrap">
-                          {n.time}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1 leading-snug">
-                        {n.desc}
-                      </p>
-                    </div>
+                {notifications.length === 0 ? (
+                  <div className="px-5 py-10 text-center text-sm text-gray-500">
+                    No notifications yet.
                   </div>
-                ))}
+                ) : (
+                  notifications.map((n, i) => (
+                    <div
+                      key={i}
+                      className="flex gap-3 px-5 py-4 border-b border-[#F3F4F6] last:border-none hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      <div className="flex items-start pt-1">
+                        <span className="w-2 h-2 rounded-full bg-[#F97373]" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-gray-900 leading-snug">{n.title}</p>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 leading-snug">{n.desc}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}

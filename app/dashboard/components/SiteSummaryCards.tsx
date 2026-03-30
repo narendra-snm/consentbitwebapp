@@ -31,6 +31,13 @@ export default function SiteSummaryCards({
   const createdLabel = formatDate(site?.createdAt);
   const updatedLabel = formatDate(site?.updatedAt);
 
+  const pagesScannedDisplay = (() => {
+    const raw = site?.pagesScanned;
+    if (raw === null || raw === undefined || raw === "") return "—";
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? String(n) : "—";
+  })();
+
   return (
     <div className="grid grid-cols-2 gap-6 mt-4">
 
@@ -46,7 +53,9 @@ export default function SiteSummaryCards({
         <div className="grid grid-cols-4 gap-4 items-start">
 
           {/* Status Box */}
-          <div className="bg-[#FFEFEF]  col-span-2  rounded-lg py-3.75 px-3.5">  
+          <div
+            className={`${isVerified ? "bg-[#ECFDF3]" : "bg-[#FFEFEF]"} col-span-2 rounded-lg py-3.75 px-3.5`}
+          >
             <div className="flex gap-3">
             <div>
               <img src="/images/redCookies.png" alt="Verification" className="mt-1" />
@@ -192,7 +201,9 @@ export default function SiteSummaryCards({
 
       <div>
         <p className="text-[#4B5563]">Pages scanned</p>
-        <p className="mt-1 text-sm text-[#161616]">—</p>
+        <p className="mt-1 text-sm text-[#161616]">
+          {pagesScannedDisplay}
+        </p>
       </div>
 
       <div>
