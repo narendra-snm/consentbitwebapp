@@ -42,10 +42,27 @@ export default function DashboardPage() {
  }, [user?.name, userEmail]);
  const [showInstallModal, setShowInstallModal] = useState(false);
  const [postSetupInstall, setPostSetupInstall] = useState<{
-   scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string;
+   scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string; returnTo?: string;
  } | null>(null);
  const [pendingPostSetupDomain, setPendingPostSetupDomain] = useState<string | null>(null);
  const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(null);
+ const [pendingPostSetupReturnTo, setPendingPostSetupReturnTo] = useState<string | null>(null);
+
+ const computeReturnTarget = (siteId: string, returnTo: string | null): string => {
+   const r = String(returnTo || "").trim();
+   if (!r) return `/dashboard/${siteId}`;
+   // If returnTo looks like /dashboard/<oldId>/... keep the sub-path and swap in the new siteId.
+   const parts = r.split("?")[0].split("#")[0].split("/").filter(Boolean);
+   if (parts[0] === "dashboard") {
+     if (parts.length >= 2 && parts[1] && !["profile", "all-domain", "post-setup"].includes(parts[1])) {
+       const sub = parts.slice(2).join("/");
+       return sub ? `/dashboard/${siteId}/${sub}` : `/dashboard/${siteId}`;
+     }
+     // For /dashboard, /dashboard/profile, /dashboard/all-domain: go to the new site's dashboard root.
+     return `/dashboard/${siteId}`;
+   }
+   return `/dashboard/${siteId}`;
+ };
 
  const normalizeDomain = (raw: string) =>
    String(raw || "")
@@ -64,8 +81,10 @@ export default function DashboardPage() {
    if (params.get('postSetup') === '1') {
       const domain = params.get('domain') ?? '';
       const siteId = params.get('siteId') ?? '';
+      const returnTo = params.get('returnTo') ?? '';
       if (domain) setPendingPostSetupDomain(normalizeDomain(domain));
       if (siteId) setPendingPostSetupSiteId(String(siteId));
+      if (returnTo) setPendingPostSetupReturnTo(String(returnTo));
       if (domain || siteId) {
         setWizardSkipped(true);
         window.history.replaceState({}, '', '/dashboard');
@@ -81,15 +100,17 @@ export default function DashboardPage() {
       if (data?.type === "CONSENTBIT_POST_SETUP") {
         if (data?.domain) setPendingPostSetupDomain(normalizeDomain(String(data.domain)));
         if (data?.siteId) setPendingPostSetupSiteId(String(data.siteId));
+        if (data?.returnTo) setPendingPostSetupReturnTo(String(data.returnTo));
         setWizardSkipped(true);
       }
     }
     function onStorage(ev: StorageEvent) {
       if (ev.key !== "cb_post_setup" || !ev.newValue) return;
       try {
-        const parsed = JSON.parse(ev.newValue) as { domain?: string; siteId?: string };
+        const parsed = JSON.parse(ev.newValue) as { domain?: string; siteId?: string; returnTo?: string };
         if (parsed?.domain) setPendingPostSetupDomain(normalizeDomain(parsed.domain));
         if (parsed?.siteId) setPendingPostSetupSiteId(String(parsed.siteId));
+        if (parsed?.returnTo) setPendingPostSetupReturnTo(String(parsed.returnTo));
         if (parsed?.domain || parsed?.siteId) {
           setWizardSkipped(true);
         }
@@ -118,7 +139,7 @@ export default function DashboardPage() {
        const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
        const cdnScriptId = result?.site?.cdnScriptId;
        if (siteId && scriptUrl) {
-         setPostSetupInstall({ scriptUrl, siteId, siteDomain: domain, cdnScriptId });
+         setPostSetupInstall({ scriptUrl, siteId, siteDomain: domain, cdnScriptId, returnTo: pendingPostSetupReturnTo || undefined });
        }
        void refresh({ showLoading: false });
        let ticks = 0;
@@ -141,7 +162,7 @@ export default function DashboardPage() {
      cancelled = true;
      if (poll) clearInterval(poll);
    };
- }, [pendingPostSetupDomain, loading, authenticated, refresh]);
+ }, [pendingPostSetupDomain, loading, authenticated, refresh, pendingPostSetupReturnTo]);
 
   // If we returned from Stripe with a siteId (upgrade / existing site), show its install code in the wizard UI.
   useEffect(() => {
@@ -154,6 +175,7 @@ export default function DashboardPage() {
         siteId: String(match.id),
         siteDomain: String(match.domain || ''),
         cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
+        returnTo: pendingPostSetupReturnTo || undefined,
       });
       setPendingPostSetupSiteId(null);
     } else {
@@ -161,7 +183,7 @@ export default function DashboardPage() {
       // this effect reruns and picks up the scriptUrl.
       void refresh({ showLoading: false });
     }
-  }, [pendingPostSetupSiteId, loading, authenticated, refresh, sites]);
+  }, [pendingPostSetupSiteId, loading, authenticated, refresh, sites, pendingPostSetupReturnTo]);
 
  /** Raw URL from API (`Site.embedScriptUrl`); modal resolves to absolute — keeps snippet identical to stored value. */
  const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
@@ -251,7 +273,8 @@ export default function DashboardPage() {
             type="button"
             onClick={() => {
               setPostSetupInstall(null);
-              const target = postSetupInstall?.siteId ? `/dashboard/${postSetupInstall.siteId}` : "/dashboard";
+              const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
+              const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : "/dashboard";
               router.replace(target);
             }}
             className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
@@ -304,7 +327,12 @@ export default function DashboardPage() {
         siteDomain={postSetupInstall?.siteDomain}
         siteId={postSetupInstall?.siteId}
         cdnScriptId={postSetupInstall?.cdnScriptId}
-        onClose={() => setPostSetupInstall(null)}
+        onClose={() => {
+          const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
+          const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : null;
+          setPostSetupInstall(null);
+          if (target) router.replace(target);
+        }}
       />
       </div>
       </>

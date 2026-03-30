@@ -19,18 +19,22 @@ export function PostSetupClient() {
   useEffect(() => {
     const domain = normalizeDomain(searchParams?.get("domain") || "");
     const siteId = String(searchParams?.get("siteId") || "").trim();
+    const returnToRaw = String(searchParams?.get("returnTo") || "").trim();
+    const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/dashboard";
     if (!domain && !siteId) {
       router.replace("/dashboard");
       return;
     }
 
-    // Prefer direct message to the already-open wizard/dashboard tab.
+    const dashUrl = domain
+      ? `/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`
+      : `/dashboard?postSetup=1&siteId=${encodeURIComponent(siteId)}&returnTo=${encodeURIComponent(returnTo)}`;
+
+    // Prefer navigating the opener (works even if opener isn't listening for postMessage).
     try {
       if (window.opener && !window.opener.closed) {
-        window.opener.postMessage(
-          { type: "CONSENTBIT_POST_SETUP", domain, siteId },
-          window.location.origin,
-        );
+        // same-origin navigation
+        window.opener.location.replace(dashUrl);
         window.close();
         return;
       }
@@ -48,11 +52,7 @@ export function PostSetupClient() {
       // ignore
     }
 
-    if (domain) {
-      router.replace(`/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}`);
-    } else {
-      router.replace(`/dashboard?postSetup=1&siteId=${encodeURIComponent(siteId)}`);
-    }
+    router.replace(dashUrl);
   }, [router, searchParams]);
 
   return (

@@ -151,12 +151,21 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     setSubmitError(null);
     setSubmitting(true);
     try {
+      const returnTo =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}${window.location.hash || ""}`
+          : "/dashboard";
       if (planId === "free") {
         const result = await firstSetup({ websiteUrl: domain });
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
         await refresh({ showLoading: false });
         onClose?.();
-        router.push(newSiteId ? `/dashboard/${newSiteId}` : "/dashboard");
+        // Route through /dashboard so we can show install code, then return to the same sub-tab
+        router.push(
+          newSiteId
+            ? `/dashboard?postSetup=1&siteId=${encodeURIComponent(newSiteId)}&returnTo=${encodeURIComponent(returnTo)}`
+            : "/dashboard",
+        );
       } else {
         if (!activeOrganizationId) {
           setSubmitError("Organization not loaded. Please refresh and try again.");
@@ -171,8 +180,9 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           siteId: null,
           siteName: domain,
           siteDomain: domain,
-          successUrl: `${origin}/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}`,
-          cancelUrl: `${origin}/dashboard`,
+          // Complete in a separate Stripe tab, then bring the opener back to the same sub-tab and show install code.
+          successUrl: `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`,
+          cancelUrl: `${origin}${returnTo}`,
         });
         const tab = window.open(data.url, "_blank");
         checkoutTab.current = tab;
