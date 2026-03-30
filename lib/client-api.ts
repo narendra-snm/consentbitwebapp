@@ -116,7 +116,11 @@ export async function verifyVerificationCode(payload: {
   if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
   // Cache dashboard data so the provider renders instantly after navigation
   if (data.dashboardInit?.authenticated) {
-    try { sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit)); } catch {}
+    try {
+      sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit));
+      // Used by DashboardSessionProvider to avoid showing stale cached data from another user.
+      sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    } catch {}
   }
   return data;
 }
