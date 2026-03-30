@@ -133,10 +133,8 @@ export default function SettingsPage() {
   }, [activeSiteId, sites]);
   const domainCount = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
-    const selectedSite =
-      rows.find((site: any) => String(site?.id) === String(resolvedSiteId)) || null;
-    return selectedSite ? 1 : 0;
-  }, [resolvedSiteId, sites]);
+    return rows.length;
+  }, [sites]);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);

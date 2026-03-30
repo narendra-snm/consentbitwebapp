@@ -57,6 +57,24 @@ export default function BillingPage({
   const router = useRouter();
   const { updateSiteInState, refresh, sites: sessionSites } = useDashboardSession();
 
+  const domainSites = useMemo(() => {
+    const map = new Map<string, { id: string; domain: string; name?: string }>();
+    const add = (arr: typeof sites) => {
+      for (const s of arr || []) {
+        const id = String((s as { id?: string })?.id || "").trim();
+        if (!id || map.has(id)) continue;
+        map.set(id, {
+          id,
+          domain: String((s as { domain?: string })?.domain || ""),
+          name: String((s as { name?: string; domain?: string })?.name || (s as { domain?: string })?.domain || ""),
+        });
+      }
+    };
+    add(sites);
+    add((Array.isArray(sessionSites) ? sessionSites : []) as typeof sites);
+    return Array.from(map.values());
+  }, [sites, sessionSites]);
+
   // Find the active site in session state — authoritative source for cancel status
   const activeSiteData = useMemo(
     () => (Array.isArray(sessionSites) ? sessionSites : []).find((s: any) => String(s?.id) === String(activeSiteId)) ?? null,
@@ -116,7 +134,7 @@ export default function BillingPage({
       } catch { /* ignore */ }
     }
     let cancelled = false;
-    if (rawInvoices.length === 0) setInvoiceLoading(true);
+    setInvoiceLoading(true);
     setInvoiceError(null);
     getBillingInvoices(organizationId, 20)
       .then((res) => {
@@ -131,7 +149,7 @@ export default function BillingPage({
       .catch((e) => { if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices"); })
       .finally(() => { if (!cancelled) setInvoiceLoading(false); });
     return () => { cancelled = true; };
-  }, [organizationId, rawInvoices.length]);
+  }, [organizationId]);
 
   // Load billing summary (for payment method + billing details)
   useEffect(() => {
@@ -171,10 +189,11 @@ export default function BillingPage({
         if (!d || Number.isNaN(d.getTime())) return filterYear === "all" && filterMonth === "all";
         if (filterYear  !== "all" && String(d.getFullYear()) !== filterYear)  return false;
         if (filterMonth !== "all" && String(d.getMonth() + 1) !== filterMonth) return false;
-        // Domain filter: if a specific domain is selected, keep only invoices tied to
-        // that site's active subscription (matched by activeSiteId).
-        // Since Stripe invoices are org-level, we show all when filterDomain === "all",
-        // and show all for the selected domain too (single-subscription org).
+        if (filterDomain !== "all") {
+          const sid = inv.siteId ?? null;
+          if (!sid) return false;
+          if (String(sid) !== String(filterDomain)) return false;
+        }
         return true;
       })
       .map((inv) => {
@@ -393,7 +412,7 @@ export default function BillingPage({
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 <option value="all">All Domains ({domainCount})</option>
-                {sites.map((s) => (
+                {domainSites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.domain || s.name || s.id}
                   </option>

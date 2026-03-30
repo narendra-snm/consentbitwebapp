@@ -152,7 +152,7 @@ function formatTimeUtc(iso: string | null) {
 function displayStatus(status: string | null) {
   if (!status) return '—';
   const s = status.toLowerCase();
-  if (s === 'given') return 'Given';
+  if (s === 'given') return 'Accepted';
   if (s === 'rejected') return 'Rejected';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }

@@ -323,6 +323,8 @@ export type BillingInvoice = {
   created: string | null;
   hostedInvoiceUrl: string | null;
   invoicePdf: string | null;
+  /** Site whose Stripe subscription produced this invoice, when known */
+  siteId?: string | null;
 };
 
 export async function getBillingInvoices(
@@ -430,6 +432,8 @@ export type ScanHistoryRow = {
   scanUrl: string | null;
   scriptsFound: number;
   cookiesFound: number;
+  /** Distinct cookie category keys for this scan (e.g. analytics, necessary). */
+  categories?: string[];
   scanDuration: number | null;
   scanStatus: string;
   createdAt: string;

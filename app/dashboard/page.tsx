@@ -104,20 +104,44 @@ export default function DashboardPage() {
     };
   }, []);
 
- // Once authenticated, create the site and show install code
+ // Once authenticated, create the site and show install code.
+ // Stripe's webhook may arrive after this tab loads — poll session so paid plan replaces "free" in the header.
  useEffect(() => {
    if (!pendingPostSetupDomain || loading || !authenticated) return;
    const domain = pendingPostSetupDomain;
    setPendingPostSetupDomain(null);
-   firstSetup({ websiteUrl: domain }).then((result) => {
-     const siteId = result?.siteId ?? result?.site?.id;
-     const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
-     const cdnScriptId = result?.site?.cdnScriptId;
-     if (siteId && scriptUrl) {
-       setPostSetupInstall({ scriptUrl, siteId, siteDomain: domain, cdnScriptId });
-     }
-     void refresh({ showLoading: false });
-   }).catch(console.error);
+   let poll: ReturnType<typeof setInterval> | null = null;
+   let cancelled = false;
+   firstSetup({ websiteUrl: domain })
+     .then((result) => {
+       if (cancelled) return;
+       const siteId = result?.siteId ?? result?.site?.id;
+       const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
+       const cdnScriptId = result?.site?.cdnScriptId;
+       if (siteId && scriptUrl) {
+         setPostSetupInstall({ scriptUrl, siteId, siteDomain: domain, cdnScriptId });
+       }
+       void refresh({ showLoading: false });
+       let ticks = 0;
+       poll = setInterval(() => {
+         if (cancelled) {
+           if (poll) clearInterval(poll);
+           poll = null;
+           return;
+         }
+         ticks += 1;
+         void refresh({ showLoading: false });
+         if (ticks >= 24) {
+           if (poll) clearInterval(poll);
+           poll = null;
+         }
+       }, 1500);
+     })
+     .catch(console.error);
+   return () => {
+     cancelled = true;
+     if (poll) clearInterval(poll);
+   };
  }, [pendingPostSetupDomain, loading, authenticated, refresh]);
 
   // If we returned from Stripe with a siteId (upgrade / existing site), show its install code in the wizard UI.

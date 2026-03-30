@@ -192,7 +192,9 @@ export default function SiteSummaryCards({
 
       <div>
         <p className="text-[#4B5563]">Pages scanned</p>
-        <p className="mt-1 text-sm text-[#161616]">—</p>
+        <p className="mt-1 text-sm text-[#161616]">
+          {typeof site?.pagesScanned === "number" ? site.pagesScanned : "—"}
+        </p>
       </div>
 
       <div>

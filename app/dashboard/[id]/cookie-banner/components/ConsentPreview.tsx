@@ -340,36 +340,53 @@ export default function ConsentPreview({
 
         {/* Right Side Buttons */}
         <div className="flex items-center gap-3">
-          <button className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors">
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">Save changes</span>
-            <svg
-              width="36"
-              height="36"
-              viewBox="0 0 36 36"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect
-                x="0.5"
-                y="0.5"
-                width="35"
-                height="35"
-                rx="7.5"
-                fill="#F9F9FA"
-              />
-              <rect
-                x="0.5"
-                y="0.5"
-                width="35"
-                height="35"
-                rx="7.5"
-                stroke="#E5E5E5"
-              />
-              <path
-                d="M12.75 24.75H23.25C23.6478 24.75 24.0294 24.592 24.3107 24.3107C24.592 24.0294 24.75 23.6478 24.75 23.25V15C24.7506 14.9013 24.7317 14.8035 24.6943 14.7121C24.657 14.6207 24.602 14.5376 24.5325 14.4675L21.5325 11.4675C21.4624 11.398 21.3793 11.343 21.2879 11.3057C21.1966 11.2684 21.0987 11.2494 21 11.25H12.75C12.3522 11.25 11.9706 11.408 11.6893 11.6894C11.408 11.9707 11.25 12.3522 11.25 12.75V23.25C11.25 23.6478 11.408 24.0294 11.6893 24.3107C11.9706 24.592 12.3522 24.75 12.75 24.75ZM20.25 23.25H15.75V19.5H20.25V23.25ZM18.75 14.25H17.25V12.75H18.75V14.25ZM12.75 12.75H14.25V15.75H20.25V12.75H20.6925L23.25 15.3075V23.25H21.75V19.5C21.75 19.1022 21.592 18.7207 21.3107 18.4394C21.0294 18.158 20.6478 18 20.25 18H15.75C15.3522 18 14.9706 18.158 14.6893 18.4394C14.408 18.7207 14.25 19.1022 14.25 19.5V23.25H12.75V12.75Z"
-                fill="#4B5563"
-              />
-            </svg>
+          <button
+            type="button"
+            disabled={saveDisabled || saveBusy}
+            onClick={() => void onSaveChanges?.()}
+            aria-label={saveBusy ? 'Saving…' : 'Save changes'}
+            title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
+            className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
+          >
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              {saveBusy ? 'Saving…' : 'Save changes'}
+            </span>
+            {saveBusy ? (
+              <svg className="h-5 w-5 animate-spin text-[#007aff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 36 36"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden
+              >
+                <rect
+                  x="0.5"
+                  y="0.5"
+                  width="35"
+                  height="35"
+                  rx="7.5"
+                  fill="#F9F9FA"
+                />
+                <rect
+                  x="0.5"
+                  y="0.5"
+                  width="35"
+                  height="35"
+                  rx="7.5"
+                  stroke="#E5E5E5"
+                />
+                <path
+                  d="M12.75 24.75H23.25C23.6478 24.75 24.0294 24.592 24.3107 24.3107C24.592 24.0294 24.75 23.6478 24.75 23.25V15C24.7506 14.9013 24.7317 14.8035 24.6943 14.7121C24.657 14.6207 24.602 14.5376 24.5325 14.4675L21.5325 11.4675C21.4624 11.398 21.3793 11.343 21.2879 11.3057C21.1966 11.2684 21.0987 11.2494 21 11.25H12.75C12.3522 11.25 11.9706 11.408 11.6893 11.6894C11.408 11.9707 11.25 12.3522 11.25 12.75V23.25C11.25 23.6478 11.408 24.0294 11.6893 24.3107C11.9706 24.592 12.3522 24.75 12.75 24.75ZM20.25 23.25H15.75V19.5H20.25V23.25ZM18.75 14.25H17.25V12.75H18.75V14.25ZM12.75 12.75H14.25V15.75H20.25V12.75H20.6925L23.25 15.3075V23.25H21.75V19.5C21.75 19.1022 21.592 18.7207 21.3107 18.4394C21.0294 18.158 20.6478 18 20.25 18H15.75C15.3522 18 14.9706 18.158 14.6893 18.4394C14.408 18.7207 14.25 19.1022 14.25 19.5V23.25H12.75V12.75Z"
+                  fill="#4B5563"
+                />
+              </svg>
+            )}
           </button>
 
           <div className="flex flex-col items-end gap-1">
