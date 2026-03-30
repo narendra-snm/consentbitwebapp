@@ -942,7 +942,7 @@ export default function ConsentPreview({
 
     {publishSuccess ? (
       <div
-        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4"
+        className="fixed inset-0 z-[999999999999999999999] flex items-center justify-center bg-black/40 p-4"
         role="presentation"
         onClick={() => onDismissPublishSuccess?.()}
       >

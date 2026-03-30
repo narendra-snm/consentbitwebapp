@@ -114,7 +114,7 @@ export default function StepWizard({
             <div className="w-full lg:max-w-[720px]">
               <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />
             </div>
-            <div className="w-full lg:w-[270px]">
+            {/* <div className="w-full lg:w-[270px]">
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-4 shadow-sm">
                 <p className="text-sm font-semibold text-[#111827] mb-2">Upgrade to Basic plan</p>
                 <p className="text-xs text-[#6b7280] leading-relaxed mb-3">
@@ -132,7 +132,7 @@ export default function StepWizard({
                   Upgrade Plan Now →
                 </button>
               </div>
-            </div>
+            </div> */}
           </div>
         ) : (
           <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />
@@ -532,7 +532,7 @@ function StepThree({
                     value={publicUrl}
                     onChange={(e) => setPublicUrl(e.target.value)}
                     placeholder="yoursite.com"
-                    className="border rounded-md px-3 py-2 text-sm w-[260px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className=" rounded-md px-3 py-2 text-sm w-[260px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={verifying}
                   />
                 </div>

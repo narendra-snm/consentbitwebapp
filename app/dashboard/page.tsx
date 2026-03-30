@@ -9,6 +9,7 @@ import StepWizard from "./components/StepWizard";
 import { useEffect, useMemo, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
 import { firstSetup } from "@/lib/client-api";
+import ComplianceAlert from "./components/ComplianceAlert";
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
@@ -233,30 +234,32 @@ export default function DashboardPage() {
 
   // Show skeleton until hydrated (prevents server/client mismatch) or while session loads
   if (!hydrated || loading) {
-    return (
-      <>
-        <Header />
-        <div className="max-w-[1148px] mx-auto pb-4">
-          <DashboardTabs />
-          {/* Skeleton cards */}
-          <div className="grid grid-cols-2 gap-6 mt-4 animate-pulse">
-            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
-              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
-              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-              <div className="h-4 bg-gray-200 rounded w-1/4" />
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
-              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
-              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-              <div className="h-4 bg-gray-200 rounded w-1/4" />
-            </div>
-          </div>
-          <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
-        </div>
-      </>
-    );
+    // return (
+    //   <>
+    //     <Header />
+    //     <div className="max-w-[1148px] mx-auto pb-4">
+    //       <DashboardTabs />
+    //       {/* Skeleton cards */}
+    //       <div className="grid grid-cols-2 gap-6 mt-4 animate-pulse">
+    //         <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+    //           <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+    //           <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+    //           <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+    //           <div className="h-4 bg-gray-200 rounded w-1/4" />
+    //         </div>
+    //         <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+    //           <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+    //           <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+    //           <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+    //           <div className="h-4 bg-gray-200 rounded w-1/4" />
+    //         </div>
+    //       </div>
+    //       <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
+    //     </div>
+    //   </>
+    // );
+ 
+ return null
   }
 
   // Post-payment: show the same 3-step wizard Confirm UI (not the dashboard cards)
@@ -310,6 +313,11 @@ export default function DashboardPage() {
       <Header/>
       <div className="max-w-[1148px] mx-auto pb-4">
       <DashboardTabs/>
+      <ComplianceAlert
+        userName={userName}
+        siteDomain={activeSite?.domain}
+        bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
+      />
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={activeSiteId} />
       <InstallConsentModal
