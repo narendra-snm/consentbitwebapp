@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverFetch } from "@/lib/server-api";
+import { serverFetchJson } from "@/lib/server-api";
 
 export const runtime = 'edge';
 
@@ -14,13 +14,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "organizationId required" }, { status: 400 });
     }
 
-    const response = await serverFetch("/api/billing/portal", {
+    const { data, status } = await serverFetchJson("/api/billing/portal", {
       method: "POST",
       cookies: cookie,
       body: { organizationId, returnUrl },
     });
-    const data = await response.json().catch(async () => ({ error: await response.text() }));
-    return NextResponse.json(data, { status: response.status });
+    return NextResponse.json(data, { status });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create portal session";
     return NextResponse.json({ error: message }, { status: 500 });

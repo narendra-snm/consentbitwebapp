@@ -1,10 +1,9 @@
 "use client";
 
-import ComplianceAlert from "../components/ComplianceAlert";
 import GettingStarted from "../components/GettingStarted";
 import InstallConsentModal from "../components/InstallConsentModal";
 import SiteSummaryCards from "../components/SiteSummaryCards";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 
@@ -13,15 +12,11 @@ function DashboardSitePageInner() {
   const siteId = params?.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loading, authenticated, user, sites, setActiveSiteId, refresh } = useDashboardSession();
+  const { loading, authenticated, sites, setActiveSiteId, refresh } = useDashboardSession();
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
-  const userName = useMemo(() => {
-    const email = user?.email ?? "";
-    return email ? email.split("@")[0] : undefined;
-  }, [user?.email]);
   const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
 
   useEffect(() => {
@@ -56,11 +51,6 @@ function DashboardSitePageInner() {
 
   return (
     <div className="max-w-[1148px] mx-auto pb-4">
-      <ComplianceAlert
-        userName={userName}
-        siteDomain={activeSite?.domain}
-        bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
-      />
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={siteId} />
       <InstallConsentModal

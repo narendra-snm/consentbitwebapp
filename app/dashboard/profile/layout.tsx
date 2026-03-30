@@ -1,6 +1,5 @@
 import React from 'react'
 import AddSiteModal from "../components/AddSiteModal";
-import ComplianceAlert from "../components/ComplianceAlert";
 import DashboardTabs from "../components/DashboardTabs";
 import GettingStarted from "../components/GettingStarted";
 import Header from "../components/header";

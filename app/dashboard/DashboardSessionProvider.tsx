@@ -230,10 +230,12 @@ export function DashboardSessionProvider({
     }
   }, []);
 
-  // Only fetch on mount when we don't already have fresh data (sessionStorage / SSR initialData).
+  // Always reconcile with the server on mount. Seeded/cached sessions used to skip this entirely,
+  // so fields like `pagesScanned` from dashboard-init never arrived (UI showed "—").
   useEffect(() => {
-    if (skipInitialRefresh.current) return;
-    void refresh();
+    const silent = skipInitialRefresh.current;
+    skipInitialRefresh.current = false;
+    void refresh({ showLoading: !silent });
   }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.

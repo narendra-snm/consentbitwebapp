@@ -335,9 +335,7 @@ export async function getBillingInvoices(
     `/api/billing/invoices?organizationId=${encodeURIComponent(organizationId)}&limit=${limit}`,
     { credentials: "include" },
   );
-  const data = await res
-    .json()
-    .catch(async () => ({ error: await res.text(), invoices: [] }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || `Billing invoices failed: ${res.status}`);
   return data as { invoices: BillingInvoice[] };
 }
@@ -364,9 +362,7 @@ export async function getBillingUsage(
     `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}${siteParam}`,
     { credentials: "include" },
   );
-  const data = await res
-    .json()
-    .catch(async () => ({ error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || `Billing usage failed: ${res.status}`);
   return data as BillingUsage;
 }

@@ -42,6 +42,8 @@ type Props = {
 const invoiceCache = new Map<string, { rows: BillingInvoice[]; ts: number }>();
 const summaryCache = new Map<string, { data: BillingSummary; ts: number }>();
 const CACHE_TTL_MS = 60_000;
+/** Bump when invoice API shape/proxy changes so we do not reuse empty cached rows forever. */
+const INVOICE_STORAGE_KEY = "billing-invoices:v2";
 
 export default function BillingPage({
   currentPlan,
@@ -122,7 +124,7 @@ export default function BillingPage({
     if (cached && now - cached.ts < CACHE_TTL_MS) { setRawInvoices(cached.rows); return; }
     if (typeof window !== "undefined" && !cached) {
       try {
-        const raw = window.sessionStorage.getItem(`billing-invoices:${organizationId}`);
+        const raw = window.sessionStorage.getItem(`${INVOICE_STORAGE_KEY}:${organizationId}`);
         if (raw) {
           const parsed = JSON.parse(raw) as { rows?: BillingInvoice[]; ts?: number };
           if (Array.isArray(parsed?.rows) && parsed?.ts && now - parsed.ts < CACHE_TTL_MS) {
@@ -143,7 +145,7 @@ export default function BillingPage({
           setRawInvoices(rows);
           const entry = { rows, ts: Date.now() };
           invoiceCache.set(organizationId, entry);
-          try { window.sessionStorage.setItem(`billing-invoices:${organizationId}`, JSON.stringify(entry)); } catch { /* ignore */ }
+          try { window.sessionStorage.setItem(`${INVOICE_STORAGE_KEY}:${organizationId}`, JSON.stringify(entry)); } catch { /* ignore */ }
         }
       })
       .catch((e) => { if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices"); })

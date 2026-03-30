@@ -1,6 +1,5 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
-import ComplianceAlert from "./components/ComplianceAlert";
 import DashboardTabs from "./components/DashboardTabs";
 import GettingStarted from "./components/GettingStarted";
 import Header from "./components/header";
@@ -288,11 +287,6 @@ export default function DashboardPage() {
       <Header/>
       <div className="max-w-[1148px] mx-auto pb-4">
       <DashboardTabs/>
-      <ComplianceAlert
-        userName={userName}
-        siteDomain={activeSite?.domain}
-        bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
-      />
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={activeSiteId} />
       <InstallConsentModal
