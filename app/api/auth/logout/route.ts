@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
-import { serverFetch } from '@/lib/server-api';
+import { serverFetchJson } from '@/lib/server-api';
 
 export const runtime = 'edge';
 
 export async function POST(request: Request) {
   try {
     const cookie = request.headers.get('cookie') || '';
-    const workerRes = await serverFetch('/api/auth/logout', {
+    const { data, status } = await serverFetchJson('/api/auth/logout', {
       method: 'POST',
       cookies: cookie,
     });
 
-    const data = await workerRes.json().catch(async () => ({ success: false }));
-    const res = NextResponse.json(data, { status: workerRes.status });
+    const res = NextResponse.json(data, { status });
 
     // Clear cookie in browser as well (backend already sends Set-Cookie, but keep safe)
     res.headers.set('Set-Cookie', 'sid=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax');

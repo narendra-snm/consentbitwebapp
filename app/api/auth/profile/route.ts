@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { serverFetch } from '@/lib/server-api';
+import { serverFetchJson } from '@/lib/server-api';
 
 export const runtime = 'edge';
 
@@ -8,22 +8,14 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const cookie = request.headers.get('cookie') || '';
 
-    const workerRes = await serverFetch('/api/auth/profile', {
+    const { data, status } = await serverFetchJson('/api/auth/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       cookies: cookie,
       body: JSON.stringify(body),
     });
 
-    const text = await workerRes.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { success: false, error: text || 'Invalid JSON from upstream' };
-    }
-
-    return NextResponse.json(data, { status: workerRes.status });
+    return NextResponse.json(data, { status });
   } catch (error: any) {
     console.error('Profile API error:', error);
     return NextResponse.json(
