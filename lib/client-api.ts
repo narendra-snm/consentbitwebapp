@@ -1,10 +1,29 @@
 
+/**
+ * Decode a base64 transport envelope produced by the worker's security middleware.
+ * Response shape: { d: "<base64 UTF-8 JSON>" }
+ * Falls through for plain JSON responses (backward-compat / public endpoints).
+ */
+function decodeEnvelope(parsed: any): any {
+  if (parsed && typeof parsed.d === 'string') {
+    try {
+      const binary = atob(parsed.d);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through to raw parsed value */ }
+  }
+  return parsed;
+}
+
 /** Parse a fetch response safely — reads body once, handles HTML error pages from Cloudflare/Workers. */
 async function parseApiResponse(res: Response): Promise<any> {
   const text = await res.text();
-  try { return JSON.parse(text); } catch {
+  let parsed: any;
+  try { parsed = JSON.parse(text); } catch {
     return { success: false, error: text.trimStart().startsWith('<') ? `Server error (${res.status}). Please try again.` : text || `Request failed: ${res.status}` };
   }
+  return decodeEnvelope(parsed);
 }
 
 /** Hash password for sending to server (never send plain password in request body). */
@@ -37,7 +56,7 @@ export async function login(email: string, password: string) {
     throw new Error(`Login failed: ${res.status}`);
   }
 
-  return res.json();
+  return parseApiResponse(res);
 
 }
 //login ends here
@@ -118,7 +137,7 @@ export async function signup(payload: SignupPayload) {
     }),
   });
 
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) {
     throw new Error(data.error || `Signup failed: ${res.status}`);
   }
@@ -131,13 +150,13 @@ export async function signup(payload: SignupPayload) {
 export async function getMe() {
   const res = await fetch('/api/auth/me', { credentials: 'include' });
   if (!res.ok) return { authenticated: false, user: null, organizations: [] };
-  return res.json();
+  return parseApiResponse(res);
 }
 
 export async function getDashboardInit() {
   const res = await fetch('/api/auth/dashboard-init', { credentials: 'include', cache: 'no-store' });
   if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: 'free' };
-  return res.json(); // { authenticated, user, organizations, sites, effectivePlanId }
+  return parseApiResponse(res); // decodes base64 envelope if present
 }
 //me endpoint ends here
 //profile update starts here
@@ -148,7 +167,7 @@ export async function updateProfile(payload: { name?: string }) {
     credentials: 'include',
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || 'Failed to update profile');
   return data; // { success, user, organizations }
 }
@@ -184,7 +203,7 @@ export async function firstSetup(payload: {
     throw new Error(message || `Setup failed: ${res.status}`);
   }
   
-  return res.json();
+  return parseApiResponse(res);
 }
 //first setup ends here
 
@@ -196,7 +215,7 @@ export async function getSites(organizationId?: string) {
     credentials: 'include',
   });
 
-  const data = await response.json().catch(async () => ({ success: false, error: await response.text() }));
+  const data = await parseApiResponse(response);
   if (!response.ok) {
     throw new Error((data as any)?.error || `Failed to load sites: ${response.status}`);
   }
@@ -371,7 +390,7 @@ export type BillingSummary = {
 };
 export async function getBillingSummary(organizationId: string): Promise<BillingSummary> {
   const res = await fetch(`/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}`, { credentials: "include" });
-  const data = await res.json().catch(async () => ({ error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || "Failed to load billing summary");
   return data as BillingSummary;
 }
@@ -383,7 +402,7 @@ export async function createBillingPortalSession(organizationId: string, returnU
     credentials: "include",
     body: JSON.stringify({ organizationId, returnUrl }),
   });
-  const data = await res.json().catch(async () => ({ error: await res.text() }));
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || "Failed to create portal session");
   return data as { url: string };
 }

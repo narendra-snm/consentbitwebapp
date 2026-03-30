@@ -16,7 +16,7 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
-  const urlSiteId = pathParts[0] === "dashboard" && pathParts.length >= 2 ? pathParts[1] : null;
+
   const { sites, activeSiteId, setActiveSiteId, logout, loading, effectivePlanId } = useDashboardSession();
 
   const planLabel = (() => {
@@ -87,7 +87,7 @@ export default function Header() {
           >
             {displayDomain} 
             <svg width="10" height="5" viewBox="0 0 10 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M0.5 0.5L3.26857 3.16493C4.04299 3.91036 5.26812 3.91036 6.04254 3.16493L8.81111 0.5" stroke="black" stroke-linecap="round"/>
+<path d="M0.5 0.5L3.26857 3.16493C4.04299 3.91036 5.26812 3.91036 6.04254 3.16493L8.81111 0.5" stroke="black" strokeLinecap="round"/>
 </svg>
 
           </button>

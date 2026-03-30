@@ -35,6 +35,7 @@ export default function ConsentPreview({
   onNext,
   bothModeBannerType,
   onBothModeBannerTypeChange,
+  forceModalView,
   /** Initial cookie banner layout (matches published embed: box / banner / popup). */
   initialLayout,
 }: {
@@ -47,6 +48,8 @@ export default function ConsentPreview({
   onBothModeBannerTypeChange?: (next: 'gdpr' | 'ccpa') => void;
   /** Floating reopen / preferences control in the browser mock */
   floatingButton?: { enabled: boolean; position: 'left' | 'right' };
+  /** When set, forces the preview to show this view (e.g. "gdpr-preferences" when preference accordion is open). */
+  forceModalView?: 'main' | 'gdpr-preferences' | 'ccpa-optout';
   /** Persist recent editor changes to the server (draft save; use when you have unpublished edits). */
   onSaveChanges?: () => void | Promise<void>;
   /** When true, Save is not clickable (no pending edits or request in flight). */
@@ -190,6 +193,9 @@ export default function ConsentPreview({
 
   type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
   const [modalView, setModalView] = useState<ModalView>("main");
+  useEffect(() => {
+    if (forceModalView) setModalView(forceModalView);
+  }, [forceModalView]);
   const previewAreaRef = useRef<HTMLDivElement | null>(null);
   const initialBannerRef = useRef<HTMLDivElement | null>(null);
   /** How many px we need to lift the floating button to clear the banner. */
@@ -736,14 +742,16 @@ export default function ConsentPreview({
               </div>
 
               <div className="flex justify-end gap-3 mt-6 flex-wrap">
-                <button
-                  style={acceptRejectStyle}
-                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95"
-                  type="button"
-                  onClick={() => setModalView("main")}
-                >
-                  {content?.rejectAll || t("rejectAll")}
-                </button>
+                {content?.rejectButton !== false ? (
+                  <button
+                    style={acceptRejectStyle}
+                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95"
+                    type="button"
+                    onClick={() => setModalView("main")}
+                  >
+                    {content?.rejectAll || t("rejectAll")}
+                  </button>
+                ) : null}
                 <button
                   style={preferenceStyle}
                   className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95"

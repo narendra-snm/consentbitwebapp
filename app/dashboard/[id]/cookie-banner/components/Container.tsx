@@ -947,6 +947,13 @@ const isToggleEnabled =
         onBothModeBannerTypeChange={
           consentType === "both" ? setBothContentFocus : undefined
         }
+        forceModalView={
+          openAccordionKey === "preferenceBanner"
+            ? (activeContentBannerType === "ccpa" ? "ccpa-optout" : "gdpr-preferences")
+            : openAccordionKey === "cookieNotice" || openAccordionKey === "cookieList" || openAccordionKey === null
+            ? "main"
+            : undefined
+        }
       />
       <InstallConsentModal
         open={showInstallModal}

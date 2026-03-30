@@ -25,9 +25,11 @@ export async function serverFetch(
   const url = `${getProductionApiBase()}${endpoint}`;
   
   const requestHeaders: Record<string, string> = {
+    // Required by the worker's CSRF guard on all mutating requests
+    'X-Requested-With': 'XMLHttpRequest',
     ...headers,
   };
-  
+
   // Forward cookies if provided
   if (cookies) {
     requestHeaders['Cookie'] = cookies;

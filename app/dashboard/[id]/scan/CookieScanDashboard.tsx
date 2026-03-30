@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCustomCookieRule,
   deleteCustomCookieRule,
@@ -17,6 +17,7 @@ import {
   type ScheduledScan,
 } from '@/lib/client-api';
 import { ScheduleScanModal } from './ScheduleScanModal';
+import { UpgradePlanModal } from '../../components/UpgradePlanModal';
 
 import { useDashboardSession } from '../../DashboardSessionProvider';
 
@@ -140,7 +141,7 @@ function writeScanCache(siteId: string, data: ScanCache) {
 }
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
-  const { refresh, sites } = useDashboardSession();
+  const { refresh, sites, effectivePlanId, activeOrganizationId } = useDashboardSession();
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
@@ -148,6 +149,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const scanningRef = useRef(false); // ref guard prevents double-invocation from stale closure
 
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('necessary');
@@ -165,6 +167,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   });
 
   const hasDraftRules = useMemo(() => customRules.some((r) => r.published === 0), [customRules]);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [scanLimitReached, setScanLimitReached] = useState(false);
   const [bottomTab, setBottomTab] = useState<'history' | 'rules'>('history');
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 10;
@@ -182,7 +186,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         getScheduledScans(siteId).catch(() => ({ success: true as const, scheduledScans: [] as ScheduledScan[] })),
         getCustomCookieRules(siteId).catch(() => ({ rules: [] as CustomCookieRule[] })),
       ]);
-      const history = historyData.scans || [];
+      const rawHistory = historyData.scans || [];
+      // Deduplicate by id — prevent duplicate rows if backend returns the same scan twice
+      const history = rawHistory.filter((s, i, a) => a.findIndex((x) => String(x.id) === String(s.id)) === i);
       const byCat = cookiesData.cookiesByCategory || {};
       const scheduled = scheduledData.scheduledScans || [];
       const rules = rulesData.rules || [];
@@ -252,22 +258,35 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   }, [siteId, sites]);
 
   const handleScanNow = async () => {
-    if (!siteId || scanning) return;
+    if (!siteId || scanningRef.current) return;
+    scanningRef.current = true;
     setScanning(true);
     setError(null);
     try {
       const result = await scanSiteNow(siteId);
+      const targetId = result.scanHistoryId ? String(result.scanHistoryId) : null;
 
       if (result.scanning) {
-        // Background scan started — poll every 4s until scan history entry is no longer pending
+        // Background scan started — poll every 4s for the specific scanHistoryId
         const poll = setInterval(async () => {
           try {
             const historyData = await getScanHistory(siteId);
-            const latest = (historyData.scans || [])[0];
-            if (!latest || String(latest.scanStatus).toLowerCase() !== 'pending') {
+            const scans = historyData.scans || [];
+            // Find the specific scan we triggered, or fall back to the latest
+            const target = targetId
+              ? scans.find((s) => String(s.id) === targetId)
+              : scans[0];
+            const status = String(target?.scanStatus ?? '').toLowerCase();
+            // Keep polling if target not yet visible in DB, or still pending
+            if (target && status !== 'pending' && status !== '') {
               clearInterval(poll);
+              // Replace history with deduplicated fresh data
+              const unique = scans.filter((s, i, a) => a.findIndex((x) => String(x.id) === String(s.id)) === i);
+              setScanHistory(unique);
+              setHistoryPage(1);
               await loadData(false);
               void refresh({ showLoading: false });
+              scanningRef.current = false;
               setScanning(false);
             }
           } catch { /* keep polling on error */ }
@@ -275,15 +294,23 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         // Safety stop after 2 minutes
         setTimeout(() => {
           clearInterval(poll);
+          scanningRef.current = false;
           setScanning(false);
         }, 2 * 60 * 1000);
       } else {
         await loadData(false);
         void refresh({ showLoading: false });
+        scanningRef.current = false;
         setScanning(false);
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Scan failed');
+      const msg = e instanceof Error ? e.message : 'Scan failed';
+      if (msg.toLowerCase().includes('scan limit') || msg.toLowerCase().includes('limit reached')) {
+        setScanLimitReached(true);
+      } else {
+        setError(msg);
+      }
+      scanningRef.current = false;
       setScanning(false);
     }
   };
@@ -393,17 +420,40 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
+      {showUpgradeModal && (
+        <UpgradePlanModal
+          currentPlanId={effectivePlanId}
+          organizationId={activeOrganizationId ?? null}
+          siteId={siteId}
+          reason="scan"
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
+
+      {/* Scanning overlay popup */}
       {scanning && (
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          <span>
-            Scanning <strong>{siteLabel}</strong> — headless Chrome is collecting all cookies from every domain. Dashboard updates automatically when done.
-          </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="flex w-[340px] flex-col items-center gap-5 rounded-2xl bg-white px-8 py-10 shadow-2xl">
+            <div className="relative flex h-16 w-16 items-center justify-center">
+              <svg className="absolute inset-0 h-full w-full animate-spin" viewBox="0 0 56 56" fill="none">
+                <circle cx="28" cy="28" r="24" stroke="#e6f1fd" strokeWidth="5" />
+                <path d="M28 4a24 24 0 0 1 24 24" stroke="#007aff" strokeWidth="5" strokeLinecap="round" />
+              </svg>
+              <svg className="h-7 w-7 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="font-['DM_Sans'] text-base font-semibold text-[#0a091f]">Scanning in progress</p>
+              <p className="mt-1 font-['DM_Sans'] text-sm text-[#6b7280]">
+                Collecting cookies from <strong>{siteLabel}</strong>.<br />This may take up to a minute.
+              </p>
+            </div>
+          </div>
         </div>
       )}
+
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
@@ -418,15 +468,31 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               {loading ? 'Loading…' : lastSuccessfulScan ? formatDateUtc(lastSuccessfulScan.createdAt) : 'No scans yet'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleScanNow}
-            disabled={scanning}
-            className="h-10 rounded-lg bg-[#007aff] px-8 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
-            style={dm}
-          >
-            {scanning ? 'Scanning…' : 'Scan Now'}
-          </button>
+          {scanLimitReached ? (
+            <div className="flex flex-col items-end gap-1">
+              <span className="font-['DM_Sans'] text-xs font-medium text-[#f59e0b]" style={dm}>
+                Monthly scan limit reached
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(true)}
+                className="h-10 rounded-lg bg-[#f59e0b] px-5 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#d97706]"
+                style={dm}
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleScanNow}
+              disabled={scanning}
+              className="h-10 rounded-lg bg-[#007aff] px-8 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
+              style={dm}
+            >
+              {scanning ? 'Scanning…' : 'Scan Now'}
+            </button>
+          )}
         </div>
 
         <div className="flex items-center justify-between rounded-lg bg-[#e6f1fd] p-4.5">
@@ -645,12 +711,12 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </p>
                 <button
                   type="button"
-                  onClick={handleScanNow}
+                  onClick={scanLimitReached ? () => setShowUpgradeModal(true) : handleScanNow}
                   disabled={scanning}
-                  className="rounded-lg bg-[#007aff] px-5 py-2 font-['DM_Sans'] text-sm font-medium text-white hover:bg-[#0066d6] disabled:opacity-50"
+                  className={`rounded-lg px-5 py-2 font-['DM_Sans'] text-sm font-medium text-white disabled:opacity-50 ${scanLimitReached ? 'bg-[#f59e0b] hover:bg-[#d97706]' : 'bg-[#007aff] hover:bg-[#0066d6]'}`}
                   style={dm}
                 >
-                  {scanning ? 'Scanning…' : 'Scan Now'}
+                  {scanning ? 'Scanning…' : scanLimitReached ? 'Upgrade Plan' : 'Scan Now'}
                 </button>
               </div>
             ) : (
