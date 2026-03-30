@@ -214,13 +214,15 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
   const buildProofHtml = useCallback((rows: ConsentLog[]) => {
     const domain = displayDomain;
+     const logoSrc =
+      typeof window !== 'undefined' ? `${window.location.origin}/images/ConsentBit-logo-Dark.png` : '/images/ConsentBit-logo-Dark.png';
     const pages = rows.map((log, index) => {
       const acceptedList = getAcceptedCategoriesList(log.categories);
       const acceptedLabels = acceptedList.length ? acceptedList.join(', ') : 'None';
       const cookiesInProof = cookiesForAcceptedCategories(cookies, log.categories);
       const cookieRows =
         cookiesInProof.length === 0
-          ? '<tr><td colspan="3">No cookies recorded for accepted categories.</td></tr>'
+          ? '<tr><td class="proof-td" colspan="3">No cookies recorded for accepted categories.</td></tr>'
           : cookiesInProof
               .map(
                 (c) =>
@@ -234,8 +236,14 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
       return `
         <div class="proof-page">
-          <h1 class="proof-title">Proof of consent</h1>
-          <table class="proof-meta">
+          <header class="proof-header">
+            <h1 class="proof-title">Proof of consent</h1>
+            <div class="proof-brand">
+              <img class="proof-logo" src="${escapeHtml(logoSrc)}" alt="Consentbit" width="170" height="22" />
+            </div>
+          </header>
+
+          <table class="proof-meta" role="presentation">
             <tr><td class="proof-label">Consented domain</td><td class="proof-value">${escapeHtml(domain)}</td></tr>
             <tr><td class="proof-label">Consent date</td><td class="proof-value">${escapeHtml(formatProofDate(log.createdAt))}</td></tr>
             <tr><td class="proof-label">Consent ID</td><td class="proof-value">${escapeHtml(log.id)}</td></tr>
@@ -243,11 +251,17 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
             <tr><td class="proof-label">Anonymized IP address</td><td class="proof-value">${escapeHtml(anonymizeIp(log.ipAddress))}</td></tr>
             <tr><td class="proof-label">Consent status</td><td class="proof-value">${escapeHtml(displayStatus(log.status))}</td></tr>
           </table>
-          <p class="proof-categories"><strong>Accepted Categories</strong><br/>${escapeHtml(acceptedLabels)}</p>
+
+          <div class="proof-categories-wrap">
+            <p class="proof-categories-title">Accepted Categories</p>
+            <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
+          </div>
+
           <table class="proof-cookie-table">
             <thead><tr><th class="proof-th">Cookie Name</th><th class="proof-th">Duration</th><th class="proof-th">Description</th></tr></thead>
             <tbody>${cookieRows}</tbody>
           </table>
+
           <p class="proof-footer">Page ${index + 1} of ${rows.length}</p>
         </div>
       `;
@@ -255,20 +269,103 @@ export function ConsentLogsDashboard({ siteId, siteDomain }: { siteId: string; s
 
     return `
       <style>
-        body { font-family: system-ui, sans-serif; padding: 24px; color: #000; font-size: 12px; }
-        .proof-page { break-after: page; margin-bottom: 24px; }
-        .proof-page:last-child { break-after: auto; }
-        .proof-title { font-size: 18px; margin: 0 0 16px; font-weight: 700; color: #000; }
-        .proof-meta { width: 100%; max-width: 520px; margin-bottom: 16px; }
-        .proof-label { padding: 4px 8px 4px 0; vertical-align: top; font-weight: 600; color: #000; width: 180px; }
-        .proof-value { padding: 4px 0; color: #000; }
-        .proof-categories { margin: 16px 0 8px; color: #000; }
-        .proof-cookie-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-        .proof-th, .proof-td { border: 1px solid #333; padding: 8px; text-align: left; color: #000; }
-        .proof-th { background: #f1f5f9; font-weight: 600; }
-        .proof-footer { margin-top: 24px; font-size: 11px; color: #333; }
+        @page { margin: 16mm 14mm; }
+        body {
+          margin: 0;
+          padding: 24px 28px 32px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          color: #111827;
+          font-size: 12px;
+          line-height: 1.45;
+          background: #fff;
+        }
+        .proof-page { break-after: page; margin-bottom: 32px; }
+        .proof-page:last-child { break-after: auto; margin-bottom: 0; }
+
+        .proof-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 20px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid #dbe5f3;
+        }
+        .proof-title {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: #007aff;
+        }
+        .proof-brand { flex-shrink: 0; padding-top: 2px; }
+        .proof-logo { display: block; height: 22px; width: auto; max-width: 170px; }
+
+        .proof-meta {
+          width: 100%;
+          max-width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 18px;
+        }
+        .proof-label {
+          padding: 6px 12px 6px 0;
+          vertical-align: top;
+          font-weight: 600;
+          color: #374151;
+          width: 200px;
+        }
+        .proof-value {
+          padding: 6px 0;
+          color: #111827;
+          word-break: break-word;
+        }
+
+        .proof-categories-wrap {
+          border: 1px solid #93c5fd;
+          border-radius: 8px;
+          background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 48%);
+          padding: 12px 14px 14px;
+          margin: 0 0 14px;
+        }
+        .proof-categories-title {
+          margin: 0 0 6px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #007aff;
+        }
+        .proof-categories-line {
+          margin: 0;
+          color: #374151;
+          font-size: 12px;
+        }
+
+        .proof-cookie-table {
+          border-collapse: collapse;
+          width: 100%;
+          border: 1px solid #93c5fd;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .proof-th, .proof-td {
+          border: 1px solid #bfdbfe;
+          padding: 10px 12px;
+          text-align: left;
+          vertical-align: top;
+        }
+        .proof-th {
+          background: #e6f1fd;
+          color: #1e3a5f;
+          font-weight: 600;
+          font-size: 12px;
+        }
+        .proof-td { color: #111827; font-size: 11.5px; }
+        .proof-footer {
+          margin-top: 20px;
+          font-size: 11px;
+          color: #6b7280;
+        }
       </style>
-      ${pages.length ? pages.join('') : `<div class="proof-page"><h1 class="proof-title">Proof of consent</h1><p>No consent records for this site.</p></div>`}
+      ${pages.length ? pages.join('') : `<div class="proof-page"><header class="proof-header"><h1 class="proof-title">Proof of consent</h1><div class="proof-brand"><img class="proof-logo" src="${escapeHtml(logoSrc)}" alt="Consentbit" width="170" height="22" /></div></header><p>No consent records for this site.</p></div>`}
     `;
   }, [cookies, displayDomain]);
 
