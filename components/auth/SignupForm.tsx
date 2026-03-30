@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";         
+import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
 
@@ -12,6 +12,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -19,6 +20,21 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const otpWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Allow deep-link / refresh into OTP step: /signup?step=verify&email=...
+  useEffect(() => {
+    const sp = searchParams;
+    if (!sp) return;
+    const wantsVerify = (sp.get("step") || "").toLowerCase() === "verify";
+    const qpEmail = (sp.get("email") || "").trim();
+    const qpName = (sp.get("name") || "").trim();
+    if (wantsVerify) {
+      if (qpEmail && !email) setEmail(qpEmail);
+      if (qpName && !name) setName(qpName);
+      setStep(2);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (step !== 2) return;
@@ -58,6 +74,8 @@ export function SignupForm() {
       if (step === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
         setStep(2);
+        // Persist step in URL so the OTP screen reliably shows (even after reload)
+        router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}`);
       } else {
         await verifyVerificationCode({ email, purpose: 'signup', code });
         router.push('/dashboard');

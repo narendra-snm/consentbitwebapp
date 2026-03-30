@@ -78,7 +78,10 @@ export async function requestVerificationCode(payload: {
     }),
   });
   const data = await parseApiResponse(res);
-  if (!res.ok || !data.success) throw new Error(data.error || `Request code failed: ${res.status}`);
+  const success =
+    Boolean(data?.success) ||
+    (res.ok && (typeof data?.requestId === 'string' || typeof data?.expiresAt === 'string' || typeof data?.code === 'string'));
+  if (!res.ok || !success) throw new Error(data?.error || `Request code failed: ${res.status}`);
   return data as { success: true; requestId: string; expiresAt: string; code?: string };
 }
 
