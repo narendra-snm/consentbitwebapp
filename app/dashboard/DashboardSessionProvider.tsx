@@ -127,6 +127,7 @@ export function DashboardSessionProvider({
     })();
     // 2. Persistent session cache (written after every successful refresh)
     const seed = ssData ?? initialData ?? readSessionCache();
+    console.log("SEED:", seed);
     if (seed?.authenticated) {
       skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
       const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];

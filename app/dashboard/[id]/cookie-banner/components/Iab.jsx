@@ -324,7 +324,7 @@ function CookieAccordion({ category, s }) {
                 fontWeight: s.fontWeight,
               }}
             >
-              {category.description}
+              {/* {category.description} */}
             </p>
           </div>
         </div>
@@ -344,31 +344,11 @@ function CookieAccordion({ category, s }) {
             padding: "12px",
             backgroundColor: "#F9FAFB",
             borderRadius: smallBr,
+              fontWeight: s.fontWeight,
+              fontSize: "12px",
           }}
         >
-          {category.cookies.length === 0 ? (
-            <p style={{ color: s.textColor, opacity: 0.5, fontSize: "12px", textAlign: "center", fontStyle: "italic" }}>
-              No cookies to display.
-            </p>
-          ) : (
-            category.cookies.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  paddingBottom: i < category.cookies.length - 1 ? "12px" : 0,
-                  marginBottom: i < category.cookies.length - 1 ? "12px" : 0,
-                  borderBottom: i < category.cookies.length - 1 ? "1px solid #E5E7EB" : "none",
-                }}
-              >
-                {[["Cookie", c.name], ["Duration", c.duration], ["Description", c.description]].map(([label, val]) => (
-                  <div key={label} style={{ display: "flex", gap: "8px", marginBottom: "4px", fontSize: "12px" }}>
-                    <span style={{ fontWeight: "600", minWidth: "76px", color: s.textColor, opacity: 0.55 }}>{label}</span>
-                    <span style={{ color: s.textColor }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-            ))
-          )}
+         {category.description}
         </div>
       </div>
     </div>
@@ -795,11 +775,15 @@ export function CookieConsentBanner({ config = {},device="desktop",alignment="bo
   const [visible, setVisible] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  if (!visible) return null;
+  
+console.log(modalOpen)
+  const handleAccept = () => { setVisible(true);setModalOpen(false)  };
+  const handleReject = () => { setVisible(true); setModalOpen(false)  };
+  const handleCustomise = () => {
+    setVisible(false);
+    setModalOpen(true); 
 
-  const handleAccept = () => { setVisible(false); setModalOpen(false); };
-  const handleReject = () => { setVisible(false); setModalOpen(false); };
-  const handleCustomise = () => setModalOpen(true);
+  };
 
   const br = `${s.borderRadius}px`;
 const positionStyles =
@@ -818,6 +802,7 @@ const positionStyles =
     : {};
   return (
     <>
+   {visible &&   <>
       {/* BOX — bottom-left card */}
       {s.bannerType === "box" && (
         <div
@@ -860,10 +845,10 @@ const positionStyles =
           </div>
         </div>
       )}
-
+</>}
       <PreferenceModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() =>{ setModalOpen(false); setVisible(true);}}
         onAccept={handleAccept}
         onReject={handleReject}
         s={s}
