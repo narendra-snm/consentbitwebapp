@@ -1,5 +1,5 @@
 import { SignupForm } from "@/components/auth/SignupForm";
-import Link from "next/link";
+import { Suspense } from "react";
 
 
 
@@ -22,7 +22,9 @@ export default function SignupPage() {
     >
       {/* Logo */}
      
-      <SignupForm />
+      <Suspense fallback={null}>
+        <SignupForm />
+      </Suspense>
 
    
     </div>
