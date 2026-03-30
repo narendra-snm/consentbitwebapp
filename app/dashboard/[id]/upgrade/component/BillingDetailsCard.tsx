@@ -195,7 +195,7 @@ export default function BillingDetailsCard({
               <img
                 alt="Card type"
                 className="size-[42px] object-cover"
-                src={imgImage4}
+                src={typeof imgImage4 === 'string' ? imgImage4 : imgImage4.src}
               />
             </div>
           </div>
