@@ -53,7 +53,9 @@ export default function SiteSummaryCards({
         <div className="grid grid-cols-4 gap-4 items-start">
 
           {/* Status Box */}
-          <div className="bg-[#FFEFEF]  col-span-2  rounded-lg py-3.75 px-3.5">  
+          <div
+            className={`${isVerified ? "bg-[#ECFDF3]" : "bg-[#FFEFEF]"} col-span-2 rounded-lg py-3.75 px-3.5`}
+          >
             <div className="flex gap-3">
             <div>
               <img src="/images/redCookies.png" alt="Verification" className="mt-1" />
