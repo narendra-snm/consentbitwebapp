@@ -21,10 +21,40 @@ export function SignupForm() {
   const [loading, setLoading] = useState(false);
   const otpWrapRef = useRef<HTMLDivElement | null>(null);
   const urlWantsVerify = (searchParams?.get("step") || "").toLowerCase() === "verify";
-  const effectiveStep: 1 | 2 = urlWantsVerify ? 2 : step;
   const debugEnabled = (searchParams?.get("debug") || "") === "1";
   const [debugLine, setDebugLine] = useState<string>("");
   const PENDING_KEY = "cb_signup_pending_otp";
+  const [hydrated, setHydrated] = useState(false);
+  const [pendingOtp, setPendingOtp] = useState(false);
+
+  useEffect(() => setHydrated(true), []);
+
+  // Derive pendingOtp from sessionStorage after hydration (production-safe).
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      const raw = sessionStorage.getItem(PENDING_KEY);
+      if (!raw) {
+        setPendingOtp(false);
+        return;
+      }
+      const parsed = JSON.parse(raw) as { email?: string; name?: string; ts?: number };
+      const ts = Number(parsed?.ts || 0);
+      if (!ts || Date.now() - ts > 15 * 60 * 1000) {
+        sessionStorage.removeItem(PENDING_KEY);
+        setPendingOtp(false);
+        return;
+      }
+      setPendingOtp(true);
+      if (parsed?.email && !email) setEmail(String(parsed.email));
+      if (parsed?.name && !name) setName(String(parsed.name));
+    } catch {
+      setPendingOtp(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  const effectiveStep: 1 | 2 = (urlWantsVerify || pendingOtp) ? 2 : step;
 
   // Allow deep-link / refresh into OTP step: /signup?step=verify&email=...
   useEffect(() => {
@@ -41,28 +71,10 @@ export function SignupForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Production-safe fallback: if the app remounts and URL params are lost/stripped,
-  // restore Step 2 from sessionStorage (valid for ~15 minutes).
   useEffect(() => {
-    if (urlWantsVerify) return; // URL is the strongest signal
-    try {
-      const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(PENDING_KEY) : null;
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { email?: string; name?: string; ts?: number };
-      const ts = Number(parsed?.ts || 0);
-      if (!ts || Date.now() - ts > 15 * 60 * 1000) {
-        sessionStorage.removeItem(PENDING_KEY);
-        return;
-      }
-      if (parsed?.email && !email) setEmail(String(parsed.email));
-      if (parsed?.name && !name) setName(String(parsed.name));
-      setStep(2);
-      if (debugEnabled) setDebugLine("restored step=2 from sessionStorage");
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debugEnabled, urlWantsVerify]);
+    if (!hydrated || !debugEnabled) return;
+    if (pendingOtp && !urlWantsVerify) setDebugLine("restored step=2 from sessionStorage");
+  }, [debugEnabled, hydrated, pendingOtp, urlWantsVerify]);
 
   useEffect(() => {
     if (effectiveStep !== 2) return;
@@ -116,12 +128,14 @@ export function SignupForm() {
             PENDING_KEY,
             JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim(), ts: Date.now() }),
           );
+          setPendingOtp(true);
         } catch {}
         // Persist step in URL so the OTP screen reliably shows (even after reload)
         router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}${debugEnabled ? "&debug=1" : ""}`);
       } else {
         await verifyVerificationCode({ email, purpose: 'signup', code });
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
+        setPendingOtp(false);
         router.push('/dashboard');
       }
     } catch (err: unknown) {
