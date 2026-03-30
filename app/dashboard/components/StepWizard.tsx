@@ -42,7 +42,10 @@ export default function StepWizard({
   } | null>(initialSiteData ?? null);
 
   const nextStep = () => {
-    setStep((prev) => prev + 1);
+    setStep((prev) => {
+      if (prev >= 3) return 3;
+      return (prev + 1) as 1 | 2 | 3;
+    });
   };
 
   // Called when user picks the Free plan — create site now then advance
