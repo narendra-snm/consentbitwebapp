@@ -5,11 +5,19 @@ import { Globe, Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
+import { getBillingUsage } from "@/lib/client-api";
+import { UpgradePlanModal } from "./UpgradePlanModal";
+
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
+  const [pageviewUsage, setPageviewUsage] = useState<{ used: number; limit: number } | null>(null);
+  const [scanOverLimit, setScanOverLimit] = useState(false);
+  const [scanUsage, setScanUsage] = useState<{ used: number; limit: number } | null>(null);
   const domainRef = useRef<any>(null);
   const notifRef = useRef<any>(null);
 
@@ -17,7 +25,7 @@ export default function Header() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
 
-  const { sites, activeSiteId, setActiveSiteId, logout, loading, effectivePlanId } = useDashboardSession();
+  const { sites, activeSiteId, activeOrganizationId, setActiveSiteId, logout, loading, effectivePlanId } = useDashboardSession();
 
   const planLabel = (() => {
     const k = String(effectivePlanId || "free").toLowerCase();
@@ -29,7 +37,37 @@ export default function Header() {
   })();
   const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
 
-  const notifications: { title: string; desc: string; time: string }[] = [];
+  // Fetch billing usage once the org is known — check pageview and scan limits
+  useEffect(() => {
+    if (!activeOrganizationId) return;
+    getBillingUsage(activeOrganizationId)
+      .then((data) => {
+        if (data.pageviewsLimit > 0 && data.pageviewsUsed >= data.pageviewsLimit) {
+          setPageviewOverLimit(true);
+          setPageviewUsage({ used: data.pageviewsUsed, limit: data.pageviewsLimit });
+        }
+        if (data.scansLimit > 0 && data.scansUsed >= data.scansLimit) {
+          setScanOverLimit(true);
+          setScanUsage({ used: data.scansUsed, limit: data.scansLimit });
+        }
+      })
+      .catch(() => {/* non-critical */});
+  }, [activeOrganizationId]);
+
+  const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
+    ...(pageviewOverLimit && pageviewUsage ? [{
+      title: 'Pageview limit reached',
+      desc: `${pageviewUsage.used.toLocaleString()} / ${pageviewUsage.limit.toLocaleString()} pageviews used. Tracking paused — upgrade to continue.`,
+      time: 'Now',
+      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+    }] : []),
+    ...(scanOverLimit && scanUsage ? [{
+      title: 'Scan limit reached',
+      desc: `${scanUsage.used.toLocaleString()} / ${scanUsage.limit.toLocaleString()} scans used. Scheduled scans are paused — upgrade to continue.`,
+      time: 'Now',
+      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+    }] : []),
+  ];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -180,19 +218,20 @@ export default function Header() {
 
         {/* NOTIFICATION */}
         <div ref={notifRef} className="relative">
-          <img
-            src="/images/bell.svg"
-            className="mt-1 cursor-pointer"
-            onClick={() => setNotifOpen(!notifOpen)}
-          />
+          <div className="relative mt-1 cursor-pointer" onClick={() => setNotifOpen(!notifOpen)}>
+            <img src="/images/bell.svg" />
+            {notifications.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#F97373] text-[9px] font-bold text-white">
+                {notifications.length}
+              </span>
+            )}
+          </div>
 
           {notifOpen && (
             <div className="absolute right-0 top-[180%] w-[412px] bg-white rounded-xl shadow-[0_12px_40px_rgba(15,23,42,0.16)] border border-[#E5E7EB] z-50">
-              {/* Optional header / title */}
-              {/* <div className="px-4 py-3 border-b border-[#E5E7EB]">
+              <div className="px-4 py-3 border-b border-[#E5E7EB]">
                 <p className="text-sm font-semibold text-gray-800">Notifications</p>
-              </div> */}
-
+              </div>
               <div className="max-h-[700px] overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="px-5 py-10 text-center text-sm text-gray-500">
@@ -202,17 +241,21 @@ export default function Header() {
                   notifications.map((n, i) => (
                     <div
                       key={i}
-                      className="flex gap-3 px-5 py-4 border-b border-[#F3F4F6] last:border-none hover:bg-[#F9FAFB] transition-colors"
+                      onClick={n.action}
+                      className={`flex gap-3 px-5 py-4 border-b border-[#F3F4F6] last:border-none hover:bg-[#F9FAFB] transition-colors ${n.action ? 'cursor-pointer' : ''}`}
                     >
                       <div className="flex items-start pt-1">
-                        <span className="w-2 h-2 rounded-full bg-[#F97373]" />
+                        <span className="w-2 h-2 rounded-full bg-[#F97373] shrink-0" />
                       </div>
                       <div className="flex-1">
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start gap-2">
                           <p className="text-sm font-semibold text-gray-900 leading-snug">{n.title}</p>
                           <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1 leading-snug">{n.desc}</p>
+                        {n.action && (
+                          <p className="text-xs text-[#007AFF] mt-1.5 font-medium">Upgrade Plan →</p>
+                        )}
                       </div>
                     </div>
                   ))
@@ -223,9 +266,18 @@ export default function Header() {
         </div>
 
         {/* AVATAR */}
-
-        <img src="/images/Icon.svg"  className="mt-1 rounded-full cursor-pointer" onClick={()=>router.push("/dashboard/profile")} />
+        <img src="/images/Icon.svg" className="mt-1 rounded-full cursor-pointer" onClick={() => router.push("/dashboard/profile")} />
       </div>
+
+      {showUpgradeModal && (
+        <UpgradePlanModal
+          currentPlanId={effectivePlanId}
+          organizationId={activeOrganizationId ?? null}
+          siteId={activeSiteId}
+          reason="pageview"
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
     </header>
   );
 }
