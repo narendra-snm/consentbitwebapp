@@ -160,7 +160,7 @@ export default function SiteSummaryCards({
   <div className="grid grid-cols-2 gap-4">
 
     {/* BLUE STATS CARD */}
-    <div className="bg-[#EEF4FB] min-h-[160px]  rounded-lg py-3.75 px-3.5 flex flex-col justify-between">
+    <div className="bg-[#EEF4FB] min-h-[144px]  rounded-lg py-3.75 px-3.5 flex flex-col justify-between">
 
       {/* Icons */}
       <div className="flex justify-between mb-4">
