@@ -151,7 +151,8 @@ export function SignupForm() {
 
       // If the email already exists, send them to login (common confusion).
       if (effectiveStep === 1 && /already exists|log in instead/i.test(msg)) {
-        router.push(`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        // router.push(`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+       setError('An account with this email already exists. Please log in instead.');
         return;
       }
 
