@@ -67,7 +67,7 @@ export function LoginForm() {
       <form onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col items-center w-full max-w-[463px]">
           {/* Title */}
-          <h1 className="text-[40px] font-normal text-[#2C3E8F] mb-6">
+          <h1 className="text-[40px] font-normal text-[#262E84] mb-6">
             Log In
           </h1>
 
@@ -104,7 +104,7 @@ export function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#2C3E8F] hover:bg-[#24347a] text-white py-6 rounded-md transition disabled:opacity-70"
+            className="w-full bg-[#262E84] text-lg hover:bg-[#24347a] text-white py-6 rounded-md transition disabled:opacity-70"
           >
             {loading
               ? step === 1 ? 'Sending code…' : 'Verifying…'

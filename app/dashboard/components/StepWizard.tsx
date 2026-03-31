@@ -176,7 +176,7 @@ function StepCircle({
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
             : active
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
-            : "bg-[#ffffff] text-[#007AFF]"
+            : "bg-[#F5F0F0] text-[#007AFF]"
         }`}
       >
         {completed ? <Check className="w-5 h-5" /> : number}
