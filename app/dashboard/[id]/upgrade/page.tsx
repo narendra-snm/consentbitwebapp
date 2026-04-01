@@ -1,16 +1,18 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { Playwrite_NG_Modern } from "next/font/google";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
+type CheckoutStage = "redirecting" | "processing_success" | null;
 
 export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
+  const router = useRouter();
   const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId } =
     useDashboardSession();
 
@@ -21,16 +23,73 @@ export default function PricingTable() {
     | "essential"
     | "growth";
 
-  // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const ok = new URLSearchParams(window.location.search).get("success");
-    if (ok !== "1") return;
-    void refresh({ showLoading: false });
-    // Webhook can lag; refresh again so "Current plan" moves off Free.
-    const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
-    return () => window.clearTimeout(t);
-  }, [refresh]);
+  // // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
+  //   const ok = new URLSearchParams(window.location.search).get("success");
+  //   if (ok !== "1") return;
+  //   void refresh({ showLoading: false });
+  //   // Webhook can lag; refresh again so "Current plan" moves off Free.
+  //   const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
+  //   return () => window.clearTimeout(t);
+  // }, [refresh]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const search = new URLSearchParams(window.location.search);
+  const ok = search.get("success");
+  const targetPlan = (search.get("plan") || "").toLowerCase();
+  const sessionId = search.get("session_id");
+
+  if (ok !== "1" || !targetPlan) return;
+
+  // Show a "payment succeeded" loading state while we wait for the webhook and session refresh.
+  setCheckoutStage("processing_success");
+
+  let cancelled = false;
+  let timer: number | undefined;
+
+  const cleanUrl = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("success");
+    url.searchParams.delete("canceled");
+    url.searchParams.delete("plan");
+    url.searchParams.delete("session_id");
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  const poll = async () => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (cancelled) return;
+
+      await refresh({ showLoading: false });
+
+      const current = String(effectivePlanId || "free").toLowerCase();
+
+      if (current === targetPlan) {
+        cleanUrl();
+        // We have the latest plan locally — send the user back to the dashboard.
+        router.replace(`/dashboard/${encodeURIComponent(siteId)}?success=1`);
+        return;
+      }
+
+      await new Promise((resolve) => {
+        timer = window.setTimeout(resolve, 1500);
+      });
+    }
+
+    cleanUrl();
+    // Even if the webhook is delayed, send the user back to the dashboard; it will refresh there too.
+    router.replace(`/dashboard/${encodeURIComponent(siteId)}?success=1`);
+  };
+
+  void poll();
+
+  return () => {
+    cancelled = true;
+    if (timer) window.clearTimeout(timer);
+  };
+}, [refresh, effectivePlanId, router, siteId]);
 
   const CurrentPlanButton = () => (
     <button
@@ -48,8 +107,10 @@ export default function PricingTable() {
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [awaitingPayment, setAwaitingPayment] = useState(false);
+  const [checkoutStage, setCheckoutStage] = useState<CheckoutStage>(null);
+  // Kept for backwards-compatibility while we remove the old overlay UI.
+  // (Checkout now redirects in the same tab.)
+  const [awaitingPayment] = useState(false);
 
   const getPrice = (plan: keyof typeof prices) => {
     const mp = prices[plan];
@@ -81,53 +142,96 @@ export default function PricingTable() {
 
   const total = calculateTotal();
 
-  async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
-    if (sessionLoading) {
-      alert("Please wait — loading your account.");
-      return;
-    }
-    if (!activeOrganizationId) {
-      alert(
-        "We could not load your organization. Refresh the page or sign in again.",
-      );
-      return;
-    }
-    if (!siteId) {
-      alert("Missing site. Open Upgrade from a site in the dashboard.");
-      return;
-    }
-    setCheckoutLoading(true);
-    try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const { url } = await createCheckoutSession({
-        organizationId: activeOrganizationId,
-        planId: plan,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        siteId,
-        successUrl: origin
-          ? `${origin}/dashboard/${siteId}?success=1`
-          : undefined,
-        cancelUrl: origin
-          ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
-          : undefined,
-      });
-      // Open Stripe in a new tab; show waiting overlay on this page
-      window.open(url, "_blank");
-      setAwaitingPayment(true);
-      // Poll for plan upgrade — refresh every 3s until plan changes or user dismisses
-      const poll = setInterval(async () => {
-        await refresh({ showLoading: false });
-      }, 3000);
-      // Stop polling after 10 minutes
-      setTimeout(() => { clearInterval(poll); setAwaitingPayment(false); }, 10 * 60 * 1000);
-      // Store poll id so cancel button can clear it
-      (window as any).__cbPollId = poll;
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not start checkout.");
-    } finally {
-      setCheckoutLoading(false);
-    }
+//   async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
+//     if (sessionLoading) {
+//       alert("Please wait — loading your account.");
+//       return;
+//     }
+//     if (!activeOrganizationId) {
+//       alert(
+//         "We could not load your organization. Refresh the page or sign in again.",
+//       );
+//       return;
+//     }
+//     if (!siteId) {
+//       alert("Missing site. Open Upgrade from a site in the dashboard.");
+//       return;
+//     }
+//     setCheckoutLoading(true);
+//     try {
+//      const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+// const successUrl = origin
+//   ? `${origin}/dashboard/${siteId}/upgrade?success=1`
+//   : undefined;
+
+// const cancelUrl = origin
+//   ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
+//   : undefined;
+
+// const { url } = await createCheckoutSession({
+//   organizationId: activeOrganizationId,
+//   planId: plan,
+//   interval: billing === "yearly" ? "yearly" : "monthly",
+//   siteId,
+//   successUrl,
+//   cancelUrl,
+// });
+// window.location.assign(url);
+//     } catch (e) {
+//       alert(e instanceof Error ? e.message : "Could not start checkout.");
+//     } finally {
+//       setCheckoutLoading(false);
+//     }
+//   }
+async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
+  if (sessionLoading) {
+    alert("Please wait — loading your account.");
+    return;
   }
+  if (!activeOrganizationId) {
+    alert("We could not load your organization. Refresh the page or sign in again.");
+    return;
+  }
+  if (!siteId) {
+    alert("Missing site. Open Upgrade from a site in the dashboard.");
+    return;
+  }
+
+  if (plan === "free") {
+    alert("Please select a paid plan.");
+    return;
+  }
+
+  setCheckoutStage("redirecting");
+
+  try {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const basePath = `/dashboard/${siteId}/upgrade`;
+
+    const successUrl = origin
+      ? `${origin}${basePath}?success=1&plan=${encodeURIComponent(plan)}&session_id={CHECKOUT_SESSION_ID}`
+      : undefined;
+
+    const cancelUrl = origin
+      ? `${origin}${basePath}?canceled=1`
+      : undefined;
+
+    const { url } = await createCheckoutSession({
+      organizationId: activeOrganizationId,
+      planId: plan,
+      interval: billing === "yearly" ? "yearly" : "monthly",
+      siteId,
+      successUrl,
+      cancelUrl,
+    });
+
+    window.location.assign(url);
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Could not start checkout.");
+    setCheckoutStage(null);
+  }
+}
 
   const PlanHeader = ({
     name,
@@ -190,7 +294,7 @@ export default function PricingTable() {
     return (
       <button
         type="button"
-        disabled={checkoutLoading}
+        disabled={checkoutStage !== null}
         onClick={() => {
           setSelected(plan);
         }}
@@ -210,28 +314,27 @@ export default function PricingTable() {
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
-      {/* Awaiting payment overlay */}
-      {awaitingPayment && (
+      {/* Checkout loading overlay (redirecting / payment success processing) */}
+      {checkoutStage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative w-[360px] rounded-[16px] bg-white p-8 shadow-lg text-center">
+          <div className="relative w-[380px] rounded-[16px] bg-white p-8 shadow-lg text-center">
             <div className="mb-4 flex justify-center">
               <div className="h-10 w-10 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
             </div>
-            <p className="text-base font-semibold text-black mb-1">Waiting for payment…</p>
-            <p className="text-sm text-[#4b5563] mb-5">Complete the checkout in the new tab. This page will update automatically once payment is confirmed.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setAwaitingPayment(false);
-                if (typeof window !== "undefined" && (window as any).__cbPollId) {
-                  clearInterval((window as any).__cbPollId);
-                }
-              }}
-              className="text-sm text-[#007aff] underline"
-            >
-              Cancel / I already paid
-            </button>
+            {checkoutStage === "redirecting" ? (
+              <>
+                <p className="text-base font-semibold text-black mb-1">Redirecting to checkout…</p>
+                <p className="text-sm text-[#4b5563]">Opening Stripe checkout in this tab.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-semibold text-black mb-1">Payment succeeded</p>
+                <p className="text-sm text-[#4b5563]">
+                  Updating your dashboard with the latest plan details…
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -431,7 +534,7 @@ export default function PricingTable() {
 
               <button
                 type="button"
-                disabled={checkoutLoading || !selected}
+                disabled={checkoutStage !== null || !selected}
                 onClick={() => {
                   if (!selected) {
                     alert("Select Basic, Essential, or Growth first.");
@@ -441,7 +544,7 @@ export default function PricingTable() {
                 }}
                 className="bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {checkoutLoading ? "Redirecting…" : "Proceed to pay"}
+                {checkoutStage === "redirecting" ? "Redirecting…" : "Proceed to pay"}
               </button>
 
             </div>

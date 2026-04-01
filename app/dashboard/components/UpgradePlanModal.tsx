@@ -51,6 +51,10 @@ export function UpgradePlanModal({
     setLoading(true);
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}${window.location.hash || ''}`
+          : '/dashboard';
       const data = await createCheckoutSession({
         organizationId,
         planId: nextPlan,
@@ -58,7 +62,8 @@ export function UpgradePlanModal({
         siteId,
         siteName: null,
         siteDomain: null,
-        successUrl: `${origin}/dashboard/post-setup?siteId=${encodeURIComponent(siteId)}`,
+        // Return to same page with upgraded=1 so PostSetupOverlay shows InstallConsentModal.
+        successUrl: `${origin}${returnTo || '/dashboard'}?upgraded=1&siteId=${encodeURIComponent(siteId)}`,
         cancelUrl: typeof window !== 'undefined' ? window.location.href : `${origin}/dashboard`,
       });
       window.location.assign(data.url);

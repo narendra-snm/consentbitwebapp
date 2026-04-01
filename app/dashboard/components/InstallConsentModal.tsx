@@ -43,7 +43,8 @@ export default function InstallConsentModal({
   cdnScriptId?: string;
   onClose?: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedIcon, setCopiedIcon] = useState(false);
+  const [copiedBtn, setCopiedBtn] = useState(false);
   const [publicUrl, setPublicUrl] = useState(siteDomain || "");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -55,8 +56,10 @@ export default function InstallConsentModal({
     siteId ?? null,
     cdnScriptId ?? null,
   );
+  // No async/defer — the script must execute synchronously as the browser parses <head>
+  // so the consent blocker is installed before any tracking scripts that follow it.
   const installCode = absoluteScriptUrl
-    ? `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${absoluteScriptUrl}" async></script>\n<!-- End ConsentBit banner -->`
+    ? `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${absoluteScriptUrl}"></script>\n<!-- End ConsentBit banner -->`
     : "";
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function InstallConsentModal({
     return `https://${v}`;
   };
 
-  const handleCopy = async () => {
+  const handleCopy = async (which: "icon" | "btn") => {
     setCopyError(null);
     if (!installCode) {
       setCopyError("Missing script URL for this site.");
@@ -84,8 +87,13 @@ export default function InstallConsentModal({
     }
     const ok = await copyToClipboard(installCode);
     if (ok) {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      if (which === "icon") {
+        setCopiedIcon(true);
+        window.setTimeout(() => setCopiedIcon(false), 2000);
+      } else {
+        setCopiedBtn(true);
+        window.setTimeout(() => setCopiedBtn(false), 2000);
+      }
     } else {
       setCopyError("Could not copy — select the code and copy manually (Ctrl/Cmd+C).");
     }
@@ -121,7 +129,16 @@ export default function InstallConsentModal({
         );
       }
     } catch (e: unknown) {
-      setVerifyError(e instanceof Error ? e.message : "Verification failed");
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.includes("403")) {
+        setVerifyError("The URL you entered was not found or is incorrect. Please check the domain and try again.");
+      } else if (msg.includes("404")) {
+        setVerifyError("Page not found. Check the domain is correct and the site is live.");
+      } else if (msg.includes("fetch") || msg.includes("network") || msg.toLowerCase().includes("failed to fetch")) {
+        setVerifyError("Could not reach that URL. Make sure the domain is correct and the site is publicly accessible.");
+      } else {
+        setVerifyError(msg || "Verification failed. Check the domain and try again.");
+      }
     } finally {
       setVerifying(false);
     }
@@ -146,30 +163,29 @@ export default function InstallConsentModal({
             <p className="whitespace-pre-wrap break-all pr-2 font-mono text-sm">{installCode}</p>
             <button
               type="button"
-              onClick={() => void handleCopy()}
+              onClick={() => void handleCopy("icon")}
               className="absolute bottom-4 right-4 rounded p-1 text-gray-500 hover:bg-black/5 hover:text-gray-800"
-              aria-label={copied ? "Copied" : "Copy installation code"}
-              title={copied ? "Copied" : "Copy"}
+              aria-label={copiedIcon ? "Copied" : "Copy installation code"}
+              title={copiedIcon ? "Copied" : "Copy"}
             >
-              {copied ? <Check size={22} className="text-emerald-600" /> : <Copy size={22} />}
+              {copiedIcon ? <Check size={22} className="text-emerald-600" /> : <Copy size={22} />}
             </button>
           </div>
 
           <div className="mb-9.25 flex gap-3">
             <button
               type="button"
-              onClick={() => void handleCopy()}
+              onClick={() => void handleCopy("btn")}
               className="flex items-center gap-2 rounded-md bg-[#E6F1FD] px-2.75 py-3.5 text-xs hover:bg-gray-200"
             >
-              {copied ? "Copied!" : "Copy code"}
+              {copiedBtn ? "Copied!" : "Copy code"}
               <Copy size={14} className="ml-2" />
             </button>
           </div>
 
           <p className="mb-5 font-semibold">
-            Paste the code right after the opening{" "}
-            <span className="rounded bg-blue-100 px-1 text-blue-700">{"<head>"}</span> tag in your site&apos;s source
-            code.
+            Paste the code as the <strong>first script</strong> inside the opening{" "}
+            <span className="rounded bg-blue-100 px-1 text-blue-700">{"<head>"}</span> tag — before any other scripts — so tracking is blocked before consent.
           </p>
 
           <p className="mb-1 text-xs">Refer to our platform-wise guides for instructions.</p>
@@ -184,7 +200,7 @@ export default function InstallConsentModal({
             <input
               type="text"
               value={publicUrl}
-              onChange={(e) => setPublicUrl(e.target.value)}
+              onChange={(e) => { setPublicUrl(e.target.value); setVerifyError(null); }}
               placeholder={siteDomain || "yoursite.com"}
               disabled={verifying}
               className="h-12 w-full min-w-[319px] max-w-[319px] pr-[70px] rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

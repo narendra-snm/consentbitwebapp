@@ -49,7 +49,13 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
     onChange: (v: string) => void;
   }) => {
     const [open, setOpen] = useState(false);
+    const [inputText, setInputText] = useState(value);
     const popoverRef = useRef<HTMLDivElement>(null);
+
+    // Keep local text in sync when value changes externally (e.g. picker drag)
+    useEffect(() => {
+      setInputText(value);
+    }, [value]);
 
     useEffect(() => {
       const handleClick = (e: MouseEvent) => {
@@ -65,30 +71,43 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
       return () => document.removeEventListener("mousedown", handleClick);
     }, []);
 
+    const handleTextChange = (raw: string) => {
+      setInputText(raw);
+      const normalised = raw.trim().startsWith("#") ? raw.trim() : `#${raw.trim()}`;
+      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalised)) {
+        onPick(normalised);
+      }
+    };
+
     return (
       <div className="flex items-center justify-between">
         <label className="text-sm text-[#111827]">{label}</label>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            className="flex items-center w-[150px] h-[36px] bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg overflow-hidden"
-          >
-            <div
-              className="w-[42px] h-full"
+        <div className="relative" ref={popoverRef}>
+          <div className="flex items-center w-[150px] h-[36px] bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg overflow-hidden">
+            {/* Swatch — click opens picker */}
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              className="w-[42px] h-full shrink-0 border-r border-[#E5E5E5] cursor-pointer"
               style={{ backgroundColor: value }}
+              aria-label="Open color picker"
             />
-            <span className="flex-1 text-sm text-[#111827] text-center">
-              {value}
-            </span>
-          </button>
+            {/* Editable hex text input */}
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => handleTextChange(e.target.value)}
+              onBlur={() => setInputText(value)}
+              onFocus={() => setOpen(false)}
+              maxLength={7}
+              spellCheck={false}
+              className="flex-1 text-sm text-[#111827] text-center bg-transparent outline-none px-1"
+            />
+          </div>
 
           {open && (
-            <div
-              ref={popoverRef}
-              className="absolute top-[44px] right-0 z-50 bg-white p-3 rounded-lg shadow-xl"
-            >
+            <div className="absolute top-[44px] right-0 z-50 bg-white p-3 rounded-lg shadow-xl">
               <HexColorPicker color={value} onChange={onPick} />
             </div>
           )}

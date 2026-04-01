@@ -34,7 +34,7 @@ export default function BannerControl({ value, onChange }: Props) {
               key={pos.id}
               type="button"
               onClick={() => patch({ position: pos.id })}
-              className="relative flex flex-col items-start gap-2 focus:outline-none"
+              className="relative flex flex-col items-start gap-2 focus:outline-none cursor-pointer"
               aria-label={`Select ${pos.label} position`}
             >
               {position === pos.id && (

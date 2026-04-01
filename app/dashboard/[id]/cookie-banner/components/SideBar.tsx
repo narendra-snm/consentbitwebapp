@@ -8,9 +8,12 @@ interface SidebarProps {
   active: string;
   setActive: (active: string) => void;
   iabEnabled: boolean;
+  effectivePlanId?: string;
 }
 
-export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
+export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: SidebarProps) {
+  const planKey = String(effectivePlanId || "free").toLowerCase();
+  const isFree = planKey === "free";
 
   const menuItems = [
     { name: "General", icon: "general" },
@@ -25,12 +28,19 @@ export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
 
       {menuItems.map((item) => {
         const isActive = active === item.name;
+        const lockedForFree =
+          isFree &&
+          (item.name === "Content" ||
+            item.name === "Layout" ||
+            item.name === "Colors" ||
+            item.name === "Type");
+        const disabled = (iabEnabled && item.name === "Content") || lockedForFree;
 
         return (
           <button
             key={item.name}
             onClick={() => setActive(item.name)}
-            disabled={iabEnabled && item.name === "Content"}
+            disabled={disabled}
             className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all
               
               ${isActive ? "bg-[#E6F1FD]" : "hover:bg-gray-50"}
@@ -109,7 +119,7 @@ export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
             <span
               className={`text-base font-medium tracking-tight
                 ${isActive ? "text-[#007AFF]" : "text-[#111827]"}
-                ${iabEnabled && item.name === "Content" ? "text-gray-400 cursor-not-allowed" : ""}
+                ${disabled ? "text-gray-400 cursor-not-allowed" : ""}
               `}
             >
               {item.name}

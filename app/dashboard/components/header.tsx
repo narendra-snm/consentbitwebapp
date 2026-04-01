@@ -85,7 +85,7 @@ export default function Header() {
   }, []);
 
   const displayDomain =
-    activeSite?.domain || activeSite?.name || (loading ? "Loading…" : "Select a site");
+    activeSite?.domain || activeSite?.name || (!loading ? "Select a site" : null);
 
   const handleSelectSite = (site: any) => {
     setActiveSiteId(site?.id ? String(site.id) : null);
@@ -115,15 +115,18 @@ export default function Header() {
         {/* DOMAIN SELECTOR */}
         <div ref={domainRef} className="relative flex items-center gap-2">
           <button
-            onClick={() => setDomainOpen(!domainOpen)}
-            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm"
+            onClick={() => !loading && setDomainOpen(!domainOpen)}
+            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm min-w-[120px]"
             suppressHydrationWarning
           >
-            {displayDomain} 
+            {loading ? (
+              <span className="h-4 w-20 rounded bg-[#d0e4f7] animate-pulse inline-block" />
+            ) : (
+              displayDomain
+            )}
             <svg width="10" height="5" viewBox="0 0 10 5" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M0.5 0.5L3.26857 3.16493C4.04299 3.91036 5.26812 3.91036 6.04254 3.16493L8.81111 0.5" stroke="black" strokeLinecap="round"/>
 </svg>
-
           </button>
 
           <button onClick={() =>{ 

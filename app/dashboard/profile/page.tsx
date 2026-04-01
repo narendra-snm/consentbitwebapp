@@ -74,6 +74,9 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const isActive = (tab: TabType) => activeTab === tab;
 
+  const ORGS_PER_PAGE = 5;
+  const [orgPage, setOrgPage] = useState(1);
+
   const accountOwnerEmail = useMemo(
     () => String(user?.email || "").trim() || "—",
     [user?.email],
@@ -113,6 +116,9 @@ export default function SettingsPage() {
       };
     });
   }, [sites]);
+
+  const orgTotalPages = Math.max(1, Math.ceil(organizations.length / ORGS_PER_PAGE));
+  const pagedOrganizations = organizations.slice((orgPage - 1) * ORGS_PER_PAGE, orgPage * ORGS_PER_PAGE);
 
   const currentPlan = useMemo<PlanTier>(() => {
     const rows = Array.isArray(sites) ? sites : [];
@@ -332,7 +338,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Table Rows */}
-                {organizations.map((org, index) => (
+                {pagedOrganizations.map((org, index) => (
                   <div key={index}>
                     <div className={`px-[13px] py-4 grid ${TABLE_GRID} gap-x-4 items-center`}>
                       {/* Site URL */}
@@ -403,7 +409,7 @@ export default function SettingsPage() {
                         </button>
                       </div>
                     </div>
-                    {index < organizations.length - 1 && <div className="h-[1px] bg-black/10 mx-[2px]" />}
+                    {index < pagedOrganizations.length - 1 && <div className="h-[1px] bg-black/10 mx-[2px]" />}
                   </div>
                 ))}
                 {!loading && organizations.length === 0 ? (
@@ -411,6 +417,40 @@ export default function SettingsPage() {
                     No organizations found.
                   </div>
                 ) : null}
+
+                {/* Organizations Pagination */}
+                {orgTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-[13px] py-3 border-t border-black/10">
+                    <p className="text-[12px] text-[#6b7280]">
+                      {(orgPage - 1) * ORGS_PER_PAGE + 1}–{Math.min(orgPage * ORGS_PER_PAGE, organizations.length)} of {organizations.length}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setOrgPage((p) => Math.max(1, p - 1))}
+                        disabled={orgPage === 1}
+                        className="w-7 h-7 flex items-center justify-center rounded border border-[#e5e5e5] text-[#4b5563] disabled:opacity-40 hover:bg-[#f3f4f6]"
+                      >
+                        <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M5 1L1 5L5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                      {Array.from({ length: orgTotalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setOrgPage(p)}
+                          className={`w-7 h-7 flex items-center justify-center rounded text-[12px] font-medium border ${p === orgPage ? "bg-[#007AFF] text-white border-[#007AFF]" : "border-[#e5e5e5] text-[#4b5563] hover:bg-[#f3f4f6]"}`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setOrgPage((p) => Math.min(orgTotalPages, p + 1))}
+                        disabled={orgPage === orgTotalPages}
+                        className="w-7 h-7 flex items-center justify-center rounded border border-[#e5e5e5] text-[#4b5563] disabled:opacity-40 hover:bg-[#f3f4f6]"
+                      >
+                        <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1L5 5L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -136,17 +136,38 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     return raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
   }
 
+  function validateDomain(raw: string): string | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return "Please enter your website URL.";
+    const domain = normalizeDomain(trimmed);
+    if (!domain) return "Please enter your website URL.";
+    // Must contain a dot (e.g. example.com — not just "localhost" or a bare word)
+    if (!domain.includes(".")) return "Enter a valid domain like example.com.";
+    // Must not have spaces
+    if (/\s/.test(domain)) return "Domain cannot contain spaces.";
+    // Basic hostname pattern check
+    if (!/^[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=%]+$/.test(domain)) return "Enter a valid website URL.";
+    // Check for duplicate domain
+    const existingSite = (Array.isArray(sites) ? sites : []).find((s: any) => {
+      const existingDomain = normalizeDomain(String(s?.domain || s?.name || ""));
+      return existingDomain && existingDomain.toLowerCase() === domain.toLowerCase();
+    });
+    if (existingSite) return `${domain} is already added to your account.`;
+    return null;
+  }
+
   async function handlePlanAction(planId: PlanType) {
     if (planId === "free" && hasExistingFreeSite) {
       setSubmitError("Free plan allows only one site. Upgrade to add more sites.");
       return;
     }
     setSelectedPlan(planId);
-    const domain = normalizeDomain(websiteUrl);
-    if (!domain) {
-      setUrlError("Please enter a valid website URL.");
+    const validationError = validateDomain(websiteUrl);
+    if (validationError) {
+      setUrlError(validationError);
       return;
     }
+    const domain = normalizeDomain(websiteUrl);
     setUrlError(null);
     setSubmitError(null);
     setSubmitting(true);
@@ -160,12 +181,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
         await refresh({ showLoading: false });
         onClose?.();
-        // Route through /dashboard so we can show install code, then return to the same sub-tab
-        router.push(
-          newSiteId
-            ? `/dashboard?postSetup=1&siteId=${encodeURIComponent(newSiteId)}&returnTo=${encodeURIComponent(returnTo)}`
-            : "/dashboard",
-        );
+        // Use postSetup=1 so PostSetupOverlay shows InstallConsentModal on the current page.
+        const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
+        if (newSiteId) {
+          url.searchParams.set("postSetup", "1");
+          url.searchParams.set("siteId", newSiteId);
+        }
+        router.push(url.pathname + url.search + (url.hash || ""));
       } else {
         if (!activeOrganizationId) {
           setSubmitError("Organization not loaded. Please refresh and try again.");
@@ -184,9 +206,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           successUrl: `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`,
           cancelUrl: `${origin}${returnTo}`,
         });
-        const tab = window.open(data.url, "_blank");
-        checkoutTab.current = tab;
-        setCheckoutPending(true);
+        // Redirect in the same tab to avoid leaving behind a stuck "waiting" state.
+        window.location.assign(data.url);
       }
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "Failed to add website");
@@ -276,6 +297,9 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                   onChange={(e) => {
                     setWebsiteUrl(e.target.value);
                     if (urlError) setUrlError(null);
+                  }}
+                  onBlur={(e) => {
+                    if (e.target.value.trim()) setUrlError(validateDomain(e.target.value));
                   }}
                   placeholder="acme.com"
                   className={`w-full h-[48px] bg-white border rounded-lg px-[18px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] ${
