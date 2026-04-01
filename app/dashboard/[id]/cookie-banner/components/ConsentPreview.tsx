@@ -531,7 +531,7 @@ export default function ConsentPreview({
               <button
                 key="float-icon"
                 type="button"
-                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white shadow-md cursor-pointer hover:opacity-90"
+                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-transparent shadow-md cursor-pointer hover:opacity-90"
                 onClick={openPreferences}
                 aria-label={content?.preferencesLabel || t('preferences')}
               >
@@ -545,7 +545,7 @@ export default function ConsentPreview({
               return (
                 <div key={bannerAnimation} className="absolute bottom-0 left-0 right-0">
                   {floatingButton.enabled && (
-                    <div className={`absolute bottom-2 z-0 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
+                    <div className={`absolute bottom-2 z-20 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
                       {floatingIcon}
                     </div>
                   )}

@@ -265,8 +265,10 @@ export default function DashboardPage() {
 
 
 
-  // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton
-  if (hydrated && (pendingPostSetupDomain || pendingPostSetupSiteId)) {
+  // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton.
+  // Also keep showing loader when wizardSkipped=true but postSetupInstall not yet ready (avoids
+  // flashing the wizard + dashboard before the install modal appears).
+  if (hydrated && (pendingPostSetupDomain || pendingPostSetupSiteId || (wizardSkipped && !postSetupInstall && !showOnboarding && loading))) {
     const loadingLabel = pendingPostSetupSiteId
       ? "Payment succeeded — updating your plan…"
       : "Setting up your site…";
@@ -395,17 +397,6 @@ export default function DashboardPage() {
           alt="logo"
           className="h-6"
         />
-        <button
-          type="button"
-          onClick={() => {
-            dismissOnboardingWizard();
-            const target = activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard";
-            router.replace(target);
-          }}
-          className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
-        >
-          Skip to Dashboard →
-        </button>
       </div>
 
       {/* Wizard */}

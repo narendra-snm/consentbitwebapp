@@ -61,8 +61,10 @@ export default function StepWizard({
         cdnScriptId: result?.site?.cdnScriptId,
         domain: siteData.domain,
       });
-      void refresh({ showLoading: false });
+      // Step first, then refresh — prevents sites.length > 0 flipping showOnboarding off
+      // before the wizard advances, which caused a flash of the dashboard.
       setStep(3);
+      void refresh({ showLoading: false });
     } catch (err: unknown) {
       setSetupError(err instanceof Error ? err.message : 'Setup failed');
     }
