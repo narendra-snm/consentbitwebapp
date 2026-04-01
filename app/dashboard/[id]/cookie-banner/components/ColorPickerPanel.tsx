@@ -5,6 +5,7 @@ import { HexColorPicker } from "react-colorful";
 import { useAppContext } from "@/app/context/AppProvider";
 import type { ColorSettings } from "./bannerAppearance";
 
+
 type Props = {
   /** When set with `onChange`, panel is controlled from parent `appearance.colors` (publish + preview stay in sync). */
   value?: ColorSettings;
@@ -41,10 +42,12 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
 
   const ColorInput = ({
     label,
+    tooltip,
     value,
     onChange: onPick,
   }: {
     label: string;
+    tooltip: string;
     value: string;
     onChange: (v: string) => void;
   }) => {
@@ -83,7 +86,10 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
       <div className="flex items-center justify-between">
         <label className="text-sm text-[#111827]">{label}</label>
 
-        <div className="relative" ref={popoverRef}>
+        <div className="relative group" ref={popoverRef}>
+          <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+            {tooltip}
+          </span>
           <div className="flex items-center w-[150px] h-[36px] bg-[#F9F9FA] border border-[#E5E5E5] rounded-lg overflow-hidden">
             {/* Swatch — click opens picker */}
             <button
@@ -102,7 +108,7 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
               onFocus={() => setOpen(false)}
               maxLength={7}
               spellCheck={false}
-              className="flex-1 text-sm text-[#111827] text-center bg-transparent outline-none px-1"
+              className="flex-1 text-sm text-[#111827] text-left bg-transparent outline-none px-2"
             />
           </div>
 
@@ -119,25 +125,24 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
   return (
     <div className="w-full max-w-[454px] space-y-4">
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
-        <h3 className="text-base font-semibold  mb-5">
-          General Colors
-        </h3>
+        <h3 className="text-base font-semibold mb-5">General Colors</h3>
 
         <div className="space-y-4">
           <ColorInput
             label="Banners background"
+            tooltip="Background color of the consent banner card."
             value={colors.bannerBg}
             onChange={(v) => updateColor("bannerBg", v)}
           />
-
           <ColorInput
             label="Text color"
+            tooltip="Color of the body text inside the banner."
             value={colors.textColor}
             onChange={(v) => updateColor("textColor", v)}
           />
-
           <ColorInput
             label="Heading color"
+            tooltip="Color of the banner title and category headings."
             value={colors.headingColor}
             onChange={(v) => updateColor("headingColor", v)}
           />
@@ -145,36 +150,35 @@ const ColorPickerPanel: React.FC<Props> = ({ value: controlledValue, onChange: c
       </div>
 
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
-        <h3 className="text-base font-semibold  mb-5">
-          Buttons colors
-        </h3>
+        <h3 className="text-base font-semibold mb-5">Buttons colors</h3>
 
         <p className="text-xs text-[#6B7280] mb-3">Accept/Reject/Cancel</p>
         <div className="space-y-4 mb-6">
           <ColorInput
             label="Background"
+            tooltip="Background color of the Accept, Reject and Cancel buttons."
             value={colors.buttonColor}
             onChange={(v) => updateColor("buttonColor", v)}
           />
-
           <ColorInput
             label="Text"
+            tooltip="Text color of the Accept, Reject and Cancel buttons."
             value={colors.buttonTextColor}
             onChange={(v) => updateColor("buttonTextColor", v)}
           />
         </div>
 
-        <p className="text-xs text-[#6B7280] mb-3">
-          Preferences
-        </p>
+        <p className="text-xs text-[#6B7280] mb-3">Preferences</p>
         <div className="space-y-4">
           <ColorInput
             label="Background"
+            tooltip="Background color of the Preferences and Save buttons."
             value={colors.preferencesButtonBg}
             onChange={(v) => updateColor("preferencesButtonBg", v)}
           />
           <ColorInput
             label="Text"
+            tooltip="Text color of the Preferences and Save buttons."
             value={colors.preferencesButtonText}
             onChange={(v) => updateColor("preferencesButtonText", v)}
           />

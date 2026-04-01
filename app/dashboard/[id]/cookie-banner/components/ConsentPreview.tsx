@@ -1,7 +1,7 @@
 "use client";
 
+import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getBannerLanguage, getTranslation } from "./translations";
 import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
@@ -12,6 +12,17 @@ import {CookieConsentBanner} from "./Iab"
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
+}
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
 }
 
 export default function ConsentPreview({
@@ -883,60 +894,51 @@ export default function ConsentPreview({
 
       {/* Device Selector */}
       <div className="flex gap-6 mt-6 mb-4 items-center">
-        <button
-          type="button"
-          className="flex items-center gap-2 cursor-pointer "
-          onClick={() => setDevice("mobile")}
-        >
-          <div
-            className="w-[10px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "mobile" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base"
-            style={{ color: device === "mobile" ? "#007aff" : "#6B7280" }}
+        <Tooltip text="Preview the banner on a phone screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("mobile")}
           >
-            Phone
-          </p>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2 cursor-pointer"
-          onClick={() => setDevice("tablet")}
-        >
-          <div
-            className="w-[16px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "tablet" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base cursor-pointer"
-            style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}
+            <div
+              className="w-[10px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "mobile" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base" style={{ color: device === "mobile" ? "#007aff" : "#6B7280" }}>
+              Phone
+            </p>
+          </button>
+        </Tooltip>
+        <Tooltip text="Preview the banner on a tablet screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("tablet")}
           >
-            Tablet
-          </p>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2 cursor-pointer"
-          onClick={() => setDevice("desktop")}
-        >
-          <div
-            className="w-[24px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "desktop" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base"
-            style={{ color: device === "desktop" ? "#007aff" : "#6B7280" }}
+            <div
+              className="w-[16px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "tablet" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base cursor-pointer" style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}>
+              Tablet
+            </p>
+          </button>
+        </Tooltip>
+        <Tooltip text="Preview the banner on a desktop screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("desktop")}
           >
-            Desktop
-          </p>
-        </button>
+            <div
+              className="w-[24px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "desktop" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base" style={{ color: device === "desktop" ? "#007aff" : "#6B7280" }}>
+              Desktop
+            </p>
+          </button>
+        </Tooltip>
       </div>
     </div>
 

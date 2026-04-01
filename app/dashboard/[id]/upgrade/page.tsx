@@ -6,6 +6,28 @@ import { createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { Playwrite_NG_Modern } from "next/font/google";
 
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-center">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function TooltipBelow({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex">
+      {children}
+      <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-center">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 type CheckoutStage = "redirecting" | "processing_success" | null;
 
@@ -292,23 +314,25 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
     const isSelected = selected === plan;
 
     return (
-      <button
-        type="button"
-        disabled={checkoutStage !== null}
-        onClick={() => {
-          setSelected(plan);
-        }}
-        className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
-        ${
-          isSelected
-            ? "bg-green-500"
-            : recommended
-            ? "bg-green-500"
-            : "bg-[#007aff]"
-        }`}
-      >
-        {isSelected ? "Selected" : "Switch plan"}
-      </button>
+      <Tooltip text={isSelected ? "This plan is selected. Click Proceed to pay to continue." : `Switch to the ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan.`}>
+        <button
+          type="button"
+          disabled={checkoutStage !== null}
+          onClick={() => {
+            setSelected(plan);
+          }}
+          className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed
+          ${
+            isSelected
+              ? "bg-green-500"
+              : recommended
+              ? "bg-green-500"
+              : "bg-[#007aff]"
+          }`}
+        >
+          {isSelected ? "Selected" : "Switch plan"}
+        </button>
+      </Tooltip>
     );
   };
 
@@ -346,27 +370,31 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
             Chose your Payment Plan
           </div>
           <div className="flex bg-[#f1f5f9] rounded-[22px] p-1 gap-2.25">
-            <button
-              onClick={() => setBilling("monthly")}
-              className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] ${
-                billing === "monthly"
-                  ? "bg-[#007aff] text-white"
-                  : "text-[#848199]"
-              }`}
-            >
-              MONTHLY
-            </button>
+            <TooltipBelow text="Billed month-to-month. Cancel anytime.">
+              <button
+                onClick={() => setBilling("monthly")}
+                className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] cursor-pointer ${
+                  billing === "monthly"
+                    ? "bg-[#007aff] text-white"
+                    : "text-[#848199]"
+                }`}
+              >
+                MONTHLY
+              </button>
+            </TooltipBelow>
 
-            <button
-              onClick={() => setBilling("yearly")}
-              className={`px-5.75 py-2 text-[14px]  h-[44px] font-extrabold rounded-[22px] ${
-                billing === "yearly"
-                  ? "bg-[#007aff] text-white"
-                  : "text-[#848199]"
-              }`}
-            >
-              YEARLY (20% OFF)
-            </button>
+            <TooltipBelow text="Pay for a full year and save 20% compared to monthly billing.">
+              <button
+                onClick={() => setBilling("yearly")}
+                className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] cursor-pointer ${
+                  billing === "yearly"
+                    ? "bg-[#007aff] text-white"
+                    : "text-[#848199]"
+                }`}
+              >
+                YEARLY (20% OFF)
+              </button>
+            </TooltipBelow>
           </div>
 
           
@@ -389,7 +417,7 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
           <Feature label="No of Domains" values={["01", "01", "01", "01"]} />
 
           <Feature
-            label="No of scans"
+            label="No of Scans"
             values={[
               "100",
               "750",
@@ -399,7 +427,7 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
           />
 
           <Feature
-            label="No of Page views"
+            label="No of Page Views"
             values={[
               "7500",
               "100,000 pageviews/m",
@@ -493,13 +521,15 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
                 )}
               </div>
 
-              <button
-                onClick={applyPromo}
-                disabled={!selected}
-                className="bg-[#007aff] text-white px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Apply
-              </button>
+              <Tooltip text={!selected ? "Select a plan first to apply a promo code." : "Apply your promo code for a discount."}>
+                <button
+                  onClick={applyPromo}
+                  disabled={!selected}
+                  className="bg-[#007aff] text-white px-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Apply
+                </button>
+              </Tooltip>
 
             </div>
 
@@ -523,29 +553,32 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
                 <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
                   ${total}
                 </div>
-
-                <div>
+               
+                {/* <div>
                   {billing === "yearly"
                     ? "(Billed annually)"
                     : "(Billed monthly)"}
-                </div>
+                </div> */}
+                <div className="text-gray-500">Payable now</div>
 
               </div>
 
-              <button
-                type="button"
-                disabled={checkoutStage !== null || !selected}
-                onClick={() => {
-                  if (!selected) {
-                    alert("Select Basic, Essential, or Growth first.");
-                    return;
-                  }
-                  void checkoutWithPlan(selected);
-                }}
-                className="bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {checkoutStage === "redirecting" ? "Redirecting…" : "Proceed to pay"}
-              </button>
+              <Tooltip text={!selected ? "Select a plan above to proceed to payment." : `Proceed to pay for the ${selected.charAt(0).toUpperCase() + selected.slice(1)} plan via Stripe.`}>
+                <button
+                  type="button"
+                  disabled={checkoutStage !== null || !selected}
+                  onClick={() => {
+                    if (!selected) {
+                      alert("Select Basic, Essential, or Growth first.");
+                      return;
+                    }
+                    void checkoutWithPlan(selected);
+                  }}
+                  className="bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {checkoutStage === "redirecting" ? "Redirecting…" : "Proceed to pay"}
+                </button>
+              </Tooltip>
 
             </div>
 
@@ -557,6 +590,14 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
     </div>
   );
 }
+const FEATURE_TOOLTIPS: Record<string, string> = {
+  "No of Domains": "Number of websites you can add under this plan.",
+  "No of Scans": "How many automated cookie scans you can run per month.",
+  "No of Page Views": "Maximum monthly page views tracked for consent analytics.",
+  "IAB / TCF": "IAB Transparency & Consent Framework — required for ad networks and publishers in the EU.",
+  "Compliance": "Privacy regulations covered. GDPR for EU visitors, CCPA for California visitors.",
+};
+
 function Feature({
   label,
   values,
@@ -564,10 +605,16 @@ function Feature({
   label: string;
   values: string[];
 }) {
+  const tip = FEATURE_TOOLTIPS[label];
   return (
     <>
-      <div className="p- py-5.5 border-t border-[#000000]/10 text-[17px] flex items-center ">
+      <div className="p- py-5.5 border-t border-[#000000]/10 text-[17px] flex items-center gap-1.5">
         {label}
+        {tip && (
+          <Tooltip text={tip}>
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#e5e7eb] text-[#6b7280] text-[10px] font-bold cursor-default select-none">?</span>
+          </Tooltip>
+        )}
       </div>
 
       {values.map((v, i) => (
