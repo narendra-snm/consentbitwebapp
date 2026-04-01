@@ -687,10 +687,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
 
           <div>
-            <h3 className="mb-2 font-['DM_Sans'] text-base font-semibold leading-5 text-black" style={dm}>
+            <h3 className="mb-6 text-xl font-['DM_Sans'] text-base font-semibold leading-5 text-black" style={dm}>
               {CATEGORY_LABELS[selectedCategory] ?? selectedCategory}
             </h3>
-            <p className="font-['DM_Sans'] text-sm font-normal leading-normal text-[#4b5563]" style={dm}>
+            <p className="font-['DM_Sans']  font-normal leading-normal text-[#4b5563]" style={dm}>
               {CATEGORY_DESCRIPTIONS[selectedCategory] ?? 'No description available.'}
             </p>
             {selectedCookies.length > 0 ? (
@@ -830,8 +830,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </p>
               </div>
             ) : (
-              <div className="w-full rounded-[5px] border border-[#9fbce4] overflow-hidden">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center h-[40px] bg-[#f2f7ff] px-4 gap-3">
+              <div className="w-full rounded-[5px]  border-[#9fbce4] overflow-hidden">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 bg-[#f2f7ff]  border-b border-[#9FBCE4]  gap-3">
                   {['Scan Date (UTC)', 'Status', 'URLs', 'Categories', 'Cookies', 'Scripts', 'URL'].map((label) => (
                     <div key={label} className="font-['DM_Sans'] text-xs font-semibold text-[#0a091f]" style={dm}>{label}</div>
                   ))}
@@ -844,9 +844,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     .map((row, i) => (
                       <div
                         key={row.id}
-                        className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center h-[44px] px-4 gap-3 ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
+                        className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 gap-3  border-b border-[#9FBCE4]`}
                       >
-                        <div className="font-['DM_Sans'] text-xs text-[#0a091f] truncate" style={dm}>{formatTableDate(row.createdAt)}</div>
+                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatTableDate(row.createdAt)}</div>
                         <div>{statusBadge(row.scanStatus)}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
                         <div
@@ -933,8 +933,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 </p>
               </div>
             ) : (
-              <div className="w-full overflow-hidden rounded-[5px] border border-[#9fbce4]">
-                <div className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_auto] items-center h-[40px] bg-[#f2f7ff] px-4 gap-3">
+              <div className="w-full overflow-hidden rounded-[5px]  border-[#9fbce4]">
+                <div className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_auto] items-center py-5 pl-5.75  pr-1   border-b border-[#9FBCE4] gap-3 bg-[#f2f7ff]">
                   {['Cookie ID', 'Domain (Provider)', 'Category', 'Duration', 'Script Pattern', ''].map((h) => (
                     <div key={h} className="font-['DM_Sans'] text-xs font-semibold text-[#0a091f]" style={dm}>{h}</div>
                   ))}
@@ -942,21 +942,21 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 {customRules.map((rule, i) => (
                   <div
                     key={rule.id}
-                    className={`grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_auto] items-center min-h-[44px] px-4 gap-3 py-2 ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}
+                    className={`grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_auto] items-center  pl-5.75 pr-1 gap-3 py-5  border-b border-[#9FBCE4]`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-['DM_Sans'] text-xs font-medium text-[#0a091f] truncate" style={dm}>{rule.name}</span>
+                    <div className=" ">
+                      <span className="font-['DM_Sans'] text-sm font-medium text-[#0a091f] truncate" style={dm}>{rule.name}</span>
                       {rule.published === 0 && (
                         <span className="shrink-0 inline-flex h-4 items-center rounded-full bg-orange-100 px-1.5 text-[9px] font-semibold text-orange-600 uppercase tracking-wide">
                           draft
                         </span>
                       )}
                     </div>
-                    <span className="font-['DM_Sans'] text-xs text-[#0a091f] truncate" style={dm}>{rule.domain}</span>
-                    <span className="font-['DM_Sans'] text-xs text-[#0a091f] capitalize" style={dm}>{rule.category}</span>
-                    <span className="font-['DM_Sans'] text-xs text-[#6b7280]" style={dm}>{rule.duration || '—'}</span>
+                    <span className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{rule.domain}</span>
+                    <span className="font-['DM_Sans'] text-sm text-[#0a091f] capitalize" style={dm}>{rule.category}</span>
+                    <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>{rule.duration || '—'}</span>
                     <span className="font-['DM_Sans'] text-[11px] text-[#6b7280] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
-                    <button
+                    {/* <button
                       type="button"
                       onClick={() => void handleDeleteRule(rule.id)}
                       disabled={deletingRuleId === rule.id}
@@ -964,7 +964,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                       style={dm}
                     >
                       {deletingRuleId === rule.id ? '…' : 'Delete'}
-                    </button>
+                    </button> */}
                   </div>
                 ))}
               </div>

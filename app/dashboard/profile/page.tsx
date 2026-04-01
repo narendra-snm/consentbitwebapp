@@ -317,7 +317,7 @@ export default function SettingsPage() {
                 <div className="px-[13px] py-[20px] border-b border-black/10">
                   <div className="flex items-center justify-between mb-[29px]">
                     <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[16px] text-black tracking-[-1px]" style={{ fontVariationSettings: "'opsz' 14" }}>Organization</p>
-                    <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black text-right" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: {accountId}</p>
+                    <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black text-center w-full" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: {accountId}</p>
                   </div>
 
                   {/* Column Headers — same grid as rows */}

@@ -140,7 +140,7 @@ export default function SiteSummaryCards({
           href={siteId ? `/dashboard/${siteId}/cookie-banner` : "/dashboard"}
           className="mt-2.25 bg-[#EEF4FB] rounded-lg py-6 px-3.5 flex items-center justify-between"
         >
-          <span className="text-[#007AFF] text-sm font-medium">
+          <span className="text-[#007AFF] text-sm ">
             Customize cookie banner
           </span>
 
@@ -160,41 +160,43 @@ export default function SiteSummaryCards({
   <div className="grid grid-cols-2 gap-4">
 
     {/* BLUE STATS CARD */}
-    <div className="bg-[#EEF4FB] min-h-[144px]  rounded-lg py-3.75 px-3.5 flex flex-col justify-between">
+    <div className={`bg-[#EEF4FB] ${ isVerified ? "min-h-[144px]":"min-h-[160px]"}  rounded-lg py-3.75 px-3.5 flex flex-col justify-between`}>
 
       {/* Icons */}
-      <div className="flex justify-between mb-4">
-        <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                      <img src="/images/coookie.png" alt="Verification" className="mt-1" />
+      <div className="flex mb-4">
+  <div className="w-1/2 flex justify-start">
+    <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
+      <img src="/images/coookie.png" alt="Verification" className="mt-1" />
+    </div>
+  </div>
 
-        </div>
-
-        <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                      <img src="/images/menu.png" alt="Verification" className="mt-1" />
-
-        </div>
-      </div>
+  <div className="w-1/2 flex justify-start ">
+    <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
+      <img src="/images/menu.png" alt="Verification" className="mt-1" />
+    </div>
+  </div>
+</div>
 
       {/* Stats */}
-      <div className="flex justify-between mt-2">
-        <div>
-          <p className="text-2xl font-semibold text-gray-800">
-            {site?.cookieCount ?? "—"}
-          </p>
-          <p className="text-xs text-gray-500">
-            Total cookies
-          </p>
-        </div>
+      <div className="flex mt-2 pl-2">
+  <div className="w-1/2">
+    <p className="text-[22px] font-semibold text-gray-800">
+      {site?.cookieCount ?? "—"}
+    </p>
+    <p className="text-xs text-[#4B5563]">
+      Total cookies
+    </p>
+  </div>
 
-        <div>
-          <p className="text-2xl font-semibold text-gray-800">
-            {site?.cookieCategories ?? "—"}
-          </p>
-          <p className="text-xs text-gray-500">
-            Categories
-          </p>
-        </div>
-      </div>
+  <div className="w-1/2">
+    <p className="text-[22px] font-semibold text-gray-800">
+      {site?.cookieCategories ?? "—"}
+    </p>
+    <p className="text-xs text-[#4B5563]">
+      Categories
+    </p>
+  </div>
+</div>
 
     </div>
 
@@ -203,14 +205,14 @@ export default function SiteSummaryCards({
 
       <div>
         <p className="text-[#4B5563]">Last successful scan</p>
-        <p className="mt-1 text-sm text-[#161616]">
+        <p className="mt-1 text-sm text-[#161616] font-medium">
           {updatedLabel}
         </p>
       </div>
 
       <div>
         <p className="text-[#4B5563]">Pages scanned</p>
-        <p className="mt-1 text-sm text-[#161616]">
+        <p className="mt-1 text-sm text-[#161616] font-medium">
           {pagesScannedDisplay}
         </p>
       </div>

@@ -247,7 +247,7 @@ export async function updateSiteBannerSettings(payload: {
   name: string;
   domain: string;
   organizationId: string;
-  bannerType: 'gdpr' | 'ccpa';
+  bannerType: 'gdpr' | 'ccpa' | 'iab';
   regionMode: 'gdpr' | 'ccpa' | 'both';
 }) {
   const res = await fetch('/api/sites', {

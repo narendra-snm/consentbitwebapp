@@ -40,7 +40,7 @@ export default function ConsentPreview({
   initialLayout,
 }: {
   iabEnabled: boolean;
-  previewBannerType?: "gdpr" | "ccpa";
+  previewBannerType?: "gdpr" | "ccpa" |'iab';
   siteDomain?: string | null;
   consentType?: 'gdpr' | 'ccpa' | 'both';
   /** When template is GDPR+CCPA, sync preview tabs with Content editor (controlled). */
@@ -104,7 +104,7 @@ export default function ConsentPreview({
   // For "both" (non-free), allow switching using the preview tabs.
   const [activeBothType, setActiveBothType] = useState<"gdpr" | "ccpa">("gdpr");
 
-  const selectedBannerType: "gdpr" | "ccpa" = useMemo(() => {
+  const selectedBannerType: "gdpr" | "ccpa" | "iab" = useMemo(() => {
     if (previewBannerType) return previewBannerType;
     if (consentType === 'ccpa') return 'ccpa';
     if (consentType === 'both') {
@@ -265,7 +265,7 @@ export default function ConsentPreview({
 
   return (
     <>
-    <div className="w-full px-4.5">
+    <div className="w-full px-3.75">
       {/* Tabs */}
       <div className="flex items-center justify-between mb-4 mt-4.5">
         {/* Free user: show ONLY selected tab based on dropdown selection. */}

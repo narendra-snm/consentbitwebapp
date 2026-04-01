@@ -25,6 +25,7 @@ interface PricingPlan {
   buttonColor: string;
   isRecommended?: boolean;
   additionalNote?: string;
+  buttonTextColor?: string;
 }
 
 const plans: PricingPlan[] = [
@@ -38,7 +39,8 @@ const plans: PricingPlan[] = [
     iabTcf: "NIL",
     compliance: "GDPR/CCPA",
     buttonText: "Take this plan",
-    buttonColor: "#007AFF",
+    buttonColor: "#FFFFFF",
+    buttonTextColor: "#007AFF",
   },
   {
     id: "basic",
@@ -379,7 +381,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     }}
                     className={`relative rounded-[8px] border ${
                       plan.isRecommended
-                        ? "border-[#e5e5e5] bg-[#f0fff1]"
+                        ? "border-[#e5e5e5] bg-[#f0fff1] z-50"
                         : "border-[#e5e5e5] bg-[#e6f1fd]"
                     } ${
                       selectedPlan != null && selectedPlan === plan.id
@@ -390,7 +392,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     } ${isDisabled ? "opacity-60" : ""}`}
                   >
                     {/* Card Header */}
-                    <div className="bg-white border-b border-[#e5e5e5] rounded-t-[8px] px-[12px] py-[16px] pt-[21px] h-[69px] flex items-center justify-between">
+                    <div className="bg-white border-b border-[#e5e5e5] rounded-t-[8px] px-[12px] pb-[23px] pt-[21px] h-[69px] flex items-center justify-between">
                       <p
                         className={`font-bold leading-[normal] text-[#007aff] tracking-[-${
                           plan.id === "free" ? "0.9" : "0.8"
@@ -458,12 +460,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                           }
                         }}
                         disabled={isDisabled}
-                        className="px-4.5 h-[44px] rounded-[8px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed w-full"
-                        style={{ backgroundColor: plan.buttonColor }}
+                        className="px-4.5 w-fit h-[44px] rounded-[8px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed "
+                        style={{ backgroundColor: plan.buttonColor, }}
                       >
                         <p
                           className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[15px] text-white whitespace-nowrap"
-                          style={{ fontVariationSettings: "'opsz' 14" }}
+                          style={{ fontVariationSettings: "'opsz' 14", color: plan.buttonTextColor || "#FFFFFF" }}
                         >
                           {plan.buttonText}
                         </p>
@@ -472,7 +474,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
                     {/* Additional Note */}
                     {plan.additionalNote && (
-                      <div className="absolute -bottom-[24px] left-0 right-0 px-[12px]">
+                      <div className="absolute -bottom-[30px] left-0 right-0  px-[12px]">
                         <p
                           className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4B5563] text-[13px] tracking-[-0.22px] text-left"
                           style={{ fontVariationSettings: "'opsz' 9" }}

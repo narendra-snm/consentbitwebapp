@@ -282,10 +282,13 @@ export default function DashboardPage() {
             }}
             className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
           >
-            Skip to Dashboard →
+            Skip to Dashboard < svg className="inline ml-1" width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
+</svg>
+
           </button>
         </div>
-        <div className="flex justify-center mt-20 px-4">
+        <div className="flex justify-center  px-4">
           <StepWizard
             userName={userName}
             organizationId={activeOrganizationId}
@@ -371,7 +374,7 @@ export default function DashboardPage() {
 
       {/* Wizard */}
       {authenticated && showOnboarding && (
-        <div className="flex justify-center mt-20">
+        <div className=" ">
           <StepWizard
             onWizardComplete={handleWizardComplete}
             organizationId={activeOrganizationId}

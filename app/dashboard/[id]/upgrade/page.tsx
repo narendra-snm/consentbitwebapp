@@ -256,7 +256,7 @@ export default function PricingTable() {
 
             <button
               onClick={() => setBilling("yearly")}
-              className={`px-5.75 py-2 text-[14px]  h-[44px] font-extrabold rounded-[22px] ${
+              className={`px-2 py-2 text-[14px]  h-[44px] font-extrabold rounded-[22px] ${
                 billing === "yearly"
                   ? "bg-[#007aff] text-white"
                   : "text-[#848199]"
@@ -369,7 +369,7 @@ export default function PricingTable() {
             )}
             {selected && <div className="mb-4" />}
 
-            <div className="flex border rounded-lg overflow-hidden">
+            <div className="flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg overflow-hidden">
 
               <div className="relative flex-1">
                 <input
@@ -393,9 +393,12 @@ export default function PricingTable() {
               <button
                 onClick={applyPromo}
                 disabled={!selected}
-                className="bg-[#007aff] text-white px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Apply
+             <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>
+   Apply
               </button>
 
             </div>

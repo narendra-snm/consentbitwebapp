@@ -265,6 +265,7 @@ export default function page({ siteId }: { siteId: string }) {
       region_mode: next.regionMode,
     });
 
+    iabEnabled && setIabEnabled(false);
     // Persist to backend in the background; UI doesn't wait or revert on failure.
     updateSiteBannerSettings({
       name: String(site.name || site.domain || ''),
@@ -714,9 +715,36 @@ const isToggleEnabled =
         className={`relative ${
           !isToggleEnabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
         }`}
-        onClick={() => {
+        onClick={async () => {
           if (!isToggleEnabled) return;
-          setIabEnabled((prev) => !prev);
+          setIabEnabled((prev) =>{
+
+             !prev && updateSiteBannerSettings({
+      name: String(site.name || site.domain || ''),
+      domain: String(site.domain || ''),
+      organizationId: String(activeOrganizationId),
+      bannerType: "iab",
+      regionMode: "gdpr",
+    }).catch((e) => {
+      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
+    });
+
+    prev && updateSiteBannerSettings({
+      name: String(site.name || site.domain || ''),
+      domain: String(site.domain || ''),
+      organizationId: String(activeOrganizationId),
+      bannerType: freePreviewBannerType,
+      regionMode: freePreviewBannerType,
+    }).catch((e) => {
+      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
+    });
+    
+            
+            return !prev
+          });
+
+          console.log("Updating site with IAB support enabled:", !iabEnabled);
+         
         }}
       >
         <div
@@ -749,9 +777,12 @@ const isToggleEnabled =
       </p>
 
       {/* Button */}
-      <button className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
+      <button onClick={()=>router.push("/upgrade")} className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
         Get Pro Plan
-        <span>→</span>
+        <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>
+</svg>
+</span>
       </button>
     </div>
 

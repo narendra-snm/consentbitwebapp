@@ -151,7 +151,10 @@ export default function Header() {
               <div className="border-t border-[#00000010]" />
 
               <div className="flex justify-between px-4 py-3 text-[15px] font-medium">
-                <button className="text-[#007AFF] cursor-pointer" onClick={()=>router.push("/dashboard/all-domain")}>View All →</button>
+                <button className="text-[#007AFF] cursor-pointer" onClick={()=>router.push("/dashboard/all-domain")}>View All <svg className="inline" width="11" height="11" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
+</svg>
+</button>
                 <button className="text-[#007AFF] cursor-pointer" onClick={() =>{ 
             setAddSiteOpen(true)
             setDomainOpen(false)
@@ -185,7 +188,7 @@ export default function Header() {
               if (id) router.push(`/dashboard/${id}/upgrade`);
               else router.push("/dashboard");
             }}
-            className="px-3 py-1 bg-[#E6F1FD] text-[#007AFF]"
+            className="px-3 py-1 bg-[#E6F1FD] "
             suppressHydrationWarning
           >
             {planLabel}
