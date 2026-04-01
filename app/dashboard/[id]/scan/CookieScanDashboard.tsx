@@ -27,7 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   functional: 'Functional',
   analytics: 'Analytics',
   performance: 'Performance',
-  advertisement: 'Advertisement',
+  advertisement: 'Advertising',
   marketing: 'Marketing',
   behavioral: 'Behavioral',
   uncategorized: 'Uncategorized',
@@ -35,20 +35,23 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   necessary:
-    'Necessary cookies are required to enable the basic features of this site, such as providing secure log-in or adjusting your consent preferences. These cookies do not store any personally identifiable data.',
-  functional:
-    'Functional cookies enable the website to provide enhanced functionality and personalization. They may be set by us or by third-party providers whose services we have added to our pages.',
-  analytics:
-    'Analytics cookies help website owners to understand how visitors interact with websites by collecting and reporting information anonymously.',
-  performance:
-    'Performance cookies are used to understand and analyze the key performance indexes of the website which helps in delivering a better user experience for the visitors.',
-  advertisement:
-    'Advertisement cookies are used to provide visitors with relevant ads and marketing campaigns. These cookies track visitors across websites and collect information to provide customized ads.',
-  marketing:
-    'Marketing cookies are used to track visitors across websites. The intention is to display ads that are relevant and engaging for the individual user.',
-  behavioral:
-    'Behavioral cookies are used to understand how visitors interact with the website. These cookies help provide information on metrics such as visitor behavior, session recordings, and user experience.',
-  uncategorized: 'Uncategorized cookies are cookies that have not been classified into a category as yet.',
+  'Necessary cookies are essential for the basic functionality of this website, such as secure log-in, security, and managing your consent preferences. These cookies are always active and do not require user consent. They do not store any personally identifiable information.',
+
+functional:
+  'Functional cookies enable enhanced functionality and personalization, such as remembering user preferences, settings, and choices. These cookies may be set by us or by third-party services integrated into the website.',
+
+analytics:
+  'Analytics cookies help us understand how visitors interact with the website by collecting and reporting information in an aggregated and anonymous manner. This helps us improve website performance and user experience.',
+
+performance:
+  'Performance cookies are used to measure and analyze key performance indicators such as page load times, traffic sources, and overall site performance to enhance usability and functionality.',
+
+marketing:
+  'Marketing cookies (also referred to as advertising cookies) are used to track visitors across websites using cookies, pixels, and similar tracking technologies. These cookies may be set by us or third-party advertising partners to deliver personalized ads and measure the effectiveness of marketing campaigns.',
+
+uncategorized:
+  'Uncategorized cookies are cookies that are currently being reviewed and have not yet been assigned to a specific category.',
+
 };
 
 const ALL_CATEGORIES = [
@@ -69,16 +72,12 @@ const ICON_PLUS = 'M3.13333 8V0H4.85V8H3.13333ZM0 4.88889V3.11111H8V4.88889H0Z';
 function formatLocalDateTime(dateString: string) {
   try {
     const d = new Date(dateString);
-    return d.toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      timeZoneName: 'short',
-    });
+    const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    const day = d.getUTCDate();
+    const year = d.getUTCFullYear();
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${month} ${day}, ${year}, ${hh}:${mm} (UTC)`;
   } catch {
     return dateString;
   }

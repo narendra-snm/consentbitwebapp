@@ -198,11 +198,8 @@ export default function BillingDetailsCard({
       {pm ? (
         <div className="relative">
           <div
-            className="rounded-[14px] overflow-hidden px-5 pt-5 pb-4 min-h-[202px] flex flex-col justify-between"
-            style={{
-              background:
-                "linear-gradient(145deg, #d4e4fb 0%, #c2d5f8 50%, #aec5f4 100%)",
-            }}
+            className="rounded-[14px] overflow-hidden px-5 pt-5 pb-4 min-h-[202px] flex flex-col justify-between bg-[linear-gradient(117.61deg,_#E2EDFF_-10.2%,_#007AFF_87.03%)]"
+            
           >
             <div className="absolute top-3 right-3 flex items-center gap-1.5">
               <p

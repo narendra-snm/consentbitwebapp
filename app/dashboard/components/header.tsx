@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import React from "react";
 import { Globe, Plus } from "lucide-react";
+
+function Tooltip({ text, children, align = "left" }: { text: string; children: React.ReactNode; align?: "left" | "right" | "center" }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className={`pointer-events-none absolute top-full mt-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"}`}>
+        {text}
+      </span>
+    </span>
+  );
+}
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
@@ -85,7 +97,7 @@ export default function Header() {
   }, []);
 
   const displayDomain =
-    activeSite?.domain || activeSite?.name || (loading ? "Loading…" : "Select a site");
+    activeSite?.domain || activeSite?.name || (!loading ? "Select a site" : null);
 
   const handleSelectSite = (site: any) => {
     setActiveSiteId(site?.id ? String(site.id) : null);
@@ -115,15 +127,18 @@ export default function Header() {
         {/* DOMAIN SELECTOR */}
         <div ref={domainRef} className="relative flex items-center gap-2">
           <button
-            onClick={() => setDomainOpen(!domainOpen)}
-            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm"
+            onClick={() => !loading && setDomainOpen(!domainOpen)}
+            className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm min-w-[120px]"
             suppressHydrationWarning
           >
-            {displayDomain} 
+            {loading ? (
+              <span className="h-4 w-20 rounded bg-[#d0e4f7] animate-pulse inline-block" />
+            ) : (
+              displayDomain
+            )}
             <svg width="10" height="5" viewBox="0 0 10 5" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M0.5 0.5L3.26857 3.16493C4.04299 3.91036 5.26812 3.91036 6.04254 3.16493L8.81111 0.5" stroke="black" strokeLinecap="round"/>
 </svg>
-
           </button>
 
           <button onClick={() =>{ 
@@ -135,18 +150,38 @@ export default function Header() {
           </button>
 
           {domainOpen && (
-            <div className="absolute top-[110%] left-0 w-[300px] bg-white rounded-xl  shadow-[0_12px_40px_rgba(15,23,42,0.16)]  overflow-hidden z-50">
-              {sites.map((s: any) => (
-                <div
-                  key={s.id}
-                  onClick={() => handleSelectSite(s)}
-                  className={`px-4 py-3 text-sm cursor-pointer hover:bg-gray-50 ${
-                    activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
-                  }`}
-                >
-                  {s?.domain || s?.name || s?.id}
-                </div>
-              ))}
+            <div className="absolute top-[110%] left-0 w-[300px] bg-white rounded-xl shadow-[0_12px_40px_rgba(15,23,42,0.16)] overflow-hidden z-50">
+              <div className="max-h-[240px] overflow-y-auto">
+                {sites.map((s: any) => {
+                  const domain = s?.domain || s?.name || s?.id;
+                  const siteUrl = s?.domain ? (s.domain.startsWith("http") ? s.domain : `https://${s.domain}`) : null;
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => handleSelectSite(s)}
+                      className={`flex items-center justify-between px-4 py-3 text-sm cursor-pointer hover:bg-gray-50 ${
+                        activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
+                      }`}
+                    >
+                      <span className="truncate">{domain}</span>
+                      {siteUrl && (
+                        <a
+                          href={siteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="ml-2 shrink-0 text-[#9CA3AF] hover:text-[#007AFF] transition-colors"
+                          aria-label={`Open ${domain} in new tab`}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 1H11M11 1V5M11 1L5 7M4.5 2H2C1.44772 2 1 2.44772 1 3V10C1 10.5523 1.44772 11 2 11H9C9.55228 11 10 10.5523 10 10V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <div className="border-t border-[#00000010]" />
 
@@ -168,10 +203,12 @@ export default function Header() {
         </div>
 
         {/* VIEW ALL DOMAINS */}
-        <button onClick={()=>router.push("/dashboard/all-domain")} className="flex items-center gap-2 text-base cursor-pointer  text-[#4B5563]">
-          <Globe size={16} />
-          View all Domains
-        </button>
+        <Tooltip text="See and manage all your connected domains.">
+          <button onClick={()=>router.push("/dashboard/all-domain")} className="flex items-center gap-2 text-base cursor-pointer  text-[#4B5563]">
+            <Globe size={16} />
+            View all Domains
+          </button>
+        </Tooltip>
       </div>
 
       {/* RIGHT SECTION */}
@@ -196,18 +233,20 @@ export default function Header() {
         </div>
 
         {/* UPGRADE BUTTON */}
-        <button
-          type="button"
-          onClick={() => {
-            const id = activeSiteId || sites[0]?.id;
-            if (id) router.push(`/dashboard/${id}/upgrade`);
-            else router.push("/dashboard");
-          }}
-          className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
-          suppressHydrationWarning
-        >
-          {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
-        </button>
+        <Tooltip text={String(effectivePlanId || "free").toLowerCase() === "free" ? "Upgrade to a paid plan to unlock more features." : "Switch or modify your current subscription plan."} align="right">
+          <button
+            type="button"
+            onClick={() => {
+              const id = activeSiteId || sites[0]?.id;
+              if (id) router.push(`/dashboard/${id}/upgrade`);
+              else router.push("/dashboard");
+            }}
+            className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
+            suppressHydrationWarning
+          >
+            {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
+          </button>
+        </Tooltip>
 
         {/* LOGOUT */}
         <button
@@ -221,14 +260,16 @@ export default function Header() {
 
         {/* NOTIFICATION */}
         <div ref={notifRef} className="relative">
-          <div className="relative mt-1 cursor-pointer" onClick={() => setNotifOpen(!notifOpen)}>
-            <img src="/images/bell.svg" />
-            {notifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#F97373] text-[9px] font-bold text-white">
-                {notifications.length}
-              </span>
-            )}
-          </div>
+          <Tooltip text="View alerts for pageview or scan limit warnings." align="right">
+            <div className="relative mt-1 cursor-pointer" role="button" aria-label="Notifications" onClick={() => setNotifOpen(!notifOpen)}>
+              <img src="/images/bell.svg" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#F97373] text-[9px] font-bold text-white">
+                  {notifications.length}
+                </span>
+              )}
+            </div>
+          </Tooltip>
 
           {notifOpen && (
             <div className="absolute right-0 top-[180%] w-[412px] bg-white rounded-xl shadow-[0_12px_40px_rgba(15,23,42,0.16)] border border-[#E5E7EB] z-50">
@@ -269,7 +310,7 @@ export default function Header() {
         </div>
 
         {/* AVATAR */}
-        <img src="/images/Icon.svg" className="mt-1 rounded-full cursor-pointer" onClick={() => router.push("/dashboard/profile")} />
+        <img src="/images/Icon.svg" role="button" aria-label="Profile" className="mt-1 rounded-full cursor-pointer" onClick={() => router.push("/dashboard/profile")} />
       </div>
 
       {showUpgradeModal && (

@@ -1,7 +1,19 @@
 "use client";
 
+import React from "react";
 import Accordion from "./ui/Accordion";
 import ToggleSwitch from "./ui/ToggleSwitch";
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 const LIMITS = {
   title: 60,
@@ -221,10 +233,12 @@ export function CookieNoticeAccordion2({
                   <label className="block font-['DM_Sans'] font-normal text-base text-black leading-5" style={{ fontVariationSettings: "'opsz' 14" }}>
                     "Reject All" button
                   </label>
-                  <ToggleSwitch
-                    checked={settings.rejectButton}
-                    onChange={() => toggleSwitch('rejectButton')}
-                  />
+                  <Tooltip text="Show or hide the Reject All button on the banner.">
+                    <ToggleSwitch
+                      checked={settings.rejectButton}
+                      onChange={() => toggleSwitch('rejectButton')}
+                    />
+                  </Tooltip>
                 </div>
                 <input
                   type="text"
@@ -244,10 +258,12 @@ export function CookieNoticeAccordion2({
                   >
                     Do Not Share link
                   </label>
-                  <ToggleSwitch
-                    checked={settings.rejectButton}
-                    onChange={() => toggleSwitch('rejectButton')}
-                  />
+                  <Tooltip text="Show or hide the Do Not Share My Personal Information link.">
+                    <ToggleSwitch
+                      checked={settings.rejectButton}
+                      onChange={() => toggleSwitch('rejectButton')}
+                    />
+                  </Tooltip>
                 </div>
                 <label
                   className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
@@ -276,10 +292,12 @@ export function CookieNoticeAccordion2({
                   >
                     &quot;Preference&quot; button
                   </label>
-                  <ToggleSwitch
-                    checked={settings.customizeButton}
-                    onChange={() => toggleSwitch('customizeButton')}
-                  />
+                  <Tooltip text="Show or hide the Preferences button on the banner.">
+                    <ToggleSwitch
+                      checked={settings.customizeButton}
+                      onChange={() => toggleSwitch('customizeButton')}
+                    />
+                  </Tooltip>
                 </div>
                 <input
                   type="text"
@@ -303,10 +321,12 @@ export function CookieNoticeAccordion2({
                     ? "Privacy policy link"
                     : '"Cookie policy" link'}
                 </label>
-                <ToggleSwitch
-                  checked={settings.cookiePolicyLink}
-                  onChange={() => toggleSwitch("cookiePolicyLink")}
-                />
+                <Tooltip text="Show or hide the cookie / privacy policy link on the banner.">
+                  <ToggleSwitch
+                    checked={settings.cookiePolicyLink}
+                    onChange={() => toggleSwitch("cookiePolicyLink")}
+                  />
+                </Tooltip>
               </div>
               <input
                 type="text"
@@ -339,10 +359,12 @@ export function CookieNoticeAccordion2({
                 <label className="block font-['DM_Sans'] font-normal text-base text-black leading-5" style={{ fontVariationSettings: "'opsz' 14" }}>
                   Close button
                 </label>
-                <ToggleSwitch 
-                  checked={settings.closeButton} 
-                  onChange={() => toggleSwitch('closeButton')} 
-                />
+                <Tooltip text="Show or hide the close (×) button on the banner.">
+                  <ToggleSwitch
+                    checked={settings.closeButton}
+                    onChange={() => toggleSwitch('closeButton')}
+                  />
+                </Tooltip>
               </div>
             </div>
           </div>

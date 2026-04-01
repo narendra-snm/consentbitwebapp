@@ -1,13 +1,25 @@
 'use client';
 
+import React from 'react';
 import type { BannerLayoutValue } from './bannerAppearance';
+
+function Tooltip({ text, children, align = 'left' }: { text: string; children: React.ReactNode; align?: 'left' | 'right' }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className={`pointer-events-none absolute bottom-full mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${align === 'right' ? 'right-0' : 'left-0'}`}>
+        {text}
+      </span>
+    </span>
+  );
+}
 
 type Position = BannerLayoutValue['position'];
 
-const positions: Array<{ id: Position; label: string }> = [
-  { id: 'box', label: 'Box' },
-  { id: 'banner', label: 'Banner' },
-  { id: 'bottom-center', label: 'Bottom Center' },
+const positions: Array<{ id: Position; label: string; tip: string; tipAlign?: 'left' | 'right' }> = [
+  { id: 'box', label: 'Box', tip: 'A compact floating box pinned to a corner of the screen.' },
+  { id: 'banner', label: 'Banner', tip: 'A full-width bar that spans the entire bottom of the page.' },
+  { id: 'bottom-center', label: 'Bottom Center', tip: 'A centered panel anchored to the bottom of the screen.', tipAlign: 'right' },
 ];
 
 const animations = ['Fade In', 'Slide Up', 'Slide Down', 'Zoom In'];
@@ -27,14 +39,14 @@ export default function BannerControl({ value, onChange }: Props) {
   return (
     <div className="max-w-[454px] space-y-6 rounded-lg bg-white  ">
       <div className="space-y-3 mb-[50px]">
-        <h3 className=" font-semibold pb-1">Banner position</h3>
+        <h3 className="font-semibold pb-1">Banner position</h3>
         <div className="flex items-end gap-8">
           {positions.map((pos) => (
             <button
               key={pos.id}
               type="button"
               onClick={() => patch({ position: pos.id })}
-              className="relative flex flex-col items-start gap-2 focus:outline-none"
+              className="relative group flex flex-col items-start gap-2 focus:outline-none cursor-pointer"
               aria-label={`Select ${pos.label} position`}
             >
               {position === pos.id && (
@@ -77,6 +89,9 @@ export default function BannerControl({ value, onChange }: Props) {
                 </svg>
               )}
               <span className="text-sm text-[#111827] ml-1">{pos.label}</span>
+              <span className={`pointer-events-none absolute bottom-full mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${pos.tipAlign === 'right' ? 'right-0' : 'left-0'}`}>
+                {pos.tip}
+              </span>
             </button>
           ))}
         </div>
@@ -84,14 +99,14 @@ export default function BannerControl({ value, onChange }: Props) {
 
       {position === 'box' && (
       <div className="space-y-3 mb-[37px]">
-        <h3 className=" font-semibold text-gray-900">Alignment</h3>
+        <h3 className="font-semibold text-gray-900">Alignment</h3>
         {/* <p className="text-xs text-[#6b7280]">Corner position for the box layout only.</p> */}
 
         <div className="flex items-center gap-10">
           {(['bottom-left', 'bottom-right'] as const).map((a) => {
             const isActive = alignment === a;
             return (
-              <label key={a} className="flex items-center gap-3 cursor-pointer">
+              <label key={a} className="relative group flex items-center gap-3 cursor-pointer">
                 <input
                   type="radio"
                   name="alignment"
@@ -109,6 +124,9 @@ export default function BannerControl({ value, onChange }: Props) {
                 <span className="text-sm text-[#111827]">
                   {a === 'bottom-left' ? 'Bottom left' : 'Bottom right'}
                 </span>
+                <span className={`pointer-events-none absolute bottom-full mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${a === 'bottom-right' ? 'right-0' : 'left-0'}`}>
+                  {a === 'bottom-left' ? 'Pin the banner box to the bottom-left corner of the screen.' : 'Pin the banner box to the bottom-right corner of the screen.'}
+                </span>
               </label>
             );
           })}
@@ -117,7 +135,7 @@ export default function BannerControl({ value, onChange }: Props) {
       )}
 
       <div className="rounded-xl border border-gray-200 bg-[#F9F9FA] p-5 space-y-3">
-        <h3 className=" font-semibold ">Border Radious</h3>
+        <h3 className="font-semibold"><Tooltip text="Sets the corner roundness of the banner in pixels. Use 0 for sharp corners or higher values for a rounder look.">Border Radius</Tooltip></h3>
         <input
           type="number"
           min={0}
@@ -129,7 +147,7 @@ export default function BannerControl({ value, onChange }: Props) {
       </div>
 
       <div className="rounded-xl border border-[#E5E5E5] bg-[#F9F9FA] p-5 space-y-3">
-        <h3 className=" font-semibold ">Animation</h3>
+        <h3 className="font-semibold"><Tooltip text="Controls how the banner enters the screen — fade in smoothly, slide from the bottom or top, or zoom in.">Animation</Tooltip></h3>
         <select
           value={animation}
           onChange={(e) => patch({ animation: e.target.value })}

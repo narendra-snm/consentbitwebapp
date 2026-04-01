@@ -26,9 +26,14 @@ export function PostSetupClient() {
       return;
     }
 
-    const dashUrl = domain
-      ? `/dashboard?postSetup=1&domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`
-      : `/dashboard?postSetup=1&siteId=${encodeURIComponent(siteId)}&returnTo=${encodeURIComponent(returnTo)}`;
+    // Redirect to returnTo page with postSetup params so PostSetupOverlay shows InstallConsentModal there.
+    // Build URL properly so existing query params in returnTo are preserved.
+    const base = returnTo.startsWith("/dashboard") ? returnTo : "/dashboard";
+    const url = new URL(base, window.location.origin);
+    url.searchParams.set("postSetup", "1");
+    if (domain) url.searchParams.set("domain", domain);
+    else url.searchParams.set("siteId", siteId);
+    const dashUrl = url.pathname + url.search + (url.hash || "");
 
     // Prefer navigating the opener (works even if opener isn't listening for postMessage).
     try {
@@ -46,7 +51,7 @@ export function PostSetupClient() {
     try {
       localStorage.setItem(
         "cb_post_setup",
-        JSON.stringify({ domain, siteId, ts: Date.now() }),
+        JSON.stringify({ domain, siteId, returnTo, ts: Date.now() }),
       );
     } catch {
       // ignore

@@ -1,23 +1,36 @@
 
-
-import { useState } from "react";
+import React from "react";
 import svgPaths from "./svg";
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex w-full">
+      {children}
+      <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 interface SidebarProps {
   
   active: string;
   setActive: (active: string) => void;
   iabEnabled: boolean;
+  effectivePlanId?: string;
 }
 
-export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
+export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: SidebarProps) {
+  const planKey = String(effectivePlanId || "free").toLowerCase();
+  const isFree = planKey === "free";
 
   const menuItems = [
-    { name: "General", icon: "general" },
-    { name: "Content", icon: "content" },
-    { name: "Layout", icon: "layout" },
-    { name: "Colors", icon: "colors" },
-    { name: "Type", icon: "type" },
+    { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },
+    { name: "Content", icon: "content", tip: "Edit banner title, description, button labels and cookie policy link." },
+    { name: "Layout", icon: "layout", tip: "Set banner position, shape, border radius and animation style." },
+    { name: "Colors", icon: "colors", tip: "Customise background, text and button colors." },
+    { name: "Type", icon: "type", tip: "Choose font family, weight and text alignment for the banner." },
   ];
 
   return (
@@ -25,16 +38,21 @@ export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
 
       {menuItems.map((item) => {
         const isActive = active === item.name;
+        const lockedForFree =
+          isFree &&
+          (item.name === "Content" ||
+            item.name === "Layout" ||
+            item.name === "Colors" ||
+            item.name === "Type");
+        const disabled = (iabEnabled && item.name === "Content") || lockedForFree;
 
         return (
+          <Tooltip key={item.name} text={disabled ? (lockedForFree ? "Upgrade your plan to unlock this tab." : "Not available in this mode.") : item.tip}>
           <button
-            key={item.name}
             onClick={() => setActive(item.name)}
-            disabled={iabEnabled && item.name === "Content"}
-            className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all
-              
+            disabled={disabled}
+            className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all w-full
               ${isActive ? "bg-[#E6F1FD]" : "hover:bg-gray-50"}
-              
             `}
           >
             {/* Active blue vertical bar */}
@@ -109,12 +127,13 @@ export function Sidebar({ active, setActive, iabEnabled }: SidebarProps) {
             <span
               className={`text-base font-medium tracking-tight
                 ${isActive ? "text-[#007AFF]" : "text-[#111827]"}
-                ${iabEnabled && item.name === "Content" ? "text-gray-400 cursor-not-allowed" : ""}
+                ${disabled ? "text-gray-400 cursor-not-allowed" : ""}
               `}
             >
               {item.name}
             </span>
           </button>
+          </Tooltip>
         );
       })}
     </div>

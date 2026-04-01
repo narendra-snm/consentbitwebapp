@@ -281,31 +281,20 @@ export function DashboardSessionProvider({
   }, []);
 
   const logout = useCallback(async () => {
+    // Clear caches and redirect immediately — don't wait for the API call
+    // to avoid a flash of empty/blue dashboard state before the login page loads.
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } catch (e) {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem(SESSION_CACHE_KEY);
+        sessionStorage.removeItem("dashboardInit");
+        sessionStorage.removeItem("cbLastUserEmail");
+      }
+    } catch { /* ignore */ }
+    router.push("/login");
+    // Fire-and-forget the logout API call in the background
+    fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch((e) => {
       console.error("[DashboardSession] logout failed", e);
-    } finally {
-      // Clear all session caches so stale data never appears after logout
-      try {
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.removeItem(SESSION_CACHE_KEY);
-          sessionStorage.removeItem("dashboardInit");
-          sessionStorage.removeItem("cbLastUserEmail");
-        }
-      } catch { /* ignore */ }
-      setState({
-        loading: false,
-        authenticated: false,
-        user: null,
-        organizations: [],
-        sites: [],
-        effectivePlanId: "free",
-        activeOrganizationId: null,
-        activeSiteId: null,
-      });
-      router.push("/login");
-    }
+    });
   }, [router]);
 
   const value: DashboardSessionApi = useMemo(

@@ -661,12 +661,25 @@ export default function page({ siteId }: { siteId: string }) {
     const id = window.setTimeout(() => setSaveSuccess(false), 4000);
     return () => window.clearTimeout(id);
   }, [saveSuccess]);
-const [iabEnabled, setIabEnabled] = useState(false);
-const isToggleEnabled =
-  effectivePlanId === "growth" || effectivePlanId === "essential";
+  const [iabEnabled, setIabEnabled] = useState(false);
+  const isToggleEnabled =
+    effectivePlanId === "growth" || effectivePlanId === "essential";
+
+  // Free plan should not have access to Content/Layout/Type sections.
+  useEffect(() => {
+    if (!isFreePlan) return;
+    if (active === "Content" || active === "Layout" || active === "Colors" || active === "Type") {
+      setActive("General");
+    }
+  }, [active, isFreePlan]);
   return (
     <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
-      <Sidebar active={active} setActive={setActive} iabEnabled={iabEnabled} />
+      <Sidebar
+        active={active}
+        setActive={setActive}
+        iabEnabled={iabEnabled}
+        effectivePlanId={effectivePlanId}
+      />
       <div className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
         {active === "General" && (

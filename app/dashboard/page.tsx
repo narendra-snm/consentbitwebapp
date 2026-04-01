@@ -1,18 +1,19 @@
 "use client";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DashboardTabs from "./components/DashboardTabs";
 import GettingStarted from "./components/GettingStarted";
 import Header from "./components/header";
 import InstallConsentModal from "./components/InstallConsentModal";
 import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
 import { firstSetup } from "@/lib/client-api";
 import ComplianceAlert from "./components/ComplianceAlert";
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
+ const searchParams = useSearchParams();
  const { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, refresh } = useDashboardSession();
  const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || null;
  const userEmail = user?.email ?? "";
@@ -76,23 +77,31 @@ export default function DashboardPage() {
      .replace(/\.+$/, "")
      .toLowerCase();
 
- // Detect ?postSetup=1&domain=X on return from Stripe payment
+ // Detect ?postSetup=1&domain=X on return from Stripe payment.
+ // IMPORTANT: In App Router, changing only search params may not remount this page,
+ // so we must react to `useSearchParams()` changes (not just on mount).
+ const lastPostSetupSig = useRef<string>("");
  useEffect(() => {
-   const params = new URLSearchParams(window.location.search);
-   if (params.get('postSetup') === '1') {
-      const domain = params.get('domain') ?? '';
-      const siteId = params.get('siteId') ?? '';
-      const returnTo = params.get('returnTo') ?? '';
-      if (domain) setPendingPostSetupDomain(normalizeDomain(domain));
-      if (siteId) setPendingPostSetupSiteId(String(siteId));
-      if (returnTo) setPendingPostSetupReturnTo(String(returnTo));
-      if (domain || siteId) {
-        setWizardSkipped(true);
-        window.history.replaceState({}, '', '/dashboard');
-      }
-   }
- }, []);
+   const params = searchParams;
+   if (!params) return;
+   if (params.get("postSetup") !== "1") return;
 
+   const domain = params.get("domain") ?? "";
+   const siteId = params.get("siteId") ?? "";
+   const returnTo = params.get("returnTo") ?? "";
+   const sig = `${domain}|${siteId}|${returnTo}`;
+   if (sig && lastPostSetupSig.current === sig) return;
+   lastPostSetupSig.current = sig;
+
+   // domain= case is handled by PostSetupOverlay (works on any dashboard page).
+   // page.tsx only handles siteId= (StepWizard first-time flow on /dashboard).
+   if (domain) return;
+   if (siteId) setPendingPostSetupSiteId(String(siteId));
+   if (returnTo) setPendingPostSetupReturnTo(String(returnTo));
+   if (siteId) setWizardSkipped(true);
+ }, [searchParams]);
+
+  // Detect ?upgraded=1&siteId=X&returnTo=Y on return from plan upgrade via UpgradePlanModal.
   // Also accept post-setup signal from the Stripe success tab (window.postMessage or storage event).
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
@@ -165,29 +174,71 @@ export default function DashboardPage() {
    };
  }, [pendingPostSetupDomain, loading, authenticated, refresh, pendingPostSetupReturnTo]);
 
-  // If we returned from Stripe with a siteId (upgrade / existing site), show its install code in the wizard UI.
+  // If we returned from Stripe with a siteId (upgrade / existing site), show its install code popup.
+  // We render the popup immediately using a fallback script URL (derived from siteId) and then
+  // upgrade it to the canonical `embedScriptUrl` once `sites` refresh completes.
   useEffect(() => {
-    if (!pendingPostSetupSiteId || loading || !authenticated) return;
+    if (!pendingPostSetupSiteId || !authenticated) return;
     const id = String(pendingPostSetupSiteId);
-    const match = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === id);
-    if (match?.scriptUrl) {
-      setPostSetupInstall({
-        scriptUrl: String(match.scriptUrl),
-        siteId: String(match.id),
-        siteDomain: String(match.domain || ''),
-        cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
+
+    let cancelled = false;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
+    // Ensure modal opens immediately (even if sites/session still loading).
+    setPostSetupInstall((prev) => {
+      if (prev?.siteId === id) return prev;
+      return {
+        scriptUrl: "",
+        siteId: id,
+        siteDomain: "",
+        cdnScriptId: undefined,
         returnTo: pendingPostSetupReturnTo || undefined,
-      });
-      setPendingPostSetupSiteId(null);
-    } else {
-      // Keep `pendingPostSetupSiteId` set so when `refresh()` updates `sites`,
-      // this effect reruns and picks up the scriptUrl.
-      void refresh({ showLoading: false });
-    }
-  }, [pendingPostSetupSiteId, loading, authenticated, refresh, sites, pendingPostSetupReturnTo]);
+      };
+    });
+
+    const tryResolve = async () => {
+      if (cancelled) return;
+      const match = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === id);
+      const scriptUrl =
+        (match?.embedScriptUrl ?? match?.embed_script_url ?? match?.scriptUrl ?? match?.script_url) || null;
+      if (match && scriptUrl) {
+        setPostSetupInstall({
+          scriptUrl: String(scriptUrl),
+          siteId: String(match.id),
+          siteDomain: String(match.domain || ""),
+          cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
+          returnTo: pendingPostSetupReturnTo || undefined,
+        });
+        setPendingPostSetupSiteId(null);
+        return;
+      }
+
+      // Not ready yet — refresh and retry a few times (webhook/session can lag).
+      attempts += 1;
+      if (attempts <= 20) {
+        try {
+          await refresh({ showLoading: false });
+        } catch {
+          // ignore
+        }
+        t = setTimeout(tryResolve, 1500);
+      } else {
+        // Give up polling; keep the fallback modal open (still usable), and clear pending flag.
+        setPendingPostSetupSiteId(null);
+      }
+    };
+
+    void tryResolve();
+
+    return () => {
+      cancelled = true;
+      if (t) clearTimeout(t);
+    };
+  }, [pendingPostSetupSiteId, authenticated, refresh, sites, pendingPostSetupReturnTo]);
 
  /** Raw URL from API (`Site.embedScriptUrl`); modal resolves to absolute — keeps snippet identical to stored value. */
- const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
+ const rawInstallScriptUrl = (activeSite as any)?.embedScriptUrl ?? (activeSite as any)?.scriptUrl ?? "";
 
   // When sites exist, keep selected siteId in URL.
   useEffect(() => {
@@ -212,10 +263,15 @@ export default function DashboardPage() {
   };
 
 
+console.log("DashboardPage render", { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, showOnboarding });
 
-
-  // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton
-  if (hydrated && (pendingPostSetupDomain || pendingPostSetupSiteId)) {
+  // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton.
+  // Also keep showing loader when wizardSkipped=true but postSetupInstall not yet ready (avoids
+  // flashing the wizard + dashboard before the install modal appears).
+  if (hydrated && (pendingPostSetupDomain || pendingPostSetupSiteId || (wizardSkipped && !postSetupInstall && !showOnboarding && loading))) {
+    const loadingLabel = pendingPostSetupSiteId
+      ? "Payment succeeded — updating your plan…"
+      : "Setting up your site…";
     return (
       <div className="min-h-screen bg-[#E6F1FD] flex flex-col">
         <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10 rounded-t-xl">
@@ -226,8 +282,30 @@ export default function DashboardPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <p className="text-[#374151] text-sm font-medium">Setting up your site…</p>
+          <p className="text-[#374151] text-sm font-medium">{loadingLabel}</p>
         </div>
+      </div>
+    );
+  }
+
+  // Post-payment: if install info is ready, always show the install popup even while session is still loading.
+  if (hydrated && authenticated && postSetupInstall) {
+    return (
+      <div className="min-h-screen bg-[#E6F1FD]">
+        <Header />
+        <InstallConsentModal
+          open={true}
+          scriptUrl={postSetupInstall.scriptUrl}
+          siteDomain={postSetupInstall.siteDomain}
+          siteId={postSetupInstall.siteId}
+          cdnScriptId={postSetupInstall.cdnScriptId}
+          onClose={() => {
+            const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
+            const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : null;
+            setPostSetupInstall(null);
+            if (target) router.replace(target);
+          }}
+        />
       </div>
     );
   }
@@ -258,56 +336,51 @@ export default function DashboardPage() {
     //     </div>
     //   </>
     // );
- 
  return null
-  }
+//     return (
+//       <div className="min-h-screen bg-[#E6F1FD] pb-4">
+//         <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
+//           <img
+//             src="/images/ConsentBit-logo-Dark.png"
+//             alt="logo"
+//             className="h-6"
+//           />
+//           <button
+//             type="button"
+//             onClick={() => {
+//               setPostSetupInstall(null);
+//               const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
+//               const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : "/dashboard";
+//               router.replace(target);
+//             }}
+//             className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
+//           >
+//             Skip to Dashboard < svg className="inline ml-1" width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+// <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
+// </svg>
 
-  // Post-payment: show the same 3-step wizard Confirm UI (not the dashboard cards)
-  if (authenticated && postSetupInstall) {
-    return (
-      <div className="min-h-screen bg-[#E6F1FD] pb-4">
-        <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
-          <img
-            src="/images/ConsentBit-logo-Dark.png"
-            alt="logo"
-            className="h-6"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setPostSetupInstall(null);
-              const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
-              const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : "/dashboard";
-              router.replace(target);
-            }}
-            className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
-          >
-            Skip to Dashboard < svg className="inline ml-1" width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
-</svg>
-
-          </button>
-        </div>
-        <div className="flex justify-center  px-4">
-          <StepWizard
-            userName={userName}
-            organizationId={activeOrganizationId}
-            initialStep={3}
-            initialSelectedPlan={'paid'}
-            initialSiteData={{
-              scriptUrl: postSetupInstall.scriptUrl,
-              siteId: postSetupInstall.siteId,
-              cdnScriptId: postSetupInstall.cdnScriptId,
-              domain: postSetupInstall.siteDomain,
-            }}
-            onWizardComplete={async () => {
-              setPostSetupInstall(null);
-              await refresh({ showLoading: false });
-            }}
-          />
-        </div>
-      </div>
-    );
+//           </button>
+//         </div>
+//         <div className="flex justify-center  px-4">
+//           <StepWizard
+//             userName={userName}
+//             organizationId={activeOrganizationId}
+//             initialStep={3}
+//             initialSelectedPlan={'paid'}
+//             initialSiteData={{
+//               scriptUrl: postSetupInstall?.scriptUrl,
+//               siteId: postSetupInstall?.siteId,
+//               cdnScriptId: postSetupInstall?.cdnScriptId,
+//               domain: postSetupInstall?.siteDomain,
+//             }}
+//             onWizardComplete={async () => {
+//               setPostSetupInstall(null);
+//               await refresh({ showLoading: false });
+//             }}
+//           />
+//         </div>
+//       </div>
+//     );
   }
 
   if (authenticated && !showOnboarding) {
@@ -359,21 +432,10 @@ export default function DashboardPage() {
           alt="logo"
           className="h-6"
         />
-        <button
-          type="button"
-          onClick={() => {
-            dismissOnboardingWizard();
-            const target = activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard";
-            router.replace(target);
-          }}
-          className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
-        >
-          Skip to Dashboard →
-        </button>
       </div>
 
       {/* Wizard */}
-      {authenticated && showOnboarding && (
+      {authenticated && showOnboarding && loading===false && (
         <div className=" ">
           <StepWizard
             onWizardComplete={handleWizardComplete}

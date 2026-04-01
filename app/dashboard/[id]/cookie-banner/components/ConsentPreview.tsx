@@ -1,7 +1,7 @@
 "use client";
 
+import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getBannerLanguage, getTranslation } from "./translations";
 import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
@@ -12,6 +12,17 @@ import {CookieConsentBanner} from "./Iab"
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
+}
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
 }
 
 export default function ConsentPreview({
@@ -520,7 +531,7 @@ export default function ConsentPreview({
               <button
                 key="float-icon"
                 type="button"
-                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white shadow-md cursor-pointer hover:opacity-90"
+                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-transparent shadow-md cursor-pointer hover:opacity-90"
                 onClick={openPreferences}
                 aria-label={content?.preferencesLabel || t('preferences')}
               >
@@ -534,7 +545,7 @@ export default function ConsentPreview({
               return (
                 <div key={bannerAnimation} className="absolute bottom-0 left-0 right-0">
                   {floatingButton.enabled && (
-                    <div className={`absolute bottom-2 z-0 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
+                    <div className={`absolute bottom-2 z-20 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
                       {floatingIcon}
                     </div>
                   )}
@@ -700,7 +711,7 @@ export default function ConsentPreview({
                   <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
                     <button
                       type="button"
-                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none "
                       aria-expanded={prefExpanded === 'analytics'}
                       onClick={() =>
                         setPrefExpanded((v) => (v === 'analytics' ? null : 'analytics'))
@@ -731,7 +742,7 @@ export default function ConsentPreview({
                   <div className="flex items-center gap-3.5 px-4 py-3 min-h-[48px]">
                     <button
                       type="button"
-                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none"
+                      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded border border-[#e5e7eb] bg-[#f3f4f6] text-sm font-medium text-[#111827] leading-none cursor-pointer"
                       aria-expanded={prefExpanded === 'preferences'}
                       onClick={() =>
                         setPrefExpanded((v) => (v === 'preferences' ? null : 'preferences'))
@@ -762,7 +773,7 @@ export default function ConsentPreview({
                 {content?.rejectButton !== false ? (
                   <button
                     style={acceptRejectStyle}
-                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95"
+                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
                     type="button"
                     onClick={() => setModalView("main")}
                   >
@@ -771,7 +782,7 @@ export default function ConsentPreview({
                 ) : null}
                 <button
                   style={preferenceStyle}
-                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95"
+                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -791,7 +802,7 @@ export default function ConsentPreview({
                 </p>
                 {content?.closeButton ? (
                   <button
-                    className="text-black opacity-70"
+                    className="text-black opacity-70 cursor-pointer"
                     type="button"
                     onClick={() => setModalView("main")}
                     aria-label="Close opt-out"
@@ -831,7 +842,7 @@ export default function ConsentPreview({
               <div className="flex gap-2">
                 <button
                   style={acceptRejectStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded"
+                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer "
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -839,7 +850,7 @@ export default function ConsentPreview({
                 </button>
                 <button
                   style={preferenceStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded"
+                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer "
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -868,7 +879,7 @@ export default function ConsentPreview({
           {floatingButton.enabled && modalView !== 'main' ? (
             <button
               type="button"
-              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white p-0 cursor-pointer shadow-md hover:opacity-90 focus:outline-none ${
+              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center  justify-center rounded-full border border-[#e2e8f0] bg-white p-0 cursor-pointer shadow-md hover:opacity-90 focus:outline-none ${
                 floatingButton.position === 'right' ? 'right-4' : 'left-4'
               }`}
               onClick={openPreferences}
@@ -883,60 +894,51 @@ export default function ConsentPreview({
 
       {/* Device Selector */}
       <div className="flex gap-6 mt-6 mb-4 items-center">
-        <button
-          type="button"
-          className="flex items-center gap-2"
-          onClick={() => setDevice("mobile")}
-        >
-          <div
-            className="w-[10px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "mobile" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base"
-            style={{ color: device === "mobile" ? "#007aff" : "#6B7280" }}
+        <Tooltip text="Preview the banner on a phone screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("mobile")}
           >
-            Phone
-          </p>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2"
-          onClick={() => setDevice("tablet")}
-        >
-          <div
-            className="w-[16px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "tablet" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base"
-            style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}
+            <div
+              className="w-[10px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "mobile" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base" style={{ color: device === "mobile" ? "#007aff" : "#6B7280" }}>
+              Phone
+            </p>
+          </button>
+        </Tooltip>
+        <Tooltip text="Preview the banner on a tablet screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("tablet")}
           >
-            Tablet
-          </p>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2"
-          onClick={() => setDevice("desktop")}
-        >
-          <div
-            className="w-[24px] h-[17px] border-2 rounded-sm"
-            style={{
-              borderColor: device === "desktop" ? "#007aff" : "#4B5563",
-            }}
-          />
-          <p
-            className="text-base"
-            style={{ color: device === "desktop" ? "#007aff" : "#6B7280" }}
+            <div
+              className="w-[16px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "tablet" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base cursor-pointer" style={{ color: device === "tablet" ? "#007aff" : "#6B7280" }}>
+              Tablet
+            </p>
+          </button>
+        </Tooltip>
+        <Tooltip text="Preview the banner on a desktop screen.">
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setDevice("desktop")}
           >
-            Desktop
-          </p>
-        </button>
+            <div
+              className="w-[24px] h-[17px] border-2 rounded-sm"
+              style={{ borderColor: device === "desktop" ? "#007aff" : "#4B5563" }}
+            />
+            <p className="text-base" style={{ color: device === "desktop" ? "#007aff" : "#6B7280" }}>
+              Desktop
+            </p>
+          </button>
+        </Tooltip>
       </div>
     </div>
 
@@ -977,14 +979,12 @@ export default function ConsentPreview({
             className="mt-2 font-['DM_Sans'] text-sm leading-relaxed text-[#374151]"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
-            Your preview reflects saved content.
-            <span className="mt-2 block text-[#6b7280]">
-              On live sites, allow up to ~2 minutes for the embed script cache to refresh, or hard-refresh the page.
-            </span>
+            
+            
           </p>
           <button
             type="button"
-            className="mt-6 w-full rounded-lg bg-[#2ec04f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#26a342] transition-colors"
+            className="mt-6 w-full rounded-lg bg-[#2ec04f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#26a342] transition-colors cursor-pointer"
             onClick={() => onDismissPublishSuccess?.()}
           >
             OK

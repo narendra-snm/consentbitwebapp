@@ -23,6 +23,7 @@ interface Invoice {
   amount: string;
   paymentMethod: string;
   status: string;
+  siteName: string;
   hostedInvoiceUrl?: string | null;
   invoicePdf?: string | null;
 }
@@ -40,11 +41,13 @@ type Props = {
 };
 
 // Simple in-memory cache to avoid refetch on each tab switch.
+// Reset on module reload so stale data (without siteId) is never reused.
 const invoiceCache = new Map<string, { rows: BillingInvoice[]; ts: number }>();
+invoiceCache.clear();
 const summaryCache = new Map<string, { data: BillingSummary; ts: number }>();
 const CACHE_TTL_MS = 60_000;
 /** Bump when invoice API shape/proxy changes so we do not reuse empty cached rows forever. */
-const INVOICE_STORAGE_KEY = "billing-invoices:v2";
+const INVOICE_STORAGE_KEY = "billing-invoices:v3";
 
 export default function BillingPage({
   currentPlan,
@@ -117,6 +120,10 @@ export default function BillingPage({
   const [filterMonth, setFilterMonth]   = useState<string>("all");
   const [filterDomain, setFilterDomain] = useState<string>("all");
 
+  // Pagination
+  const INVOICES_PER_PAGE = 5;
+  const [invoicePage, setInvoicePage] = useState(1);
+
   // Load invoices
   useEffect(() => {
     if (!organizationId) { setRawInvoices([]); return; }
@@ -184,18 +191,21 @@ export default function BillingPage({
     return Array.from(years).sort((a, b) => b - a);
   }, [rawInvoices]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => { setInvoicePage(1); }, [filterYear, filterMonth, filterDomain]);
+
   // Mapped + filtered invoices
-  const invoices = useMemo<Invoice[]>(() => {
+  const allFilteredInvoices = useMemo<Invoice[]>(() => {
+    // If no invoices have a siteId (older worker), skip the domain filter entirely
+    const hasSiteIds = (rawInvoices || []).some((inv) => !!inv.siteId);
     return (rawInvoices || [])
       .filter((inv) => {
         const d = inv.created ? new Date(inv.created) : null;
         if (!d || Number.isNaN(d.getTime())) return filterYear === "all" && filterMonth === "all";
         if (filterYear  !== "all" && String(d.getFullYear()) !== filterYear)  return false;
         if (filterMonth !== "all" && String(d.getMonth() + 1) !== filterMonth) return false;
-        if (filterDomain !== "all") {
-          const sid = inv.siteId ?? null;
-          if (!sid) return false;
-          if (String(sid) !== String(filterDomain)) return false;
+        if (filterDomain !== "all" && hasSiteIds) {
+          if (!inv.siteId || String(inv.siteId) !== String(filterDomain)) return false;
         }
         return true;
       })
@@ -206,6 +216,10 @@ export default function BillingPage({
           : "-";
         const amount = ((inv.amountPaid ?? inv.amountDue ?? 0) / 100).toFixed(2) + " USD";
         const status = String(inv.status || "open").toLowerCase() === "paid" ? "Completed" : String(inv.status || "Open");
+        const siteMatch = inv.siteId
+          ? domainSites.find((s) => String(s.id) === String(inv.siteId))
+          : null;
+        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "—";
         return {
           date,
           invoiceNumber: inv.number || inv.id,
@@ -214,11 +228,15 @@ export default function BillingPage({
             ? `Card ****${summary.paymentMethod.last4}`
             : "Card",
           status,
+          siteName,
           hostedInvoiceUrl: inv.hostedInvoiceUrl,
           invoicePdf: inv.invoicePdf,
         };
       });
-  }, [rawInvoices, summary, filterYear, filterMonth, filterDomain]);
+  }, [rawInvoices, summary, filterYear, filterMonth, filterDomain, domainSites]);
+
+  const invoiceTotalPages = Math.max(1, Math.ceil(allFilteredInvoices.length / INVOICES_PER_PAGE));
+  const invoices = allFilteredInvoices.slice((invoicePage - 1) * INVOICES_PER_PAGE, invoicePage * INVOICES_PER_PAGE);
 
   const planLabel = currentPlan;
   const upgradeCta =
@@ -234,7 +252,7 @@ export default function BillingPage({
     try {
       const returnUrl = typeof window !== "undefined" ? window.location.href : "";
       const { url } = await createBillingPortalSession(organizationId, returnUrl);
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.location.assign(url);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not open billing portal");
     } finally {
@@ -414,7 +432,7 @@ export default function BillingPage({
                 className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
-                <option value="all">All Domains ({domainCount})</option>
+                <option value="all">All Domains ({domainSites.length || domainCount})</option>
                 {domainSites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.domain || s.name || s.id}
@@ -429,7 +447,7 @@ export default function BillingPage({
         </div>
 
             {/* Table Header */}
-            <div className="grid grid-cols-[100px_150px_90px_120px_90px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
+            <div className="grid grid-cols-[100px_150px_90px_130px_120px_90px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Issue Date
               </p>
@@ -438,6 +456,9 @@ export default function BillingPage({
               </p>
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Amount
+              </p>
+              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
+                Site
               </p>
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Payment Method
@@ -450,7 +471,7 @@ export default function BillingPage({
         {/* Table Rows */}
         <div className="space-y-[20px] pb-6">
           {invoices.map((invoice, index) => (
-            <div key={index} className="grid grid-cols-[100px_150px_90px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
+            <div key={index} className="grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.date}</p>
 
               <div className="flex items-center gap-[6px]">
@@ -473,6 +494,8 @@ export default function BillingPage({
 
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.amount}</p>
 
+              <p className="font-normal leading-[20px] text-[12px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }} title={invoice.siteName}>{invoice.siteName}</p>
+
               <div className="flex items-center gap-[7px]">
                 {pm && (
                   <span className="inline-flex relative w-6 h-4 shrink-0">
@@ -493,10 +516,44 @@ export default function BillingPage({
           ))}
           {invoiceLoading && <p className="text-sm text-[#6b7280]">Loading invoices...</p>}
           {invoiceError && <p className="text-sm text-[#b91c1c]">{invoiceError}</p>}
-          {!invoiceLoading && !invoiceError && invoices.length === 0 && (
+          {!invoiceLoading && !invoiceError && allFilteredInvoices.length === 0 && (
             <p className="text-sm text-[#6b7280]">No invoices found.</p>
           )}
         </div>
+
+        {/* Invoice Pagination */}
+        {invoiceTotalPages > 1 && (
+          <div className="flex items-center justify-between px-3.5 py-3 border-t border-[#000000]/10">
+            <p className="text-[12px] text-[#6b7280]">
+              {(invoicePage - 1) * INVOICES_PER_PAGE + 1}–{Math.min(invoicePage * INVOICES_PER_PAGE, allFilteredInvoices.length)} of {allFilteredInvoices.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                disabled={invoicePage === 1}
+                className="w-7 h-7 flex items-center justify-center rounded border border-[#e5e5e5] text-[#4b5563] disabled:opacity-40 hover:bg-[#f3f4f6]"
+              >
+                <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M5 1L1 5L5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              {Array.from({ length: invoiceTotalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setInvoicePage(p)}
+                  className={`w-7 h-7 flex items-center justify-center rounded text-[12px] font-medium border ${p === invoicePage ? "bg-[#007AFF] text-white border-[#007AFF]" : "border-[#e5e5e5] text-[#4b5563] hover:bg-[#f3f4f6]"}`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+                disabled={invoicePage === invoiceTotalPages}
+                className="w-7 h-7 flex items-center justify-center rounded border border-[#e5e5e5] text-[#4b5563] disabled:opacity-40 hover:bg-[#f3f4f6]"
+              >
+                <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1L5 5L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Column */}

@@ -68,7 +68,7 @@ export function BannerLinkSection({ effectivePlanId, consentType }: BannerLinkSe
             <button
               type="button"
               onClick={handleCopy}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors cursor-pointer" 
               title={copied ? "Copied!" : "Copy snippet"}
             >
               {copied

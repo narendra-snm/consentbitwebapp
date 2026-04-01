@@ -61,8 +61,10 @@ export default function StepWizard({
         cdnScriptId: result?.site?.cdnScriptId,
         domain: siteData.domain,
       });
-      void refresh({ showLoading: false });
+      // Step first, then refresh — prevents sites.length > 0 flipping showOnboarding off
+      // before the wizard advances, which caused a flash of the dashboard.
       setStep(3);
+      void refresh({ showLoading: false });
     } catch (err: unknown) {
       setSetupError(err instanceof Error ? err.message : 'Setup failed');
     }
@@ -234,6 +236,11 @@ function StepOne({
       setError('Please enter a valid domain');
       return;
     }
+    // Must contain at least one dot and a valid TLD (e.g. example.com)
+    if (!/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/.test(cleanDomain)) {
+      setError('Please enter a valid domain (e.g. yoursite.com)');
+      return;
+    }
     const existing = (Array.isArray(sites) ? sites : []).some((s: any) => {
       const d = normalizeDomain(String(s?.domain || s?.name || ""));
       return d && d === cleanDomain;
@@ -259,7 +266,7 @@ function StepOne({
           <input
             type="text"
             value={domain}
-            onChange={(e) => setDomain(e.target.value)}
+            onChange={(e) => { setDomain(e.target.value); setError(null); }}
             placeholder="Yoursite.com"
             className="placeholder:text-[#000000] placeholder:text-base w-full px-4 py-3.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
