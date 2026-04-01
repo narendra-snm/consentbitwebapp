@@ -336,17 +336,12 @@ export default function DashboardPage() {
     // );
  
     return (
-      <div className="min-h-screen bg-[#E6F1FD] flex flex-col">
-        <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10 rounded-t-xl">
-          <img src="/images/ConsentBit-logo-Dark.png" alt="logo" className="h-6" />
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          <p className="text-[#374151] text-sm font-medium">Loading your dashboard…</p>
-        </div>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
+        <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <p className="text-[#374151] text-sm font-medium">Loading your dashboard…</p>
       </div>
     );
   }
