@@ -6,7 +6,7 @@ p378e8c00: "M10.7583 6.53333L6.43334 10.8583C6.26667 11.025 6.10834 11.35 6.0750
 }
 
 // import imgImage4 from "../../../../../public/images/card.png";
-
+// test
 interface BillingDetailsProps {
   name: string;
   email: string;
