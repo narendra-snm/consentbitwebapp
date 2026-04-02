@@ -1,0 +1,89 @@
+import React from "react";
+
+const BouncyIcon = () => {
+  return (
+    <div className="w-10 h-10">
+      <svg
+        width="40"
+        height="40"
+        viewBox="0 0 40 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect width="40" height="40" rx="8" fill="white" />
+
+        {/* Top Right Box */}
+        <path
+          d="M24.5831 18.1666H26.4164C28.2497 18.1666 29.1664 17.25 29.1664 15.4166V13.5833C29.1664 11.75 28.2497 10.8333 26.4164 10.8333H24.5831C22.7497 10.8333 21.8331 11.75 21.8331 13.5833V15.4166C21.8331 17.25 22.7497 18.1666 24.5831 18.1666Z"
+          stroke="#007AFF"
+          strokeWidth="2"
+          style={{
+            transformOrigin: "center",
+            animation: "bounceScale 1.2s infinite",
+            animationDelay: "0s",
+          }}
+        />
+
+        {/* Bottom Left Box */}
+        <path
+          d="M13.5831 29.1666H15.4164C17.2497 29.1666 18.1664 28.25 18.1664 26.4166V24.5833C18.1664 22.75 17.2497 21.8333 15.4164 21.8333H13.5831C11.7497 21.8333 10.8331 22.75 10.8331 24.5833V26.4166C10.8331 28.25 11.7497 29.1666 13.5831 29.1666Z"
+          stroke="#007AFF"
+          strokeWidth="2"
+          style={{
+            transformOrigin: "center",
+            animation: "bounceScale 1.2s infinite",
+            animationDelay: "0.2s",
+          }}
+        />
+
+        {/* Top Left Circle */}
+        <path
+          d="M14.4997 18.1666C16.5248 18.1666 18.1664 16.525 18.1664 14.5C18.1664 12.4749 16.5248 10.8333 14.4997 10.8333C12.4747 10.8333 10.8331 12.4749 10.8331 14.5C10.8331 16.525 12.4747 18.1666 14.4997 18.1666Z"
+          stroke="#007AFF"
+          strokeWidth="2"
+          style={{
+            transformOrigin: "center",
+            animation: "bounceScale 1.2s infinite",
+            animationDelay: "0.4s",
+          }}
+        />
+
+        {/* Bottom Right Circle */}
+        <path
+          d="M25.4997 29.1666C27.5248 29.1666 29.1664 27.525 29.1664 25.5C29.1664 23.4749 27.5248 21.8333 25.4997 21.8333C23.4747 21.8333 21.8331 23.4749 21.8331 25.5C21.8331 27.525 23.4747 29.1666 25.4997 29.1666Z"
+          stroke="#007AFF"
+          strokeWidth="2"
+          style={{
+            transformOrigin: "center",
+            animation: "bounceScale 1.7s infinite",
+            animationDelay: "0.6s",
+          }}
+        />
+      </svg>
+
+      {/* Animation Keyframes */}
+    <style>
+{`
+  @keyframes bounceScale {
+    0% {
+      transform: scale(1);
+    }
+    25% {
+      transform: scale(0.9);
+    }
+    50% {
+      transform: scale(1);
+    }
+
+    /* HOLD (pause zone) */
+    100% {
+      transform: scale(1);
+    }
+  }
+`}
+</style>
+    </div>
+  );
+};
+
+export default BouncyIcon;

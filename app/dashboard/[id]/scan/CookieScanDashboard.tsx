@@ -694,22 +694,22 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             </p>
             {selectedCookies.length > 0 ? (
               <>
-              <div className="mt-3 overflow-x-auto rounded-lg border border-[#e5e7eb]">
+              <div className="mt-3 overflow-x-auto rounded-lg ">
                 <table className="w-full text-left font-['DM_Sans'] text-xs" style={dm}>
                   <thead>
-                    <tr className="border-b border-[#e5e7eb] bg-[#f9fafb]">
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Name</th>
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Provider</th>
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Domain</th>
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Duration</th>
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Source</th>
-                      <th className="px-3 py-2 font-semibold text-[#374151]">Description</th>
+                    <tr className="border-b border-[#9FBCE4] bg-[#F2F7FF] text-sm ">
+                      <th className="px-3 pl-5.5 py-4.5 font-medium text-[#0A091F]">Name</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Provider</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Domain</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Duration</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Source</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Description</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagedCookies.map((c, i) => (
-                      <tr key={c.id} className={i % 2 === 0 ? 'bg-white' : 'bg-[#f9fafb]'}>
-                        <td className="px-3 py-2 font-semibold text-black">
+                      <tr key={c.id} className= 'text-sm font-medium border-b border-[#9FBCE4]'>
+                        <td className={`py-4.5 px-3 pl-5.5 font-semibold text-black`}>
                           <div className="flex items-center gap-1">
                             {c.name}
                             {String(c.source || '').startsWith('user-rule:') && (
@@ -719,11 +719,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-[#4b5563]">{c.provider ?? '—'}</td>
-                        <td className="px-3 py-2 text-[#4b5563]">{c.domain || '—'}</td>
-                        <td className="px-3 py-2 text-[#4b5563]">{formatCookieDuration(c.expires)}</td>
-                        <td className="px-3 py-2 text-[#4b5563]">{c.source ?? '—'}</td>
-                        <td className="px-3 py-2 text-[#4b5563]">{c.description || '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{c.provider ?? '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{c.domain || '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{formatCookieDuration(c.expires)}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{c.source ?? '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{c.description || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

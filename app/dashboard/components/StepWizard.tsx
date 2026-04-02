@@ -94,7 +94,7 @@ export default function StepWizard({
   }`}
 >          <StepCircle step={step} number={1} label="Domain" isActive={step === 1} active={step >= 1} completed={step > 1} align="start" />
           <StepCircle step={step} number={2} label="Select your plan" isActive={step === 2} active={step >= 2} completed={step > 2} align="center" />
-          <StepCircle step={step} number={3} label="Confirm" isActive={step === 3} active={step >= 3} completed={step === 3} align="end" />
+          <StepCircle step={step} number={3} label="Confirm" isActive={step === 3} active={step >= 3} completed={step > 3} align="end" />
         </div>
 
         {/* Step Content */}

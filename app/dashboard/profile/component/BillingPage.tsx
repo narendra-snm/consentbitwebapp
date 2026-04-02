@@ -389,7 +389,7 @@ export default function BillingPage({
         </div>
       </div>
     )}
-    <div className="grid grid-cols-[614px_1fr] gap-2.5 overflow-auto">
+    <div className="grid 2xl:grid-cols-[800px_1fr] xl:gap-12 xl:grid-cols-1  gap-2.5 overflow-auto">
       {/* Left Column - Invoices */}
       <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
         {/* Header with Filters */}
@@ -481,7 +481,7 @@ export default function BillingPage({
         {/* Table Rows */}
         <div className="space-y-[20px] pb-6">
           {invoices.map((invoice, index) => (
-            <div key={index} className="grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
+            <div key={index} className={`grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center ${index === invoices.length - 1 ? "" : "border-b border-[#000000]/10"} py-4.5`}>
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.date}</p>
 
               <div className="flex items-center gap-[6px]">

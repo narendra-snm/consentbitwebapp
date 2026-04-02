@@ -1,6 +1,11 @@
 import { Globe, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+import BouncyIcon from "./ui/BouncyIcon"
+import CookieAnimation from "./ui/CookieAnimation";
+import CircularArrow from "./ui/CircularArrow";
+
+
 export default function SiteSummaryCards({
   site,
   onOpenInstall,
@@ -73,9 +78,7 @@ export default function SiteSummaryCards({
             <p className="text-xs ">Cookie banner status</p>
 
             <p className={`font-medium text-xl mt-1 flex items-center gap-1 ${isVerified ? "text-emerald-600" : "text-[#AC2734]"}`}>
-              {isVerified ? "Active" : "Inactive"} <svg width="12" height="14" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M2.86102e-05 8.10511C-0.00238037 7.33074 0.151782 6.56362 0.453565 5.84827C0.755347 5.13291 1.19874 4.48358 1.758 3.93797C2.69762 3.01009 3.92752 2.41963 5.24995 2.26153V0L8.9999 2.94758L5.24995 5.89516V3.75006C4.32834 3.8996 3.47782 4.32981 2.81849 4.97994C2.39913 5.38933 2.06666 5.87644 1.84033 6.41303C1.614 6.94962 1.49832 7.52501 1.50001 8.10585V8.10732C1.50001 8.35049 1.52476 8.58999 1.56451 8.82727C1.56976 8.85895 1.57276 8.89211 1.57876 8.9238C1.71186 9.60334 2.00406 10.2431 2.43224 10.7926C2.55224 10.9466 2.68049 11.0962 2.81924 11.2325C2.98868 11.3971 3.17126 11.5482 3.36523 11.6842C3.87382 12.0501 4.45603 12.3051 5.07296 12.4322C5.17946 12.4543 5.2867 12.469 5.39545 12.483C5.44195 12.4896 5.48695 12.4985 5.53345 12.5029C6.00907 12.5508 6.48938 12.5252 6.95693 12.427L7.27493 13.8676C6.65075 13.9991 6.00936 14.0329 5.37445 13.9678C5.3227 13.9627 5.27095 13.9524 5.2192 13.9457C5.06546 13.9266 4.91246 13.9045 4.76171 13.8735L4.72196 13.8669L4.72271 13.8632C4.16264 13.7453 3.623 13.5479 3.12073 13.2774L3.09898 13.2641C2.834 13.1188 2.58076 12.9538 2.34149 12.7704C2.139 12.6164 1.9425 12.4535 1.75875 12.273C1.57275 12.091 1.40626 11.895 1.24801 11.6945C1.23226 11.6739 1.21126 11.6555 1.19551 11.6348L1.20001 11.6319C0.855879 11.1828 0.579766 10.6872 0.380274 10.1603L0.374274 10.1625C0.352524 10.105 0.336774 10.0461 0.317274 9.98787C0.289525 9.90682 0.261024 9.82502 0.237025 9.74249C0.207026 9.63932 0.182276 9.53542 0.158277 9.43078C0.141777 9.35783 0.122277 9.28709 0.108778 9.2134C0.0847778 9.08739 0.0667782 8.95991 0.0517778 8.83316C0.0442781 8.77716 0.0345278 8.72263 0.0292778 8.66589C0.0120287 8.4824 0.00152969 8.29744 0.00152969 8.111C0.00152969 8.111 2.86102e-05 8.10806 2.86102e-05 8.10511ZM9.60214 10.7565L10.8021 11.6415C10.286 12.3166 9.62915 12.8756 8.8754 13.2811L8.15466 11.9885C8.7213 11.6843 9.21491 11.2642 9.60214 10.7565ZM10.4999 8.10585C10.4999 7.999 10.4961 7.89436 10.4886 7.78972L11.9841 7.68434C12.0469 8.52858 11.9233 9.37617 11.6219 10.1692L10.2171 9.65259C10.405 9.15784 10.5008 8.63391 10.4999 8.10585Z" fill="#007AFF"/>
-</svg>
+              {isVerified ? "Active" : "Inactive"} <CircularArrow/>
 
             </p>
 </div>
@@ -166,13 +169,15 @@ export default function SiteSummaryCards({
       <div className="flex mb-4">
   <div className="w-1/2 flex justify-start">
     <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
-      <img src="/images/coookie.png" alt="Verification" className="mt-1" />
+      {/* <img src="/images/coookie.png" alt="Verification" className="mt-1" /> */}
+      <CookieAnimation/>
     </div>
   </div>
 
   <div className="w-1/2 flex justify-start ">
     <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
-      <img src="/images/menu.png" alt="Verification" className="mt-1" />
+      {/* <img src="/images/menu.png" alt="Verification" className="mt-1" /> */}
+      <BouncyIcon/>
     </div>
   </div>
 </div>
