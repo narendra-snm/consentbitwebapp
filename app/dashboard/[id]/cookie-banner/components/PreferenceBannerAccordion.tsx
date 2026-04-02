@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Accordion from "./ui/Accordion";
 
-const LIMITS = { title: 60, message: 320, button: 40 } as const;
+const LIMITS = { title: 60, message: 320, button: 20 } as const;
 
 function clampLen(value: string, max: number): string {
   const s = value ?? "";
@@ -42,9 +42,9 @@ export default function PreferenceBannerAccordion({
     if (!value) return;
     setSettings((prev) => ({
       ...prev,
-      title: value.title ?? prev.title,
-      overview: value.message ?? prev.overview,
-      savePreferences: value.saveButtonLabel ?? prev.savePreferences,
+      title: clampLen(value.title ?? prev.title, LIMITS.title),
+      overview: clampLen(value.message ?? prev.overview, LIMITS.message),
+      savePreferences: clampLen(value.saveButtonLabel ?? prev.savePreferences, LIMITS.button),
     }));
   }, [value?.title, value?.message, value?.saveButtonLabel]);
 

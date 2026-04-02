@@ -845,7 +845,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                         key={row.id}
                         className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 gap-3  border-b border-[#9FBCE4]`}
                       >
-                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatTableDate(row.createdAt)}</div>
+                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
                         <div>{statusBadge(row.scanStatus)}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
                         <div

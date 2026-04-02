@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 import { cancelSubscription } from '@/lib/client-api';
@@ -164,7 +164,18 @@ const filterInputClass =
 export function DomainManagementDashboard() {
   const router = useRouter();
   const { sites, loading, refresh } = useDashboardSession();
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -175,6 +186,8 @@ export function DomainManagementDashboard() {
   const [filterBilling, setFilterBilling] = useState<'all' | 'Monthly' | 'Yearly'>('all');
   const [filterExpiration, setFilterExpiration] = useState<'all' | 'has' | 'na'>('all');
   const [filterFocusKey, setFilterFocusKey] = useState<SortKey | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 12;
 
   const domainFilterRef = useRef<HTMLInputElement>(null);
   const statusFilterRef = useRef<HTMLSelectElement>(null);
@@ -191,6 +204,7 @@ export function DomainManagementDashboard() {
       setSortAsc(true);
       return key;
     });
+    setCurrentPage(1);
   }, []);
 
   const rows = useMemo<Domain[]>(() => {
@@ -331,12 +345,16 @@ export function DomainManagementDashboard() {
     return next;
   }, [filteredRows, sortAsc, sortKey]);
 
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pagedRows = sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const clearFilters = useCallback(() => {
     setFilterDomain('');
     setFilterStatus('all');
     setFilterPlan('all');
     setFilterBilling('all');
     setFilterExpiration('all');
+    setCurrentPage(1);
   }, []);
 
   const handleCancelSubscription = async (domain: Domain) => {
@@ -527,12 +545,10 @@ export function DomainManagementDashboard() {
 
         {/* Table Rows */}
         <div className="bg-[#fafbfc] border border-t-0 border-[#e5e7eb] rounded-b-[10px] overflow-hidden">
-          {sortedRows.map((domain) => (
+          {pagedRows.map((domain) => (
             <div
               key={domain.id}
               className={`${TABLE_GRID} px-[20px] py-[16px] border-b border-[#e5e7eb] last:border-b-0 relative group hover:bg-[#f5f7fa] transition-colors`}
-              onMouseEnter={() => setHoveredRow(domain.id)}
-              onMouseLeave={() => setHoveredRow(null)}
             >
               {/* Domain URL */}
               <div className="text-[#4b5563] text-sm font-medium tracking-[-0.7px] min-w-0 break-all" style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}>
@@ -576,18 +592,18 @@ export function DomainManagementDashboard() {
               <div className="flex items-center justify-end">
                 <button
                   type="button"
-                  onClick={() => router.push(domain.id ? `/dashboard/${domain.id}` : "/dashboard")}
+                  onClick={(e) => { e.stopPropagation(); setOpenMenuId((prev) => prev === domain.id ? null : domain.id); }}
                 >
                   <ThreeDotMenu />
                 </button>
               </div>
 
-              {/* Hover Menu */}
-              {hoveredRow === domain.id && (
-                <div className="absolute right-[40px] top-[50%] transform -translate-y-1/2 bg-white shadow-lg rounded-[8px] py-[8px] px-[12px] z-10 border border-[#e5e7eb] min-w-[180px]">
+              {/* Click Menu */}
+              {openMenuId === domain.id && (
+                <div ref={menuRef} className="absolute right-[40px] top-[50%] transform -translate-y-1/2 bg-white shadow-lg rounded-[8px] py-[8px] px-[12px] z-10 border border-[#e5e7eb] min-w-[180px]">
                   <button
                     type="button"
-                    onClick={() => router.push(domain.id ? `/dashboard/${domain.id}` : "/dashboard")}
+                    onClick={() => { setOpenMenuId(null); router.push(domain.id ? `/dashboard/${domain.id}` : "/dashboard"); }}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left"
                   >
                     <div className="w-[16px] h-[16px] flex items-center justify-center">
@@ -606,7 +622,7 @@ export function DomainManagementDashboard() {
                   <button
                     type="button"
                     disabled={domain.billingPeriod === null || actionLoadingId === domain.id}
-                    onClick={() => void handleCancelSubscription(domain)}
+                    onClick={() => { setOpenMenuId(null); void handleCancelSubscription(domain); }}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-[16px] h-[16px] flex items-center justify-center">
@@ -630,6 +646,47 @@ export function DomainManagementDashboard() {
             </div>
           ) : null}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-1 pt-4">
+            <p className="text-xs text-[#6b7280]" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedRows.length)} of {sortedRows.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-md text-xs font-medium border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    page === currentPage
+                      ? 'bg-[#2563eb] border-[#2563eb] text-white'
+                      : 'border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-md text-xs font-medium border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

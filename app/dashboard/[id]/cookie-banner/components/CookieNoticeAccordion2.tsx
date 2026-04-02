@@ -18,7 +18,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 const LIMITS = {
   title: 60,
   message: 320,
-  button: 30,
+  button: 20,
   policyLabel: 35,
 } as const;
 
@@ -72,7 +72,16 @@ export function CookieNoticeAccordion2({
     cookiePolicyLink: true,
     cookiePolicyLabel: 'Privacy Policy',
     url: 'https.link.com',
-    ...(value || {}),
+    ...(value
+      ? {
+          ...value,
+          ...(value.acceptAll !== undefined && { acceptAll: clampLen(value.acceptAll, LIMITS.button) }),
+          ...(value.rejectAll !== undefined && { rejectAll: clampLen(value.rejectAll, LIMITS.button) }),
+          ...(value.customizeLabel !== undefined && { customizeLabel: clampLen(value.customizeLabel, LIMITS.button) }),
+          ...(value.title !== undefined && { title: clampLen(value.title, LIMITS.title) }),
+          ...(value.message !== undefined && { message: clampLen(value.message, LIMITS.message) }),
+        }
+      : {}),
   };
 
   const update = (patch: Partial<CookieNoticeSettings>) => {
@@ -106,8 +115,8 @@ export function CookieNoticeAccordion2({
               />
             </div>
 
-            {/* Message — CCPA only; GDPR main copy uses saved description / defaults */}
-            {bannerType === "ccpa" ? (
+            {/* Message — both GDPR and CCPA */}
+            {(bannerType === "gdpr" || bannerType === "ccpa") ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label

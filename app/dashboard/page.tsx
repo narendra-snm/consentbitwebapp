@@ -25,7 +25,13 @@ export default function DashboardPage() {
  useEffect(() => setHydrated(true), []);
  const [wizardSticky, setWizardSticky] = useState(false);
  /** User chose "Skip to Dashboard" — hide wizard even if they never created a site. */
- const [wizardSkipped, setWizardSkipped] = useState(false);
+ /** True when the URL signals a post-payment / post-setup return — suppresses wizard on first render. */
+ const isPostPaymentFlow = (() => {
+   if (typeof window === 'undefined') return false;
+   const p = new URLSearchParams(window.location.search);
+   return p.get('postSetup') === '1' || p.get('upgraded') === '1';
+ })();
+ const [wizardSkipped, setWizardSkipped] = useState(() => isPostPaymentFlow);
  useEffect(() => {
    if (loading || !authenticated) return;
    if ((sites?.length || 0) === 0) {
@@ -47,8 +53,18 @@ export default function DashboardPage() {
    scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string; returnTo?: string;
  } | null>(null);
  const [pendingPostSetupDomain, setPendingPostSetupDomain] = useState<string | null>(null);
- const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(null);
- const [pendingPostSetupReturnTo, setPendingPostSetupReturnTo] = useState<string | null>(null);
+ const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(() => {
+   if (typeof window === 'undefined') return null;
+   const p = new URLSearchParams(window.location.search);
+   if (p.get('postSetup') === '1') return p.get('siteId') || null;
+   return null;
+ });
+ const [pendingPostSetupReturnTo, setPendingPostSetupReturnTo] = useState<string | null>(() => {
+   if (typeof window === 'undefined') return null;
+   const p = new URLSearchParams(window.location.search);
+   if (p.get('postSetup') === '1') return p.get('returnTo') || null;
+   return null;
+ });
 
  const computeReturnTarget = (siteId: string, returnTo: string | null): string => {
    const r = String(returnTo || "").trim();
@@ -434,8 +450,8 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
         />
       </div>
 
-      {/* Wizard */}
-      {authenticated && showOnboarding && loading===false && (
+      {/* Wizard — never render during post-payment flows; PostSetupOverlay handles those */}
+      {authenticated && showOnboarding && loading===false && !isPostPaymentFlow && (
         <div className=" ">
           <StepWizard
             onWizardComplete={handleWizardComplete}
