@@ -373,7 +373,6 @@ export function DomainManagementDashboard() {
         stripeSubscriptionId: domain.stripeSubscriptionId,
       });
       await refresh({ showLoading: false });
-      setHoveredRow(null);
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : "Failed to cancel subscription");
     } finally {
