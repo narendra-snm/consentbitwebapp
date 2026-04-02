@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DashboardTabs from "./components/DashboardTabs";
