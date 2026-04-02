@@ -1,4 +1,6 @@
+
 "use client";
+export const runtime = 'edge';
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DashboardTabs from "./components/DashboardTabs";
 import GettingStarted from "./components/GettingStarted";
@@ -25,7 +27,13 @@ export default function DashboardPage() {
  useEffect(() => setHydrated(true), []);
  const [wizardSticky, setWizardSticky] = useState(false);
  /** User chose "Skip to Dashboard" — hide wizard even if they never created a site. */
- const [wizardSkipped, setWizardSkipped] = useState(false);
+ /** True when the URL signals a post-payment / post-setup return — suppresses wizard on first render. */
+ const isPostPaymentFlow = (() => {
+   if (typeof window === 'undefined') return false;
+   const p = new URLSearchParams(window.location.search);
+   return p.get('postSetup') === '1' || p.get('upgraded') === '1';
+ })();
+ const [wizardSkipped, setWizardSkipped] = useState(() => isPostPaymentFlow);
  useEffect(() => {
    if (loading || !authenticated) return;
    if ((sites?.length || 0) === 0) {
@@ -47,8 +55,18 @@ export default function DashboardPage() {
    scriptUrl: string; siteId: string; siteDomain: string; cdnScriptId?: string; returnTo?: string;
  } | null>(null);
  const [pendingPostSetupDomain, setPendingPostSetupDomain] = useState<string | null>(null);
- const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(null);
- const [pendingPostSetupReturnTo, setPendingPostSetupReturnTo] = useState<string | null>(null);
+ const [pendingPostSetupSiteId, setPendingPostSetupSiteId] = useState<string | null>(() => {
+   if (typeof window === 'undefined') return null;
+   const p = new URLSearchParams(window.location.search);
+   if (p.get('postSetup') === '1') return p.get('siteId') || null;
+   return null;
+ });
+ const [pendingPostSetupReturnTo, setPendingPostSetupReturnTo] = useState<string | null>(() => {
+   if (typeof window === 'undefined') return null;
+   const p = new URLSearchParams(window.location.search);
+   if (p.get('postSetup') === '1') return p.get('returnTo') || null;
+   return null;
+ });
 
  const computeReturnTarget = (siteId: string, returnTo: string | null): string => {
    const r = String(returnTo || "").trim();
@@ -202,6 +220,9 @@ export default function DashboardPage() {
       const match = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === id);
       const scriptUrl =
         (match?.embedScriptUrl ?? match?.embed_script_url ?? match?.scriptUrl ?? match?.script_url) || null;
+      const planId = match?.planId ?? match?.plan_id ?? match?.subscription_plan ?? match?.plan ?? null;
+      const planReady = planId && String(planId).toLowerCase() !== "free";
+
       if (match && scriptUrl) {
         setPostSetupInstall({
           scriptUrl: String(scriptUrl),
@@ -210,8 +231,11 @@ export default function DashboardPage() {
           cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
           returnTo: pendingPostSetupReturnTo || undefined,
         });
-        setPendingPostSetupSiteId(null);
-        return;
+        // Keep polling until plan is also updated (Stripe webhook may lag)
+        if (planReady || attempts >= 20) {
+          setPendingPostSetupSiteId(null);
+          return;
+        }
       }
 
       // Not ready yet — refresh and retry a few times (webhook/session can lag).
@@ -434,8 +458,8 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
         />
       </div>
 
-      {/* Wizard */}
-      {authenticated && showOnboarding && loading===false && (
+      {/* Wizard — never render during post-payment flows; PostSetupOverlay handles those */}
+      {authenticated && showOnboarding && loading===false && !isPostPaymentFlow && (
         <div className=" ">
           <StepWizard
             onWizardComplete={handleWizardComplete}

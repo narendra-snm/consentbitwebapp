@@ -93,6 +93,7 @@ export default function ConsentPreview({
     rejectButton?: boolean;
     customizeButton?: boolean;
     cookiePolicyLink?: boolean;
+    cookiePolicyLabel?: string;
     privacyPolicyUrl?: string;
     /** CCPA opt-out preference panel (Do Not Share → modal) */
     ccpaOptOutTitle?: string;
@@ -491,11 +492,11 @@ export default function ConsentPreview({
                 <p style={headingStyle} className="text-[15px] font-bold tracking-tight mb-2">
                   {content?.title || t('title')}
                 </p>
-                <p style={bodyTextStyle} className="text-[11px] tracking-tight mb-2">
+                <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] tracking-tight mb-2">
                   {(content?.message != null && content.message !== '' ? content.message : null) ??
                     (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
                   {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
-                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{t('privacyPolicy')}</a></>
+                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{content?.cookiePolicyLabel || t('privacyPolicy')}</a></>
                   ) : null}
                 </p>
                 {selectedBannerType === 'ccpa' ? (
@@ -509,16 +510,16 @@ export default function ConsentPreview({
                 ) : (
                   <div className="flex gap-2 justify-end mt-3">
                     {content?.customizeButton !== false ? (
-                      <button className="px-3 py-1 border text-[11px] rounded" onClick={openPreferences} type="button" style={preferenceStyle}>
+                      <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" onClick={openPreferences} type="button" style={preferenceStyle}>
                         {content?.preferencesLabel || t('preferences')}
                       </button>
                     ) : null}
                     {content?.rejectButton !== false ? (
-                      <button className="px-3 py-1 border text-[11px] rounded" type="button" style={acceptRejectStyle}>
+                      <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" type="button" style={acceptRejectStyle}>
                         {content?.rejectAll || t('rejectAll')}
                       </button>
                     ) : null}
-                    <button className="px-3 py-1 border text-[11px] rounded" type="button" style={acceptRejectStyle}>
+                    <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" type="button" style={acceptRejectStyle}>
                       {content?.acceptAll || t('acceptAll') || 'Ok, Got it'}
                     </button>
                   </div>
@@ -598,7 +599,7 @@ export default function ConsentPreview({
           {modalView === "gdpr-preferences" ? (
             <div
               key={`gdpr-prefs-${bannerAnimation}`}
-              className="rounded-md shadow-lg w-full min-w-0 p-5 border border-[#e2e8f0]"
+              className="rounded-md shadow-lg w-full min-w-0 p-5 border border-[#e2e8f0] overflow-hidden"
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -617,7 +618,7 @@ export default function ConsentPreview({
                 ) : null}
               </div>
 
-              <p style={bodyTextStyle} className="text-[11px] leading-relaxed mb-4">
+              <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] leading-relaxed mb-4">
                 {stripTrailingMoreInfo(content?.preferenceMessage || t('managePreferences'))}
                 {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
                   <>
@@ -628,7 +629,7 @@ export default function ConsentPreview({
                       rel="noreferrer"
                       className="text-[#007aff] underline"
                     >
-                      {t('privacyPolicy')}
+                      {content?.cookiePolicyLabel || t('privacyPolicy')}
                     </a>
                     .
                   </>
@@ -773,7 +774,7 @@ export default function ConsentPreview({
                 {content?.rejectButton !== false ? (
                   <button
                     style={acceptRejectStyle}
-                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
+                    className="px-5 py-2 min-w-[88px] max-w-[160px] truncate border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
                     type="button"
                     onClick={() => setModalView("main")}
                   >
@@ -782,11 +783,11 @@ export default function ConsentPreview({
                 ) : null}
                 <button
                   style={preferenceStyle}
-                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
+                  className="px-5 py-2 min-w-[88px] max-w-[160px] truncate border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {t("save")}
+                  {content?.saveMyPreferencesLabel || t("save")}
                 </button>
               </div>
             </div>
@@ -825,7 +826,7 @@ export default function ConsentPreview({
                       rel="noreferrer"
                       className="text-[#007aff] underline"
                     >
-                      {t('privacyPolicy')}
+                      {content?.cookiePolicyLabel || t('privacyPolicy')}
                     </a>
                     .
                   </>
@@ -850,7 +851,7 @@ export default function ConsentPreview({
                 </button>
                 <button
                   style={preferenceStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer "
+                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer truncate max-w-[160px]"
                   type="button"
                   onClick={() => setModalView("main")}
                 >

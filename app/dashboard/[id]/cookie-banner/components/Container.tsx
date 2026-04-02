@@ -218,6 +218,7 @@ export default function page({ siteId }: { siteId: string }) {
         rejectButton: contentSettings.rejectButton,
         customizeButton: contentSettings.customizeButton,
         cookiePolicyLink: contentSettings.cookiePolicyLink,
+        cookiePolicyLabel: contentSettings.cookiePolicyLabel,
         privacyPolicyUrl: contentSettings.privacyPolicyUrl,
       };
     }
@@ -230,10 +231,12 @@ export default function page({ siteId }: { siteId: string }) {
       preferencesLabel: contentSettings.preferencesLabel,
       preferenceTitle: contentSettings.preferenceTitle,
       preferenceMessage: contentSettings.preferenceMessage,
+      saveMyPreferencesLabel: contentSettings.gdpr.saveMyPreferencesLabel,
       closeButton: contentSettings.closeButton,
       rejectButton: contentSettings.rejectButton,
       customizeButton: contentSettings.customizeButton,
       cookiePolicyLink: contentSettings.cookiePolicyLink,
+      cookiePolicyLabel: contentSettings.cookiePolicyLabel,
       privacyPolicyUrl: contentSettings.privacyPolicyUrl,
     };
   }, [activeContentBannerType, contentSettings]);

@@ -161,7 +161,7 @@ function writeScanCache(siteId: string, data: ScanCache) {
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const router = useRouter();
-  const { refresh, sites, effectivePlanId, activeOrganizationId, loading: sessionLoading, authenticated } =
+  const { refresh, sites, effectivePlanId, activeOrganizationId, loading: sessionLoading, authenticated, logout } =
     useDashboardSession();
   const siteList = useMemo(() => (Array.isArray(sites) ? sites : []), [sites]);
   const siteKnown = useMemo(
@@ -238,7 +238,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const list = Array.isArray(sitesRef.current) ? sitesRef.current : [];
       const ok = list.some((s: any) => String(s?.id) === String(siteId));
       if (list.length === 0 || !ok) {
-        setShowNoSiteModal(true);
+        void logout();
       } else {
         setError(msg);
       }
@@ -268,7 +268,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     const list = Array.isArray(sites) ? sites : [];
     const ok = list.some((s: any) => String(s?.id) === String(siteId));
     if (list.length === 0 || !ok) {
-      setShowNoSiteModal(true);
+      void logout();
     } else {
       setShowNoSiteModal(false);
     }
@@ -308,7 +308,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const handleScanNow = async () => {
     if (!siteId || scanningRef.current) return;
     if (!sessionLoading && authenticated && (siteList.length === 0 || !siteKnown)) {
-      setShowNoSiteModal(true);
+      void logout();
       return;
     }
     scanningRef.current = true;
@@ -845,7 +845,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                         key={row.id}
                         className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 gap-3  border-b border-[#9FBCE4]`}
                       >
-                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatTableDate(row.createdAt)}</div>
+                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
                         <div>{statusBadge(row.scanStatus)}</div>
                         <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
                         <div

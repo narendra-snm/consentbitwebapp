@@ -1,3 +1,6 @@
+
+"use client";
+export const runtime = 'edge';
 import { useEffect, useMemo, useState } from "react";
 import {
   getBillingInvoices,
@@ -24,6 +27,7 @@ interface Invoice {
   paymentMethod: string;
   status: string;
   siteName: string;
+  siteId: string | null;
   hostedInvoiceUrl?: string | null;
   invoicePdf?: string | null;
 }
@@ -61,7 +65,7 @@ export default function BillingPage({
   sites = [],
 }: Props) {
   const router = useRouter();
-  const { updateSiteInState, refresh, sites: sessionSites } = useDashboardSession();
+  const { updateSiteInState, refresh, sites: sessionSites, setActiveSiteId } = useDashboardSession();
 
   const domainSites = useMemo(() => {
     const map = new Map<string, { id: string; domain: string; name?: string }>();
@@ -119,6 +123,11 @@ export default function BillingPage({
   const [filterYear, setFilterYear]     = useState<string>("all");
   const [filterMonth, setFilterMonth]   = useState<string>("all");
   const [filterDomain, setFilterDomain] = useState<string>("all");
+
+  // Sync filterDomain when header dropdown changes (activeSiteId → table filter)
+  useEffect(() => {
+    if (activeSiteId) setFilterDomain(activeSiteId);
+  }, [activeSiteId]);
 
   // Pagination
   const INVOICES_PER_PAGE = 5;
@@ -229,6 +238,7 @@ export default function BillingPage({
             : "Card",
           status,
           siteName,
+          siteId: inv.siteId ? String(inv.siteId) : null,
           hostedInvoiceUrl: inv.hostedInvoiceUrl,
           invoicePdf: inv.invoicePdf,
         };
@@ -494,7 +504,19 @@ export default function BillingPage({
 
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.amount}</p>
 
-              <p className="font-normal leading-[20px] text-[12px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }} title={invoice.siteName}>{invoice.siteName}</p>
+              {invoice.siteId ? (
+                <button
+                  type="button"
+                  onClick={() => { setFilterDomain(invoice.siteId!); setActiveSiteId(invoice.siteId!); }}
+                  className="font-normal leading-[20px] text-[12px] text-[#007aff] underline truncate text-left cursor-pointer"
+                  style={{ fontVariationSettings: "'opsz' 14" }}
+                  title={`Filter by ${invoice.siteName}`}
+                >
+                  {invoice.siteName}
+                </button>
+              ) : (
+                <p className="font-normal leading-[20px] text-[12px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }} title={invoice.siteName}>{invoice.siteName}</p>
+              )}
 
               <div className="flex items-center gap-[7px]">
                 {pm && (

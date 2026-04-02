@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import LoginPage from "./login/page";
 
 

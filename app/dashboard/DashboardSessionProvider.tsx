@@ -195,6 +195,7 @@ export function DashboardSessionProvider({
           activeOrganizationId: null,
           activeSiteId: null,
         });
+        router.replace("/login");
         return;
       }
 
@@ -240,7 +241,7 @@ export function DashboardSessionProvider({
       console.error("[DashboardSession] refresh failed", e);
       setState((s) => ({ ...s, loading: false }));
     }
-  }, []);
+  }, [router]);
 
   // Always reconcile with the server on mount. Seeded/cached sessions used to skip this entirely,
   // so fields like `pagesScanned` from dashboard-init never arrived (UI showed "—").
@@ -249,6 +250,13 @@ export function DashboardSessionProvider({
     skipInitialRefresh.current = false;
     void refresh({ showLoading: !silent });
   }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Redirect to login if session is not authenticated after loading completes.
+  useEffect(() => {
+    if (!state.loading && !state.authenticated) {
+      router.replace("/login");
+    }
+  }, [state.loading, state.authenticated, router]);
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
   useEffect(() => {
