@@ -648,7 +648,7 @@ function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical"
           marginBottom: "10px",
         }}
       >
-        We value your privacy
+       Your privacy matters to us
       </p>
       <p
         style={{
@@ -660,21 +660,9 @@ function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical"
           marginBottom: "16px",
         }}
       >
-        We and{" "}
-        <button
-          onClick={onCustomise}
-          style={{
-            background: "none", border: "none", cursor: "pointer", padding: 0,
-            color: s.SecButtonColor, fontWeight: "600", textDecoration: "underline",
-          }}
-        >
-          our 969 partners
-        </button>{" "}
-        use cookies and other tracking technologies to improve your experience on our website. We may store and/or
-        access information on a device and process personal data, such as your IP address and browsing data, for
-        personalised advertising and content, advertising and content measurement, audience research and services development.
-        Additionally, we may utilize precise geolocation data and identification through device scanning.
-      </p>
+       We and our trusted partners use cookies and similar technologies to collect and store information from your device. This may include details such as your IP address, browsing behavior, and device information.
+This data is used to ensure the website functions properly, enhance your experience, deliver personalized content and advertisements, and analyze performance and user engagement. In certain situations, we may also process location data and use device-based identification methods.
+You have the option to manage your preferences and control how your information is used.  </p>
 
       {/* Buttons */}
       <div
@@ -748,14 +736,12 @@ console.log("btnJustifyVal:", btnJustifyVal);
       >
         <div style={{ flex: 1, minWidth: "220px" }}>
           <p style={{ color: s.headingColor, fontWeight: "700", fontSize: "14px", textAlign: s.textAlign, marginBottom: "4px" }}>
-            We value your privacy
+            Your privacy matters to us
           </p>
           <p style={{ color: s.textColor, fontSize: "12px", lineHeight: "1.6", textAlign: s.textAlign, fontWeight: s.fontWeight, margin: 0 }}>
-            We and{" "}
-            <button onClick={onCustomise} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: s.SecButtonColor, fontWeight: "600", textDecoration: "underline" }}>
-              our 969 partners
-            </button>{" "}
-            use cookies and other tracking technologies to personalise advertising and content, and improve your experience.
+           We and our trusted partners use cookies and similar technologies to collect and store information from your device. This may include details such as your IP address, browsing behavior, and device information.
+This data is used to ensure the website functions properly, enhance your experience, deliver personalized content and advertisements, and analyze performance and user engagement. In certain situations, we may also process location data and use device-based identification methods.
+You have the option to manage your preferences and control how your information is used.
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: btnJustifyVal, flexShrink: 0 }}>
@@ -818,14 +804,27 @@ const positionStyles =
           <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
         </div>
       )}
-
+ {s.bannerType === "bottom-center" && (
+        <div
+          style={{
+            position: "absolute", bottom: "20px", left: `50%`, transform: "translateX(-50%)", zIndex: 999999,
+            width: "100%", maxWidth: "420px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            borderRadius: br,
+            animation: "slideUp 0.4s cubic-bezier(0.25,0.46,0.45,0.94)",
+             ...positionStyles,
+          }}
+        >
+          <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
+        </div>
+      )}
       {/* BANNER — full width bottom */}
       {s.bannerType === "banner" && (
         <FullBanner s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} />
       )}
 
       {/* POPUP — centered overlay */}
-      {s.bannerType === "popup" && (
+      {s.bannerType === "Bottom Center" && (
         <div
           style={{
             position: "absolute", inset: 0, zIndex: 999999,
