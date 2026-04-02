@@ -389,7 +389,7 @@ export default function BillingPage({
         </div>
       </div>
     )}
-    <div className="grid grid-cols-[614px_1fr] gap-2.5 overflow-auto">
+    <div className="grid 2xl:grid-cols-[800px_1fr] xl:gap-12 xl:grid-cols-1  gap-2.5 overflow-auto">
       {/* Left Column - Invoices */}
       <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
         {/* Header with Filters */}
