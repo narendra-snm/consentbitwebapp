@@ -9,6 +9,7 @@ import {
 } from "@/lib/client-api";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import BillingDetailsCard from "./BillingDetailsCard";
 
 const svgPaths = {
   p112ba780: "M6.3 0H2.8C2.41395 0 2.1 0.31395 2.1 0.7V2.1H0.7C0.31395 2.1 0 2.41395 0 2.8V6.3C0 6.68605 0.31395 7 0.7 7H4.2C4.58605 7 4.9 6.68605 4.9 6.3V4.9H6.3C6.68605 4.9 7 4.58605 7 4.2V0.7C7 0.31395 6.68605 0 6.3 0ZM0.7 6.3V2.8H4.2L4.2007 6.3H0.7ZM6.3 4.2H4.9V2.8C4.9 2.41395 4.58605 2.1 4.2 2.1H2.8V0.7H6.3V4.2Z",
@@ -559,7 +560,7 @@ export default function BillingPage({
       <div className="space-y-[10px]">
 
         {/* Your Current plan */}
-        <div className="w-full bg-[#FBFBFB] border border-[#EBEBEB] rounded-lg overflow-hidden px-5 py-5">
+        <div className="w-full max-w-[554px] bg-[#FBFBFB] border border-[#EBEBEB] rounded-lg overflow-hidden px-5 py-5">
           <div className="pb-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-[16px] font-semibold">Your Current plan</h2>
             <span className="text-[18px] font-black text-[#007AFF]">{planLabel}</span>
@@ -627,125 +628,17 @@ export default function BillingPage({
         </div>
 
         {/* Billing Details + Payment Method — single card with blue border */}
-        <div className="w-full bg-white border border-[#007AFF]/25 rounded-[14px] overflow-hidden">
-
-          {/* Billing Details header */}
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-[15px] font-bold text-black">Billing Details</h2>
-            <button
-              type="button"
-              onClick={handleOpenPortal}
-              disabled={portalLoading}
-              className="flex items-center gap-1.5 border border-[#e5e7eb] bg-white rounded-[8px] px-3 py-1.5 text-[12px] text-black font-medium hover:bg-[#f8fafc] disabled:opacity-50 transition-colors whitespace-nowrap"
-            >
-              {portalLoading ? "Opening…" : "Visit Stripe portal to edit billing details →"}
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-[#f1f5f9] mx-5" />
-
-          {/* Name / Email */}
-          <div className="grid grid-cols-2 px-5 py-4 gap-x-6">
-            <div>
-              <p className="text-[11px] text-[#9ca3af] mb-0.5">Name</p>
-              <p className="text-[14px] font-bold text-black">{userName || "—"}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[#9ca3af] mb-0.5">Email</p>
-              <p className="text-[14px] font-bold text-black">{userEmail || "—"}</p>
-            </div>
-          </div>
-
-          {/* Country / Address */}
-          <div className="grid grid-cols-2 px-5 pb-4 gap-x-6">
-            <div>
-              <p className="text-[11px] text-[#9ca3af] mb-0.5">Country</p>
-              <p className="text-[14px] font-bold text-black">United States</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[#9ca3af] mb-0.5">Address</p>
-              <p className="text-[14px] font-bold text-black leading-snug">—</p>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-[#f1f5f9] mx-5" />
-
-          {/* Payment Method label + card */}
-          <div className="px-5 py-4">
-            <p className="text-[13px] text-[#6b7280] mb-3">Payment Methood</p>
-
-            {pm ? (
-              <div
-                className="relative rounded-[14px] overflow-hidden px-5 pt-5 pb-4"
-                style={{ background: "linear-gradient(145deg, #d4e4fb 0%, #c2d5f8 50%, #aec5f4 100%)" }}
-              >
-                {/* Top-right: edit icon + portal label */}
-                <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                  <p className="text-[10px] text-[#5a7ab5] font-medium leading-tight text-right">
-                    Stripe Customer<br />portal
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenPortal}
-                    disabled={portalLoading}
-                    className="w-7 h-7 rounded-[6px] bg-white/40 flex items-center justify-center hover:bg-white/60 transition-colors disabled:opacity-50"
-                    title="Edit in Stripe portal"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M1 9L8.5 1.5a1.2 1.2 0 011.7 1.7L3 11l-2.5.5L1 9z" stroke="#3b6ab5" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Card number */}
-                <p className="text-[17px] font-bold text-[#1e3a6e] tracking-[3px] font-mono mb-1 select-none">
-                  •••• •••• •••• {pm.last4}
-                </p>
-
-                {/* Expiry */}
-                <p className="text-[12px] text-[#4a6fa5] mb-5">
-                  {pm.brand.toLowerCase()} card - Expires {pm.exp_month}/{pm.exp_year}
-                </p>
-
-                {/* Bottom row */}
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] font-semibold text-[#1e3a6e]">{userName || "Cardholder"}</p>
-                  <div className="flex items-center gap-3">
-                    <p className="text-[15px] text-[#4a6fa5] tracking-[3px] select-none">•••</p>
-                    {isMastercard && (
-                      <div className="flex">
-                        <div className="w-[26px] h-[26px] rounded-full bg-[#eb001b]" />
-                        <div className="w-[26px] h-[26px] rounded-full bg-[#f79e1b] -ml-[10px]" />
-                      </div>
-                    )}
-                    {isVisa && (
-                      <span className="text-[15px] font-black italic text-[#1a1f71]">VISA</span>
-                    )}
-                    {!isMastercard && !isVisa && (
-                      <span className="text-[11px] font-semibold text-[#4a6fa5] capitalize">{pm.brand}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-[12px] border border-dashed border-[#d1d5db] p-4 text-center">
-                <p className="text-[13px] text-[#9ca3af] mb-2">No payment method on file.</p>
-                <button
-                  type="button"
-                  onClick={handleOpenPortal}
-                  disabled={portalLoading}
-                  className="text-[13px] text-[#007AFF] hover:underline disabled:opacity-50"
-                >
-                  {portalLoading ? "Opening…" : "Add payment method"}
-                </button>
-              </div>
-            )}
-          </div>
-
-        </div>
-
+       
+<BillingDetailsCard
+  name={userName}
+  email={userEmail}
+  country="United States"
+  address="—"
+  pm={pm}
+  portalLoading={portalLoading}
+  onEditCard={handleOpenPortal}
+  onVisitStripePortal={handleOpenPortal}
+/>
       </div>
     </div>
     </>

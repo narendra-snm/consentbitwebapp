@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
-import { ConsentLogsDashboard } from './ConsentLogsDashboard';
+import { ConsentLogsDashboard}  from './ConsentLogsDashboard';
 
 function pickSiteLabel(site: { name?: string; domain?: string } | null | undefined) {
   if (!site) return '';

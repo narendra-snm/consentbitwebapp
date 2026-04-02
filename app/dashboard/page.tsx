@@ -263,7 +263,7 @@ export default function DashboardPage() {
   };
 
 
-
+console.log("DashboardPage render", { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, showOnboarding });
 
   // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton.
   // Also keep showing loader when wizardSkipped=true but postSetupInstall not yet ready (avoids
@@ -336,16 +336,51 @@ export default function DashboardPage() {
     //     </div>
     //   </>
     // );
- 
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
-        <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <p className="text-[#374151] text-sm font-medium">Loading your dashboard…</p>
-      </div>
-    );
+ return null
+//     return (
+//       <div className="min-h-screen bg-[#E6F1FD] pb-4">
+//         <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
+//           <img
+//             src="/images/ConsentBit-logo-Dark.png"
+//             alt="logo"
+//             className="h-6"
+//           />
+//           <button
+//             type="button"
+//             onClick={() => {
+//               setPostSetupInstall(null);
+//               const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
+//               const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : "/dashboard";
+//               router.replace(target);
+//             }}
+//             className="cursor-pointer text-xs bg-white text-[#007AFF] px-3.75 py-3.5 rounded-lg font-medium"
+//           >
+//             Skip to Dashboard < svg className="inline ml-1" width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+// <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
+// </svg>
+
+//           </button>
+//         </div>
+//         <div className="flex justify-center  px-4">
+//           <StepWizard
+//             userName={userName}
+//             organizationId={activeOrganizationId}
+//             initialStep={3}
+//             initialSelectedPlan={'paid'}
+//             initialSiteData={{
+//               scriptUrl: postSetupInstall?.scriptUrl,
+//               siteId: postSetupInstall?.siteId,
+//               cdnScriptId: postSetupInstall?.cdnScriptId,
+//               domain: postSetupInstall?.siteDomain,
+//             }}
+//             onWizardComplete={async () => {
+//               setPostSetupInstall(null);
+//               await refresh({ showLoading: false });
+//             }}
+//           />
+//         </div>
+//       </div>
+//     );
   }
 
   if (authenticated && !showOnboarding) {
@@ -400,8 +435,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Wizard */}
-      {authenticated && showOnboarding && (
-        <div className="flex justify-center mt-20">
+      {authenticated && showOnboarding && loading===false && (
+        <div className=" ">
           <StepWizard
             onWizardComplete={handleWizardComplete}
             organizationId={activeOrganizationId}

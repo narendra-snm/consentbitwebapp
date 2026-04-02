@@ -1,40 +1,16 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { Playwrite_NG_Modern } from "next/font/google";
 
-function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
-  return (
-    <span className="relative group inline-flex">
-      {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-center">
-        {text}
-      </span>
-    </span>
-  );
-}
-
-function TooltipBelow({ text, children }: { text: string; children: React.ReactNode }) {
-  return (
-    <span className="relative group inline-flex">
-      {children}
-      <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal text-center">
-        {text}
-      </span>
-    </span>
-  );
-}
-
 type Plan = "basic" | "essential" | "growth" | "free" | null;
-type CheckoutStage = "redirecting" | "processing_success" | null;
 
 export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
-  const router = useRouter();
   const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId } =
     useDashboardSession();
 
@@ -45,73 +21,16 @@ export default function PricingTable() {
     | "essential"
     | "growth";
 
-  // // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
-  // useEffect(() => {
-  //   if (typeof window === "undefined") return;
-  //   const ok = new URLSearchParams(window.location.search).get("success");
-  //   if (ok !== "1") return;
-  //   void refresh({ showLoading: false });
-  //   // Webhook can lag; refresh again so "Current plan" moves off Free.
-  //   const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
-  //   return () => window.clearTimeout(t);
-  // }, [refresh]);
-useEffect(() => {
-  if (typeof window === "undefined") return;
-
-  const search = new URLSearchParams(window.location.search);
-  const ok = search.get("success");
-  const targetPlan = (search.get("plan") || "").toLowerCase();
-  const sessionId = search.get("session_id");
-
-  if (ok !== "1" || !targetPlan) return;
-
-  // Show a "payment succeeded" loading state while we wait for the webhook and session refresh.
-  setCheckoutStage("processing_success");
-
-  let cancelled = false;
-  let timer: number | undefined;
-
-  const cleanUrl = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("success");
-    url.searchParams.delete("canceled");
-    url.searchParams.delete("plan");
-    url.searchParams.delete("session_id");
-    window.history.replaceState({}, "", url.toString());
-  };
-
-  const poll = async () => {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      if (cancelled) return;
-
-      await refresh({ showLoading: false });
-
-      const current = String(effectivePlanId || "free").toLowerCase();
-
-      if (current === targetPlan) {
-        cleanUrl();
-        // We have the latest plan locally — send the user back to the dashboard.
-        router.replace(`/dashboard/${encodeURIComponent(siteId)}?success=1`);
-        return;
-      }
-
-      await new Promise((resolve) => {
-        timer = window.setTimeout(resolve, 1500);
-      });
-    }
-
-    cleanUrl();
-    // Even if the webhook is delayed, send the user back to the dashboard; it will refresh there too.
-    router.replace(`/dashboard/${encodeURIComponent(siteId)}?success=1`);
-  };
-
-  void poll();
-
-  return () => {
-    cancelled = true;
-    if (timer) window.clearTimeout(timer);
-  };
-}, [refresh, effectivePlanId, router, siteId]);
+  // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok = new URLSearchParams(window.location.search).get("success");
+    if (ok !== "1") return;
+    void refresh({ showLoading: false });
+    // Webhook can lag; refresh again so "Current plan" moves off Free.
+    const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
+    return () => window.clearTimeout(t);
+  }, [refresh]);
 
   const CurrentPlanButton = () => (
     <button
@@ -129,10 +48,8 @@ useEffect(() => {
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
-  const [checkoutStage, setCheckoutStage] = useState<CheckoutStage>(null);
-  // Kept for backwards-compatibility while we remove the old overlay UI.
-  // (Checkout now redirects in the same tab.)
-  const [awaitingPayment] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
 
   const getPrice = (plan: keyof typeof prices) => {
     const mp = prices[plan];
@@ -164,96 +81,53 @@ useEffect(() => {
 
   const total = calculateTotal();
 
-//   async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
-//     if (sessionLoading) {
-//       alert("Please wait — loading your account.");
-//       return;
-//     }
-//     if (!activeOrganizationId) {
-//       alert(
-//         "We could not load your organization. Refresh the page or sign in again.",
-//       );
-//       return;
-//     }
-//     if (!siteId) {
-//       alert("Missing site. Open Upgrade from a site in the dashboard.");
-//       return;
-//     }
-//     setCheckoutLoading(true);
-//     try {
-//      const origin = typeof window !== "undefined" ? window.location.origin : "";
-
-// const successUrl = origin
-//   ? `${origin}/dashboard/${siteId}/upgrade?success=1`
-//   : undefined;
-
-// const cancelUrl = origin
-//   ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
-//   : undefined;
-
-// const { url } = await createCheckoutSession({
-//   organizationId: activeOrganizationId,
-//   planId: plan,
-//   interval: billing === "yearly" ? "yearly" : "monthly",
-//   siteId,
-//   successUrl,
-//   cancelUrl,
-// });
-// window.location.assign(url);
-//     } catch (e) {
-//       alert(e instanceof Error ? e.message : "Could not start checkout.");
-//     } finally {
-//       setCheckoutLoading(false);
-//     }
-//   }
-async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
-  if (sessionLoading) {
-    alert("Please wait — loading your account.");
-    return;
+  async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
+    if (sessionLoading) {
+      alert("Please wait — loading your account.");
+      return;
+    }
+    if (!activeOrganizationId) {
+      alert(
+        "We could not load your organization. Refresh the page or sign in again.",
+      );
+      return;
+    }
+    if (!siteId) {
+      alert("Missing site. Open Upgrade from a site in the dashboard.");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const { url } = await createCheckoutSession({
+        organizationId: activeOrganizationId,
+        planId: plan,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        siteId,
+        successUrl: origin
+          ? `${origin}/dashboard/${siteId}?success=1`
+          : undefined,
+        cancelUrl: origin
+          ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
+          : undefined,
+      });
+      // Open Stripe in a new tab; show waiting overlay on this page
+      window.open(url, "_blank");
+      setAwaitingPayment(true);
+      // Poll for plan upgrade — refresh every 3s until plan changes or user dismisses
+      const poll = setInterval(async () => {
+        await refresh({ showLoading: false });
+      }, 3000);
+      // Stop polling after 10 minutes
+      setTimeout(() => { clearInterval(poll); setAwaitingPayment(false); }, 10 * 60 * 1000);
+      // Store poll id so cancel button can clear it
+      (window as any).__cbPollId = poll;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not start checkout.");
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
-  if (!activeOrganizationId) {
-    alert("We could not load your organization. Refresh the page or sign in again.");
-    return;
-  }
-  if (!siteId) {
-    alert("Missing site. Open Upgrade from a site in the dashboard.");
-    return;
-  }
-
-  if (plan === "free") {
-    alert("Please select a paid plan.");
-    return;
-  }
-
-  setCheckoutStage("redirecting");
-
-  try {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const basePath = `/dashboard/${siteId}/upgrade`;
-
-    const successUrl = origin
-      ? `${origin}${basePath}?success=1&plan=${encodeURIComponent(plan)}&session_id={CHECKOUT_SESSION_ID}`
-      : undefined;
-
-    const cancelUrl = origin
-      ? `${origin}${basePath}?canceled=1`
-      : undefined;
-
-    const { url } = await createCheckoutSession({
-      organizationId: activeOrganizationId,
-      planId: plan,
-      interval: billing === "yearly" ? "yearly" : "monthly",
-      siteId,
-      successUrl,
-      cancelUrl,
-    });
-
-    window.location.assign(url);
-  } catch (e) {
-    alert(e instanceof Error ? e.message : "Could not start checkout.");
-    setCheckoutStage(null);
-  }
-}
 
   const PlanHeader = ({
     name,
@@ -314,51 +188,50 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
     const isSelected = selected === plan;
 
     return (
-      <Tooltip text={isSelected ? "This plan is selected. Click Proceed to pay to continue." : `Switch to the ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan.`}>
-        <button
-          type="button"
-          disabled={checkoutStage !== null}
-          onClick={() => {
-            setSelected(plan);
-          }}
-          className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed
-          ${
-            isSelected
-              ? "bg-green-500"
-              : recommended
-              ? "bg-green-500"
-              : "bg-[#007aff]"
-          }`}
-        >
-          {isSelected ? "Selected" : "Switch plan"}
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        disabled={checkoutLoading}
+        onClick={() => {
+          setSelected(plan);
+        }}
+        className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
+        ${
+          isSelected
+            ? "bg-green-500"
+            : recommended
+            ? "bg-green-500"
+            : "bg-[#007aff]"
+        }`}
+      >
+        {isSelected ? "Selected" : "Switch plan"}
+      </button>
     );
   };
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
-      {/* Checkout loading overlay (redirecting / payment success processing) */}
-      {checkoutStage && (
+      {/* Awaiting payment overlay */}
+      {awaitingPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative w-[380px] rounded-[16px] bg-white p-8 shadow-lg text-center">
+          <div className="relative w-[360px] rounded-[16px] bg-white p-8 shadow-lg text-center">
             <div className="mb-4 flex justify-center">
               <div className="h-10 w-10 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
             </div>
-            {checkoutStage === "redirecting" ? (
-              <>
-                <p className="text-base font-semibold text-black mb-1">Redirecting to checkout…</p>
-                <p className="text-sm text-[#4b5563]">Opening Stripe checkout in this tab.</p>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-semibold text-black mb-1">Payment succeeded</p>
-                <p className="text-sm text-[#4b5563]">
-                  Updating your dashboard with the latest plan details…
-                </p>
-              </>
-            )}
+            <p className="text-base font-semibold text-black mb-1">Waiting for payment…</p>
+            <p className="text-sm text-[#4b5563] mb-5">Complete the checkout in the new tab. This page will update automatically once payment is confirmed.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setAwaitingPayment(false);
+                if (typeof window !== "undefined" && (window as any).__cbPollId) {
+                  clearInterval((window as any).__cbPollId);
+                }
+              }}
+              className="text-sm text-[#007aff] underline"
+            >
+              Cancel / I already paid
+            </button>
           </div>
         </div>
       )}
@@ -370,31 +243,27 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
             Chose your Payment Plan
           </div>
           <div className="flex bg-[#f1f5f9] rounded-[22px] p-1 gap-2.25">
-            <TooltipBelow text="Billed month-to-month. Cancel anytime.">
-              <button
-                onClick={() => setBilling("monthly")}
-                className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] cursor-pointer ${
-                  billing === "monthly"
-                    ? "bg-[#007aff] text-white"
-                    : "text-[#848199]"
-                }`}
-              >
-                MONTHLY
-              </button>
-            </TooltipBelow>
+            <button
+              onClick={() => setBilling("monthly")}
+              className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] ${
+                billing === "monthly"
+                  ? "bg-[#007aff] text-white"
+                  : "text-[#848199]"
+              }`}
+            >
+              MONTHLY
+            </button>
 
-            <TooltipBelow text="Pay for a full year and save 20% compared to monthly billing.">
-              <button
-                onClick={() => setBilling("yearly")}
-                className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] cursor-pointer ${
-                  billing === "yearly"
-                    ? "bg-[#007aff] text-white"
-                    : "text-[#848199]"
-                }`}
-              >
-                YEARLY (20% OFF)
-              </button>
-            </TooltipBelow>
+            <button
+              onClick={() => setBilling("yearly")}
+              className={`px-2 py-2 text-[14px]  h-[44px] font-extrabold rounded-[22px] ${
+                billing === "yearly"
+                  ? "bg-[#007aff] text-white"
+                  : "text-[#848199]"
+              }`}
+            >
+              YEARLY (20% OFF)
+            </button>
           </div>
 
           
@@ -417,7 +286,7 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
           <Feature label="No of Domains" values={["01", "01", "01", "01"]} />
 
           <Feature
-            label="No of Scans"
+            label="No of scans"
             values={[
               "100",
               "750",
@@ -427,7 +296,7 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
           />
 
           <Feature
-            label="No of Page Views"
+            label="No of Page views"
             values={[
               "7500",
               "100,000 pageviews/m",
@@ -500,7 +369,7 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
             )}
             {selected && <div className="mb-4" />}
 
-            <div className="flex border rounded-lg overflow-hidden">
+            <div className="flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg overflow-hidden">
 
               <div className="relative flex-1">
                 <input
@@ -521,15 +390,16 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
                 )}
               </div>
 
-              <Tooltip text={!selected ? "Select a plan first to apply a promo code." : "Apply your promo code for a discount."}>
-                <button
-                  onClick={applyPromo}
-                  disabled={!selected}
-                  className="bg-[#007aff] text-white px-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Apply
-                </button>
-              </Tooltip>
+              <button
+                onClick={applyPromo}
+                disabled={!selected}
+                className="bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+             <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>
+   Apply
+              </button>
 
             </div>
 
@@ -553,32 +423,29 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
                 <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
                   ${total}
                 </div>
-               
-                {/* <div>
+
+                <div>
                   {billing === "yearly"
                     ? "(Billed annually)"
                     : "(Billed monthly)"}
-                </div> */}
-                <div className="text-gray-500">Payable now</div>
+                </div>
 
               </div>
 
-              <Tooltip text={!selected ? "Select a plan above to proceed to payment." : `Proceed to pay for the ${selected.charAt(0).toUpperCase() + selected.slice(1)} plan via Stripe.`}>
-                <button
-                  type="button"
-                  disabled={checkoutStage !== null || !selected}
-                  onClick={() => {
-                    if (!selected) {
-                      alert("Select Basic, Essential, or Growth first.");
-                      return;
-                    }
-                    void checkoutWithPlan(selected);
-                  }}
-                  className="bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {checkoutStage === "redirecting" ? "Redirecting…" : "Proceed to pay"}
-                </button>
-              </Tooltip>
+              <button
+                type="button"
+                disabled={checkoutLoading || !selected}
+                onClick={() => {
+                  if (!selected) {
+                    alert("Select Basic, Essential, or Growth first.");
+                    return;
+                  }
+                  void checkoutWithPlan(selected);
+                }}
+                className="bg-[#2ec04f]  border-2 border-white outline-1 outline-[#2ec04f] text-white px-6 py-3 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {checkoutLoading ? "Redirecting…" : "Proceed to pay"}
+              </button>
 
             </div>
 
@@ -590,14 +457,6 @@ async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free")
     </div>
   );
 }
-const FEATURE_TOOLTIPS: Record<string, string> = {
-  "No of Domains": "Number of websites you can add under this plan.",
-  "No of Scans": "How many automated cookie scans you can run per month.",
-  "No of Page Views": "Maximum monthly page views tracked for consent analytics.",
-  "IAB / TCF": "IAB Transparency & Consent Framework — required for ad networks and publishers in the EU.",
-  "Compliance": "Privacy regulations covered. GDPR for EU visitors, CCPA for California visitors.",
-};
-
 function Feature({
   label,
   values,
@@ -605,16 +464,10 @@ function Feature({
   label: string;
   values: string[];
 }) {
-  const tip = FEATURE_TOOLTIPS[label];
   return (
     <>
-      <div className="p- py-5.5 border-t border-[#000000]/10 text-[17px] flex items-center gap-1.5">
+      <div className="p- py-5.5 border-t border-[#000000]/10 text-[17px] flex items-center ">
         {label}
-        {tip && (
-          <Tooltip text={tip}>
-            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#e5e7eb] text-[#6b7280] text-[10px] font-bold cursor-default select-none">?</span>
-          </Tooltip>
-        )}
       </div>
 
       {values.map((v, i) => (

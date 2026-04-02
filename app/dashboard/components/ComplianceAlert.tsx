@@ -25,7 +25,7 @@ const show=false
         </p>
       <p className="text-[17px] text-[#4B5563] mb-5">
         You are currently viewing the dashboard for{" "}
-        <span className="text-blue-600 font-medium cursor-pointer hover:underline">
+        <span className="text-[#0777E6] font-medium cursor-pointer hover:underline">
           {siteDomain || "—"}
         </span>
       </p>

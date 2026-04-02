@@ -71,26 +71,37 @@ export default function StepWizard({
   };
 
   return (
+    <div className={`${step===1?"mt-20":""} flex justify-center `}>
     <div className={`${step===3 || step===2? '':'bg-white p-8 shadow-lg '}  transition-all duration-500 ease-in-out rounded-[28px]   w-full ${step === 2 ? 'max-w-[1292px]' : step === 3 ? 'max-w-[785px]' : 'max-w-[635px]'} min-h-[513px]`}>
       {/* Title */}
-      <h2 className={`text-center text-2xl font-semibold  text-black font-s ${step===3?'mb-10':'my-10.5'}`}>
+      <h2 className={`text-center text-2xl font-semibold  text-black font-s ${step===3?'my-10':'my-10.5 '}`}>
         {step === 3
           ? (selectedPlan === 'free' ? 'Verify your installation' : 'Get your installation code')
-          : 'Add your first domain'}
+          : (step === 2 ? 'Select your plan' : 'Add your first domain')}
       </h2>
 
       {/* Step Indicator */}
       <div className="max-w-[478px] mx-auto">
-        <div className="grid grid-cols-3 items-start mb-18 relative">
-          <StepCircle number={1} label="Domain" active={step >= 1} completed={step > 1} align="start" />
-          <StepCircle number={2} label="Select your plan" active={step >= 2} completed={step > 2} align="center" />
-          <StepCircle number={3} label="Confirm" active={step >= 3} completed={step === 3} align="end" />
+<div
+  className={`grid grid-cols-3 items-start relative ${
+    step === 1
+      ? 'mb-18'
+      : step === 2
+      ? 'mb-[38px]'
+      : step === 3
+      ? 'mb-[61px]'
+      : ''
+  }`}
+>          <StepCircle step={step} number={1} label="Domain" isActive={step === 1} active={step >= 1} completed={step > 1} align="start" />
+          <StepCircle step={step} number={2} label="Select your plan" isActive={step === 2} active={step >= 2} completed={step > 2} align="center" />
+          <StepCircle step={step} number={3} label="Confirm" isActive={step === 3} active={step >= 3} completed={step === 3} align="end" />
         </div>
 
         {/* Step Content */}
         {step === 1 && (
           <StepOne
             userName={userName}
+            step={step}
             nextStep={nextStep}
             onSetupComplete={(data) => setSiteData(data)}
           />
@@ -113,7 +124,7 @@ export default function StepWizard({
       {step === 3 && (
         selectedPlan === 'free' ? (
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 justify-center items-start">
-            <div className="w-full lg:max-w-[720px]">
+            <div className="w-full lg:max-w-[785px]">
               <StepThree siteData={siteData} onWizardComplete={onWizardComplete} />
             </div>
             {/* <div className="w-full lg:w-[270px]">
@@ -141,6 +152,7 @@ export default function StepWizard({
         )
       )}
     </div>
+    </div>
   );
 }
 
@@ -150,8 +162,12 @@ function StepCircle({
   active,
   completed,
   align,
+  step,
+  isActive,
 }: {
+  isActive: boolean;
   number: number;
+  step: number;
   label: string;
   active: boolean;
   completed: boolean;
@@ -168,7 +184,7 @@ function StepCircle({
     <div className={`flex flex-col ${alignment}`}>
       {/* line */}
       {number !== 3 && (
-        <div className="absolute top-4 w-full h-[1px] bg-gray-300 z-0" />
+        <div className={`absolute top-4 w-full h-[1px] ${step>1 ? "bg-white/70" : "bg-[#F5F0F0]"}  z-0 `}/>
       )}
 
       {/* circle */}
@@ -178,13 +194,13 @@ function StepCircle({
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
             : active
             ? "bg-[#007AFF] text-white border-[#cfe6ff] border-3"
-            : "bg-[#F5F0F0] text-[#007AFF]"
+            :step===2 && number===3?"bg-white text-[#007AFF]": "bg-[#F5F0F0] text-[#007AFF]"
         }`}
       >
         {completed ? <Check className="w-5 h-5" /> : number}
       </div>
 
-      <span className="text-lg font-medium ">{label}</span>
+      <span className={`text-lg font-medium ${isActive  ? "" : "text-black/50"}`}>{label}</span>
     </div>
   );
 }
@@ -193,7 +209,9 @@ function StepOne({
   nextStep,
   userName,
   onSetupComplete,
+  step
 }: {
+  step: number;
   nextStep: () => void;
   userName?: string;
   onSetupComplete: (data: { domain: string }) => void;
@@ -238,7 +256,7 @@ function StepOne({
 
   return (
     <>
-      <div className="mb-3.5">
+      <div className={`mb-3.5 `}>
         <div className="flex justify-between items-center mb-3.5">
           <label className="text-[15px] text-black ">Domain*</label>
           <span className="text-[15px] text-[#00000050]">What is your sites domain?</span>
@@ -267,9 +285,12 @@ function StepOne({
         <button
           onClick={handleNext}
           disabled={!domain.trim()}
-          className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2"
+          className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm px-6 py-3.5 rounded-md font-medium transition-colors flex items-center gap-2"
         >
-          Next <span>→</span>
+          Next <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>
+</svg>
+</span>
         </button>
       </div>
     </>
@@ -438,13 +459,13 @@ function StepThree({
     { name: "Squarespace", icon: "⬜" },
     { name: "Joomla", icon: "📝" },
   ];
-
+const [showTooltip, setShowTooltip] = useState(false);
   return (
     <div className="  ">
       {/* Header */}
-      <div className="mb-5 py-5.5 border-b-2 border-blue-200 text-center bg-[#D9E9FB] border-1 border-[#C7D9ED] ">
-        <h3 className="text-lg font-semibold text-gray-800">Your Next Steps</h3>
-        <p className="text-sm text-gray-600 mt-1">You are almost ready to get started. Here is what you need to do next.</p>
+      <div className="mb-5 py-5.5 border-b-2 border-blue-200 rounded-[5px] text-center bg-[#D9E9FB] border-1 border-[#C7D9ED] ">
+        <h3 className="text-lg font-semibold text-gray-800 pb-3">Your Next Steps</h3>
+        <p className="text-sm text-gray-600 mt-1">You are almost ready to get started! Here is what you need to do next.</p>
       </div>
 
       {/* Step 1 */}
@@ -454,10 +475,10 @@ function StepThree({
             <div className="w-8 h-8 rounded-full bg-[#C2DFFF] text-[#007AFF] flex items-center justify-center text-xs font-semibold flex-shrink-0 border border-[#007AFF] mt-1">1</div>
             <img src="/images/line.svg" alt="Verification" className="mt-1 relative -top-1" />
           </div>       
-          <div className="flex-1">
-            <h4 className="font-semibold text-gray-800 mb-3">Step 1: Copy this banner installation code</h4>
+          <div className="flex-1 mt-8">
+            <h4 className="font-bold text-[15px]  mb-3">Step 1: Copy this banner installation code</h4>
             <div className="bg-[#E6F1FD] border border-[#E5E5E5] rounded p-3 mb-3">
-              <code className="text-xs text-gray-700 font-mono break-words">
+              <code className="text-xs text-[#161616] font-mono break-words">
                 {codeSnippet}
               </code>
             </div>
@@ -465,27 +486,60 @@ function StepThree({
               <div className="flex gap-2">
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg  text-xs font-medium  hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg  text-xs font-medium  hover:bg-gray-50 transition-colors"
                 >
                   
                   {copied ? "Copied!" : "Copy"}
                   <Copy size={16} />
                 </button>
-                <button className="flex items-center gap-2 px-3 py-1.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg text-xs font-medium  hover:bg-gray-50 transition-colors">
+                <button className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg text-xs font-medium  hover:bg-gray-50 transition-colors">
                   <Share2 size={16} />
                 </button>
               </div>
-              <button
+             <div className="relative"> <button
                 type="button"
-                onClick={goToCookieBanner}
+              onClick={() => {
+  const isToggleEnabled = false; // your condition here
+
+  if (!isToggleEnabled) {
+    setShowTooltip((prev) => !prev);
+  } else {
+    goToCookieBanner();
+  }
+}}
                 disabled={!siteData?.siteId}
                 className="px-4 py-3.25 bg-[#007AFF] flex items-center gap-1 hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
               <svg width="13" height="12" viewBox="0 0 13 12" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M0 4.50143C0 4.42704 0 4.35264 0 4.27824C0.643143 2.98583 1.28935 1.69492 1.92698 0.399793C2.06298 0.123555 2.27691 0.0012224 2.57011 0.00105058C5.04023 -0.000393703 7.51034 -0.000231926 9.98046 0.000827438C10.2748 0.000953513 10.4888 0.125652 10.6241 0.399909C11.2629 1.69452 11.9085 2.98578 12.5517 4.27824V4.50143C12.4753 4.62589 12.4159 4.76553 12.32 4.87256C10.5549 6.84395 8.78444 8.81063 7.01725 10.7802C6.39619 11.4724 6.15288 11.4723 5.53262 10.7804C3.79101 8.8378 2.04581 6.89836 0.306355 4.95379C0.186041 4.81929 0.101289 4.65296 0 4.50143ZM6.27594 9.01873C6.83174 7.6478 7.36066 6.34319 7.89512 5.02489H4.65504C5.19435 6.35372 5.72142 7.65243 6.27594 9.01873ZM4.65806 3.76038H7.85845C7.86042 3.71983 7.86978 3.68979 7.86193 3.66525C7.61949 2.90761 7.37951 2.1491 7.12439 1.39572C7.10173 1.3288 6.98016 1.2563 6.90227 1.25369C6.48469 1.23972 6.06604 1.2381 5.64867 1.25492C5.56813 1.25817 5.45096 1.34636 5.42058 1.42306C5.30842 1.70627 5.22548 2.00106 5.13174 2.29156C4.97623 2.77352 4.82086 3.25553 4.65806 3.76038ZM8.38873 1.24795C8.65934 2.08586 8.90933 2.86678 9.16772 3.64492C9.18548 3.69842 9.26532 3.76696 9.31736 3.76789C9.83309 3.77706 10.3491 3.77344 10.861 3.77344C10.868 3.73008 10.879 3.7083 10.8725 3.69517C10.4873 2.91668 10.1024 2.13801 9.71025 1.36303C9.68354 1.31024 9.60195 1.25454 9.54446 1.253C9.17565 1.2431 8.80644 1.24795 8.38873 1.24795ZM3.34678 3.7657C3.61469 2.93699 3.88188 2.11052 4.16107 1.2469C3.77016 1.2469 3.43748 1.25583 3.10563 1.24312C2.94072 1.23681 2.85943 1.2996 2.78908 1.44381C2.44465 2.14984 2.08863 2.8502 1.73865 3.55352C1.70773 3.61565 1.69075 3.68471 1.6619 3.7657L3.34678 3.7657ZM2.01811 5.00584C2.79988 5.87427 3.52913 6.68437 4.25838 7.49446C3.98759 6.68553 3.67386 5.90781 3.35046 5.13412C3.32638 5.07652 3.23405 5.01355 3.17154 5.01151C2.81309 4.99984 2.45407 5.00584 2.01811 5.00584ZM8.24906 7.45636C8.26215 7.47127 8.27525 7.48618 8.28835 7.50108C9.02081 6.68639 9.75326 5.8717 10.5313 5.00629C10.0924 5.00629 9.72532 4.99993 9.35891 5.01279C9.30036 5.01485 9.21767 5.09178 9.19204 5.15324C8.87278 5.91889 8.56201 6.68808 8.24906 7.45636Z" fill="white"/>
 </svg>
-  Customize your banner →
+  Customize your banner <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>
+</svg>
+
               </button>
+              {showTooltip && (
+  <div className="absolute right-[-112%] bottom-[-220%] z-50">
+    <div className="w-[222px] bg-white rounded-xl shadow-xl border border-gray-200 p-2 pt-4">
+      
+      <p className="font-semibold mb-1">
+        Upgrade to Pro
+      </p>
+
+      <p className="text-sm text-[#1A5EA1] leading-relaxed mb-3">
+        To enable this feature, please switch to the Essential or Growth plan.
+      </p>
+
+      <button
+        onClick={() => router.push("/upgrade")}
+        className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
+      >
+        Get Pro Plan
+      </button>
+    </div>
+  </div>
+)}
+              </div>
             </div>
           </div>
         </div>
@@ -498,8 +552,8 @@ function StepThree({
             <div className="w-8 h-8 rounded-full bg-[#C2DFFF] text-[#007AFF] flex items-center justify-center text-xs font-semibold flex-shrink-0 border border-[#007AFF] mt-1">2</div>
             <img src="/images/line.svg" alt="Verification" className="mt-1 relative -top-1" />
           </div>     
-          <div className="flex-1">
-            <h4 className="font-semibold text-gray-800 mb-2">Paste the code right after the opening {`<head>`} tag in your site's source code.</h4>
+          <div className="flex-1 mt-2">
+            <h4 className="font-bold text-[15px] mb-2">Paste the code right after the opening {`<head>`} tag in your site's source code.</h4>
             <p className="text-sm text-gray-600 mb-3">Refer to our platform-wise guides for instructions.</p>
             <div className="flex flex-wrap gap-2">
               {/* {platforms.map((platform) => (
@@ -524,10 +578,10 @@ function StepThree({
             <div className="w-8 h-8 rounded-full bg-[#C2DFFF] text-[#007AFF] flex items-center justify-center text-xs font-semibold flex-shrink-0 border border-[#007AFF] mt-1">3</div>
             <img src="/images/line.svg" alt="Verification" className="mt-1 relative -top-1" />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 mt-1">
             <div className="flex items-start justify-between">
               <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Step 3: Verify your installation.</h4>
+                <h4 className="font-bold text-[15px] mb-2">Step 3: Verify your installation.</h4>
                 <div className="flex items-center gap-2 mb-2 bg-[#E6F1FD] rounded-[60px] w-fit px-2 py-1">
                   <span className="text-lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="24" height="24" rx="12" fill="white"/>
@@ -561,7 +615,7 @@ function StepThree({
                 type="button"
                 onClick={handleVerify}
                 disabled={verifying}
-                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium rounded flex-shrink-0 ml-4 transition-colors"
+                className="px-8.75 py-3.5 top-[24px] relative bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium rounded flex-shrink-0 ml-4 transition-colors"
               >
                 {verifying ? 'Verifying…' : 'Verify'}
               </button>

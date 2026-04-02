@@ -103,7 +103,7 @@ export function PricingTable({
 
         {/* Pricing Table */}
         <div className="px-6">
-          <div className="grid grid-cols-[200px_220px_220px_316px_260px] text-left">
+          <div className="grid grid-cols-[200px_220px_220px_316px_1fr] text-left">
 
             {/* Header Row */}
             <div></div>
@@ -154,7 +154,7 @@ export function PricingTable({
             <Cell highlight>5000 scans</Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">10000 pageviews/m</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[13px] text-[#4B5563]">
                 + $.49 for additional 10000 page views
               </div>
             </Cell>
@@ -165,13 +165,13 @@ export function PricingTable({
             <Cell>100,000 page views/m</Cell>
             <Cell highlight>
               <div className="font-bold text-[#5243c2]">500,000 pageviews/m</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[13px] text-[#4B5563]">
                 + $.49 for additional 10000 page views
               </div>
             </Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">2 Million pageviews/m</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[13px] text-[#4B5563]">
                 + $.39 for additional 10000 page views
               </div>
             </Cell>
@@ -230,7 +230,7 @@ function PlanHeader({ title, price, button, primary = false, highlight = false, 
       <button
         onClick={onClick}
         disabled={disabled || onClick == null}
-        className={`py-[16.5px] px-[23.5px] rounded-lg w-fit text-[15px] ${
+        className={`py-[16.5px] px-[23.5px] rounded-lg w-fit text-[15px] cursor-pointer ${
           highlight
             ? "bg-[#4cbb66] text-white  "
             : primary
@@ -246,7 +246,7 @@ function PlanHeader({ title, price, button, primary = false, highlight = false, 
 
 function Feature({ title }: { title: string }) {
   return (
-    <div className="py-4 px-6 border-t border-[#000000]/10 text-black text-[17px] font-medium">{title}</div>
+    <div className="py-4 flex items-center px-6 border-t border-[#000000]/10 text-black text-[17px] font-medium">{title}</div>
   );
 }
 
@@ -260,13 +260,14 @@ type CellProps = {
 function Cell({ children, highlight = false, gray = false, last = false }: CellProps) {
   return (
     <div
-      className={`py-5.5 px-6 border-t border-[#000000]/10 font-bold ${
+      className={`py-5.5 px-4 border-t border-[#000000]/10 font-bold flex items-center ${
         highlight ? "bg-[#f0fff1] text-[#5243c2] border-r border-l" : gray ? "text-gray-400" : "text-[#5243c2]"
       }
       
       ${last?'rounded-b-[20px] pb-7':''}`}
     >
-      {children}
+      <span> {children}</span>
+     
     </div>
   );
 }

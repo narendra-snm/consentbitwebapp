@@ -21,7 +21,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
           </p>
         </div>
 
-        <div className="flex items-center gap-3 pt-5.75 mt-auto">
+        <div className="flex items-center gap-3 pt-5.75 mt-auto relative bottom-[-6px]">
           <a
             href="https://docs.consentbit.com"
             target="_blank"
