@@ -471,7 +471,7 @@ export default function BillingPage({
         {/* Table Rows */}
         <div className="space-y-[20px] pb-6">
           {invoices.map((invoice, index) => (
-            <div key={index} className="grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center border-b border-[#000000]/10 py-4.5">
+            <div key={index} className={`grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center ${index === invoices.length - 1 ? "" : "border-b border-[#000000]/10"} py-4.5`}>
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.date}</p>
 
               <div className="flex items-center gap-[6px]">

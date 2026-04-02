@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/context/AppProvider.jsx", "app/dashboard/[id]/cookie-banner/components/Iab.jsx"  ],
+, "app/context/AppProvider.jsx", "app/dashboard/[id]/cookie-banner/components/Iab.jsx", "app/dashboard/components/ui/CircularArrow.jsx"  ],
   "exclude": ["node_modules"]
 }
