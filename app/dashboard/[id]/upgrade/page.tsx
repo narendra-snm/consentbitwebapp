@@ -25,15 +25,29 @@ export default function PricingTable() {
     | "essential"
     | "growth";
 
-  // After Stripe redirects back, reload sites + effectivePlanId (webhook may finish a moment later).
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+
+  // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const ok = new URLSearchParams(window.location.search).get("success");
-    if (ok !== "1") return;
-    void refresh({ showLoading: false });
-    // Webhook can lag; refresh again so "Current plan" moves off Free.
-    const t = window.setTimeout(() => void refresh({ showLoading: false }), 2500);
-    return () => window.clearTimeout(t);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upgraded") !== "1") return;
+    // Clean URL so refresh doesn't re-trigger
+    window.history.replaceState({}, "", window.location.pathname);
+    let attempts = 0;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      await refresh({ showLoading: false });
+      attempts += 1;
+      if (attempts < 20) {
+        t = setTimeout(poll, 1500);
+      } else {
+        setUpgradeSuccess(true);
+      }
+    };
+    setUpgradeSuccess(true);
+    void poll();
+    return () => { if (t) clearTimeout(t); };
   }, [refresh]);
 
   const CurrentPlanButton = () => (
@@ -53,7 +67,7 @@ export default function PricingTable() {
   const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [awaitingPayment, setAwaitingPayment] = useState(false);
+
 
   const getPrice = (plan: keyof typeof prices) => {
     const mp = prices[plan];
@@ -109,23 +123,14 @@ export default function PricingTable() {
         interval: billing === "yearly" ? "yearly" : "monthly",
         siteId,
         successUrl: origin
-          ? `${origin}/dashboard/${siteId}?success=1`
+          ? `${origin}/dashboard/${siteId}/upgrade?upgraded=1`
           : undefined,
         cancelUrl: origin
           ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
           : undefined,
       });
-      // Open Stripe in a new tab; show waiting overlay on this page
-      window.open(url, "_blank");
-      setAwaitingPayment(true);
-      // Poll for plan upgrade — refresh every 3s until plan changes or user dismisses
-      const poll = setInterval(async () => {
-        await refresh({ showLoading: false });
-      }, 3000);
-      // Stop polling after 10 minutes
-      setTimeout(() => { clearInterval(poll); setAwaitingPayment(false); }, 10 * 60 * 1000);
-      // Store poll id so cancel button can clear it
-      (window as any).__cbPollId = poll;
+      // Redirect to Stripe in the same tab
+      window.location.href = url;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not start checkout.");
     } finally {
@@ -214,29 +219,12 @@ export default function PricingTable() {
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
-      {/* Awaiting payment overlay */}
-      {awaitingPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative w-[360px] rounded-[16px] bg-white p-8 shadow-lg text-center">
-            <div className="mb-4 flex justify-center">
-              <div className="h-10 w-10 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
-            </div>
-            <p className="text-base font-semibold text-black mb-1">Waiting for payment…</p>
-            <p className="text-sm text-[#4b5563] mb-5">Complete the checkout in the new tab. This page will update automatically once payment is confirmed.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setAwaitingPayment(false);
-                if (typeof window !== "undefined" && (window as any).__cbPollId) {
-                  clearInterval((window as any).__cbPollId);
-                }
-              }}
-              className="text-sm text-[#007aff] underline"
-            >
-              Cancel / I already paid
-            </button>
-          </div>
+      {/* Payment success banner */}
+      {upgradeSuccess && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white border border-green-200 shadow-lg rounded-xl px-5 py-3">
+          <span className="text-green-500 text-lg">✓</span>
+          <p className="text-sm font-medium text-[#111]">Payment confirmed! Your plan has been upgraded.</p>
+          <button type="button" onClick={() => setUpgradeSuccess(false)} className="ml-2 text-[#6b7280] text-xs underline">Dismiss</button>
         </div>
       )}
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">

@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";         
+import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
 
@@ -12,6 +12,8 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") || "/dashboard";
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
@@ -46,7 +48,7 @@ export function LoginForm() {
         setStep(2);
       } else {
         await verifyVerificationCode({ email, purpose: 'login', code });
-        router.push('/dashboard');
+        router.push(nextPath);
       }
     } catch (err: unknown) {
       setError(

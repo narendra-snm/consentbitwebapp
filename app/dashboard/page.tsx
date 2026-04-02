@@ -1,6 +1,5 @@
+
 "use client";
-
-
 export const runtime = 'edge';
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DashboardTabs from "./components/DashboardTabs";
@@ -221,6 +220,9 @@ export default function DashboardPage() {
       const match = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === id);
       const scriptUrl =
         (match?.embedScriptUrl ?? match?.embed_script_url ?? match?.scriptUrl ?? match?.script_url) || null;
+      const planId = match?.planId ?? match?.plan_id ?? match?.subscription_plan ?? match?.plan ?? null;
+      const planReady = planId && String(planId).toLowerCase() !== "free";
+
       if (match && scriptUrl) {
         setPostSetupInstall({
           scriptUrl: String(scriptUrl),
@@ -229,8 +231,11 @@ export default function DashboardPage() {
           cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
           returnTo: pendingPostSetupReturnTo || undefined,
         });
-        setPendingPostSetupSiteId(null);
-        return;
+        // Keep polling until plan is also updated (Stripe webhook may lag)
+        if (planReady || attempts >= 20) {
+          setPendingPostSetupSiteId(null);
+          return;
+        }
       }
 
       // Not ready yet — refresh and retry a few times (webhook/session can lag).

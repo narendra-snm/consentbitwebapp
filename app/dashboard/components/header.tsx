@@ -131,7 +131,7 @@ export default function Header() {
             className="border-2 border-[#E6F1FD] bg-[#E6F1FD] flex gap-1 items-center rounded-md px-3 py-2 text-sm min-w-[120px]"
             suppressHydrationWarning
           >
-            {loading ? (
+            {!hydrated || loading ? (
               <span className="h-4 w-20 rounded bg-[#d0e4f7] animate-pulse inline-block" />
             ) : (
               displayDomain

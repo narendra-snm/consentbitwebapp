@@ -93,6 +93,7 @@ export default function ConsentPreview({
     rejectButton?: boolean;
     customizeButton?: boolean;
     cookiePolicyLink?: boolean;
+    cookiePolicyLabel?: string;
     privacyPolicyUrl?: string;
     /** CCPA opt-out preference panel (Do Not Share → modal) */
     ccpaOptOutTitle?: string;
@@ -495,7 +496,7 @@ export default function ConsentPreview({
                   {(content?.message != null && content.message !== '' ? content.message : null) ??
                     (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
                   {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
-                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{t('privacyPolicy')}</a></>
+                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{content?.cookiePolicyLabel || t('privacyPolicy')}</a></>
                   ) : null}
                 </p>
                 {selectedBannerType === 'ccpa' ? (
@@ -628,7 +629,7 @@ export default function ConsentPreview({
                       rel="noreferrer"
                       className="text-[#007aff] underline"
                     >
-                      {t('privacyPolicy')}
+                      {content?.cookiePolicyLabel || t('privacyPolicy')}
                     </a>
                     .
                   </>
@@ -825,7 +826,7 @@ export default function ConsentPreview({
                       rel="noreferrer"
                       className="text-[#007aff] underline"
                     >
-                      {t('privacyPolicy')}
+                      {content?.cookiePolicyLabel || t('privacyPolicy')}
                     </a>
                     .
                   </>

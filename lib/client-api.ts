@@ -21,7 +21,7 @@ async function parseApiResponse(res: Response): Promise<any> {
   const text = await res.text();
   let parsed: any;
   try { parsed = JSON.parse(text); } catch {
-    return { success: false, error: text.trimStart().startsWith('<') ? `Server error (${res.status}). Please try again.` : text || `Request failed: ${res.status}` };
+    return { success: false, error: text.trimStart().startsWith('<') ? `Please enter the correct website URL.` : text || `Please enter the correct website URL.` };
   }
   return decodeEnvelope(parsed);
 }
@@ -259,7 +259,7 @@ export async function updateSiteBannerSettings(payload: {
   const text = await res.text();
   let data: any;
   try { data = JSON.parse(text); } catch {
-    data = { success: false, error: text.trimStart().startsWith('<') ? `Server error (${res.status}). Please try again.` : text };
+    data = { success: false, error: text.trimStart().startsWith('<') ? `Something went wrong. Please try again.` : text };
   }
   if (!res.ok || !data.success) throw new Error(data.error || `Update site failed: ${res.status}`);
   return data as { success: true; site?: any };

@@ -161,7 +161,7 @@ function writeScanCache(siteId: string, data: ScanCache) {
 
 export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const router = useRouter();
-  const { refresh, sites, effectivePlanId, activeOrganizationId, loading: sessionLoading, authenticated } =
+  const { refresh, sites, effectivePlanId, activeOrganizationId, loading: sessionLoading, authenticated, logout } =
     useDashboardSession();
   const siteList = useMemo(() => (Array.isArray(sites) ? sites : []), [sites]);
   const siteKnown = useMemo(
@@ -238,7 +238,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const list = Array.isArray(sitesRef.current) ? sitesRef.current : [];
       const ok = list.some((s: any) => String(s?.id) === String(siteId));
       if (list.length === 0 || !ok) {
-        setShowNoSiteModal(true);
+        void logout();
       } else {
         setError(msg);
       }
@@ -268,7 +268,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     const list = Array.isArray(sites) ? sites : [];
     const ok = list.some((s: any) => String(s?.id) === String(siteId));
     if (list.length === 0 || !ok) {
-      setShowNoSiteModal(true);
+      void logout();
     } else {
       setShowNoSiteModal(false);
     }
@@ -308,7 +308,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const handleScanNow = async () => {
     if (!siteId || scanningRef.current) return;
     if (!sessionLoading && authenticated && (siteList.length === 0 || !siteKnown)) {
-      setShowNoSiteModal(true);
+      void logout();
       return;
     }
     scanningRef.current = true;
