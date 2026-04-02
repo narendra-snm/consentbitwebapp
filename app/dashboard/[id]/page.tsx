@@ -1,4 +1,5 @@
 "use client";
+export const runtime = 'edge';
 
 import GettingStarted from "../components/GettingStarted";
 import InstallConsentModal from "../components/InstallConsentModal";

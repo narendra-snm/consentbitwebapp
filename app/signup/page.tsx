@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { SignupForm } from "@/components/auth/SignupForm";
 import { Suspense } from "react";
 

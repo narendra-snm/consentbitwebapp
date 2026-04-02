@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import React from 'react'
 import AddSiteModal from "../components/AddSiteModal";
 import DashboardTabs from "../components/DashboardTabs";

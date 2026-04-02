@@ -1,5 +1,7 @@
-export const runtime = 'edge';
 "use client";
+
+
+export const runtime = 'edge';
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DashboardTabs from "./components/DashboardTabs";
 import GettingStarted from "./components/GettingStarted";
