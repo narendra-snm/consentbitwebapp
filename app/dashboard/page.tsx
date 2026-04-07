@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
 import { firstSetup } from "@/lib/client-api";
 import ComplianceAlert from "./components/ComplianceAlert";
+import FeedbackDesign from "./components/FeedbackDesign";
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
@@ -102,21 +103,32 @@ export default function DashboardPage() {
  useEffect(() => {
    const params = searchParams;
    if (!params) return;
-   if (params.get("postSetup") !== "1") return;
+  const isPostSetup = params.get("postSetup") === "1";
+  const isUpgraded = params.get("upgraded") === "1";
+  if (!isPostSetup && !isUpgraded) return;
 
-   const domain = params.get("domain") ?? "";
-   const siteId = params.get("siteId") ?? "";
-   const returnTo = params.get("returnTo") ?? "";
-   const sig = `${domain}|${siteId}|${returnTo}`;
+  const domain = params.get("domain") ?? "";
+  const siteId = params.get("siteId") ?? "";
+  const returnTo = params.get("returnTo") ?? "";
+  const sig = `${isPostSetup ? "postSetup" : "upgrade"}|${domain}|${siteId}|${returnTo}`;
    if (sig && lastPostSetupSig.current === sig) return;
    lastPostSetupSig.current = sig;
 
    // domain= case is handled by PostSetupOverlay (works on any dashboard page).
    // page.tsx only handles siteId= (StepWizard first-time flow on /dashboard).
-   if (domain) return;
+  if (isPostSetup && domain) return;
    if (siteId) setPendingPostSetupSiteId(String(siteId));
    if (returnTo) setPendingPostSetupReturnTo(String(returnTo));
    if (siteId) setWizardSkipped(true);
+
+  // Stripe webhooks can lag; also prevent session cache from re-seeding "free" after payment.
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("cbSessionCache");
+    }
+  } catch {
+    // ignore
+  }
  }, [searchParams]);
 
   // Detect ?upgraded=1&siteId=X&returnTo=Y on return from plan upgrade via UpgradePlanModal.
@@ -287,8 +299,6 @@ export default function DashboardPage() {
   };
 
 
-console.log("DashboardPage render", { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, showOnboarding });
-
   // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton.
   // Also keep showing loader when wizardSkipped=true but postSetupInstall not yet ready (avoids
   // flashing the wizard + dashboard before the install modal appears).
@@ -442,6 +452,7 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
           if (target) router.replace(target);
         }}
       />
+      <FeedbackDesign/>
       </div>
       </>
     );

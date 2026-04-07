@@ -174,7 +174,7 @@ export async function getMe() {
 
 export async function getDashboardInit() {
   const res = await fetch('/api/auth/dashboard-init', { credentials: 'include', cache: 'no-store' });
-  if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: 'free' };
+  if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: '' };
   return parseApiResponse(res); // decodes base64 envelope if present
 }
 //me endpoint ends here

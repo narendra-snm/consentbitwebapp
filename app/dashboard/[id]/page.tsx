@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import ComplianceAlert from "../components/ComplianceAlert";
+import FeedbackDesign from "../components/FeedbackDesign";
 
 function DashboardSitePageInner() {
   const params = useParams<{ id: string }>();
@@ -50,10 +51,10 @@ const userName = useMemo(() => {
     let attempts = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
-      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
+      const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      // Stop once the plan is no longer free, or after 20 attempts (~40s).
-      if (planNow === "free" && attempts < 20) {
+      // Stop once the plan is known and not free, or after 20 attempts (~40s).
+      if ((!planNow || planNow === "free") && attempts < 20) {
         t = setTimeout(poll, 2000);
       }
     };
@@ -109,7 +110,9 @@ const userName = useMemo(() => {
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
-      /></>}
+      />
+      <FeedbackDesign />
+      </>}
     </div>
   );
 }

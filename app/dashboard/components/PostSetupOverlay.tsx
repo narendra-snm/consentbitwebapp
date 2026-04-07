@@ -208,7 +208,12 @@ export default function PostSetupOverlay() {
     }
   }
 
-  const isPending = (pendingDomain || pendingSiteId) && !postSetupInstall;
+  // Keep the full-screen overlay up until we have a usable scriptUrl.
+  // For `siteId` flows we optimistically set `postSetupInstall` immediately (scriptUrl=""),
+  // so `postSetupInstall !== null` alone isn't enough to consider it ready.
+  const isPending =
+    Boolean(pendingDomain || pendingSiteId) &&
+    (!postSetupInstall || String(postSetupInstall.scriptUrl || "").trim() === "");
 
   if (isPending) {
     return (

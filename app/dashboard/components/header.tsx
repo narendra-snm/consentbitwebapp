@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import React from "react";
 import { Globe, Plus } from "lucide-react";
 
@@ -19,6 +19,32 @@ import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
 import { UpgradePlanModal } from "./UpgradePlanModal";
+
+/** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
+const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain"]);
+
+/** `/dashboard/[siteId]/...` → site UUID; reserved routes return null (use session activeSiteId). */
+function pickSiteIdFromDashboardPath(pathname: string | null): string | null {
+  const parts = (pathname || "").split("/").filter(Boolean);
+  if (parts[0] !== "dashboard" || parts.length < 2) return null;
+  const id = parts[1];
+  if (!id || id === "one" || DASHBOARD_PATH_RESERVED.has(id)) return null;
+  return id;
+}
+
+function readPlanTierFromSite(site: unknown): string {
+  if (!site || typeof site !== "object") return "";
+  const s = site as Record<string, unknown>;
+  const raw =
+    s.planId ??
+    s.plan_id ??
+    s.planID ??
+    s.PlanId ??
+    s.subscription_plan ??
+    s.subscriptionPlanId ??
+    s.plan;
+  return raw != null ? String(raw).trim().toLowerCase() : "";
+}
 
 export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
@@ -79,18 +105,84 @@ export default function Header() {
   const pathname = usePathname();
   const pathParts = (pathname || "").split("/").filter(Boolean);
 
-  const { sites, activeSiteId, activeOrganizationId, setActiveSiteId, logout, loading, effectivePlanId } = useDashboardSession();
+  const {
+    sites,
+    activeSiteId,
+    activeOrganizationId,
+    setActiveSiteId,
+    logout,
+    loading,
+    effectivePlanId,
+    authenticated,
+  } = useDashboardSession();
 
-  const planLabel = (() => {
-    const k = String(effectivePlanId || "free").toLowerCase();
-    if (k === "free") return "Free";
-    if (k === "basic") return "Basic";
-    if (k === "essential") return "Essential";
-    if (k === "growth") return "Growth";
-    return effectivePlanId;
-  })();
-  const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
+  const pathSiteId = useMemo(() => pickSiteIdFromDashboardPath(pathname), [pathname]);
 
+  // URL wins: context `activeSiteId` can lag one tick behind `/dashboard/[id]/...`, so we used to show sites[0] (wrong plan).
+  const activeSite = useMemo(() => {
+    const pathId = pickSiteIdFromDashboardPath(pathname);
+    if (pathId) {
+      const match = sites.find((s: any) => String(s?.id) === pathId);
+      if (match) return match;
+      // URL names a site — do not use sites[0] (different plan) while list is still syncing.
+      if (sites.length > 0) return null;
+    }
+    return sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
+  }, [sites, pathname, activeSiteId]);
+
+  /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */
+  const planUi = useMemo(() => {
+    const PAID = new Set(["basic", "essential", "growth"]);
+    const fromSite = readPlanTierFromSite(activeSite);
+    let resolvedPlanKey = "";
+    if (PAID.has(fromSite)) resolvedPlanKey = fromSite;
+    else {
+      const fromSession = String(effectivePlanId ?? "")
+        .trim()
+        .toLowerCase();
+      if (PAID.has(fromSession)) resolvedPlanKey = fromSession;
+      else if (fromSite && fromSite !== "free") resolvedPlanKey = fromSite;
+      else resolvedPlanKey = fromSession || fromSite;
+    }
+
+    // Avoid hydration mismatch: SSR can't read sessionStorage-seeded dashboard state,
+    // so it often renders "loading/skeleton" while the client already has data.
+    // Keep skeleton on the first client paint, then flip after hydration.
+    const showPlanSkeleton =
+      !hydrated ||
+      loading ||
+      (authenticated &&
+        !!pathSiteId &&
+        sites.length > 0 &&
+        !sites.some((s: any) => String(s?.id) === pathSiteId)) ||
+      (authenticated && !loading && resolvedPlanKey === "");
+
+    const k = resolvedPlanKey;
+    const label =
+      !k
+        ? "—"
+        : k === "free"
+          ? "Free"
+          : k === "basic"
+            ? "Basic"
+            : k === "essential"
+              ? "Essential"
+              : k === "growth"
+                ? "Growth"
+                : k;
+    const isPaid = k === "basic" || k === "essential" || k === "growth";
+    const planDisplay = {
+      label,
+      upgradeButtonText: isPaid ? "Change plan" : "Update to Pro",
+      tooltipUpgrade: isPaid
+        ? "Switch or modify your current subscription plan."
+        : "Upgrade to a paid plan to unlock more features.",
+    };
+
+    return { resolvedPlanKey, showPlanSkeleton, planDisplay };
+  }, [activeSite, effectivePlanId, hydrated, loading, authenticated, pathSiteId, sites]);
+
+  const { resolvedPlanKey, showPlanSkeleton, planDisplay } = planUi;
   // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
     if (!activeOrganizationId) return;
@@ -111,7 +203,7 @@ export default function Header() {
         }
       })
       .catch(() => {/* non-critical */});
-  }, [activeOrganizationId, activeSiteId, effectivePlanId]);
+  }, [activeOrganizationId, activeSiteId, resolvedPlanKey]);
 
   const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
     ...(pageviewOverLimit && pageviewUsage ? [{
@@ -157,7 +249,6 @@ export default function Header() {
     const targetPath = currentSubPath ? `/dashboard/${site.id}/${currentSubPath}` : `/dashboard/${site.id}`;
     router.push(targetPath);
   };
-
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
       {/* LEFT SECTION */}
@@ -279,40 +370,54 @@ export default function Header() {
 
       {/* RIGHT SECTION */}
       <div className="flex items-center gap-4">
-        {/* PLAN */}
-        <div className="flex items-center text-xs bg-[#E6F1FD] border border-[#E6F1FD] rounded-lg overflow-hidden">
+        {/* PLAN — skeleton until dashboard-init finishes (no false "Free" on reload) */}
+        <div
+          className="flex items-center text-xs bg-[#E6F1FD] border border-[#E6F1FD] rounded-lg overflow-hidden"
+          aria-busy={showPlanSkeleton}
+        >
           <span className="px-2 py-3.5 bg-[#ffffff] ">
             Current Plan :
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              const id = activeSiteId || sites[0]?.id;
-              if (id) router.push(`/dashboard/${id}/upgrade`);
-              else router.push("/dashboard");
-            }}
-            className="px-3 py-1 bg-[#E6F1FD] "
-            suppressHydrationWarning
-          >
-            {planLabel}
-          </button>
+          {showPlanSkeleton ? (
+            <div className="mx-1 my-2 min-h-[28px] min-w-[72px] rounded bg-[#cfe8fc] animate-pulse" aria-hidden />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                const id = pathSiteId || activeSiteId || sites[0]?.id;
+                if (id) router.push(`/dashboard/${id}/upgrade`);
+                else router.push("/dashboard");
+              }}
+              className="px-3 py-1 bg-[#E6F1FD] capitalize"
+              suppressHydrationWarning
+            >
+              {planDisplay.label}
+            </button>
+          )}
         </div>
 
-        {/* UPGRADE BUTTON */}
-        <Tooltip text={String(effectivePlanId || "free").toLowerCase() === "free" ? "Upgrade to a paid plan to unlock more features." : "Switch or modify your current subscription plan."} align="right">
-          <button
-            type="button"
-            onClick={() => {
-              const id = activeSiteId || sites[0]?.id;
-              if (id) router.push(`/dashboard/${id}/upgrade`);
-              else router.push("/dashboard");
-            }}
-            className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
-            suppressHydrationWarning
-          >
-            {String(effectivePlanId || "free").toLowerCase() === "free" ? "Update to Pro" : "Change plan"}
-          </button>
-        </Tooltip>
+        {showPlanSkeleton ? (
+          <div
+            className="min-h-[42px] min-w-[112px] rounded-lg bg-[#c4c8e8] animate-pulse"
+            aria-hidden
+            aria-label="Loading plan actions"
+          />
+        ) : (
+          <Tooltip text={planDisplay.tooltipUpgrade} align="right">
+            <button
+              type="button"
+              onClick={() => {
+                const id = pathSiteId || activeSiteId || sites[0]?.id;
+                if (id) router.push(`/dashboard/${id}/upgrade`);
+                else router.push("/dashboard");
+              }}
+              className="px-3.5 py-3.5 rounded-lg bg-[#747BE0] text-white text-xs"
+              suppressHydrationWarning
+            >
+              {planDisplay.upgradeButtonText}
+            </button>
+          </Tooltip>
+        )}
 
         {/* LOGOUT */}
         <button
@@ -381,7 +486,7 @@ export default function Header() {
 
       {showUpgradeModal && (
         <UpgradePlanModal
-          currentPlanId={effectivePlanId}
+          currentPlanId={resolvedPlanKey}
           organizationId={activeOrganizationId ?? null}
           siteId={activeSiteId}
           reason="pageview"

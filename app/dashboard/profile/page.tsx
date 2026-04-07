@@ -379,6 +379,7 @@ export default function SettingsPage() {
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[14px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{org.nextRenewal}</p>
                         ) : (
                           <button
+                            type="button"
                             onClick={() =>
                               router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
                             }
@@ -393,6 +394,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-end gap-[10px]">
                         {org.isPaid && (
                           <button
+                            type="button"
                             onClick={() =>
                               router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
                             }
@@ -402,6 +404,7 @@ export default function SettingsPage() {
                           </button>
                         )}
                         <button
+                          type="button"
                           onClick={() =>
                             router.push(org.siteId ? `/dashboard/${org.siteId}` : activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard")
                           }

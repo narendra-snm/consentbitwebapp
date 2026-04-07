@@ -44,9 +44,17 @@ const SESSION_CACHE_KEY = "cbSessionCache";
 const SESSION_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 const LAST_USER_KEY = "cbLastUserEmail";
 
+/** Avoid misleading logs: SSR has no sessionStorage; terminal would show "null/free" while the browser is correct. */
+function devClientLog(...args: unknown[]) {
+  if (process.env.NODE_ENV !== "development") return;
+  if (typeof window === "undefined") return;
+  console.log(...args);
+}
+
 function readSessionCache(): any | null {
   try {
     const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SESSION_CACHE_KEY) : null;
+    devClientLog("[Cache] READ raw length:", raw?.length ?? "null");
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { data: any; ts: number };
     if (Date.now() - parsed.ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(SESSION_CACHE_KEY); return null; }
@@ -64,11 +72,15 @@ function readSessionCache(): any | null {
 function writeSessionCache(data: any) {
   try {
     if (typeof sessionStorage !== "undefined") {
-      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+      const payload = JSON.stringify({ data, ts: Date.now() });
+      sessionStorage.setItem(SESSION_CACHE_KEY, payload);
       const email = String(data?.user?.email || "").trim().toLowerCase();
       if (email) sessionStorage.setItem(LAST_USER_KEY, email);
+      devClientLog("[Cache] WROTE effectivePlanId:", data?.effectivePlanId, "activeSiteId:", data?.activeSiteId, "bytes:", payload.length);
+    } else {
+      devClientLog("[Cache] WRITE SKIPPED — sessionStorage unavailable");
     }
-  } catch { /* ignore quota errors */ }
+  } catch (e) { console.error("[Cache] WRITE FAILED", e); }
 }
 
 function pickActiveSiteIdFromPath(pathname: string | null): string | null {
@@ -127,8 +139,16 @@ export function DashboardSessionProvider({
   /** Latest path without putting `pathname` in `refresh` deps (avoids refetch on every tab switch). */
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  /** Always mirrors the latest state — lets refresh() read prevState without relying on setState updater timing. */
+  const stateRef = useRef<DashboardSessionState | null>(null);
   /** True when state was seeded from sessionStorage or SSR — data is fresh, skip initial fetch. */
   const skipInitialRefresh = useRef(false);
+
+  const setStateAndRef = (next: DashboardSessionState) => {
+    stateRef.current = next;
+    writeSessionCache(next);
+    setState(next);
+  };
 
   const [state, setState] = useState<DashboardSessionState>(() => {
     // 1. One-time post-login seed (set by verifyVerificationCode)
@@ -141,7 +161,14 @@ export function DashboardSessionProvider({
     })();
     // 2. Persistent session cache (written after every successful refresh)
     const seed = ssData ?? initialData ?? readSessionCache();
-    console.log("SEED:", seed, "| SEED effectivePlanId:", seed?.effectivePlanId, "| sites[0].planId:", seed?.sites?.[0]?.planId);
+    devClientLog(
+      "SEED:",
+      seed,
+      "| SEED effectivePlanId:",
+      seed?.effectivePlanId,
+      "| sites[0].planId:",
+      seed?.sites?.[0]?.planId,
+    );
     if (seed?.authenticated) {
       skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
       const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];
@@ -151,15 +178,22 @@ export function DashboardSessionProvider({
       const seedActiveSiteId = seed.activeSiteId ? String(seed.activeSiteId) : null;
       const activeSite = (seedActiveSiteId ? sites.find((s: any) => String(s?.id) === seedActiveSiteId) : null) ?? sites[0] ?? null;
       const activeSitePlanId = pickPlanIdFromSite(activeSite);
-      const seedEffectivePlanId = activeSitePlanId || seed.effectivePlanId || "free";
-      console.log("[DashboardSession] seed activeSite:", (activeSite as any)?.domain, "activeSitePlanId:", activeSitePlanId, "→ initial effectivePlanId:", seedEffectivePlanId);
+      const seedEffectivePlanId = activeSitePlanId || seed.effectivePlanId || "";
+      devClientLog(
+        "[DashboardSession] seed activeSite:",
+        (activeSite as any)?.domain,
+        "activeSitePlanId:",
+        activeSitePlanId,
+        "→ initial effectivePlanId:",
+        seedEffectivePlanId,
+      );
       return {
         loading: false,
         authenticated: true,
         user: seed.user ?? null,
         organizations: orgs,
         sites,
-        effectivePlanId: seedEffectivePlanId,
+        effectivePlanId: String(activeSitePlanId ?? seed.effectivePlanId ?? "").trim().toLowerCase() || "",
         activeOrganizationId: activeOrgId,
         activeSiteId: activeSite?.id ? String(activeSite.id) : null,
       };
@@ -170,7 +204,7 @@ export function DashboardSessionProvider({
       user: null,
       organizations: [],
       sites: [],
-      effectivePlanId: "free",
+      effectivePlanId: "",
       activeOrganizationId: null,
       activeSiteId: null,
     };
@@ -178,14 +212,13 @@ export function DashboardSessionProvider({
 
   const refresh = useCallback(async (opts?: DashboardRefreshOptions): Promise<string> => {
     const showLoading = opts?.showLoading !== false;
-    if (showLoading) setState((s) => ({ ...s, loading: true }));
+    if (showLoading) setStateAndRef({ ...(stateRef.current ?? state), loading: true });
     try {
       const data = await getDashboardInit();
       const authenticated = Boolean(data?.authenticated);
       const orgs = Array.isArray(data?.organizations) ? data.organizations : [];
 
       if (!authenticated) {
-        // Clear stale cache so next login starts fresh
         try {
           if (typeof sessionStorage !== "undefined") {
             sessionStorage.removeItem(SESSION_CACHE_KEY);
@@ -193,24 +226,23 @@ export function DashboardSessionProvider({
             sessionStorage.removeItem("cbLastUserEmail");
           }
         } catch { /* ignore */ }
-        setState({
-          loading: false,
-          authenticated: false,
-          user: null,
-          organizations: [],
-          sites: [],
-          effectivePlanId: "free",
-          activeOrganizationId: null,
-          activeSiteId: null,
-        });
+        const unauthState: DashboardSessionState = {
+          loading: false, authenticated: false, user: null,
+          organizations: [], sites: [], effectivePlanId: "",
+          activeOrganizationId: null, activeSiteId: null,
+        };
+        setStateAndRef(unauthState);
         router.replace("/login");
-        return "free";
+        return "";
       }
 
       let activeOrgId = pickOrganizationIdFromMe(orgs);
       let sites = Array.isArray(data?.sites) ? data.sites : [];
-      let effectivePlanId = data?.effectivePlanId || "free";
-      console.log("[DashboardSession] refresh → API effectivePlanId:", effectivePlanId, "| sites[0].planId:", sites[0]?.planId);
+      let effectivePlanId =
+        data?.effectivePlanId != null && String(data.effectivePlanId).trim() !== ""
+          ? String(data.effectivePlanId).trim().toLowerCase()
+          : "";
+      devClientLog("[DashboardSession] refresh → API effectivePlanId:", effectivePlanId, "| sites[0].planId:", sites[0]?.planId);
 
       if (!activeOrgId && sites.length > 0) {
         activeOrgId = pickOrganizationIdFromSite(sites[0]);
@@ -219,48 +251,42 @@ export function DashboardSessionProvider({
       const urlActive = pickActiveSiteIdFromPath(pathnameRef.current);
       const fallbackActive = sites?.[0]?.id ?? null;
 
-      let resolvedPlanId = "free";
-      setState((prev) => {
-        const prevActive = prev?.activeSiteId ? String(prev.activeSiteId) : null;
-        const prevActiveStillExists = prevActive
-          ? (sites || []).some((s: any) => String(s?.id) === prevActive)
-          : false;
-        const resolvedActiveSiteId = urlActive || (prevActiveStillExists ? prevActive : fallbackActive);
-        const activeSite =
-          (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
-        const activeSitePlanId = pickPlanIdFromSite(activeSite);
-        const freshPlanId = activeSitePlanId || effectivePlanId || "free";
-        const PAID = ["basic", "essential", "growth"];
-        // Never downgrade a known paid plan to "free" — the API may lag behind the webhook.
-        // Keep the existing paid plan until the API confirms a paid plan back.
-        resolvedPlanId = (PAID.includes(freshPlanId))
-          ? freshPlanId
-          : (PAID.includes(prev?.effectivePlanId || "") ? prev!.effectivePlanId : "free");
-        console.log("[DashboardSession] refresh setState → freshPlanId:", freshPlanId, "prev.effectivePlanId:", prev?.effectivePlanId, "→ resolvedPlanId:", resolvedPlanId);
+      // Read prev from ref — always current, never stale from closure or batching.
+      const prevState = stateRef.current;
+      const prevActive = prevState?.activeSiteId ? String(prevState.activeSiteId) : null;
+      const prevActiveStillExists = prevActive
+        ? (sites || []).some((s: any) => String(s?.id) === prevActive)
+        : false;
+      const resolvedActiveSiteId = urlActive || (prevActiveStillExists ? prevActive : fallbackActive);
+      const activeSite =
+        (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
+      const activeSitePlanId = pickPlanIdFromSite(activeSite);
+      const freshPlanId = (activeSitePlanId || effectivePlanId || "").trim().toLowerCase();
+      const PAID = ["basic", "essential", "growth"];
+      // Never downgrade a known paid plan — the API may lag behind the webhook.
+      const resolvedPlanId = PAID.includes(freshPlanId)
+        ? freshPlanId
+        : PAID.includes(prevState?.effectivePlanId || "")
+          ? prevState!.effectivePlanId
+          : freshPlanId;
 
-        const next = {
-          loading: false,
-          authenticated: true,
-          user: data?.user ?? null,
-          organizations: orgs,
-          sites,
-          effectivePlanId: resolvedPlanId,
-          activeOrganizationId: activeOrgId,
-          activeSiteId: resolvedActiveSiteId ? String(resolvedActiveSiteId) : null,
-        };
+      const next: DashboardSessionState = {
+        loading: false, authenticated: true,
+        user: data?.user ?? null, organizations: orgs, sites,
+        effectivePlanId: resolvedPlanId,
+        activeOrganizationId: activeOrgId,
+        activeSiteId: resolvedActiveSiteId ? String(resolvedActiveSiteId) : null,
+      };
 
-        // Persist to sessionStorage so next page visit loads instantly without a fetch
-        writeSessionCache(next);
-
-        return next;
-      });
+      // setStateAndRef writes cache + updates ref synchronously before React batches the setState.
+      setStateAndRef(next);
       return resolvedPlanId;
     } catch (e) {
       console.error("[DashboardSession] refresh failed", e);
-      setState((s) => ({ ...s, loading: false }));
-      return "free";
+      setStateAndRef({ ...(stateRef.current ?? state), loading: false });
+      return "";
     }
-  }, [router]);
+  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Always reconcile with the server on mount. Seeded/cached sessions used to skip this entirely,
   // so fields like `pagesScanned` from dashboard-init never arrived (UI showed "—").
@@ -286,7 +312,7 @@ export function DashboardSessionProvider({
       if (String(s.activeSiteId) === String(urlActive)) return s;
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(urlActive)) || null;
-      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId;
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "";
       return { ...s, activeSiteId: String(urlActive), effectivePlanId: nextPlanId };
     });
   }, [pathname]);
@@ -295,7 +321,7 @@ export function DashboardSessionProvider({
     setState((s) => {
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(siteId)) || null;
-      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId ;
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "";
       return { ...s, activeSiteId: siteId, effectivePlanId: nextPlanId };
     });
   }, []);

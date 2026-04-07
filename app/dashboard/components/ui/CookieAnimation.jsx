@@ -12,14 +12,34 @@ const cookies = [
 
 export default function CookieAnimation() {
   const [index, setIndex] = useState(0);
+  const [isRunning, setIsRunning] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIndex((prev) => (prev + 1) % cookies.length);
-    }, 600);
+    let interval;
 
-    return () => clearInterval(interval);
-  }, []);
+    if (isRunning) {
+      interval = setInterval(() => {
+        setIndex((prev) => (prev + 1) % cookies.length);
+      }, 600);
+
+      // Stop after one full cycle
+      const stopTimeout = setTimeout(() => {
+        setIsRunning(false);
+      }, cookies.length * 600);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(stopTimeout);
+      };
+    } else {
+      // Pause for 5 seconds
+      const pauseTimeout = setTimeout(() => {
+        setIsRunning(true);
+      }, 5000);
+
+      return () => clearTimeout(pauseTimeout);
+    }
+  }, [isRunning]);
 
   return (
     <div className="relative w-10 h-10">

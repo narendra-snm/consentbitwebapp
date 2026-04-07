@@ -4,7 +4,7 @@
 
 export const runtime = 'edge';
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react"; // useRef kept for proceedRef
 import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
@@ -14,11 +14,12 @@ type Plan = "basic" | "essential" | "growth" | "free" | null;
 export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
+  const router = useRouter();
   const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId } =
     useDashboardSession();
 
   /** Which tier column is the active subscription (from /api/sites). */
-  const currentTier = String(effectivePlanId || "free").toLowerCase() as
+  const currentTier = (String(effectivePlanId ?? "").trim().toLowerCase() || "free") as
     | "free"
     | "basic"
     | "essential"
@@ -35,23 +36,24 @@ export default function PricingTable() {
     window.history.replaceState({}, "", window.location.pathname);
     sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
     // Clear session cache so polls fetch fresh plan data from the server.
-    try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+    try {
+      sessionStorage.removeItem("cbSessionCache");
+    } catch {
+      // ignore
+    }
     setPaymentProcessing(true);
     let attempts = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
-      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
+      const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      // Stop as soon as the plan is no longer "free", or after 20 attempts (~30s).
-      if (planNow === "free" && attempts < 20) {
+      // Stop as soon as the plan is known and not free, or after 20 attempts (~30s).
+      if ((!planNow || planNow === "free") && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
-        // Clear stale session cache and set a stable post-payment flag for the dashboard.
-        try {
-          sessionStorage.removeItem("cbSessionCache");
-          sessionStorage.setItem(`cb_post_payment_${siteId}`, "1");
-        } catch { /* ignore */ }
-        window.location.href = `/dashboard/${siteId}`;
+        // Use router.push so DashboardSessionProvider stays mounted and the updated
+        // plan in React state is immediately visible in the header — no cache needed.
+        router.push(`/dashboard/${siteId}`);
       }
     };
     void poll();

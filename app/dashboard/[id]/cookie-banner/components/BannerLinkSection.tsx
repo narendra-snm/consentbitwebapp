@@ -11,7 +11,7 @@ interface BannerLinkSectionProps {
 export function BannerLinkSection({ effectivePlanId, consentType }: BannerLinkSectionProps) {
   const [copied, setCopied] = useState(false);
 
-  const planKey = String(effectivePlanId ?? "free").toLowerCase();
+  const planKey = String(effectivePlanId ?? "").toLowerCase();
   const isLocationBased = planKey === "essential" || planKey === "growth";
 
   const snippet = `<a href="#" data-consentbit-trigger>Cookie Settings</a>`;

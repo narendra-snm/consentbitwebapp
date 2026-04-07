@@ -623,6 +623,7 @@ export default function BillingPage({
 
           <div className="pt-5 flex gap-3">
             <button
+              type="button"
               onClick={() => router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard")}
               disabled={!canUpgrade}
               className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"

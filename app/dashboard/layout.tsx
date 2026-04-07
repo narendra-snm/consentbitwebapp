@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DashboardSessionProvider } from "./DashboardSessionProvider";
 import PostSetupOverlay from "./components/PostSetupOverlay";
+import Footer from "@/components/auth/Footer";
 
 // Never cache this layout — it contains authenticated user data.
 export const dynamic = "force-dynamic";
@@ -20,9 +21,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <DashboardSessionProvider>
-      {children}
+      <div className="min-h-screen flex flex-col">
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </div>
       <Suspense>
         <PostSetupOverlay />
+        
       </Suspense>
     </DashboardSessionProvider>
   );
