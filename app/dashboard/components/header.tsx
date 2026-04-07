@@ -90,7 +90,7 @@ export default function Header() {
     return effectivePlanId;
   })();
   const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
-
+console.log("pl",planLabel,effectivePlanId);
   // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
     if (!activeOrganizationId) return;
@@ -157,7 +157,7 @@ export default function Header() {
     const targetPath = currentSubPath ? `/dashboard/${site.id}/${currentSubPath}` : `/dashboard/${site.id}`;
     router.push(targetPath);
   };
-
+console.log("pl2",planLabel,effectivePlanId);
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
       {/* LEFT SECTION */}
@@ -291,10 +291,11 @@ export default function Header() {
               if (id) router.push(`/dashboard/${id}/upgrade`);
               else router.push("/dashboard");
             }}
-            className="px-3 py-1 bg-[#E6F1FD] "
+            className="px-3 py-1 bg-[#E6F1FD] capitalize"
             suppressHydrationWarning
           >
-            {planLabel}
+            {effectivePlanId}
+           
           </button>
         </div>
 

@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardSession } from "./DashboardSessionProvider";
 import { firstSetup } from "@/lib/client-api";
 import ComplianceAlert from "./components/ComplianceAlert";
+import FeedbackDesign from "./components/FeedbackDesign";
 export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
@@ -442,6 +443,7 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
           if (target) router.replace(target);
         }}
       />
+      <FeedbackDesign/>
       </div>
       </>
     );

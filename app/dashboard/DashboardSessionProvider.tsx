@@ -155,7 +155,7 @@ export function DashboardSessionProvider({
         user: seed.user ?? null,
         organizations: orgs,
         sites,
-        effectivePlanId: activeSitePlanId || seed.effectivePlanId || "free",
+        effectivePlanId: activeSitePlanId || seed.effectivePlanId ,
         activeOrganizationId: activeOrgId,
         activeSiteId: activeSite?.id ? String(activeSite.id) : null,
       };
