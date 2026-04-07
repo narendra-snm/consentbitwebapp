@@ -38,21 +38,20 @@ export default function PricingTable() {
     try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
     setPaymentProcessing(true);
     let attempts = 0;
-    let planBeforePayment: string | null = null;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
-      // Capture the plan on the first poll (first fresh fetch from server after payment).
-      if (planBeforePayment === null) planBeforePayment = planNow;
       attempts += 1;
-      const planChanged = planNow !== planBeforePayment;
-      // Stop as soon as plan updates from the first-fetched value, or after 20 attempts (~30s).
-      if (!planChanged && attempts < 20) {
+      // Stop as soon as the plan is no longer "free", or after 20 attempts (~30s).
+      if (planNow === "free" && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
-        // Clear stale session cache so dashboard loads fresh data.
-        try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
-        window.location.href = `/dashboard/${siteId}?success=1`;
+        // Clear stale session cache and set a stable post-payment flag for the dashboard.
+        try {
+          sessionStorage.removeItem("cbSessionCache");
+          sessionStorage.setItem(`cb_post_payment_${siteId}`, "1");
+        } catch { /* ignore */ }
+        window.location.href = `/dashboard/${siteId}`;
       }
     };
     void poll();

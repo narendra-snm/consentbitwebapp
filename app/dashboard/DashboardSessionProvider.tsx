@@ -141,21 +141,25 @@ export function DashboardSessionProvider({
     })();
     // 2. Persistent session cache (written after every successful refresh)
     const seed = ssData ?? initialData ?? readSessionCache();
-    console.log("SEED:", seed);
+    console.log("SEED:", seed, "| SEED effectivePlanId:", seed?.effectivePlanId, "| sites[0].planId:", seed?.sites?.[0]?.planId);
     if (seed?.authenticated) {
       skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
       const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];
       const sites = Array.isArray(seed.sites) ? seed.sites : [];
       const activeOrgId = pickOrganizationIdFromMe(orgs) || (sites.length > 0 ? pickOrganizationIdFromSite(sites[0]) : null);
-      const activeSite = sites[0] ?? null;
+      // Use the seed's known activeSiteId to find the right site, not always sites[0].
+      const seedActiveSiteId = seed.activeSiteId ? String(seed.activeSiteId) : null;
+      const activeSite = (seedActiveSiteId ? sites.find((s: any) => String(s?.id) === seedActiveSiteId) : null) ?? sites[0] ?? null;
       const activeSitePlanId = pickPlanIdFromSite(activeSite);
+      const seedEffectivePlanId = activeSitePlanId || seed.effectivePlanId || "free";
+      console.log("[DashboardSession] seed activeSite:", (activeSite as any)?.domain, "activeSitePlanId:", activeSitePlanId, "→ initial effectivePlanId:", seedEffectivePlanId);
       return {
         loading: false,
         authenticated: true,
         user: seed.user ?? null,
         organizations: orgs,
         sites,
-        effectivePlanId: activeSitePlanId || seed.effectivePlanId || "free",
+        effectivePlanId: seedEffectivePlanId,
         activeOrganizationId: activeOrgId,
         activeSiteId: activeSite?.id ? String(activeSite.id) : null,
       };
@@ -206,6 +210,7 @@ export function DashboardSessionProvider({
       let activeOrgId = pickOrganizationIdFromMe(orgs);
       let sites = Array.isArray(data?.sites) ? data.sites : [];
       let effectivePlanId = data?.effectivePlanId || "free";
+      console.log("[DashboardSession] refresh → API effectivePlanId:", effectivePlanId, "| sites[0].planId:", sites[0]?.planId);
 
       if (!activeOrgId && sites.length > 0) {
         activeOrgId = pickOrganizationIdFromSite(sites[0]);
@@ -224,7 +229,14 @@ export function DashboardSessionProvider({
         const activeSite =
           (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
         const activeSitePlanId = pickPlanIdFromSite(activeSite);
-        resolvedPlanId = activeSitePlanId || effectivePlanId || "free";
+        const freshPlanId = activeSitePlanId || effectivePlanId || "free";
+        const PAID = ["basic", "essential", "growth"];
+        // Never downgrade a known paid plan to "free" — the API may lag behind the webhook.
+        // Keep the existing paid plan until the API confirms a paid plan back.
+        resolvedPlanId = (PAID.includes(freshPlanId))
+          ? freshPlanId
+          : (PAID.includes(prev?.effectivePlanId || "") ? prev!.effectivePlanId : "free");
+        console.log("[DashboardSession] refresh setState → freshPlanId:", freshPlanId, "prev.effectivePlanId:", prev?.effectivePlanId, "→ resolvedPlanId:", resolvedPlanId);
 
         const next = {
           loading: false,
@@ -274,7 +286,7 @@ export function DashboardSessionProvider({
       if (String(s.activeSiteId) === String(urlActive)) return s;
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(urlActive)) || null;
-      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "free";
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId;
       return { ...s, activeSiteId: String(urlActive), effectivePlanId: nextPlanId };
     });
   }, [pathname]);
@@ -283,7 +295,7 @@ export function DashboardSessionProvider({
     setState((s) => {
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(siteId)) || null;
-      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "free";
+      const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId ;
       return { ...s, activeSiteId: siteId, effectivePlanId: nextPlanId };
     });
   }, []);

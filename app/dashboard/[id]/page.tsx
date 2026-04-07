@@ -35,29 +35,31 @@ const userName = useMemo(() => {
     if (siteId) setActiveSiteId(String(siteId));
   }, [authenticated, loading, router, setActiveSiteId, siteId]);
 
-  // After Stripe success redirect, poll until plan changes from "free" (webhook can lag).
+  // After Stripe payment, poll until the plan changes from "free".
+  // Uses a sessionStorage flag set by the upgrade page — avoids depending on ?success=1
+  // which gets cleared by router.replace() and cancels the polling timer.
   useEffect(() => {
-    const success = searchParams?.get("success");
-    if (success !== "1") return;
-    if (siteId) setActiveSiteId(String(siteId));
-    // Strip the query param immediately so back/refresh doesn't re-trigger.
-    router.replace(`/dashboard/${siteId}`);
+    const flagKey = `cb_post_payment_${siteId}`;
+    const hasFlag = typeof sessionStorage !== "undefined" && sessionStorage.getItem(flagKey) === "1";
+    // Also support legacy ?success=1 from the URL (strip it immediately).
+    const hasSuccessParam = searchParams?.get("success") === "1";
+    if (hasSuccessParam) router.replace(`/dashboard/${siteId}`);
+    if (!hasFlag && !hasSuccessParam) return;
+    if (hasFlag) sessionStorage.removeItem(flagKey);
+
     let attempts = 0;
-    let planBeforePayment: string | null = null;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
-      // Capture plan on the first fetch — this is what we're waiting to change.
-      if (planBeforePayment === null) planBeforePayment = planNow;
       attempts += 1;
-      // Keep polling until plan changes, or after 20 attempts (~40s).
-      if (planNow === planBeforePayment && attempts < 20) {
+      // Stop once the plan is no longer free, or after 20 attempts (~40s).
+      if (planNow === "free" && attempts < 20) {
         t = setTimeout(poll, 2000);
       }
     };
     void poll();
     return () => { if (t) clearTimeout(t); };
-  }, [refresh, router, searchParams, setActiveSiteId, siteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [siteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Avoid SSR/CSR mismatches in this client page (Suspense + session state).
   // if (!hydrated || loading){ return null};
