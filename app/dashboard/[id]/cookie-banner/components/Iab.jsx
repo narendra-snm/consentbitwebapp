@@ -801,6 +801,7 @@ const positionStyles =
              ...positionStyles,
           }}
         >
+          
           <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
         </div>
       )}
