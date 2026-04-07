@@ -68,14 +68,16 @@ export function pxBorderRadiusToRem(px: string): string {
   return `${(n / 16).toFixed(3)}rem`;
 }
 
+const MAX_BORDER_RADIUS = 30;
+
 export function bannerRadiusToPxString(r: string | undefined | null): string {
   if (r == null || r === '') return DEFAULT_APPEARANCE.layout.borderRadius;
   const s = String(r).trim();
-  if (s.endsWith('px')) return String(Math.max(0, Math.round(Number.parseFloat(s) || 12)));
-  if (s.endsWith('rem')) return String(Math.max(0, Math.round((Number.parseFloat(s) || 0.75) * 16)));
+  if (s.endsWith('px')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(Number.parseFloat(s) || 12))));
+  if (s.endsWith('rem')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round((Number.parseFloat(s) || 0.75) * 16))));
   const n = Number.parseFloat(s);
-  if (!Number.isNaN(n) && n < 4) return String(Math.max(0, Math.round(n * 16)));
-  return String(Math.max(0, Math.round(n || 12)));
+  if (!Number.isNaN(n) && n < 4) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n * 16))));
+  return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n || 12))));
 }
 
 export function normalizeBannerPosition(

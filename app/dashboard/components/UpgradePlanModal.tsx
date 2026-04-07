@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
 
 type PlanTier = 'free' | 'basic' | 'essential' | 'growth';
@@ -41,6 +41,15 @@ export function UpgradePlanModal({
   const current = (currentPlanId || 'free').toLowerCase() as PlanTier;
   const nextPlan = NEXT_PLAN[current] ?? null;
   const [loading, setLoading] = useState(false);
+
+  // Reset loading state if user returns via browser back button (bfcache restore).
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) setLoading(false);
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   async function handleUpgrade() {
     if (!nextPlan || !organizationId) return;

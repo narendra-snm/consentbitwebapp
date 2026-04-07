@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { firstSetup } from "@/lib/client-api";
 import InstallConsentModal from "./InstallConsentModal";
@@ -27,6 +27,7 @@ function getPostSetupParams(): { postSetup: string; domain: string; siteId: stri
 export default function PostSetupOverlay() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { loading, authenticated, sites, refresh } = useDashboardSession();
 
   const [pendingSiteId, setPendingSiteId] = useState<string | null>(null);
@@ -69,7 +70,7 @@ export default function PostSetupOverlay() {
     check();
     window.addEventListener("popstate", check);
     return () => window.removeEventListener("popstate", check);
-  }, [pathname]); // re-run whenever Next.js navigates to a new path
+  }, [pathname, searchParams]); // re-run whenever path OR search params change
 
   // Handle storage event (opener tab redirect via PostSetupClient)
   useEffect(() => {
@@ -193,6 +194,8 @@ export default function PostSetupOverlay() {
     const newSiteId = postSetupInstall?.siteId;
     setPostSetupInstall(null);
     lastSig.current = "";
+    // Refresh session so dashboard header + site list reflect the new site/plan immediately.
+    void refresh({ showLoading: false });
     if (newSiteId) {
       router.replace(`/dashboard/${newSiteId}`);
     } else {

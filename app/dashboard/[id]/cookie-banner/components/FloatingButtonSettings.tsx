@@ -99,6 +99,7 @@ export function FloatingButtonSettings({
 
           </div>
         </div>
+
       </div>
     </div>
   );

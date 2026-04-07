@@ -16,10 +16,10 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 const LIMITS = {
-  title: 60,
+  title: 30,
   message: 320,
   button: 20,
-  policyLabel: 35,
+  policyLabel: 30,
 } as const;
 
 function clampLen(value: string, max: number): string {
@@ -251,7 +251,7 @@ export function CookieNoticeAccordion2({
                 </div>
                 <input
                   type="text"
-                  value={settings.rejectAll || ''}
+                  value={settings.rejectAll ?? ''}
                   maxLength={LIMITS.button}
                   onChange={(e) => update({ rejectAll: clampLen(e.target.value, LIMITS.button) })}
                   className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"

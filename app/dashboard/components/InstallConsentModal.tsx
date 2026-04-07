@@ -190,7 +190,7 @@ export default function InstallConsentModal({
 
           <p className="mb-1 text-xs">Refer to our platform-wise guides for instructions.</p>
           <div className="mb-7.25 flex gap-2">
-            <img src="/images/allplatform.svg" alt="Supported platforms" />
+            <img src="/images/allplatform.png" alt="Supported platforms" />
           </div>
 
           <h3 className="mb-2.5 font-bold">Step 2: Verify your installation.</h3>

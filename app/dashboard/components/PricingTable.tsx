@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
 
 export function PricingTable({
@@ -18,6 +18,18 @@ export function PricingTable({
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [loadingPlan, setLoadingPlan] = useState<null | 'basic' | 'essential' | 'growth'>(null);
   const [freeLoading, setFreeLoading] = useState(false);
+
+  // Reset loading state if user returns via browser back button (bfcache restore).
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        setLoadingPlan(null);
+        setFreeLoading(false);
+      }
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   async function handleFreeClick() {
     setFreeLoading(true);

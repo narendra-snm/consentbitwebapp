@@ -441,6 +441,7 @@ export default function page({ siteId }: { siteId: string }) {
     return JSON.stringify(floatingButton) !== JSON.stringify(lastSavedFloatingButton);
   }, [floatingButton, lastSavedFloatingButton]);
 
+
   const appearanceDirty = useMemo(() => {
     if (!lastSavedAppearance) return false;
     return JSON.stringify(appearance) !== JSON.stringify(lastSavedAppearance);
@@ -629,9 +630,7 @@ export default function page({ siteId }: { siteId: string }) {
       setSaveSuccess(true);
     } catch (e) {
       console.error("[cookie-banner] failed to save banner customization", e);
-      setPublishError(
-        e instanceof Error ? e.message : "Could not save changes. Try again.",
-      );
+      setPublishError("Something went wrong while saving. Please try again.");
     } finally {
       setSavingContent(false);
       setPersistKind(null);
@@ -650,9 +649,7 @@ export default function page({ siteId }: { siteId: string }) {
       setPublishSuccess(true);
     } catch (e) {
       console.error("[cookie-banner] failed to publish banner customization", e);
-      setPublishError(
-        e instanceof Error ? e.message : "Could not publish changes. Try again.",
-      );
+      setPublishError("Something went wrong while publishing. Please try again.");
     } finally {
       setSavingContent(false);
       setPersistKind(null);
@@ -857,7 +854,7 @@ export default function page({ siteId }: { siteId: string }) {
                       gdpr: {
                         ...prev.gdpr,
                         message: next.message,
-                        rejectAll: next.rejectAll || prev.gdpr.rejectAll,
+                        rejectAll: next.rejectAll ?? '',
                       },
                     };
                   }

@@ -14,7 +14,7 @@ function DashboardSitePageInner() {
   const siteId = params?.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loading, authenticated, sites,user, setActiveSiteId, refresh } = useDashboardSession();
+  const { loading, authenticated, sites, user, setActiveSiteId, refresh } = useDashboardSession();
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -35,23 +35,29 @@ const userName = useMemo(() => {
     if (siteId) setActiveSiteId(String(siteId));
   }, [authenticated, loading, router, setActiveSiteId, siteId]);
 
-  // After Stripe success redirect, refresh session twice (webhook updates can lag).
+  // After Stripe success redirect, poll until plan changes from "free" (webhook can lag).
   useEffect(() => {
     const success = searchParams?.get("success");
     if (success !== "1") return;
     if (siteId) setActiveSiteId(String(siteId));
-    void refresh({ showLoading: false });
-    const t = window.setTimeout(() => {
-      void refresh({ showLoading: false });
-    }, 2500);
-    const stripQ = window.setTimeout(() => {
-      if (siteId) router.replace(`/dashboard/${siteId}`);
-    }, 300);
-    return () => {
-      window.clearTimeout(t);
-      window.clearTimeout(stripQ);
+    // Strip the query param immediately so back/refresh doesn't re-trigger.
+    router.replace(`/dashboard/${siteId}`);
+    let attempts = 0;
+    let planBeforePayment: string | null = null;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
+      // Capture plan on the first fetch — this is what we're waiting to change.
+      if (planBeforePayment === null) planBeforePayment = planNow;
+      attempts += 1;
+      // Keep polling until plan changes, or after 20 attempts (~40s).
+      if (planNow === planBeforePayment && attempts < 20) {
+        t = setTimeout(poll, 2000);
+      }
     };
-  }, [refresh, router, searchParams, setActiveSiteId, siteId]);
+    void poll();
+    return () => { if (t) clearTimeout(t); };
+  }, [refresh, router, searchParams, setActiveSiteId, siteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Avoid SSR/CSR mismatches in this client page (Suspense + session state).
   // if (!hydrated || loading){ return null};

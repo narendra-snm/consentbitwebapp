@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import React from "react";
 import { Globe, Plus } from "lucide-react";
 
@@ -8,7 +8,7 @@ function Tooltip({ text, children, align = "left" }: { text: string; children: R
   return (
     <span className="relative group inline-flex items-center">
       {children}
-      <span className={`pointer-events-none absolute top-full mt-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"}`}>
+      <span suppressHydrationWarning className={`pointer-events-none absolute top-full mt-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal ${align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"}`}>
         {text}
       </span>
     </span>
@@ -24,6 +24,48 @@ export default function Header() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [stripeReturnPending, setStripeReturnPending] = useState(false);
+  const [stripeReturnCountdown, setStripeReturnCountdown] = useState(5);
+
+  // Detect return from Stripe checkout (from AddNewSiteModal) on ANY page.
+  // useLayoutEffect fires before paint — covers screen immediately, no flash.
+  useLayoutEffect(() => {
+    const key = 'cb_stripe_redirect_modal';
+    const params = new URLSearchParams(window.location.search);
+    // If this is a successful payment redirect (post-setup or upgraded), just clear the flag silently.
+    const isSuccessRedirect = params.get('postSetup') === '1' || params.get('upgraded') === '1' || params.get('domain') !== null;
+    const handleReturn = () => {
+      sessionStorage.removeItem(key);
+      if (!isSuccessRedirect) {
+        setStripeReturnPending(true);
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+    if (sessionStorage.getItem(key) === '1') handleReturn();
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted && sessionStorage.getItem(key) === '1') handleReturn();
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  // Auto-dismiss cancel screen after 5s then open AddNewSiteModal.
+  useEffect(() => {
+    if (!stripeReturnPending) return;
+    setStripeReturnCountdown(5);
+    const interval = setInterval(() => {
+      setStripeReturnCountdown((n) => {
+        if (n <= 1) {
+          clearInterval(interval);
+          setStripeReturnPending(false);
+          setAddSiteOpen(true);
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [stripeReturnPending]);
   const [hydrated, setHydrated] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
@@ -49,10 +91,15 @@ export default function Header() {
   })();
   const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
 
-  // Fetch billing usage once the org is known — check pageview and scan limits
+  // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
     if (!activeOrganizationId) return;
-    getBillingUsage(activeOrganizationId)
+    // Reset stale flags before fetching so upgrading clears old alerts immediately.
+    setPageviewOverLimit(false);
+    setPageviewUsage(null);
+    setScanOverLimit(false);
+    setScanUsage(null);
+    getBillingUsage(activeOrganizationId, activeSiteId ?? undefined)
       .then((data) => {
         if (data.pageviewsLimit > 0 && data.pageviewsUsed >= data.pageviewsLimit) {
           setPageviewOverLimit(true);
@@ -64,7 +111,7 @@ export default function Header() {
         }
       })
       .catch(() => {/* non-critical */});
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, activeSiteId, effectivePlanId]);
 
   const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
     ...(pageviewOverLimit && pageviewUsage ? [{
@@ -114,7 +161,26 @@ export default function Header() {
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
       {/* LEFT SECTION */}
-   {  addSiteOpen && <AddNewSiteModal  onClose={() => setAddSiteOpen(false)} />}
+   {addSiteOpen && <AddNewSiteModal onClose={() => setAddSiteOpen(false)} />}
+   {stripeReturnPending && (
+     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white gap-3">
+       <div className="w-14 h-14 rounded-full bg-[#FEF2F2] flex items-center justify-center mb-1">
+         <svg className="w-7 h-7 text-[#EF4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+         </svg>
+       </div>
+       <p className="text-[17px] font-semibold text-[#111827]">Payment not completed</p>
+       <p className="text-sm text-[#6b7280]">You returned without completing the payment.</p>
+       <p className="text-xs text-[#9CA3AF]">Returning to form in {stripeReturnCountdown}s…</p>
+       <button
+         type="button"
+         onClick={() => { setStripeReturnPending(false); setAddSiteOpen(true); }}
+         className="mt-2 px-6 py-2.5 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors"
+       >
+         Cancel Payment
+       </button>
+     </div>
+   )}
       <div className="flex items-center gap-6">
         {/* Logo */}
         <img

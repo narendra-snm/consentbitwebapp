@@ -29,7 +29,7 @@ export type DashboardRefreshOptions = {
 };
 
 type DashboardSessionApi = DashboardSessionState & {
-  refresh: (opts?: DashboardRefreshOptions) => Promise<void>;
+  refresh: (opts?: DashboardRefreshOptions) => Promise<string>;
   setActiveSiteId: (siteId: string | null) => void;
   updateSiteInState: (patch: { id: string } & Record<string, any>) => void;
   logout: () => Promise<void>;
@@ -107,8 +107,12 @@ function pickPlanIdFromSite(site: unknown): string | null {
   if (!site || typeof site !== "object") return null;
   const s = site as Record<string, unknown>;
   const raw = s.planId ?? s.plan_id ?? s.subscription_plan ?? s.plan ?? null;
-  const plan = raw != null ? String(raw).trim() : "";
-  return plan || null;
+  const plan = raw != null ? String(raw).trim().toLowerCase() : "";
+  // Return null for "free" so callers can fall back to the org-level effectivePlanId.
+  // Subscriptions created via the upgrade flow are stored at org level (siteId = null),
+  // so the per-site row stays "free" even after a successful payment.
+  if (!plan || plan === "free") return null;
+  return plan;
 }
 
 export function DashboardSessionProvider({
@@ -168,7 +172,7 @@ export function DashboardSessionProvider({
     };
   });
 
-  const refresh = useCallback(async (opts?: DashboardRefreshOptions) => {
+  const refresh = useCallback(async (opts?: DashboardRefreshOptions): Promise<string> => {
     const showLoading = opts?.showLoading !== false;
     if (showLoading) setState((s) => ({ ...s, loading: true }));
     try {
@@ -196,7 +200,7 @@ export function DashboardSessionProvider({
           activeSiteId: null,
         });
         router.replace("/login");
-        return;
+        return "free";
       }
 
       let activeOrgId = pickOrganizationIdFromMe(orgs);
@@ -210,6 +214,7 @@ export function DashboardSessionProvider({
       const urlActive = pickActiveSiteIdFromPath(pathnameRef.current);
       const fallbackActive = sites?.[0]?.id ?? null;
 
+      let resolvedPlanId = "free";
       setState((prev) => {
         const prevActive = prev?.activeSiteId ? String(prev.activeSiteId) : null;
         const prevActiveStillExists = prevActive
@@ -219,7 +224,7 @@ export function DashboardSessionProvider({
         const activeSite =
           (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
         const activeSitePlanId = pickPlanIdFromSite(activeSite);
-        const resolvedPlanId = activeSitePlanId || effectivePlanId || "free";
+        resolvedPlanId = activeSitePlanId || effectivePlanId || "free";
 
         const next = {
           loading: false,
@@ -237,9 +242,11 @@ export function DashboardSessionProvider({
 
         return next;
       });
+      return resolvedPlanId;
     } catch (e) {
       console.error("[DashboardSession] refresh failed", e);
       setState((s) => ({ ...s, loading: false }));
+      return "free";
     }
   }, [router]);
 

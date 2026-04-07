@@ -372,6 +372,29 @@ export async function getBillingUsage(
 }
 // billing usage ends here
 
+// subscription upgrade starts here
+export async function upgradeSubscription(payload: {
+  siteId: string;
+  organizationId: string;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  successUrl?: string;
+  cancelUrl?: string;
+}): Promise<{ success: true; url: string; sessionId?: string }> {
+  const res = await fetch("/api/subscriptions/upgrade", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Upgrade subscription failed: ${res.status}`);
+  }
+  return data as { success: true; url: string; sessionId?: string };
+}
+// subscription upgrade ends here
+
 // subscription cancel starts here
 export async function cancelSubscription(payload: {
   subscriptionId?: string | null;
@@ -704,10 +727,21 @@ export type ConsentLogCookie = {
   lastSeenAt: string | null;
 };
 
+export type ConsentLogCookieRule = {
+  id: string;
+  name: string;
+  domain: string;
+  scriptUrlPattern: string | null;
+  category: string;
+  duration: string | null;
+  description: string | null;
+};
+
 export type ConsentHistoryResponse = {
   success: boolean;
   consents: ConsentLog[];
   cookies: ConsentLogCookie[];
+  customCookieRules: ConsentLogCookieRule[];
   total: number;
   limit: number;
   offset: number;
