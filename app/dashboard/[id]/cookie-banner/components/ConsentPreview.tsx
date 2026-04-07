@@ -632,6 +632,9 @@ export default function ConsentPreview({
               if (mobileFullWidth) {
                 return { position: 'absolute', bottom: 0, left: 0, right: 0 };
               }
+              if (layoutPos === 'banner') {
+                return { position: 'absolute', bottom: 0, left: 0, right: 0 };
+              }
               if (layoutPos === 'bottom-center') {
                 return { position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)' };
               }
@@ -640,7 +643,7 @@ export default function ConsentPreview({
                 const offset = (floatRight && bannerOnRight) ? floatGutter : 0;
                 return { position: 'absolute', bottom: 32, right: base + offset };
               }
-              // bottom-left
+              // bottom-left (box)
               const base = 32;
               const offset = (floatLeft && bannerOnLeft) ? floatGutter : 0;
               return { position: 'absolute', bottom: 32, left: base + offset };
@@ -648,7 +651,7 @@ export default function ConsentPreview({
 
             // Compute explicit wrapper width so absolute positioning anchors correctly.
             const bannerWidth = (() => {
-              if (mobileFullWidth) return '100%';
+              if (mobileFullWidth || layoutPos === 'banner') return '100%';
               const isBoldHeavy = weight === 'Black' || weight === 'Extra Bold';
               const maxBtnLen = Math.max(
                 (safeContent.acceptAll?.length ?? 0),

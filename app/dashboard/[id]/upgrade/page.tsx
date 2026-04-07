@@ -433,9 +433,7 @@ export default function PricingTable() {
           <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "free" ? (
               <CurrentPlanButton />
-            ) : (
-              <span className="text-sm text-[#848199]">—</span>
-            )}
+            ) : null}
           </div>
 
           <div className="p-4 border-t border-[#000000]/10">

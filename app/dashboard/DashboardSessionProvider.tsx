@@ -296,6 +296,45 @@ export function DashboardSessionProvider({
     void refresh({ showLoading: !silent });
   }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // After returning from Stripe, the webhook/session update can lag.
+  // Poll dashboard-init briefly so the header plan updates without a manual reload.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    const isStripeReturn = p.get("upgraded") === "1" || p.get("postSetup") === "1";
+    if (!isStripeReturn) return;
+
+    // Prevent stale cached "free" from re-seeding state after payment.
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem(SESSION_CACHE_KEY);
+      }
+    } catch {
+      // ignore
+    }
+
+    const PAID = new Set(["basic", "essential", "growth"]);
+    const maxTicks = 24; // ~36s @ 1500ms
+    let ticks = 0;
+    let stopped = false;
+    const interval = window.setInterval(async () => {
+      if (stopped) return;
+      ticks += 1;
+      const planNow = String(await refresh({ showLoading: false }) || "").trim().toLowerCase();
+      const stateNow = stateRef.current;
+      const anyPaidSite = (stateNow?.sites || []).some((s: any) => PAID.has(String(pickPlanIdFromSite(s) || "").toLowerCase()));
+      if (PAID.has(planNow) || PAID.has(String(stateNow?.effectivePlanId || "")) || anyPaidSite || ticks >= maxTicks) {
+        stopped = true;
+        window.clearInterval(interval);
+      }
+    }, 1500);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+    };
+  }, [refresh]);
+
   // Redirect to login if session is not authenticated after loading completes.
   useEffect(() => {
     if (!state.loading && !state.authenticated) {
