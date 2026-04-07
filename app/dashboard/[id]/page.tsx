@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import ComplianceAlert from "../components/ComplianceAlert";
+import FeedbackDesign from "../components/FeedbackDesign";
 
 function DashboardSitePageInner() {
   const params = useParams<{ id: string }>();
@@ -101,7 +102,9 @@ const userName = useMemo(() => {
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
-      /></>}
+      />
+      <FeedbackDesign />
+      </>}
     </div>
   );
 }

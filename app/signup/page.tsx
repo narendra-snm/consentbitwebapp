@@ -1,4 +1,5 @@
 export const runtime = 'edge';
+import Footer from "@/components/auth/Footer";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { Suspense } from "react";
 
@@ -8,6 +9,8 @@ export default function SignupPage() {
   return (
     <div  style={{
         backgroundImage: "url('/images/login.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}>
         <div className="py-5 pt-12 px-4 flex justify-center w-full">
         <img
@@ -18,7 +21,7 @@ export default function SignupPage() {
       </div>
     <div
 
-      className="min-h-[calc(100vh-100px)] flex flex-col items-center justify-center bg-cover bg-center px-6"
+      className="min-h-[calc(100vh-140px)] flex flex-col items-center justify-center bg-cover bg-center pb-5 px-6"
       
     >
       {/* Logo */}
@@ -29,6 +32,7 @@ export default function SignupPage() {
 
    
     </div>
+    <Footer/>
     </div>
   );
 }

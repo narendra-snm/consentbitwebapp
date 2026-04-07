@@ -453,7 +453,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
     ...outlineBtn,
     backgroundColor: s.SecButtonColor,
     color: s.SecButtonTextColor,
-    border: `2px solid ${s.SecButtonColor}`,
+    border: `2px solid ${s.SecButtonTextColor}`,
   };
 
   const footerJustify = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-start" : "flex-end";
@@ -463,7 +463,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
   return (
     <div
       style={{
-        position: "absolute", inset: 0, zIndex: 1000001,
+        position: "absolute", inset: 0, zIndex: 9,
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "16px", backgroundColor: "rgba(0,0,0,0.5)",
       }}
@@ -515,7 +515,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
                   fontSize: "12px",
                   fontWeight: activeTab === tab.id ? "600" : s.fontWeight,
                   borderBottom: `2px solid ${activeTab === tab.id ? s.SecButtonColor : "transparent"}`,
-                  color: activeTab === tab.id ? s.SecButtonColor : s.textColor,
+                  color: activeTab === tab.id ? s.textColor : s.textColor,
                   background: "none",
                   border: "none",
                   borderBottom: `2px solid ${activeTab === tab.id ? s.SecButtonColor : "transparent"}`,
@@ -623,18 +623,18 @@ function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical"
     fontWeight: s.fontWeight,
     fontSize: "11px",
     padding: "10px 18px",
-    border: `2px solid ${s.buttonTextColor}`,
+    border: `2px solid ${s.SecButtonTextColor}`,
     cursor: "pointer",
-    backgroundColor: s.buttonColor,
-    color: s.buttonTextColor,
+    backgroundColor: s.SecButtonColor,
+    color: s.SecButtonTextColor,
     whiteSpace: "nowrap",
     transition: "opacity 0.15s",
   };
   const solidBtn = {
     ...outlineBtn,
-    backgroundColor: s.SecButtonColor,
-    color: s.SecButtonTextColor,
-    border: `2px solid ${s.SecButtonColor}`,
+    backgroundColor: s.buttonColor,
+    color: s.buttonTextColor,
+    border: `2px solid ${s.buttonColor}`,
   };
 
   return (
@@ -669,7 +669,7 @@ You have the option to manage your preferences and control how your information 
         style={{
           display: "flex",
           flexWrap: "wrap",
-          flexDirection:"column",
+       
           gap: "8px",
           justifyContent: s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start",
         }}
@@ -685,7 +685,7 @@ You have the option to manage your preferences and control how your information 
         >
           Customise
         </button>
-        <button style={outlineBtn} onClick={onReject}>Reject All</button>
+        <button style={solidBtn} onClick={onReject}>Reject All</button>
         <button style={solidBtn} onClick={onAccept}>Accept All</button>
       </div>
     </div>
@@ -709,7 +709,7 @@ function FullBanner({ s, onCustomise, onReject, onAccept }) {
     ...outlineBtn,
     backgroundColor: s.SecButtonColor,
     color: s.SecButtonTextColor,
-    border: `2px solid ${s.SecButtonColor}`,
+    border: `2px solid ${s.SecButtonTextColor}`,
   };
   const btnJustifyVal = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start";
 console.log("btnJustifyVal:", btnJustifyVal);
@@ -745,9 +745,9 @@ You have the option to manage your preferences and control how your information 
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: btnJustifyVal, flexShrink: 0 }}>
-          <button style={outlineBtn} onClick={onCustomise}>Customise</button>
+          <button style={solidBtn} onClick={onCustomise}>Customise</button>
           <button style={outlineBtn} onClick={onReject}>Reject All</button>
-          <button style={solidBtn} onClick={onAccept}>Accept All</button>
+          <button style={outlineBtn} onClick={onAccept}>Accept All</button>
         </div>
       </div>
       <style>{`@keyframes slideUpBanner{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
@@ -770,7 +770,7 @@ console.log(modalOpen)
     setModalOpen(true); 
 
   };
-
+console.log(device)
   const br = `${s.borderRadius}px`;
 const positionStyles =
   s.bannerType === "box"
@@ -793,7 +793,7 @@ const positionStyles =
       {s.bannerType === "box" && (
         <div
           style={{
-            position: "absolute", bottom: "20px", left: `${device === "desktop" ? "20px" : "0px"}`, zIndex: 999999,
+            position: "absolute", bottom: "20px", left: `${device === "mobile"  ? "0px" : "20px"}`, zIndex: 9,
             width: "100%", maxWidth: "420px",
             boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
             borderRadius: br,

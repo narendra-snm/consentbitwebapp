@@ -294,7 +294,7 @@ export default function ConsentPreview({
               </p>
             </div>
           </div>
-        ) : consentType === "both" ? (
+        ) : consentType === "both" && !iabEnabled  ? (
           // Non-free: allow switching between GDPR and CCPA inside preview.
           <div className="flex items-center gap-4">
             <button
@@ -869,8 +869,8 @@ export default function ConsentPreview({
   headingColor: colors.headingColor || "#000000",
   buttonColor:colors.buttonColor || "#FFFFFF",
   buttonTextColor:colors.buttonTextColor || "#007AFF",
-  SecButtonColor:colors.SecButtonColor || "#007AFF",
-  SecButtonTextColor: colors.SecButtonTextColor || "#FFFFFF",
+  SecButtonColor:colors.preferencesButtonBg || "#007AFF",
+  SecButtonTextColor: colors.preferencesButtonText || "#FFFFFF",
   textAlign: alignment || "left",
   fontWeight: "400",
   borderRadius: initialLayout?.borderRadius || "12",
