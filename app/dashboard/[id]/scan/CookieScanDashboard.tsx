@@ -19,6 +19,7 @@ import {
 } from '@/lib/client-api';
 import { ScheduleScanModal } from './ScheduleScanModal';
 import { UpgradePlanModal } from '../../components/UpgradePlanModal';
+import LoadingPopup2 from './component/LoadingPopup';
 
 import { useDashboardSession } from '../../DashboardSessionProvider';
 
@@ -180,6 +181,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [addCookieError, setAddCookieError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const scanningRef = useRef(false); // ref guard prevents double-invocation from stale closure
+  const scanPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeScanPlaceholderIdRef = useRef<string | null>(null);
 
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('necessary');
@@ -201,6 +204,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   /** No sites on account, or URL site id not in session — show dialog instead of a page error strip. */
   const [showNoSiteModal, setShowNoSiteModal] = useState(false);
   const [scanLimitReached, setScanLimitReached] = useState(false);
+  const [showScanInitPopup, setShowScanInitPopup] = useState(false);
   const [bottomTab, setBottomTab] = useState<'history' | 'rules'>('history');
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 10;
@@ -224,6 +228,24 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const byCat = cookiesData.cookiesByCategory || {};
       const scheduled = scheduledData.scheduledScans || [];
       const rules = rulesData.rules || [];
+
+      // Enrich the latest completed scan row with data from getSiteCookies when the backend
+      // didn't populate categories / counts on the scan_history record itself.
+      const derivedCategories = ALL_CATEGORIES.filter((c) => (byCat[c]?.length ?? 0) > 0);
+      const totalCookies = Object.values(byCat).reduce((sum, arr) => sum + (arr?.length ?? 0), 0);
+      if (history.length > 0) {
+        const latest = history[0];
+        const needsCategories = !latest.categories?.length && derivedCategories.length > 0;
+        const needsCookieCount = (latest.cookiesFound === 0 || latest.cookiesFound == null) && totalCookies > 0;
+        if (needsCategories || needsCookieCount) {
+          history[0] = {
+            ...latest,
+            ...(needsCategories ? { categories: derivedCategories } : {}),
+            ...(needsCookieCount ? { cookiesFound: totalCookies } : {}),
+          };
+        }
+      }
+
       setScanHistory(history);
       setHistoryPage(1);
       setCookiesByCategory(byCat);
@@ -299,11 +321,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const selectedCookies = cookiesByCategory[selectedCategory] || [];
   const cookieTotalPages = Math.ceil(selectedCookies.length / COOKIE_PAGE_SIZE);
   const pagedCookies = selectedCookies.slice((cookiePage - 1) * COOKIE_PAGE_SIZE, cookiePage * COOKIE_PAGE_SIZE);
-  const siteLabel = useMemo(() => {
-    const list = Array.isArray(sites) ? sites : [];
-    const site = list.find((s: any) => String(s?.id) === String(siteId));
-    return String(site?.name || site?.domain || "this site");
-  }, [siteId, sites]);
 
   const handleScanNow = async () => {
     if (!siteId || scanningRef.current) return;
@@ -314,13 +331,37 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     scanningRef.current = true;
     setScanning(true);
     setError(null);
+    setShowScanInitPopup(true);
+    setBottomTab('history');
+    setTimeout(() => setShowScanInitPopup(false), 2000);
     try {
       const result = await scanSiteNow(siteId);
       const targetId = result.scanHistoryId ? String(result.scanHistoryId) : null;
 
       if (result.scanning) {
+        // Immediately show a placeholder row so the user sees the scan is queued/in-progress
+        const placeholderId = targetId ?? `pending-${Date.now()}`;
+        const placeholderRow: ScanHistoryRow = {
+          id: placeholderId,
+          siteId,
+          scanUrl: null,
+          scriptsFound: 0,
+          cookiesFound: 0,
+          categories: [],
+          scanDuration: null,
+          scanStatus: 'queued',
+          createdAt: new Date().toISOString(),
+        };
+        setScanHistory((prev) => {
+          const alreadyExists = prev.some((s) => String(s.id) === placeholderId);
+          if (alreadyExists) return prev;
+          return [placeholderRow, ...prev];
+        });
+        setHistoryPage(1);
+        activeScanPlaceholderIdRef.current = placeholderId;
+
         // Background scan started — poll every 4s for the specific scanHistoryId
-        const poll = setInterval(async () => {
+        const poll = scanPollRef.current = setInterval(async () => {
           try {
             const historyData = await getScanHistory(siteId);
             const scans = historyData.scans || [];
@@ -329,13 +370,27 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               ? scans.find((s) => String(s.id) === targetId)
               : scans[0];
             const status = String(target?.scanStatus ?? '').toLowerCase();
-            // Keep polling if target not yet visible in DB, or still pending
-            if (target && status !== 'pending' && status !== '') {
+
+            const isStillRunning = !target || status === 'pending' || status === 'in_progress' || status === '';
+
+            if (target && isStillRunning) {
+              // Only merge live status updates while scan is still in-progress.
+              // On completion we skip this and let loadData do the single authoritative update
+              // so we never flash stale 0,0 values from the scan-history row before cookies are written.
+              setScanHistory((prev) => {
+                // Just update the placeholder row's status in-place; don't replace the whole list
+                return prev.map((s) =>
+                  String(s.id) === placeholderId ? { ...s, scanStatus: target.scanStatus } : s,
+                );
+              });
+            }
+
+            // Stop polling once scan is done; loadData will fetch the final correct values
+            if (!isStillRunning) {
               clearInterval(poll);
-              // Replace history with deduplicated fresh data
-              const unique = scans.filter((s, i, a) => a.findIndex((x) => String(x.id) === String(s.id)) === i);
-              setScanHistory(unique);
-              setHistoryPage(1);
+              scanPollRef.current = null;
+              activeScanPlaceholderIdRef.current = null;
+              // Final refresh — getScanHistory + getSiteCookies together give correct counts
               await loadData(false);
               void refresh({ showLoading: false });
               scanningRef.current = false;
@@ -346,6 +401,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         // Safety stop after 2 minutes
         setTimeout(() => {
           clearInterval(poll);
+          scanPollRef.current = null;
+          activeScanPlaceholderIdRef.current = null;
           scanningRef.current = false;
           setScanning(false);
         }, 2 * 60 * 1000);
@@ -364,6 +421,21 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       }
       scanningRef.current = false;
       setScanning(false);
+    }
+  };
+
+  const handleCancelScan = () => {
+    if (scanPollRef.current) {
+      clearInterval(scanPollRef.current);
+      scanPollRef.current = null;
+    }
+    const pid = activeScanPlaceholderIdRef.current;
+    activeScanPlaceholderIdRef.current = null;
+    scanningRef.current = false;
+    setScanning(false);
+    if (pid) {
+      // Remove the placeholder row (queued/in-progress) from history
+      setScanHistory((prev) => prev.filter((s) => String(s.id) !== pid));
     }
   };
 
@@ -415,6 +487,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       setShowAddCookie(false);
       setAddCookieError(null);
       setCustomCookieForm({ name: '', domain: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
+      setBottomTab('rules');
       // Refresh rules list only (lightweight)
       const rulesData = await getCustomCookieRules(siteId).catch(() => ({ rules: [] as CustomCookieRule[] }));
       setCustomRules(rulesData.rules || []);
@@ -454,19 +527,18 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   };
 
   const statusBadge = (status: string) => {
-    const ok = String(status).toLowerCase() === 'completed';
+    const s = String(status).toLowerCase();
+    const ok = s === 'completed';
+    const inProgress = s === 'in_progress' || s === 'pending' || s === 'queued';
+    const bgColor = ok ? 'bg-[#b6f5cf]' : inProgress ? 'bg-amber-100' : 'bg-slate-200';
+    const dotColor = ok ? 'bg-[#118a41]' : inProgress ? 'bg-amber-500' : 'bg-slate-500';
+    const textColor = ok ? 'text-[#118a41]' : inProgress ? 'text-amber-700' : 'text-slate-600';
+    const label = ok ? 'Completed' : inProgress ? (s === 'queued' ? 'Queued' : 'In Progress') : status || 'Unknown';
     return (
-      <div
-        className={`inline-flex h-[19px] items-center gap-1 rounded-full px-2 py-0.5 ${
-          ok ? 'bg-[#b6f5cf]' : 'bg-slate-200'
-        }`}
-      >
-        <div className={`h-[5px] w-[5px] rounded-full ${ok ? 'bg-[#118a41]' : 'bg-slate-500'}`} />
-        <span
-          className={`font-['DM_Sans'] text-[10px] font-medium tracking-tight ${ok ? 'text-[#118a41]' : 'text-slate-600'}`}
-          style={dm}
-        >
-          {ok ? 'Completed' : status || 'Unknown'}
+      <div className={`inline-flex h-[19px] items-center gap-1 rounded-full px-2 py-0.5 ${bgColor}`}>
+        <div className={`h-[5px] w-[5px] rounded-full ${inProgress ? 'animate-pulse' : ''} ${dotColor}`} />
+        <span className={`font-['DM_Sans'] text-[10px] font-medium tracking-tight ${textColor}`} style={dm}>
+          {label}
         </span>
       </div>
     );
@@ -474,6 +546,12 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
+      <LoadingPopup2
+        show={showScanInitPopup}
+        title="Scan Initiated"
+        subtitle="Scanning is initiated, it will take some time"
+      />
+
       {showUpgradeModal && (
         <UpgradePlanModal
           currentPlanId={effectivePlanId}
@@ -525,29 +603,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         </div>
       ) : null}
 
-      {/* Scanning overlay popup */}
-      {scanning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="flex w-[340px] flex-col items-center gap-5 rounded-2xl bg-white px-8 py-10 shadow-2xl">
-            <div className="relative flex h-16 w-16 items-center justify-center">
-              <svg className="absolute inset-0 h-full w-full animate-spin" viewBox="0 0 56 56" fill="none">
-                <circle cx="28" cy="28" r="24" stroke="#e6f1fd" strokeWidth="5" />
-                <path d="M28 4a24 24 0 0 1 24 24" stroke="#007aff" strokeWidth="5" strokeLinecap="round" />
-              </svg>
-              <svg className="h-7 w-7 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </div>
-            <div className="text-center">
-              <p className="font-['DM_Sans'] text-base font-semibold text-[#0a091f]">Scanning in progress</p>
-              <p className="mt-1 font-['DM_Sans'] text-sm text-[#6b7280]">
-                Collecting cookies from <strong>{siteLabel}</strong>.<br />This may take up to a minute.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {error && !showNoSiteModal ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
@@ -801,7 +856,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         {/* Scan History panel */}
         {bottomTab === 'history' && (
           <>
-            {!loading && scanHistory.length === 0 ? (
+            {!loading && !scanning && scanHistory.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10">
                 <p className="font-['DM_Sans'] text-sm text-[#4b5563] text-center max-w-md" style={dm}>
                   No scan history yet. Run your first scan using the{' '}
@@ -830,8 +885,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               </div>
             ) : (
               <div className="w-full rounded-[5px]  border-[#9fbce4] overflow-hidden">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 bg-[#f2f7ff]  border-b border-[#9FBCE4]  gap-3">
-                  {['Scan Date (UTC)', 'Status', 'URLs', 'Categories', 'Cookies', 'Scripts', 'URL'].map((label) => (
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr_auto] items-center py-5 pl-5.75 pr-3 bg-[#f2f7ff]  border-b border-[#9FBCE4]  gap-3">
+                  {['Scan Date (UTC)', 'Status', 'URLs', 'Categories', 'Cookies', 'Scripts', 'URL', ''].map((label) => (
                     <div key={label} className="font-['DM_Sans'] text-xs font-semibold text-[#0a091f]" style={dm}>{label}</div>
                   ))}
                 </div>
@@ -840,32 +895,55 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 ) : (
                   scanHistory
                     .slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
-                    .map((row, i) => (
-                      <div
-                        key={row.id}
-                        className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center py-5 pl-5.75  pr-1 gap-3  border-b border-[#9FBCE4]`}
-                      >
-                        <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
-                        <div>{statusBadge(row.scanStatus)}</div>
-                        <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
+                    .map((row) => {
+                      const rowStatus = String(row.scanStatus).toLowerCase();
+                      const isInProgress = rowStatus === 'queued' || rowStatus === 'pending' || rowStatus === 'in_progress';
+                      const isActiveRow = isInProgress && String(row.id) === activeScanPlaceholderIdRef.current;
+                      return (
                         <div
-                          className="font-['DM_Sans'] text-xs text-[#0a091f] truncate min-w-0"
-                          style={dm}
-                          title={
-                            row.categories?.length
-                              ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
-                              : ''
-                          }
+                          key={row.id}
+                          className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_2fr_auto] items-center py-5 pl-5.75 pr-3 gap-3 border-b border-[#9FBCE4]`}
                         >
-                          {row.categories?.length
-                            ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
-                            : '—'}
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
+                          <div>{statusBadge(row.scanStatus)}</div>
+                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
+                          <div
+                            className="font-['DM_Sans'] text-xs text-[#0a091f] truncate min-w-0"
+                            style={dm}
+                            title={
+                              !isInProgress && row.categories?.length
+                                ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
+                                : ''
+                            }
+                          >
+                            {!isInProgress && row.categories?.length
+                              ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
+                              : '—'}
+                          </div>
+                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                            {isInProgress ? '—' : (row.cookiesFound ?? '—')}
+                          </div>
+                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                            {isInProgress ? '—' : (row.scriptsFound ?? '—')}
+                          </div>
+                          <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
+                          <div className="flex items-center justify-end">
+                            {isActiveRow && (
+                              <button
+                                type="button"
+                                onClick={handleCancelScan}
+                                title="Cancel scan"
+                                className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 text-slate-500 hover:text-red-600 transition-colors"
+                              >
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.cookiesFound ?? '—'}</div>
-                        <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scriptsFound ?? '—'}</div>
-                        <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
-                      </div>
-                    ))
+                      );
+                    })
                 )}
                 {/* Pagination */}
                 {scanHistory.length > HISTORY_PAGE_SIZE && (

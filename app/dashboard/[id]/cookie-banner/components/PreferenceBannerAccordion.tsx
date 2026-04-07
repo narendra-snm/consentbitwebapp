@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Accordion from "./ui/Accordion";
 
-const LIMITS = { title: 60, message: 320, button: 20 } as const;
+// Keep parity with CDN/embed + Cookie Notice editor limits to avoid "preview looks broken" states.
+const LIMITS = { title: 30, message: 320, button: 20 } as const;
 
 function clampLen(value: string, max: number): string {
   const s = value ?? "";

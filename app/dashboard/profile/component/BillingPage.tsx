@@ -390,8 +390,8 @@ export default function BillingPage({
       </div>
     )}
     <div className="grid 2xl:grid-cols-[800px_1fr] xl:gap-12 xl:grid-cols-1  gap-2.5 overflow-auto">
-      {/* Left Column - Invoices */}
-      <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
+      {/* Left Column - Invoices (hidden for Free plan) */}
+      {currentPlan !== "Free" && <div className="px-3.5 pt-6 bg-[#FBFBFB] rounded-[10px] border border-[#EBEBEB] h-fit">
         {/* Header with Filters */}
         <div className="flex items-center justify-between mb-[20px]">
           <p className="font-semibold leading-[20px] text-[16px] text-black tracking-[-1px]" style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -576,7 +576,7 @@ export default function BillingPage({
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Right Column */}
       <div className="space-y-[10px]">
@@ -613,7 +613,9 @@ export default function BillingPage({
               </div>
               <div>
                 <p className="text-[14px] font-normal text-[#6b7280] mb-1">IAB / TCF</p>
-                <p className="text-[14px] font-bold text-gray-400">NIL</p>
+                <p className="text-[14px] font-bold" style={{ color: (currentPlan === "Essential" || currentPlan === "Growth") ? "#5243C2" : undefined }}>
+                  {(currentPlan === "Essential" || currentPlan === "Growth") ? "Supported" : <span className="text-gray-400">NIL</span>}
+                </p>
               </div>
               <div />
             </div>

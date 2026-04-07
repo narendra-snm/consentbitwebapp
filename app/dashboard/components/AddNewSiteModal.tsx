@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { firstSetup, createCheckoutSession } from "@/lib/client-api";
 import { useDashboardSession } from "../DashboardSessionProvider";
@@ -85,7 +85,7 @@ const plans: PricingPlan[] = [
 
 export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
-  const { refresh, activeSiteId, activeOrganizationId, sites } = useDashboardSession();
+  const { refresh, activeOrganizationId, sites } = useDashboardSession();
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
@@ -93,7 +93,20 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const checkoutTab = useRef<Window | null>(null);
+
+  useLayoutEffect(() => {
+    setMounted(true);
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        setSubmitting(false);
+        setCheckoutPending(false);
+      }
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const hasExistingFreeSite = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
@@ -108,7 +121,6 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     });
   }, [sites]);
 
-  const freeSiteLimitReached = selectedPlan === "free" && hasExistingFreeSite;
 
   // Poll for checkout tab closure
   useEffect(() => {
@@ -208,7 +220,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           successUrl: `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`,
           cancelUrl: `${origin}${returnTo}`,
         });
-        // Redirect in the same tab to avoid leaving behind a stuck "waiting" state.
+        // Redirect in the same tab; set flag so back-button return shows cancel screen.
+        sessionStorage.setItem('cb_stripe_redirect_modal', '1');
         window.location.assign(data.url);
       }
     } catch (e: unknown) {
@@ -216,6 +229,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       setSubmitting(false);
     }
   }
+
+  if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -241,6 +256,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
             </p>
           </div>
         )}
+
 
         {/* Checkout pending full-page overlay */}
         {checkoutPending && (

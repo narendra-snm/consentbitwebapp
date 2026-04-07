@@ -7,6 +7,7 @@ import {
   type ConsentLog,
   type ConsentLogCookie,
   type ConsentHistoryResponse,
+  type CustomCookieRule,
 } from '@/lib/client-api';
 import LoadingPopup from '../scan/component/LoadingPopup';
 const svgPaths={
@@ -166,6 +167,39 @@ function cookiesForAcceptedCategories(
   if (accepted.length === 0) return allCookies;
   const set = new Set(accepted.map((x) => x.toLowerCase()));
   return allCookies.filter((c) => set.has((c.category || '').toLowerCase()));
+}
+
+/**
+ * Map custom cookie rule category labels (from dashboard) to the consent key names
+ * used by getAcceptedCategoriesList so we can filter them the same way.
+ * e.g. 'necessary' → 'essential', 'advertisement' → 'marketing'
+ */
+function normalizeCustomRuleCategory(cat: string): string {
+  const c = (cat || '').toLowerCase();
+  if (c === 'necessary') return 'essential';
+  if (c === 'advertisement') return 'marketing';
+  if (c === 'functional' || c === 'performance') return 'preferences';
+  return c;
+}
+
+function customRulesForAcceptedCategories(
+  rules: CustomCookieRule[],
+  categories: ConsentLog['categories'],
+): CustomCookieRule[] {
+  const c = normalizeCategories(categories);
+  if (!c) return [];
+  // CCPA accepted (doNotSell = false) → show all custom rules
+  if (c.ccpa && c.ccpa.doNotSell === false) return rules;
+  // CCPA rejected / no consent yet → show none
+  if (c.ccpa) return [];
+  return rules.filter((r) => {
+    const mapped = normalizeCustomRuleCategory(r.category);
+    if (mapped === 'essential') return true;
+    if (mapped === 'analytics') return !!c.analytics;
+    if (mapped === 'marketing') return !!c.marketing;
+    if (mapped === 'preferences') return !!c.preferences;
+    return false;
+  });
 }
 
 function formatTimeUtc(iso: string | null) {
@@ -366,6 +400,7 @@ export function ConsentLogsDashboard({
   }, [data]);
 
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
+  const customCookieRules: CustomCookieRule[] = data?.customCookieRules ?? [];
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';
@@ -382,21 +417,32 @@ export function ConsentLogsDashboard({
         const acceptedList = getAcceptedCategoriesList(log.categories);
         const acceptedLabels = acceptedList.length ? acceptedList.join(', ') : 'None';
         const cookiesInProof = cookiesForAcceptedCategories(cookies, log.categories);
+        const customRulesInProof = customRulesForAcceptedCategories(customCookieRules, log.categories);
 
-        const cookieRows =
-          cookiesInProof.length === 0
+        const cookieRows = (() => {
+          const scannedRows = cookiesInProof.map(
+            (c) => `
+              <tr>
+                <td class="proof-td">${escapeHtml(c.name || '—')}</td>
+                <td class="proof-td">${escapeHtml(cookieDuration(c.expires))}</td>
+                <td class="proof-td">${escapeHtml(c.description || '—')}</td>
+              </tr>
+            `,
+          );
+          const customRows = customRulesInProof.map(
+            (r) => `
+              <tr>
+                <td class="proof-td">${escapeHtml(r.name || '—')} <span style="font-size:10px;color:#6b7280">(custom)</span></td>
+                <td class="proof-td">${escapeHtml(r.duration || '—')}</td>
+                <td class="proof-td">${escapeHtml(r.description || '—')}</td>
+              </tr>
+            `,
+          );
+          const allRows = [...scannedRows, ...customRows];
+          return allRows.length === 0
             ? '<tr><td class="proof-td" colspan="3">No cookies recorded for accepted categories.</td></tr>'
-            : cookiesInProof
-                .map(
-                  (c) => `
-                    <tr>
-                      <td class="proof-td">${escapeHtml(c.name || '—')}</td>
-                      <td class="proof-td">${escapeHtml(cookieDuration(c.expires))}</td>
-                      <td class="proof-td">${escapeHtml(c.description || '—')}</td>
-                    </tr>
-                  `,
-                )
-                .join('');
+            : allRows.join('');
+        })();
 
         return `
           <div class="proof-page">
@@ -547,7 +593,7 @@ export function ConsentLogsDashboard({
         }
       `;
     },
-    [cookies, displayDomain],
+    [cookies, customCookieRules, displayDomain],
   );
 
   const openPrintWindow = useCallback((htmlBody: string, title: string) => {

@@ -26,6 +26,9 @@ export function PostSetupClient() {
       return;
     }
 
+    // Clear stale session cache so the dashboard fetches fresh plan/site data after payment.
+    try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+
     // Redirect to returnTo page with postSetup params so PostSetupOverlay shows InstallConsentModal there.
     // Build URL properly so existing query params in returnTo are preserved.
     const base = returnTo.startsWith("/dashboard") ? returnTo : "/dashboard";

@@ -14,6 +14,37 @@ function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
 }
 
+// Keep parity with editor + CDN/embed so preview never "breaks" with long strings.
+const LIMITS = {
+  title: 30,
+  message: 320,
+  button: 20,
+  policyLabel: 30,
+} as const;
+
+function clampLen(value: string | undefined, max: number): string {
+  const s = value ?? "";
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+// Default fallbacks for button/title fields — used when stored value looks corrupted (too long).
+const FIELD_DEFAULTS: Record<string, string> = {
+  title: 'We value your privacy',
+  acceptAll: 'Accept',
+  rejectAll: 'Reject',
+  preferencesLabel: 'Preference',
+  saveMyPreferencesLabel: 'Save Preference',
+  doNotSellLabel: 'Do Not Share My Personal Information',
+};
+
+/** Returns stored value if it looks reasonable; otherwise falls back to a safe default. */
+function safeField(key: string, value: string | undefined, max: number): string {
+  const s = value ?? '';
+  // If the stored value is suspiciously long for this field type, use the default
+  if (s.length > max) return FIELD_DEFAULTS[key] ?? s.slice(0, max);
+  return s;
+}
+
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   return (
     <span className="relative group inline-flex items-center">
@@ -217,10 +248,38 @@ export default function ConsentPreview({
   const [prefAnalytics, setPrefAnalytics] = useState(false);
   const [prefUserCategory, setPrefUserCategory] = useState(false);
 
+  const safeContent = useMemo(() => {
+    const c = content || {};
+    return {
+      ...c,
+      title: safeField('title', c.title, LIMITS.title),
+      message: clampLen(c.message, LIMITS.message),
+      preferenceTitle: clampLen(c.preferenceTitle, LIMITS.title),
+      preferenceMessage: clampLen(c.preferenceMessage, LIMITS.message),
+      acceptAll: safeField('acceptAll', c.acceptAll, LIMITS.button),
+      rejectAll: safeField('rejectAll', c.rejectAll, LIMITS.button),
+      preferencesLabel: safeField('preferencesLabel', c.preferencesLabel, LIMITS.button),
+      doNotSellLabel: c.doNotSellLabel ? clampLen(c.doNotSellLabel, 60) : c.doNotSellLabel,
+      cookiePolicyLabel: clampLen(c.cookiePolicyLabel, LIMITS.policyLabel),
+      saveMyPreferencesLabel: safeField('saveMyPreferencesLabel', c.saveMyPreferencesLabel, LIMITS.button),
+      ccpaOptOutTitle: clampLen(c.ccpaOptOutTitle, LIMITS.title),
+      ccpaOptOutMessage: clampLen(c.ccpaOptOutMessage, LIMITS.message),
+    };
+  }, [content]);
+
   useEffect(() => {
     // When the banner selection changes, reset to main preview.
     setModalView("main");
   }, [selectedBannerType]);
+
+  useEffect(() => {
+    // Preference/opt-out panels should be fully visible; avoid being "stuck" at the bottom scroll
+    // from the initial banner view.
+    if (!previewAreaRef.current) return;
+    if (modalView === 'gdpr-preferences' || modalView === 'ccpa-optout') {
+      previewAreaRef.current.scrollTop = 1;
+    }
+  }, [modalView]);
 
   useEffect(() => {
     if (modalView !== 'gdpr-preferences') setPrefExpanded(null);
@@ -430,9 +489,15 @@ export default function ConsentPreview({
               </p>
             ) : null}
             {publishError ? (
-              <p className="text-xs text-red-600 max-w-[220px] text-right" role="alert">
-                {publishError}
-              </p>
+              <div
+                role="alert"
+                className="flex items-start gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 max-w-[260px]"
+              >
+                <svg className="mt-[1px] h-3.5 w-3.5 shrink-0 text-red-500" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                  <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 4.25a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 1.5 0v-3.5zm-.75 6a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75z" />
+                </svg>
+                <p className="text-xs text-red-700 leading-snug">{publishError}</p>
+              </div>
             ) : null}
           </div>
 
@@ -449,7 +514,7 @@ export default function ConsentPreview({
 
       {/* Browser Preview */}
       <div
-        className={`${getDeviceFrameClasses()} rounded-md overflow-hidden shadow-lg flex flex-col mx-auto`}
+        className={`${getDeviceFrameClasses()} relative rounded-md overflow-hidden shadow-lg flex flex-col mx-auto`}
       >
         {/* Browser Header */}
         <div className="h-[24px] bg-[#d9d9d9] opacity-50 flex items-center px-2 gap-2">
@@ -467,89 +532,92 @@ export default function ConsentPreview({
         `}</style>
         <div
           ref={previewAreaRef}
-          className={`relative bg-gray-100 flex-1 flex flex-col min-h-0 overflow-y-auto p-6 pb-5 ${
-            modalView === 'main' ? 'justify-end' : 'justify-center'
+          className={`relative bg-gray-100 flex-1 flex flex-col min-h-0 ${
+            modalView === 'main' ? 'overflow-hidden' : 'overflow-y-auto justify-start p-6 pb-5'
           }`}
           style={bannerTypographyStyle}
         >
           {!iabEnabled && <>{  modalView === 'main' ? (() => {
             // Banner card — shared across all layouts
+            // Offset banner from floating trigger on the same side — mirrors CDN applyInitialBannerFloatingGutter.
+            const isMobile = device === 'mobile';
+            const floatLeft = floatingButton.enabled && floatingButton.position === 'left';
+            const floatRight = floatingButton.enabled && floatingButton.position === 'right';
+            const bannerOnLeft = layoutPos !== 'banner' && (layoutPos === 'bottom-center' || layoutAlign === 'bottom-left');
+            const bannerOnRight = layoutPos !== 'banner' && layoutAlign === 'bottom-right';
+            const mobileFullWidth = isMobile || device === 'tablet';
+            // On mobile/tablet: full-width, buttons stack per row
+            const initialBannerShell =
+              mobileFullWidth
+                ? 'flex w-full min-w-0 flex-col overflow-hidden max-h-[min(80vh,420px)]'
+                : layoutPos === 'banner'
+                ? 'flex w-full min-w-0 flex-col overflow-hidden max-h-[min(80vh,420px)]'
+                : 'flex flex-col self-end overflow-hidden max-h-[min(80vh,420px)]';
             const bannerCard = (
               <div
                 ref={initialBannerRef}
-                className={`shadow-lg min-w-0 p-4 relative rounded-md border border-[#e2e8f0] ${
-                  layoutPos === 'banner' ? 'w-full' : 'flex-1'
-                }`}
+                className={`shadow-lg box-border relative rounded-md border border-[#e2e8f0] p-4 ${initialBannerShell}`}
                 style={{
                   backgroundColor: colors.bannerBg,
-                  borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
+                  borderRadius: isMobile ? 0 : `${initialLayout?.borderRadius ?? 12}px`,
+                  // Width is controlled by the wrapper div; bannerCard just fills it.
+                  width: '100%',
+                  minWidth: (isMobile || layoutPos === 'banner') ? undefined : '280px',
+                  maxWidth: '100%',
                   ...previewAnimStyle,
                 }}
               >
                 {content?.closeButton ? (
                   <button type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
                 ) : null}
-                <p style={headingStyle} className="text-[15px] font-bold tracking-tight mb-2">
-                  {content?.title || t('title')}
-                </p>
-                <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] tracking-tight mb-2">
-                  {(content?.message != null && content.message !== '' ? content.message : null) ??
-                    (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
-                  {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
-                    <> {' '}<a href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{content?.cookiePolicyLabel || t('privacyPolicy')}</a></>
+                <div className="cb-banner-body-preview min-w-0 shrink-0 overflow-y-auto overflow-x-hidden mb-3">
+                  <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
+                    {safeContent.title || t('title')}
+                  </p>
+                  <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] tracking-tight mb-0">
+                    {(safeContent.message != null && safeContent.message !== '' ? safeContent.message : null) ??
+                      (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
+                    {safeContent.cookiePolicyLink && safeContent.privacyPolicyUrl ? (
+                      <> {' '}<a href={normalizePrivacyPolicyUrl(safeContent.privacyPolicyUrl)} target="_blank" rel="noreferrer" className="text-[#007aff] underline">{safeContent.cookiePolicyLabel || t('privacyPolicy')}</a></>
+                    ) : null}
+                  </p>
+                  {selectedBannerType === 'ccpa' ? (
+                    <div className="mt-2">
+                      {safeContent.rejectButton !== false ? (
+                        <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left" onClick={() => setModalView('ccpa-optout')}>
+                          {safeContent.doNotSellLabel || t('doNotSell')}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
-                </p>
-                {selectedBannerType === 'ccpa' ? (
-                  <div className="mt-2">
-                    {content?.rejectButton !== false ? (
-                      <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left" onClick={() => setModalView('ccpa-optout')}>
-                        {content?.doNotSellLabel || t('doNotSell')}
+                </div>
+                {selectedBannerType === 'gdpr' ? (
+                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-col w-full' : 'flex-nowrap justify-end'}`}>
+                    {safeContent.customizeButton !== false ? (
+                      <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} onClick={openPreferences} type="button" style={preferenceStyle}>
+                        {safeContent.preferencesLabel || t('preferences')}
                       </button>
                     ) : null}
-                  </div>
-                ) : (
-                  <div className="flex gap-2 justify-end mt-3">
-                    {content?.customizeButton !== false ? (
-                      <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" onClick={openPreferences} type="button" style={preferenceStyle}>
-                        {content?.preferencesLabel || t('preferences')}
+                    {safeContent.rejectButton !== false ? (
+                      <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} type="button" style={acceptRejectStyle}>
+                        {safeContent.rejectAll || t('rejectAll')}
                       </button>
                     ) : null}
-                    {content?.rejectButton !== false ? (
-                      <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" type="button" style={acceptRejectStyle}>
-                        {content?.rejectAll || t('rejectAll')}
-                      </button>
-                    ) : null}
-                    <button className="px-3 py-1 border text-[11px] rounded max-w-[120px] truncate" type="button" style={acceptRejectStyle}>
-                      {content?.acceptAll || t('acceptAll') || 'Ok, Got it'}
+                    <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} type="button" style={acceptRejectStyle}>
+                      {safeContent.acceptAll || t('acceptAll') || 'Ok, Got it'}
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
             );
 
-            // Floating icon button
-            const floatingIcon = floatingButton.enabled ? (
-              <button
-                key="float-icon"
-                type="button"
-                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-transparent shadow-md cursor-pointer hover:opacity-90"
-                onClick={openPreferences}
-                aria-label={content?.preferencesLabel || t('preferences')}
-              >
-                <Image src={floatingBtnLogo} alt="" width={28} height={28} draggable={false}
-                  className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain select-none drop-shadow-md" sizes="28px" />
-              </button>
-            ) : null;
-
-            // Full-width banner: icon sits at the bottom corner; banner renders on top of it
+            // Full-width banner: banner renders at the bottom edge; pad the side the floating logo is on.
             if (layoutPos === 'banner') {
+              const bannerPad = floatingButton.enabled
+                ? floatingButton.position === 'right' ? 'pr-14' : 'pl-14'
+                : '';
               return (
-                <div key={bannerAnimation} className="absolute bottom-0 left-0 right-0">
-                  {floatingButton.enabled && (
-                    <div className={`absolute bottom-2 z-20 ${floatingButton.position === 'right' ? 'right-3' : 'left-3'}`}>
-                      {floatingIcon}
-                    </div>
-                  )}
+                <div key={bannerAnimation} className={`absolute bottom-0 left-0 right-0 ${bannerPad}`}>
                   <div className="relative z-10">
                     {bannerCard}
                   </div>
@@ -557,58 +625,67 @@ export default function ConsentPreview({
               );
             }
 
-            // Box / bottom-center layouts
-            // Check if icon and banner are on the same corner (would overlap)
-            const iconOnLeft = floatingButton.position === 'left';
-            const bannerOnLeft = layoutAlign !== 'bottom-right';
-            const sameSide = floatingButton.enabled && (iconOnLeft === bannerOnLeft) && layoutPos !== 'bottom-center';
+            // All box/bottom-center layouts: absolute positioning to match CDN fixed behavior.
+            // Float gutter offset in px (matches ml-14 / mr-14 = 56px)
+            const floatGutter = 56;
+            const bannerPosStyle: React.CSSProperties = (() => {
+              if (mobileFullWidth) {
+                return { position: 'absolute', bottom: 0, left: 0, right: 0 };
+              }
+              if (layoutPos === 'bottom-center') {
+                return { position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)' };
+              }
+              if (layoutAlign === 'bottom-right') {
+                const base = 32;
+                const offset = (floatRight && bannerOnRight) ? floatGutter : 0;
+                return { position: 'absolute', bottom: 32, right: base + offset };
+              }
+              // bottom-left
+              const base = 32;
+              const offset = (floatLeft && bannerOnLeft) ? floatGutter : 0;
+              return { position: 'absolute', bottom: 32, left: base + offset };
+            })();
 
-            if (sameSide) {
-              // Flex row: icon beside banner on the same side
-              return (
-                <div
-                  key={bannerAnimation}
-                  className={`flex items-end gap-2 w-full max-w-[420px] shrink-0 ${layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'}`}
-                >
-                  {iconOnLeft && floatingIcon}
-                  {bannerCard}
-                  {!iconOnLeft && floatingIcon}
-                </div>
+            // Compute explicit wrapper width so absolute positioning anchors correctly.
+            const bannerWidth = (() => {
+              if (mobileFullWidth) return '100%';
+              const isBoldHeavy = weight === 'Black' || weight === 'Extra Bold';
+              const maxBtnLen = Math.max(
+                (safeContent.acceptAll?.length ?? 0),
+                (safeContent.rejectAll?.length ?? 0),
+                (safeContent.preferencesLabel?.length ?? 0),
               );
-            }
+              const isLongContent = (safeContent.message?.length ?? 0) > 200 || maxBtnLen > 12;
+              const base = (isBoldHeavy && isLongContent) ? 580 : isLongContent ? 500 : 380;
+              return `min(${base}px, calc(100% - 64px))`;
+            })();
 
-            // Different corners — banner at its position, icon absolute at its corner
             return (
               <div
                 key={bannerAnimation}
-                className={`w-full max-w-[360px] shrink-0 ${
-                  layoutPos === 'bottom-center' ? 'self-center' : layoutAlign === 'bottom-right' ? 'self-end' : 'self-start'
-                }`}
+                style={{ ...bannerPosStyle, width: bannerWidth }}
               >
                 {bannerCard}
-                {floatingButton.enabled && (
-                  <div className={`absolute bottom-4 ${floatingButton.position === 'right' ? 'right-4' : 'left-4'}`}>
-                    {floatingIcon}
-                  </div>
-                )}
               </div>
             );
           })() : (
             <div className="flex w-full min-w-0 shrink-0 justify-center px-1">
-            <div className="w-full max-w-[360px] min-h-0">
+            {/* Reserve space so pinned floating logo never overlaps footer */}
+            <div className="w-full max-w-[480px] min-h-0 pb-16">
           {modalView === "gdpr-preferences" ? (
             <div
               key={`gdpr-prefs-${bannerAnimation}`}
-              className="rounded-md shadow-lg w-full min-w-0 p-5 border border-[#e2e8f0] overflow-hidden"
-              style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
+              className="rounded-md shadow-lg w-full min-w-0 border border-[#e2e8f0] overflow-hidden flex flex-col"
+              style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, maxHeight: '72vh', ...previewAnimStyle }}
             >
-              <div className="flex items-center justify-between mb-3">
-                <p style={headingStyle} className="flex-1 text-[14px] tracking-tight">
-                  {content?.preferenceTitle || t("cookiePreferences")}
+              {/* Sticky header */}
+              <div className="flex items-start justify-between gap-2 px-5 pt-5 pb-3 shrink-0">
+                <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="flex-1 min-w-0 text-[14px] tracking-tight">
+                  {safeContent.preferenceTitle || t("cookiePreferences")}
                 </p>
                 {content?.closeButton ? (
                   <button
-                    className="text-black opacity-70"
+                    className="shrink-0 text-black opacity-70 leading-none"
                     type="button"
                     onClick={() => setModalView("main")}
                     aria-label="Close preferences"
@@ -618,18 +695,20 @@ export default function ConsentPreview({
                 ) : null}
               </div>
 
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-5 pb-2">
               <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] leading-relaxed mb-4">
-                {stripTrailingMoreInfo(content?.preferenceMessage || t('managePreferences'))}
-                {content?.cookiePolicyLink && content?.privacyPolicyUrl ? (
+                {stripTrailingMoreInfo(safeContent.preferenceMessage || t('managePreferences'))}
+                {safeContent.cookiePolicyLink && safeContent.privacyPolicyUrl ? (
                   <>
                     {' '}
                     <a
-                      href={normalizePrivacyPolicyUrl(content.privacyPolicyUrl)}
+                      href={normalizePrivacyPolicyUrl(safeContent.privacyPolicyUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[#007aff] underline"
                     >
-                      {content?.cookiePolicyLabel || t('privacyPolicy')}
+                      {safeContent.cookiePolicyLabel || t('privacyPolicy')}
                     </a>
                     .
                   </>
@@ -769,25 +848,27 @@ export default function ConsentPreview({
                   ) : null}
                 </div>
               </div>
+              </div>{/* end scrollable body */}
 
-              <div className="flex justify-end gap-3 mt-6 flex-wrap">
+              {/* Sticky footer buttons */}
+              <div className="flex justify-end gap-3 px-5 py-4 shrink-0 flex-wrap border-t border-[#f0f0f0]">
                 {content?.rejectButton !== false ? (
                   <button
                     style={acceptRejectStyle}
-                    className="px-5 py-2 min-w-[88px] max-w-[160px] truncate border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
+                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer max-w-[220px] truncate whitespace-nowrap"
                     type="button"
                     onClick={() => setModalView("main")}
                   >
-                    {content?.rejectAll || t("rejectAll")}
+                    {safeContent.rejectAll || t("rejectAll")}
                   </button>
                 ) : null}
                 <button
                   style={preferenceStyle}
-                  className="px-5 py-2 min-w-[88px] max-w-[160px] truncate border text-[11px] rounded-md hover:opacity-95 cursor-pointer"
+                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer max-w-[220px] truncate whitespace-nowrap"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {content?.saveMyPreferencesLabel || t("save")}
+                  {safeContent.saveMyPreferencesLabel || t("save")}
                 </button>
               </div>
             </div>
@@ -851,7 +932,7 @@ export default function ConsentPreview({
                 </button>
                 <button
                   style={preferenceStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer truncate max-w-[160px]"
+                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer break-words"
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -876,21 +957,32 @@ export default function ConsentPreview({
   borderRadius: initialLayout?.borderRadius || "12",
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
-          {/* Floating icon when preference panel is open (banner not visible) */}
-          {floatingButton.enabled && modalView !== 'main' ? (
-            <button
-              type="button"
-              className={`absolute bottom-4 z-20 flex h-10 w-10 shrink-0 items-center  justify-center rounded-full border border-[#e2e8f0] bg-white p-0 cursor-pointer shadow-md hover:opacity-90 focus:outline-none ${
-                floatingButton.position === 'right' ? 'right-4' : 'left-4'
-              }`}
-              onClick={openPreferences}
-              aria-label={content?.preferencesLabel || t('preferences')}
-            >
-              <Image src={floatingBtnLogo} alt="" width={floatingBtnLogo.width} height={floatingBtnLogo.height} draggable={false}
-                className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain object-center select-none drop-shadow-md" sizes="28px" />
-            </button>
-          ) : null}
         </div>
+      {/* Floating logo pinned to the preview frame corner — mirrors CDN position:fixed; bottom:16px; left/right:16px */}
+      {floatingButton.enabled ? (
+        <div
+          className={`absolute bottom-4 z-20 pointer-events-none ${
+            floatingButton.position === 'right' ? 'right-4' : 'left-4'
+          }`}
+        >
+          <button
+            type="button"
+            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white p-0 cursor-pointer shadow-md hover:opacity-90 focus:outline-none"
+            onClick={openPreferences}
+            aria-label={safeContent.preferencesLabel || t('preferences')}
+          >
+            <Image
+              src={floatingBtnLogo}
+              alt=""
+              width={28}
+              height={28}
+              draggable={false}
+              className="pointer-events-none h-auto w-auto max-h-[1.65rem] max-w-[1.65rem] object-contain object-center select-none drop-shadow-md"
+              sizes="28px"
+            />
+          </button>
+        </div>
+      ) : null}
       </div>
 
       {/* Device Selector */}

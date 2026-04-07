@@ -5,10 +5,9 @@
 export const runtime = 'edge';
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { createCheckoutSession } from "@/lib/client-api";
+import { useEffect, useLayoutEffect, useRef, useState } from "react"; // useRef kept for proceedRef
+import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
 import { useDashboardSession } from "../../DashboardSessionProvider";
-import { Playwrite_NG_Modern } from "next/font/google";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
@@ -25,30 +24,40 @@ export default function PricingTable() {
     | "essential"
     | "growth";
 
-  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
 
-  // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates.
+  // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("upgraded") !== "1") return;
-    // Clean URL so refresh doesn't re-trigger
+    // Clean URL so refresh doesn't re-trigger; also clear the stripe-redirect flag.
     window.history.replaceState({}, "", window.location.pathname);
+    sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
+    // Clear session cache so polls fetch fresh plan data from the server.
+    try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+    setPaymentProcessing(true);
     let attempts = 0;
+    let planBeforePayment: string | null = null;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
-      await refresh({ showLoading: false });
+      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
+      // Capture the plan on the first poll (first fresh fetch from server after payment).
+      if (planBeforePayment === null) planBeforePayment = planNow;
       attempts += 1;
-      if (attempts < 20) {
+      const planChanged = planNow !== planBeforePayment;
+      // Stop as soon as plan updates from the first-fetched value, or after 20 attempts (~30s).
+      if (!planChanged && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
-        setUpgradeSuccess(true);
+        // Clear stale session cache so dashboard loads fresh data.
+        try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+        window.location.href = `/dashboard/${siteId}?success=1`;
       }
     };
-    setUpgradeSuccess(true);
     void poll();
     return () => { if (t) clearTimeout(t); };
-  }, [refresh]);
+  }, [refresh, siteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const CurrentPlanButton = () => (
     <button
@@ -62,11 +71,64 @@ export default function PricingTable() {
 
   const prices = {free: 0, basic: 9, essential: 20, growth: 56 };
 
+  const proceedRef = useRef<HTMLDivElement>(null);
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [returnedFromStripe, setReturnedFromStripe] = useState(false);
+  const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
+  const [mounted, setMounted] = useState(false);
+
+  // useLayoutEffect fires before the browser paints — check sessionStorage here so the
+  // correct screen (cancel or upgrade) is shown on the very first paint with no flash.
+  useLayoutEffect(() => {
+    const key = `cb_stripe_redirect_${siteId}`;
+    const params = new URLSearchParams(window.location.search);
+    const isSuccess = params.get('upgraded') === '1' || params.get('canceled') === '1';
+    const handleReturn = () => {
+      setCheckoutLoading(false);
+      setReturnedFromStripe(true);
+      window.history.pushState(null, '', window.location.href);
+    };
+    if (sessionStorage.getItem(key) === '1') {
+      sessionStorage.removeItem(key);
+      // Only show cancel screen if NOT a successful/cancelled Stripe redirect.
+      if (!isSuccess) handleReturn();
+    }
+    setMounted(true);
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        setCheckoutLoading(false);
+        if (sessionStorage.getItem(key) === '1') {
+          sessionStorage.removeItem(key);
+          handleReturn();
+        }
+      }
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [siteId]);
+
+  // Auto-dismiss "Payment not completed" screen after 5 seconds.
+  useEffect(() => {
+    if (!returnedFromStripe) return;
+    setAutoCloseCountdown(5);
+    const interval = setInterval(() => {
+      setAutoCloseCountdown((n) => {
+        if (n <= 1) {
+          clearInterval(interval);
+          setReturnedFromStripe(false);
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [returnedFromStripe]);
+
+  if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
 
   const getPrice = (plan: keyof typeof prices) => {
@@ -105,35 +167,50 @@ export default function PricingTable() {
       return;
     }
     if (!activeOrganizationId) {
-      alert(
-        "We could not load your organization. Refresh the page or sign in again.",
-      );
+      alert("We could not load your organization. Refresh the page or sign in again.");
       return;
     }
     if (!siteId) {
       alert("Missing site. Open Upgrade from a site in the dashboard.");
       return;
     }
+    if (plan === "free") return;
     setCheckoutLoading(true);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const { url } = await createCheckoutSession({
-        organizationId: activeOrganizationId,
-        planId: plan,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        siteId,
-        successUrl: origin
-          ? `${origin}/dashboard/${siteId}/upgrade?upgraded=1`
-          : undefined,
-        cancelUrl: origin
-          ? `${origin}/dashboard/${siteId}/upgrade?canceled=1`
-          : undefined,
-      });
-      // Redirect to Stripe in the same tab
+      const successUrl = origin ? `${origin}/dashboard/${siteId}/upgrade?upgraded=1` : undefined;
+      const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
+      const intervalVal = billing === "yearly" ? "yearly" : "monthly";
+
+      let url: string;
+
+      if (currentTier !== "free") {
+        // Existing paid subscription — cancel old and create new checkout session
+        ({ url } = await upgradeSubscription({
+          siteId,
+          organizationId: activeOrganizationId,
+          planId: plan,
+          interval: intervalVal,
+          successUrl,
+          cancelUrl,
+        }));
+      } else {
+        // No existing subscription — standard new checkout
+        ({ url } = await createCheckoutSession({
+          organizationId: activeOrganizationId,
+          planId: plan,
+          interval: intervalVal,
+          siteId,
+          successUrl,
+          cancelUrl,
+        }));
+      }
+
+      sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
       window.location.href = url;
+      // Do NOT reset checkoutLoading here — keep overlay visible until browser navigates away.
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not start checkout.");
-    } finally {
       setCheckoutLoading(false);
     }
   }
@@ -202,6 +279,9 @@ export default function PricingTable() {
         disabled={checkoutLoading}
         onClick={() => {
           setSelected(plan);
+          setTimeout(() => {
+            proceedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 50);
         }}
         className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
         ${
@@ -217,16 +297,50 @@ export default function PricingTable() {
     );
   };
 
+  if (returnedFromStripe) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-3">
+        <div className="w-14 h-14 rounded-full bg-[#FEF2F2] flex items-center justify-center mb-2">
+          <svg className="w-7 h-7 text-[#EF4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+        <p className="text-[18px] font-semibold text-[#111827]">Payment not completed</p>
+        <p className="text-sm text-[#6b7280]">You returned without completing the payment.</p>
+        <p className="text-xs text-[#9CA3AF]">Returning to upgrade page in {autoCloseCountdown}s…</p>
+        <button
+          type="button"
+          onClick={() => setReturnedFromStripe(false)}
+          className="mt-3 px-6 py-2.5 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors"
+        >
+          Cancel Payment
+        </button>
+      </div>
+    );
+  }
+
+  if (checkoutLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-4">
+        <div className="w-12 h-12 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
+        <p className="text-[18px] font-semibold text-[#111827]">Proceeding to payment…</p>
+        <p className="text-sm text-[#6b7280]">You will be redirected to Stripe shortly.</p>
+      </div>
+    );
+  }
+
+  if (paymentProcessing) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-6">
+        <div className="w-14 h-14 rounded-full border-4 border-[#2ec04f] border-t-transparent animate-spin" />
+        <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
+        <p className="text-sm text-[#6b7280]">Updating your plan — redirecting to dashboard shortly…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
-      {/* Payment success banner */}
-      {upgradeSuccess && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white border border-green-200 shadow-lg rounded-xl px-5 py-3">
-          <span className="text-green-500 text-lg">✓</span>
-          <p className="text-sm font-medium text-[#111]">Payment confirmed! Your plan has been upgraded.</p>
-          <button type="button" onClick={() => setUpgradeSuccess(false)} className="ml-2 text-[#6b7280] text-xs underline">Dismiss</button>
-        </div>
-      )}
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
         {/* HEADER */}
@@ -404,7 +518,7 @@ export default function PricingTable() {
           </div>
 
           {/* TOTAL */}
-          <div className="bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white">
+          <div ref={proceedRef} className="bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white">
 
             <div className="flex justify-between items-start">
 

@@ -563,7 +563,7 @@ const [showTooltip, setShowTooltip] = useState(false);
               ))} */}
 
               <img
-          src="/images/platform.svg"
+          src="/images/platform.png"
           alt="Supported Platforms"
         />
             </div>
