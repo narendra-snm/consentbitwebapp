@@ -23,9 +23,9 @@ export const metadata: Metadata = {
   title: "ConsentBit",
   description: "Consent management platform",
   icons: {
-    icon: "/asset/logo.webp",
-    shortcut: "/asset/logo.webp",
-    apple: "/asset/logo.webp",
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
   },
 };
 // eslint-disable-next-line react/prop-types

@@ -328,11 +328,11 @@ export default function ConsentPreview({
   const getDeviceFrameClasses = () => {
     switch (device) {
       case "tablet":
-        return "w-[820px] max-w-full h-[500px]";
+        return "maxw-[820px] w-full h-[500px]";
       case "mobile":
-        return "w-[390px] max-w-full h-[680px]";
+        return "max-w-[390px] w-full h-[680px]";
       default:
-        return 'w-[1139px] max-w-full h-[444px]';
+        return 'max-w-[1139px] w-full h-[444px]';
     }
   };
 
@@ -545,7 +545,7 @@ export default function ConsentPreview({
 
       {/* Browser Preview */}
       <div
-        className={`${getDeviceFrameClasses()} relative rounded-md overflow-hidden shadow-lg flex flex-col mx-auto`}
+        className={`${getDeviceFrameClasses()} relative rounded-md overflow-hidden shadow-lg flex flex-col `}
       >
         {/* Browser Header */}
         <div className="h-[24px] bg-[#d9d9d9] opacity-50 flex items-center px-2 gap-2">

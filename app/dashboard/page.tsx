@@ -422,7 +422,7 @@ export default function DashboardPage() {
     return (
       <>
       <Header/>
-      <div className="max-w-[1148px] mx-auto pb-4">
+      <div className="max-w-[1148px] mx-auto pb-4 px-4">
       <DashboardTabs/>
       <ComplianceAlert
         userName={userName}
@@ -462,7 +462,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#E6F1FD] pb-4">
+    <div className="min-h-screen bg-[#E6F1FD] pb-4 px-4">
       {/* Navbar */}
       <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
         <img

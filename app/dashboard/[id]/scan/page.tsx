@@ -14,7 +14,7 @@ export default function ScanPage() {
   if (!siteId) return null;
 
   return (
-    <div className="pt-1.5">
+    <div className="pt-1.5 px-4">
       <CookieScanDashboard siteId={String(siteId)} />
     </div>
   );

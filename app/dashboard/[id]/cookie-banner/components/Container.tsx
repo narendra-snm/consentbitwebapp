@@ -120,7 +120,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+  const { loading, authenticated,activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
     console.log(effectivePlanId,"activeOrganizationId from container")
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
@@ -707,7 +707,7 @@ export default function page({ siteId }: { siteId: string }) {
     }
   }, [active, isFreePlan]);
   return (
-    <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
+    <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
