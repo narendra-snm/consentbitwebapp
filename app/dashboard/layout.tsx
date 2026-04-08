@@ -21,7 +21,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <DashboardSessionProvider>
-      {children}
+      <div className=""> {children}</div>
+     
        <Footer/>
       <Suspense>
         <PostSetupOverlay />

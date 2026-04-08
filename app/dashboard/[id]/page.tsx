@@ -93,7 +93,8 @@ const userName = useMemo(() => {
   }
 
   return (
-    <div className="max-w-[1148px] mx-auto pb-4">
+    <div className="px-4">
+    <div className="max-w-[1148px] mx-auto pb-4 ">
       {loading?<LoadingUI/>:<><ComplianceAlert
         userName={userName}
         siteDomain={activeSite?.domain}
@@ -111,6 +112,7 @@ const userName = useMemo(() => {
       />
       <FeedbackDesign />
       </>}
+    </div>
     </div>
   );
 }

@@ -120,7 +120,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { loading, authenticated, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+  const { loading, authenticated,activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
     console.log(effectivePlanId,"activeOrganizationId from container")
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
@@ -673,7 +673,7 @@ export default function page({ siteId }: { siteId: string }) {
     }
   }, [active, isFreePlan]);
   return (
-    <div className="border-t border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
+    <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
@@ -790,7 +790,7 @@ export default function page({ siteId }: { siteId: string }) {
       </p>
 
       {/* Button */}
-      <button onClick={()=>router.push("/upgrade")} className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
+      <button onClick={()=>router.push(`/dashboard/${activeSiteId}/upgrade`)} className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
         Get Pro Plan
         <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>

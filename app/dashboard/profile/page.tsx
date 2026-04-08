@@ -222,7 +222,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="size-full bg-white">
+    <div className="size-full bg-white min-h-[calc(100vh-100px)]">
       <div className="h-[1px] bg-black/10 w-full" />
 
       {/* Header */}
@@ -246,7 +246,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-[206px_1fr] h-[calc(100%-66px)]">
+      <div className="grid grid-cols-[206px_1fr] min-h-[calc(100vh-166px)]">
         {/* Sidebar */}
         <div className="border-r border-black/10 pt-[20px]">
           {/* General Tab */}

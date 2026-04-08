@@ -376,7 +376,8 @@ export default function PricingTable() {
         </div>
 
         {/* PLANS GRID */}
-        <div className="grid grid-cols-[200px_200px_220px_316px_1fr] px-6">
+        <div className="overflow-x-auto pb-2">
+        <div className="grid grid-cols-[200px_200px_220px_316px_1fr] mt-5 px-6 min-w-[1292px]">
 
           <div></div>
 
@@ -462,13 +463,13 @@ export default function PricingTable() {
           </div>
 
         </div>
-
+</div>
         {/* BOTTOM */}
         <div className="grid grid-cols-[430px_1fr] gap-4 p-6 pt-15.5">
 
           {/* PROMO */}
-          <div className={`bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white ${!selected ? 'opacity-50' : ''}`}>
-
+          <div  className={` rounded-[15px] p-7 relative border-white ${!selected ? 'opacity-50' : ''}`}>
+<img src="/images/smallbox.png" alt="promo" className="absolute inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
             <div className="text-lg font-semibold mb-1">Promo code</div>
             {!selected && (
               <p className="text-xs text-[#6b7280] mb-3">Select a plan to apply a promo code.</p>
@@ -518,9 +519,10 @@ export default function PricingTable() {
           </div>
 
           {/* TOTAL */}
-          <div ref={proceedRef} className="bg-[#e6f1fd] rounded-[15px] p-7 border-[10px] border-dashed border-white">
+          <div  ref={proceedRef} className=" relative rounded-[15px] p-7  border-white">
+<img src="/images/bigbox.png" alt="promo" className="absolute z-[10] inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
 
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start relative z-10">
 
               <div>
 

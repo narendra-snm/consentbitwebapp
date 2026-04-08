@@ -7,9 +7,9 @@ p3e9d1a00: "M11.6636 6.347L11.2166 5.59668L9.0561 6.86757L11.4557 3.91694L11.818
 export default function FeedbackDesign() {
   return (
     <div className=" bg-white pt-3.25 flex items-start justify-center">
-      <div className="flex gap-[16px]">
+      <div className="grid w-full grid-cols-2 gap-[16px]">
         {/* Left Section - Supported tech tools */}
-        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] w-[566px] h-[116px] p-[14px]">
+        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] max-w-[566px] min-h-[116px] p-[14px]">
           <h2 
             className="font-['DM_Sans:SemiBold',sans-serif] font-semibold text-[16px] text-black leading-[20px] mb-[7px]"
             style={{ fontVariationSettings: "'opsz' 14" }}
@@ -40,7 +40,7 @@ export default function FeedbackDesign() {
         </div>
 
         {/* Right Section - Share your feedbacks */}
-        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] w-[566px] h-[116px] p-[14px]">
+        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] max-w-[566px] min-h-[116px] p-[14px]">
           <h2 
             className="font-['DM_Sans:SemiBold',sans-serif] font-semibold text-[16px] text-black leading-[20px] mb-[15px]"
             style={{ fontVariationSettings: "'opsz' 14" }}
@@ -49,10 +49,10 @@ export default function FeedbackDesign() {
           </h2>
           
           {/* Input with Submit Button */}
-          <div className="relative w-[529px] h-[51px]">
+          <div className="relative w-full max-w-[529px] h-[51px]">
             <input
               type="text"
-              placeholder="Lorem ipsum dolor sit amet"
+              placeholder="please share your feedback and suggestions here"
               className="w-full h-full bg-white border border-[#d9d9d9] rounded-[5px] px-[17px] py-[15.5px] font-['DM_Sans:Regular',sans-serif] font-normal text-[13px] text-black leading-[20px] outline-none focus:border-[#007aff] transition-colors"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />

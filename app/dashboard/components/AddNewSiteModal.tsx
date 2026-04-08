@@ -238,7 +238,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-[10px] max-w-[1136px] shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="relative mx-2 bg-white rounded-[10px] max-w-[1136px] shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Submitting overlay */}
         {submitting && (
           <div className="absolute inset-0 bg-white/75 z-50 flex flex-col items-center justify-center rounded-[10px] gap-3">
@@ -514,7 +514,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
                     {/* Additional Note */}
                     {plan.additionalNote && (
-                      <div className="absolute -bottom-[30px] left-0 right-0  px-[12px]">
+                      <div className="absolute xl:-bottom-[30px] -bottom-[60px]  left-0 right-0  px-[12px]">
                         <p
                           className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4B5563] text-[13px] tracking-[-0.22px] text-left"
                           style={{ fontVariationSettings: "'opsz' 9" }}

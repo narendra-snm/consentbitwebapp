@@ -183,12 +183,11 @@ console.log("pl2",planLabel,effectivePlanId);
    )}
       <div className="flex items-center gap-6">
         {/* Logo */}
-        <img
-          src="/images/ConsentBit-logo-Dark.png"
-          alt="Consentbit"
-          width={170}
-          height={21}
-        />
+       <img
+  src="/images/ConsentBit-logo-Dark.png"
+  alt="Consentbit"
+  className="w-[100px] xl:w-[170px] h-auto"
+/>
 
         {/* DOMAIN SELECTOR */}
         <div ref={domainRef} className="relative flex items-center gap-2">
