@@ -499,7 +499,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                 billingPeriod === "yearly" && plan.price > 0
                   ? Math.floor(plan.price * 0.8)
                   : plan.price;
-              const isDisabled = hasExistingFreeSite && plan.id === "free";
+              const isDisabled = hasExistingFreeSite && plan.id === "free"  ;
 
               return (
                 <div
@@ -607,7 +607,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                             void handlePlanAction(plan.id as PlanType);
                           }
                         }}
-                        disabled={isDisabled}
+                        disabled={isDisabled ||domainCheck.status === "checking"}
                         className="px-4.5 w-fit h-[44px] rounded-[8px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed "
                         style={{ backgroundColor: plan.buttonColor, }}
                       >
