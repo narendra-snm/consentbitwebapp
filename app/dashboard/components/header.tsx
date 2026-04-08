@@ -18,10 +18,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
+import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
 
 /** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
-const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain"]);
+const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain", "post-setup"]);
 
 /** `/dashboard/[siteId]/...` → site UUID; reserved routes return null (use session activeSiteId). */
 function pickSiteIdFromDashboardPath(pathname: string | null): string | null {
@@ -30,20 +31,6 @@ function pickSiteIdFromDashboardPath(pathname: string | null): string | null {
   const id = parts[1];
   if (!id || id === "one" || DASHBOARD_PATH_RESERVED.has(id)) return null;
   return id;
-}
-
-function readPlanTierFromSite(site: unknown): string {
-  if (!site || typeof site !== "object") return "";
-  const s = site as Record<string, unknown>;
-  const raw =
-    s.planId ??
-    s.plan_id ??
-    s.planID ??
-    s.PlanId ??
-    s.subscription_plan ??
-    s.subscriptionPlanId ??
-    s.plan;
-  return raw != null ? String(raw).trim().toLowerCase() : "";
 }
 
 export default function Header() {
@@ -132,18 +119,19 @@ export default function Header() {
 
   /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */
   const planUi = useMemo(() => {
-    const PAID = new Set(["basic", "essential", "growth"]);
-    const fromSite = readPlanTierFromSite(activeSite);
-    let resolvedPlanKey = "";
-    if (PAID.has(fromSite)) resolvedPlanKey = fromSite;
-    else {
-      const fromSession = String(effectivePlanId ?? "")
-        .trim()
-        .toLowerCase();
-      if (PAID.has(fromSession)) resolvedPlanKey = fromSession;
-      else if (fromSite && fromSite !== "free") resolvedPlanKey = fromSite;
-      else resolvedPlanKey = fromSession || fromSite;
-    }
+    const resolvedPlanKey = resolvePlanTierForSiteContext({
+      activeSite,
+      sites,
+      effectivePlanId,
+    });
+
+    // `DashboardSessionProvider` stores empty `effectivePlanId` for free sites (`pickPlanIdFromSite`
+    // returns null for free). Treat unknown/empty as free once init finished — same as SideBar / upgrade page.
+    const waitingForSiteSync =
+      authenticated &&
+      !!pathSiteId &&
+      sites.length > 0 &&
+      !sites.some((s: any) => String(s?.id) === pathSiteId);
 
     // Avoid hydration mismatch: SSR can't read sessionStorage-seeded dashboard state,
     // so it often renders "loading/skeleton" while the client already has data.
@@ -151,13 +139,9 @@ export default function Header() {
     const showPlanSkeleton =
       !hydrated ||
       loading ||
-      (authenticated &&
-        !!pathSiteId &&
-        sites.length > 0 &&
-        !sites.some((s: any) => String(s?.id) === pathSiteId)) ||
-      (authenticated && !loading && resolvedPlanKey === "");
+      waitingForSiteSync;
 
-    const k = resolvedPlanKey;
+    const k = resolvedPlanKey || "free";
     const label =
       !k
         ? "—"
@@ -239,15 +223,25 @@ export default function Header() {
     activeSite?.domain || activeSite?.name || (!loading ? "Select a site" : null);
 
   const handleSelectSite = (site: any) => {
-    setActiveSiteId(site?.id ? String(site.id) : null);
+    const nextId = site?.id ? String(site.id) : null;
+    const currentId = pathSiteId || activeSiteId || null;
+    if (String(nextId || "") === String(currentId || "")) {
+      // No-op selection (already on this site) — don't navigate.
+      setDomainOpen(false);
+      return;
+    }
+
+    setActiveSiteId(nextId);
     setDomainOpen(false);
-    if (!site?.id) return;
+    if (!nextId) return;
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
     // Preserve current tab/sub-route when switching sites
     const currentSubPath = pathParts.slice(2).join('/');
-    const targetPath = currentSubPath ? `/dashboard/${site.id}/${currentSubPath}` : `/dashboard/${site.id}`;
-    router.push(targetPath);
+    const targetPath = currentSubPath ? `/dashboard/${nextId}/${currentSubPath}` : `/dashboard/${nextId}`;
+    if (targetPath !== (pathname || "")) {
+      router.push(targetPath);
+    }
   };
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">

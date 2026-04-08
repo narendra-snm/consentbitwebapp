@@ -23,8 +23,14 @@ export default function SiteSummaryCards({
 
   const displayName = site?.name || site?.domain || "—";
   const isVerified = site?.verified === 1 || site?.verified === true;
-  const bannerType =
-    site?.banner_type === "ccpa" ? "CCPA" : site?.banner_type === "gdpr" ? "GDPR" : "—";
+  const bannerType = (() => {
+    const raw = String(site?.banner_type ?? site?.bannerType ?? "").trim().toLowerCase();
+    if (raw === "iab") return "IAB";
+    if (raw === "ccpa") return "CCPA";
+    if (raw === "gdpr") return "GDPR";
+    // Some rows may not have banner_type yet; default to GDPR so the card never renders blank.
+    return "GDPR";
+  })();
   const regionMode =
     site?.region_mode === "both"
       ? "GDPR + CCPA"
@@ -129,8 +135,8 @@ export default function SiteSummaryCards({
              {regionMode}
             </p>
 
-           <p className="text-xs text-[#4B5563] mt-8.5">Last Updated</p>
-            <p className=" mt-1 ">
+           <p className="text-xs font-medium text-[#4B5563] mt-8.5">Last Updated</p>
+            <p className="mt-1 font-medium">
               {updatedLabel}
             </p>
           </div>

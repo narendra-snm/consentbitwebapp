@@ -38,11 +38,12 @@ type DashboardSessionApi = DashboardSessionState & {
 const DashboardSessionContext = createContext<DashboardSessionApi | null>(null);
 
 /** Must match DashboardTabs — these segments are not site ids. */
-const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
+const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain", "post-setup"]);
 
 const SESSION_CACHE_KEY = "cbSessionCache";
 const SESSION_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 const LAST_USER_KEY = "cbLastUserEmail";
+const LAST_ACTIVE_SITE_KEY = "cbLastActiveSiteId";
 
 /** Avoid misleading logs: SSR has no sessionStorage; terminal would show "null/free" while the browser is correct. */
 function devClientLog(...args: unknown[]) {
@@ -76,6 +77,8 @@ function writeSessionCache(data: any) {
       sessionStorage.setItem(SESSION_CACHE_KEY, payload);
       const email = String(data?.user?.email || "").trim().toLowerCase();
       if (email) sessionStorage.setItem(LAST_USER_KEY, email);
+      const activeSiteId = data?.activeSiteId != null ? String(data.activeSiteId).trim() : "";
+      if (activeSiteId) sessionStorage.setItem(LAST_ACTIVE_SITE_KEY, activeSiteId);
       devClientLog("[Cache] WROTE effectivePlanId:", data?.effectivePlanId, "activeSiteId:", data?.activeSiteId, "bytes:", payload.length);
     } else {
       devClientLog("[Cache] WRITE SKIPPED — sessionStorage unavailable");
@@ -161,6 +164,15 @@ export function DashboardSessionProvider({
     })();
     // 2. Persistent session cache (written after every successful refresh)
     const seed = ssData ?? initialData ?? readSessionCache();
+    const storedLastActiveSiteId = (() => {
+      try {
+        return typeof sessionStorage !== "undefined"
+          ? String(sessionStorage.getItem(LAST_ACTIVE_SITE_KEY) || "").trim()
+          : "";
+      } catch {
+        return "";
+      }
+    })();
     devClientLog(
       "SEED:",
       seed,
@@ -175,7 +187,7 @@ export function DashboardSessionProvider({
       const sites = Array.isArray(seed.sites) ? seed.sites : [];
       const activeOrgId = pickOrganizationIdFromMe(orgs) || (sites.length > 0 ? pickOrganizationIdFromSite(sites[0]) : null);
       // Use the seed's known activeSiteId to find the right site, not always sites[0].
-      const seedActiveSiteId = seed.activeSiteId ? String(seed.activeSiteId) : null;
+      const seedActiveSiteId = (seed.activeSiteId ? String(seed.activeSiteId) : storedLastActiveSiteId) || null;
       const activeSite = (seedActiveSiteId ? sites.find((s: any) => String(s?.id) === seedActiveSiteId) : null) ?? sites[0] ?? null;
       const activeSitePlanId = pickPlanIdFromSite(activeSite);
       const seedEffectivePlanId = activeSitePlanId || seed.effectivePlanId || "";
@@ -187,7 +199,7 @@ export function DashboardSessionProvider({
         "→ initial effectivePlanId:",
         seedEffectivePlanId,
       );
-      return {
+      const seeded: DashboardSessionState = {
         loading: false,
         authenticated: true,
         user: seed.user ?? null,
@@ -197,8 +209,11 @@ export function DashboardSessionProvider({
         activeOrganizationId: activeOrgId,
         activeSiteId: activeSite?.id ? String(activeSite.id) : null,
       };
+      // IMPORTANT: sync seed into ref immediately so the first refresh() sees it.
+      stateRef.current = seeded;
+      return seeded;
     }
-    return {
+    const empty: DashboardSessionState = {
       loading: true,
       authenticated: false,
       user: null,
@@ -208,7 +223,14 @@ export function DashboardSessionProvider({
       activeOrganizationId: null,
       activeSiteId: null,
     };
+    stateRef.current = empty;
+    return empty;
   });
+
+  // Keep ref synced (refresh() reads this, not React's possibly-stale closure state).
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const refresh = useCallback(async (opts?: DashboardRefreshOptions): Promise<string> => {
     const showLoading = opts?.showLoading !== false;
@@ -250,6 +272,31 @@ export function DashboardSessionProvider({
 
       const urlActive = pickActiveSiteIdFromPath(pathnameRef.current);
       const fallbackActive = sites?.[0]?.id ?? null;
+      const storedLastActiveSiteId = (() => {
+        try {
+          return typeof sessionStorage !== "undefined"
+            ? String(sessionStorage.getItem(LAST_ACTIVE_SITE_KEY) || "").trim()
+            : "";
+        } catch {
+          return "";
+        }
+      })();
+
+      // Post-checkout / post-setup: ?siteId= may reference the new site while the path still lags one tick.
+      let queryPreferredSiteId: string | null = null;
+      try {
+        if (typeof window !== "undefined") {
+          const sp = new URLSearchParams(window.location.search);
+          const qs = sp.get("siteId");
+          const postFlow =
+            sp.get("postSetup") === "1" || sp.get("upgraded") === "1";
+          if (qs && postFlow && (sites || []).some((s: any) => String(s?.id) === String(qs))) {
+            queryPreferredSiteId = String(qs);
+          }
+        }
+      } catch {
+        // ignore
+      }
 
       // Read prev from ref — always current, never stale from closure or batching.
       const prevState = stateRef.current;
@@ -257,7 +304,13 @@ export function DashboardSessionProvider({
       const prevActiveStillExists = prevActive
         ? (sites || []).some((s: any) => String(s?.id) === prevActive)
         : false;
-      const resolvedActiveSiteId = urlActive || (prevActiveStillExists ? prevActive : fallbackActive);
+      const storedActiveStillExists = storedLastActiveSiteId
+        ? (sites || []).some((s: any) => String(s?.id) === String(storedLastActiveSiteId))
+        : false;
+      const resolvedActiveSiteId =
+        queryPreferredSiteId ||
+        urlActive ||
+        (prevActiveStillExists ? prevActive : storedActiveStillExists ? storedLastActiveSiteId : fallbackActive);
       const activeSite =
         (sites || []).find((s: any) => String(s?.id) === String(resolvedActiveSiteId)) || null;
       const activeSitePlanId = pickPlanIdFromSite(activeSite);
@@ -352,7 +405,10 @@ export function DashboardSessionProvider({
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(urlActive)) || null;
       const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "";
-      return { ...s, activeSiteId: String(urlActive), effectivePlanId: nextPlanId };
+      const next: DashboardSessionState = { ...s, activeSiteId: String(urlActive), effectivePlanId: nextPlanId };
+      stateRef.current = next;
+      writeSessionCache(next);
+      return next;
     });
   }, [pathname]);
 
@@ -361,15 +417,26 @@ export function DashboardSessionProvider({
       const nextSite =
         (s.sites || []).find((site: any) => String(site?.id) === String(siteId)) || null;
       const nextPlanId = pickPlanIdFromSite(nextSite) || s.effectivePlanId || "";
-      return { ...s, activeSiteId: siteId, effectivePlanId: nextPlanId };
+      const next: DashboardSessionState = { ...s, activeSiteId: siteId, effectivePlanId: nextPlanId };
+      // Persist selection so hard refresh restores the latest chosen site.
+      stateRef.current = next;
+      writeSessionCache(next);
+      return next;
     });
   }, []);
 
   const updateSiteInState = useCallback((patch: { id: string } & Record<string, any>) => {
-    setState((s) => ({
-      ...s,
-      sites: (s.sites || []).map((site: any) => (String(site?.id) === String(patch.id) ? { ...site, ...patch } : site)),
-    }));
+    setState((s) => {
+      const next: DashboardSessionState = {
+        ...s,
+        sites: (s.sites || []).map((site: any) =>
+          String(site?.id) === String(patch.id) ? { ...site, ...patch } : site,
+        ),
+      };
+      stateRef.current = next;
+      writeSessionCache(next);
+      return next;
+    });
   }, []);
 
   const logout = useCallback(async () => {

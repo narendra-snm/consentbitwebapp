@@ -661,7 +661,41 @@ export default function page({ siteId }: { siteId: string }) {
     const id = window.setTimeout(() => setSaveSuccess(false), 4000);
     return () => window.clearTimeout(id);
   }, [saveSuccess]);
+  const iabSessionKey = useMemo(() => {
+    const sid = String(site?.id || siteId || "").trim();
+    return sid ? `cb_iab_enabled:${sid}` : "";
+  }, [site?.id, siteId]);
+
   const [iabEnabled, setIabEnabled] = useState(false);
+  const [iabHydrated, setIabHydrated] = useState(false);
+
+  // Preserve IAB toggle state per-site across dashboard navigation (sessionStorage).
+  // This is intentionally "session" scope (not permanent) so it survives tab changes but resets on browser close.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!iabSessionKey) return;
+
+    const stored = window.sessionStorage.getItem(iabSessionKey);
+    if (stored === "1" || stored === "0") {
+      setIabEnabled(stored === "1");
+      setIabHydrated(true);
+      return;
+    }
+
+    // Fallback to backend site state when there is no session override yet.
+    const fromSite = String((site as any)?.banner_type || (site as any)?.bannerType || "").toLowerCase();
+    if (fromSite === "iab") {
+      setIabEnabled(true);
+    }
+    setIabHydrated(true);
+  }, [iabSessionKey, site]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!iabSessionKey) return;
+    if (!iabHydrated) return;
+    window.sessionStorage.setItem(iabSessionKey, iabEnabled ? "1" : "0");
+  }, [iabEnabled, iabSessionKey, iabHydrated]);
   const isToggleEnabled =
     effectivePlanId === "growth" || effectivePlanId === "essential";
 
@@ -695,6 +729,7 @@ export default function page({ siteId }: { siteId: string }) {
                   // Only disable dropdown while we're actively saving banner settings.
                   // Session-level loading can cause the whole dropdown to appear "stuck disabled".
                   loading={false}
+                  disabled={iabEnabled}
                   effectivePlanId={effectivePlanId}
                   onChange={handleRegulationChange}
                 />
@@ -730,6 +765,17 @@ export default function page({ siteId }: { siteId: string }) {
         }`}
         onClick={async () => {
           if (!isToggleEnabled) return;
+          // Persist immediately on user action (don't wait for effects),
+          // so switching pages/tabs right after toggling keeps the state.
+          try {
+            if (typeof window !== "undefined" && iabSessionKey) {
+              window.sessionStorage.setItem(iabSessionKey, iabEnabled ? "0" : "1");
+            }
+          } catch {
+            // ignore
+          }
+          setIabHydrated(true);
+
           setIabEnabled((prev) =>{
 
              !prev && updateSiteBannerSettings({
@@ -1000,6 +1046,7 @@ export default function page({ siteId }: { siteId: string }) {
         }
       />
       <InstallConsentModal
+        key={String(siteId)}
         open={showInstallModal}
         scriptUrl={currentScriptUrl}
         siteDomain={site?.domain}

@@ -165,9 +165,9 @@ export function PricingTable({
             <Cell>750</Cell>
             <Cell highlight>5000 scans</Cell>
             <Cell>
-              <div className="font-bold text-[#5243c2]">10000 pageviews/m</div>
+              <div className="font-bold text-[#5243c2]">10000 scans</div>
               <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 page views
+                + $.49 for additional 10000 scans
               </div>
             </Cell>
 
@@ -178,13 +178,13 @@ export function PricingTable({
             <Cell highlight>
               <div className="font-bold text-[#5243c2]">500,000 pageviews/m</div>
               <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 page views
+                + $.49 for additional 10000 scans
               </div>
             </Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">2 Million pageviews/m</div>
               <div className="text-[13px] text-[#4B5563]">
-                + $.39 for additional 10000 page views
+                + $.39 for additional 10000 scans
               </div>
             </Cell>
 

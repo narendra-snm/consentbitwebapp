@@ -21,7 +21,7 @@ async function parseApiResponse(res: Response): Promise<any> {
   const text = await res.text();
   let parsed: any;
   try { parsed = JSON.parse(text); } catch {
-    return { success: false, error: text.trimStart().startsWith('<') ? `Please enter the correct website URL.` : text || `Please enter the correct website URL.` };
+    return { success: false, error: text.trimStart().startsWith('<') ? `Verification failed. Please try again in a moment.` : text || `Verification failed. Please try again.` };
   }
   return decodeEnvelope(parsed);
 }
@@ -226,6 +226,27 @@ export async function firstSetup(payload: {
 }
 //first setup ends here
 
+export async function checkDomainAvailability(payload: { websiteUrl: string }): Promise<{
+  success: boolean;
+  available?: boolean;
+  domain?: string;
+  code?: string;
+  message?: string;
+  error?: string;
+}> {
+  const res = await fetch('/api/sites/check-domain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok) {
+    throw new Error((data as any)?.error || `Domain check failed: ${res.status}`);
+  }
+  return data as any;
+}
+
 //sites endpoint starts here
 export async function getSites(organizationId?: string) {
   const url = organizationId ? `/api/sites?organizationId=${organizationId}` : '/api/sites';
@@ -265,6 +286,30 @@ export async function updateSiteBannerSettings(payload: {
   return data as { success: true; site?: any };
 }
 // site banner settings update ends here
+
+export async function renameSite(
+  siteId: string,
+  name: string,
+  domain?: string,
+): Promise<{ success: true; site: any }> {
+  const payload: { siteId: string; name: string; domain?: string } = { siteId, name };
+  if (domain != null && String(domain).trim() !== '') {
+    payload.domain = String(domain).trim();
+  }
+  const res = await fetch('/api/sites', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch {
+    data = { success: false, error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text };
+  }
+  if (!res.ok || !data.success) throw new Error(data.error || `Rename failed: ${res.status}`);
+  return data as { success: true; site: any };
+}
 
 // banner customization starts here
 export async function getBannerCustomization(siteId: string) {
@@ -413,6 +458,18 @@ export async function cancelSubscription(payload: {
   return data as { success: true; message?: string };
 }
 // subscription cancel ends here
+
+export async function deleteSite(siteId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/sites?siteId=${encodeURIComponent(siteId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Delete site failed: ${res.status}`);
+  }
+  return data as { success: boolean };
+}
 
 // billing summary starts here
 export type BillingSummary = {

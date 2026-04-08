@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { firstSetup, createCheckoutSession } from "@/lib/client-api";
+import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
 import { useDashboardSession } from "../DashboardSessionProvider";
 
 const svgPaths = {
@@ -66,7 +66,7 @@ const plans: PricingPlan[] = [
     buttonText: "14 day free trial",
     buttonColor: "#4CBB66",
     isRecommended: true,
-    additionalNote: "+ $.49 for additional 10000 page views",
+    additionalNote: "+ $.49 for additional 10000 scans",
   },
   {
     id: "growth",
@@ -79,7 +79,7 @@ const plans: PricingPlan[] = [
     compliance: "GDPR+CCPA",
     buttonText: "14 day free trial",
     buttonColor: "#007AFF",
-    additionalNote: "+ $.39 for additional 10000 page views",
+    additionalNote: "+ $.39 for additional 10000 scans",
   },
 ];
 
@@ -87,6 +87,11 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
   const { refresh, activeOrganizationId, sites } = useDashboardSession();
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [domainCheck, setDomainCheck] = useState<{
+    status: "idle" | "checking" | "available" | "unavailable";
+    domain: string;
+    message: string;
+  }>({ status: "idle", domain: "", message: "" });
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -95,6 +100,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [mounted, setMounted] = useState(false);
   const checkoutTab = useRef<Window | null>(null);
+  const previousBodyOverflow = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     setMounted(true);
@@ -106,6 +112,20 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     }
     window.addEventListener('pageshow', onPageShow);
     return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  // Prevent background page scrolling while modal is open.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    // Store initial value once so we can restore accurately.
+    if (previousBodyOverflow.current === null) {
+      previousBodyOverflow.current = document.body.style.overflow || "";
+    }
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow.current ?? "";
+      previousBodyOverflow.current = null;
+    };
   }, []);
 
   const hasExistingFreeSite = useMemo(() => {
@@ -167,8 +187,71 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       return existingDomain && existingDomain.toLowerCase() === domain.toLowerCase();
     });
     if (existingSite) return `${domain} is already added to your account.`;
+    if (
+      domainCheck.status === "unavailable" &&
+      domainCheck.domain &&
+      domainCheck.domain.toLowerCase() === domain.toLowerCase()
+    ) {
+      return domainCheck.message || "This domain is not available.";
+    }
     return null;
   }
+
+  // Debounced backend availability check for "domain already purchased" scenario.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = websiteUrl.trim();
+    const domain = normalizeDomain(raw);
+    if (!raw || !domain) {
+      setDomainCheck({ status: "idle", domain: "", message: "" });
+      return;
+    }
+
+    const localDup = (Array.isArray(sites) ? sites : []).some((s: any) => {
+      const existingDomain = normalizeDomain(String(s?.domain || s?.name || ""));
+      return existingDomain && existingDomain.toLowerCase() === domain.toLowerCase();
+    });
+    if (localDup) {
+      setDomainCheck({ status: "idle", domain: "", message: "" });
+      return;
+    }
+
+    // If basic syntactic validation fails, don't call backend.
+    if (!domain.includes(".") || /\s/.test(domain)) {
+      setDomainCheck({ status: "idle", domain: "", message: "" });
+      return;
+    }
+
+    let cancelled = false;
+    setDomainCheck({ status: "checking", domain, message: "Checking availability…" });
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await checkDomainAvailability({ websiteUrl: domain });
+        if (cancelled) return;
+        const available = Boolean(res?.available);
+        if (available) {
+          setDomainCheck({ status: "available", domain, message: "" });
+        } else {
+          setDomainCheck({
+            status: "unavailable",
+            domain,
+            message:
+              res?.message ||
+              "This domain is already in use by another account with an active subscription.",
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        // Don't hard-block on transient backend failures; submit will still enforce it.
+        setDomainCheck({ status: "idle", domain: "", message: "" });
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [websiteUrl, sites]);
 
   async function handlePlanAction(planId: PlanType) {
     if (planId === "free" && hasExistingFreeSite) {
@@ -195,13 +278,19 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
         await refresh({ showLoading: false });
         onClose?.();
-        // Use postSetup=1 so PostSetupOverlay shows InstallConsentModal on the current page.
-        const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
+        // Land on the new site's dashboard path so the header dropdown + plan match the new site.
+        // (Keeping the old /dashboard/[id]/... path while only ?siteId= is new left the UI on the previous site.)
         if (newSiteId) {
+          const url = new URL(`/dashboard/${newSiteId}`, window.location.origin);
           url.searchParams.set("postSetup", "1");
           url.searchParams.set("siteId", newSiteId);
+          url.searchParams.set("domain", domain);
+          router.push(url.pathname + url.search + (url.hash || ""));
+        } else {
+          const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
+          url.searchParams.set("postSetup", "1");
+          router.push(url.pathname + url.search + (url.hash || ""));
         }
-        router.push(url.pathname + url.search + (url.hash || ""));
       } else {
         if (!activeOrganizationId) {
           setSubmitError("Organization not loaded. Please refresh and try again.");
@@ -233,7 +322,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
@@ -325,10 +414,29 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                   }`}
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
+                {domainCheck.status === "checking" && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <svg
+                      className="animate-spin h-4 w-4 text-[#007AFF]"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  </div>
+                )}
                 {urlError && (
                   <p className="mt-1.5 text-xs text-[#b91c1c] flex items-center gap-1">
                     <span>⚠</span>
                     {urlError}
+                  </p>
+                )}
+                {!urlError && domainCheck.status === "unavailable" && (
+                  <p className="mt-1.5 text-xs text-[#b91c1c] flex items-center gap-1">
+                    <span>⚠</span>
+                    {domainCheck.message}
                   </p>
                 )}
               </div>

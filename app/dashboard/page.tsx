@@ -328,6 +328,7 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-[#E6F1FD]">
         <Header />
         <InstallConsentModal
+          key={postSetupInstall.siteId}
           open={true}
           scriptUrl={postSetupInstall.scriptUrl}
           siteDomain={postSetupInstall.siteDomain}
@@ -431,6 +432,7 @@ export default function DashboardPage() {
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={activeSiteId} />
       <InstallConsentModal
+        key={activeSite?.id ? `dash-${activeSite.id}` : "dash-install"}
         open={showInstallModal}
         scriptUrl={rawInstallScriptUrl}
         siteDomain={activeSite?.domain}
@@ -440,6 +442,7 @@ export default function DashboardPage() {
       />
       {/* Post-payment: show install code after successful Stripe checkout */}
       <InstallConsentModal
+        key={postSetupInstall?.siteId ? `post-${postSetupInstall.siteId}` : "post-install"}
         open={postSetupInstall !== null}
         scriptUrl={postSetupInstall?.scriptUrl ?? ''}
         siteDomain={postSetupInstall?.siteDomain}
