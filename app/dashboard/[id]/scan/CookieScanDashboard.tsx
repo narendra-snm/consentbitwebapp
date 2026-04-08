@@ -177,6 +177,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   );
   const sitesRef = useRef(siteList);
   sitesRef.current = siteList;
+  const currentSite = useMemo(() => siteList.find((s: any) => String(s?.id) === String(siteId)), [siteList, siteId]);
+  const siteDomain = useMemo(() => {
+    const d = (currentSite as any)?.domain ?? '';
+    return String(d).replace(/^https?:\/\//i, '').split('/')[0].trim();
+  }, [currentSite]);
   const [scanHistory, setScanHistory] = useState<ScanHistoryRow[]>([]);
   const [cookiesByCategory, setCookiesByCategory] = useState<Record<string, ScanCookie[]>>({});
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
@@ -199,6 +204,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [customCookieForm, setCustomCookieForm] = useState({
     name: '',
     domain: '',
+    provider: '',
     duration: '',
     scriptUrlPattern: '',
     description: '',
@@ -210,6 +216,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   /** No sites on account, or URL site id not in session — show dialog instead of a page error strip. */
   const [showNoSiteModal, setShowNoSiteModal] = useState(false);
   const [scanLimitReached, setScanLimitReached] = useState(false);
+  const [siteNotVerified, setSiteNotVerified] = useState(false);
   const [showScanInitPopup, setShowScanInitPopup] = useState(false);
   const [bottomTab, setBottomTab] = useState<'history' | 'rules'>('history');
   const [historyPage, setHistoryPage] = useState(1);
@@ -423,6 +430,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const msg = e instanceof Error ? e.message : 'Scan failed';
       if (msg.toLowerCase().includes('scan limit') || msg.toLowerCase().includes('limit reached')) {
         setScanLimitReached(true);
+      } else if (msg.toLowerCase().includes('not verified') || msg.toLowerCase().includes('site_not_verified')) {
+        setSiteNotVerified(true);
       } else {
         setError(msg);
       }
@@ -445,6 +454,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     setCustomCookieForm({
       name: '',
       domain: '',
+      provider: '',
       duration: '',
       scriptUrlPattern: '',
       description: '',
@@ -460,8 +470,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   const handleSaveCustomCookie = async () => {
     if (!siteId) return;
-    if (!customCookieForm.name.trim() || !customCookieForm.domain.trim()) {
-      setAddCookieError('Cookie ID and Domain are required.');
+    if (!customCookieForm.name.trim()) {
+      setAddCookieError('Cookie ID is required.');
       return;
     }
     setAddCookieError(null);
@@ -470,15 +480,16 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       await addCustomCookieRule({
         siteId,
         name: customCookieForm.name.trim(),
-        domain: customCookieForm.domain.trim(),
+        domain: siteDomain,
         category: customCookieForm.category,
+        provider: customCookieForm.provider.trim() || undefined,
         duration: customCookieForm.duration.trim() || undefined,
         scriptUrlPattern: customCookieForm.scriptUrlPattern.trim() || undefined,
         description: customCookieForm.description.trim() || undefined,
       });
       setShowAddCookie(false);
       setAddCookieError(null);
-      setCustomCookieForm({ name: '', domain: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
+      setCustomCookieForm({ name: '', domain: '', provider: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
       setBottomTab('rules');
       // Refresh full data so cookie list reflects the new rule immediately
       await loadData(false);
@@ -609,7 +620,21 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               {loading ? 'Loading…' : lastSuccessfulScan ? formatLocalDateTime(lastSuccessfulScan.createdAt) : 'No scans yet'}
             </p>
           </div>
-          {scanLimitReached ? (
+          {siteNotVerified ? (
+            <div className="flex flex-col items-end gap-1">
+              <span className="font-['DM_Sans'] text-xs font-medium text-[#ef4444]" style={dm}>
+                Script not detected on site
+              </span>
+              <button
+                type="button"
+                disabled
+                className="h-10 rounded-lg bg-[#e5e7eb] px-5 font-['DM_Sans'] text-[15px] font-normal leading-5 text-[#9ca3af] cursor-not-allowed"
+                style={dm}
+              >
+                Scan Now
+              </button>
+            </div>
+          ) : scanLimitReached ? (
             <div className="flex flex-col items-end gap-1">
               <span className="font-['DM_Sans'] text-xs font-medium text-[#f59e0b]" style={dm}>
                 Monthly scan limit reached
@@ -859,7 +884,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     Scan Now
                   </button>{' '}
                   button at the top of this page
-                  {scanLimitReached ? (
+                  {siteNotVerified ? (
+                    <>
+                      {' '}— but first,{' '}
+                      <span className="font-medium text-[#ef4444]">install the ConsentBit script on your site</span>
+                      {' '}to verify ownership before scanning.
+                    </>
+                  ) : scanLimitReached ? (
                     <>
                       {' '}
                       (or{' '}
@@ -1066,15 +1097,22 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="font-['DM_Sans'] text-xs font-medium text-[#374151]" style={dm}>
-                  Domain <span className="text-[#ef4444]">*</span>
+                  Domain
                 </label>
                 <input
-                  value={customCookieForm.domain}
-                  onChange={(e) => {
-                    setAddCookieError(null);
-                    setCustomCookieForm((s) => ({ ...s, domain: e.target.value }));
-                  }}
-                  placeholder="e.g. google.com"
+                  value={siteDomain}
+                  readOnly
+                  className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm bg-[#f6f6f6] text-[#9ca3af] cursor-not-allowed"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="font-['DM_Sans'] text-xs font-medium text-[#374151]" style={dm}>
+                  Provider <span className="text-[#9ca3af] font-normal">(optional)</span>
+                </label>
+                <input
+                  value={customCookieForm.provider}
+                  onChange={(e) => setCustomCookieForm((s) => ({ ...s, provider: e.target.value }))}
+                  placeholder="e.g. Google Analytics"
                   className="h-11 rounded-md border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#007aff]"
                 />
               </div>

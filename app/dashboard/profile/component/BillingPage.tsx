@@ -1,15 +1,23 @@
 
 "use client";
 export const runtime = 'edge';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getBillingInvoices,
   getBillingSummary,
   createBillingPortalSession,
   cancelSubscription,
+  renameSite,
+  checkSiteDomainForRename,
   type BillingInvoice,
   type BillingSummary,
 } from "@/lib/client-api";
+import {
+  normalizeSiteLabel,
+  isDuplicateDomainForOthers,
+  validateManageDomain,
+  deriveSiteNameFromDomain,
+} from "@/lib/site-manage-helpers";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import BillingDetailsCard from "./BillingDetailsCard";
@@ -99,6 +107,39 @@ export default function BillingPage({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+
+  /** Site selected in header (or first site) — editable registered URL on the plan card */
+  const [planSiteDomain, setPlanSiteDomain] = useState("");
+  const [planSiteError, setPlanSiteError] = useState<string | null>(null);
+  const [planSiteSaving, setPlanSiteSaving] = useState(false);
+
+  const domainSitesRef = useRef(domainSites);
+  domainSitesRef.current = domainSites;
+  const sessionSitesRef = useRef(sessionSites);
+  sessionSitesRef.current = sessionSites;
+
+  const planEditableSiteId = useMemo(
+    () => activeSiteId || domainSites[0]?.id || null,
+    [activeSiteId, domainSites],
+  );
+
+  // Only when the selected site changes — not on every sessionSites tick (would clear duplicate-name error early).
+  useEffect(() => {
+    if (!planEditableSiteId) {
+      setPlanSiteDomain("");
+      return;
+    }
+    const ss = sessionSitesRef.current;
+    const fromSession = (Array.isArray(ss) ? ss : []).find(
+      (x: { id?: string }) => String(x?.id) === String(planEditableSiteId),
+    ) as { domain?: string } | undefined;
+    const s = fromSession
+      ? { domain: String(fromSession.domain ?? "") }
+      : domainSitesRef.current.find((x) => String(x.id) === String(planEditableSiteId));
+    if (!s) return;
+    setPlanSiteDomain(String(s.domain ?? ""));
+    setPlanSiteError(null);
+  }, [planEditableSiteId]);
 
   // True if subscription is set to cancel at period end — checked from both summary and session site data
   const isCancelled =
@@ -255,6 +296,69 @@ export default function BillingPage({
     : currentPlan === "Essential" ? "Upgrade to Growth"
     : "Manage Subscription";
   const canUpgrade = currentPlan !== "Growth";
+
+  const handleSavePlanSiteDetails = async () => {
+    if (!planEditableSiteId || !planSiteDomain.trim()) return;
+    setPlanSiteError(null);
+    const domainErr = validateManageDomain(planSiteDomain);
+    if (domainErr) {
+      setPlanSiteError(domainErr);
+      return;
+    }
+    const rows =
+      Array.isArray(sessionSites) && sessionSites.length > 0 ? sessionSites : sites;
+    if (isDuplicateDomainForOthers(rows, planEditableSiteId, planSiteDomain.trim())) {
+      setPlanSiteError("This website URL is already used by another site in your account.");
+      return;
+    }
+    const derivedName = deriveSiteNameFromDomain(planSiteDomain.trim());
+    setPlanSiteSaving(true);
+    try {
+      const preflight = await checkSiteDomainForRename(planSiteDomain.trim(), planEditableSiteId);
+      if (!preflight.success) {
+        setPlanSiteError(preflight.error || "Could not validate this website URL.");
+        return;
+      }
+      if (preflight.available === false) {
+        setPlanSiteError(
+          preflight.message || "This website URL is not available. Choose a different URL.",
+        );
+        return;
+      }
+      const result = await renameSite(planEditableSiteId, derivedName, planSiteDomain.trim());
+      const updatedSite = (result.site || {}) as Record<string, unknown>;
+      try {
+        if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("cbSessionCache");
+      } catch {
+        /* ignore */
+      }
+      await refresh({ showLoading: false });
+      const normDomain = normalizeSiteLabel(planSiteDomain.trim());
+      updateSiteInState({
+        id: planEditableSiteId,
+        ...updatedSite,
+        name: String(updatedSite.name ?? derivedName),
+        domain: String(updatedSite.domain ?? normDomain),
+      });
+    } catch (e: unknown) {
+      const err = e as Error & { code?: string };
+      if (err.code === "DOMAIN_EXISTS_OTHER_ACCOUNT") {
+        setPlanSiteError("This website URL is already registered to another ConsentBit account.");
+      } else if (err.code === "DOMAIN_EXISTS_SAME_ACCOUNT") {
+        setPlanSiteError("This website URL is already used by another site in your account.");
+      } else if (err.code === "DUPLICATE_SITE_NAME") {
+        setPlanSiteError(
+          "This site name is already used by another site in your account. Choose a different URL.",
+        );
+      } else if (err.code === "DOMAIN_REQUIRED" || err.code === "INVALID_DOMAIN") {
+        setPlanSiteError(err.message || "Enter a valid website URL.");
+      } else {
+        setPlanSiteError(err.message || "Failed to update site");
+      }
+    } finally {
+      setPlanSiteSaving(false);
+    }
+  };
 
   const handleOpenPortal = async () => {
     if (!organizationId) return;
@@ -587,6 +691,45 @@ export default function BillingPage({
             <h2 className="text-[16px] font-semibold">Your Current plan</h2>
             <span className="text-[18px] font-black text-[#007AFF]">{planLabel}</span>
           </div>
+
+          {planEditableSiteId ? (
+            <div className="py-4 border-b border-gray-200 space-y-3">
+              <div>
+                <p className="text-[13px] font-medium text-black">Site for this plan</p>
+                <p className="text-[12px] text-[#6b7280] mt-0.5">
+                  Matches the site selected in the dashboard header. The list label uses the same host as this URL.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[12px] text-[#6b7280] mb-1" htmlFor="billing-plan-site-url">
+                  Website URL
+                </label>
+                <input
+                  id="billing-plan-site-url"
+                  type="text"
+                  value={planSiteDomain}
+                  onChange={(e) => {
+                    setPlanSiteDomain(e.target.value);
+                    setPlanSiteError(null);
+                  }}
+                  disabled={planSiteSaving}
+                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                  placeholder="example.com"
+                />
+              </div>
+              {planSiteError ? (
+                <p className="text-[12px] text-red-600">{planSiteError}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void handleSavePlanSiteDetails()}
+                disabled={planSiteSaving || !planSiteDomain.trim()}
+                className="w-full sm:w-auto min-h-[36px] px-4 rounded-lg bg-[#007AFF] hover:bg-blue-700 text-white text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {planSiteSaving ? "Saving…" : "Save site details"}
+              </button>
+            </div>
+          ) : null}
 
           <div className="pt-3 pb-3 border-b border-gray-200">
             <div className="grid grid-cols-3 gap-6">
