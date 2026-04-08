@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serverFetch } from '@/lib/server-api';
+import { serverFetchJson } from '@/lib/server-api';
 
 export const runtime = 'edge';
 
@@ -10,12 +10,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'siteId is required' }, { status: 400 });
     }
     const cookie = request.headers.get('cookie') || '';
-    const response = await serverFetch(`/api/scan-history?siteId=${encodeURIComponent(siteId)}`, {
+    const { data, status } = await serverFetchJson(`/api/scan-history?siteId=${encodeURIComponent(siteId)}`, {
       method: 'GET',
       cookies: cookie,
     });
-    const data = await response.json().catch(async () => ({ success: false, error: await response.text() }));
-    return NextResponse.json(data, { status: response.status });
+
+    // Debug: log decoded scan history payload (worker envelope already decoded).
+    // Safe-ish: do not log request cookies or headers.
+    console.log('[scan-history] decoded response', JSON.stringify({ siteId, data }, null, 2));
+
+    return NextResponse.json(data, { status });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch scan history';
     console.error('[scan-history]', error);

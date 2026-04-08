@@ -235,17 +235,18 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const scheduled = scheduledData.scheduledScans || [];
       const rules = rulesData.rules || [];
 
-      // Enrich the latest completed scan row with data from getSiteCookies when the backend
-      // didn't populate categories / counts on the scan_history record itself.
+      // Enrich scan rows that are missing categories/counts using data from getSiteCookies.
+      // The Cookie table uses ON CONFLICT so rows point to the latest scan — all historical
+      // scans share the same cookie pool, so we apply derivedCategories to all missing rows.
       const derivedCategories = ALL_CATEGORIES.filter((c) => (byCat[c]?.length ?? 0) > 0);
       const totalCookies = Object.values(byCat).reduce((sum, arr) => sum + (arr?.length ?? 0), 0);
-      if (history.length > 0) {
-        const latest = history[0];
-        const needsCategories = !latest.categories?.length && derivedCategories.length > 0;
-        const needsCookieCount = (latest.cookiesFound === 0 || latest.cookiesFound == null) && totalCookies > 0;
+      for (let i = 0; i < history.length; i++) {
+        const row = history[i];
+        const needsCategories = !row.categories?.length && derivedCategories.length > 0;
+        const needsCookieCount = (row.cookiesFound === 0 || row.cookiesFound == null) && totalCookies > 0;
         if (needsCategories || needsCookieCount) {
-          history[0] = {
-            ...latest,
+          history[i] = {
+            ...row,
             ...(needsCategories ? { categories: derivedCategories } : {}),
             ...(needsCookieCount ? { cookiesFound: totalCookies } : {}),
           };
@@ -479,9 +480,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       setAddCookieError(null);
       setCustomCookieForm({ name: '', domain: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
       setBottomTab('rules');
-      // Refresh rules list only (lightweight)
-      const rulesData = await getCustomCookieRules(siteId).catch(() => ({ rules: [] as CustomCookieRule[] }));
-      setCustomRules(rulesData.rules || []);
+      // Refresh full data so cookie list reflects the new rule immediately
+      await loadData(false);
     } catch (e: unknown) {
       setAddCookieError(e instanceof Error ? e.message : 'Failed to save rule');
     } finally {
