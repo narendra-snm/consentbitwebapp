@@ -668,7 +668,7 @@ export default function page({ siteId }: { siteId: string }) {
 
   const [iabEnabled, setIabEnabled] = useState(false);
   const [iabHydrated, setIabHydrated] = useState(false);
-
+console.log(site)
   // Preserve IAB toggle state per-site across dashboard navigation (sessionStorage).
   // This is intentionally "session" scope (not permanent) so it survives tab changes but resets on browser close.
   useEffect(() => {
@@ -696,9 +696,8 @@ export default function page({ siteId }: { siteId: string }) {
     if (!iabHydrated) return;
     window.sessionStorage.setItem(iabSessionKey, iabEnabled ? "1" : "0");
   }, [iabEnabled, iabSessionKey, iabHydrated]);
-  const isToggleEnabled =
-    effectivePlanId === "growth" || effectivePlanId === "essential";
-
+  const isToggleEnabled =site?.planId==="growth" || site?.planId==="essential";
+console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectivePlanId);
   // Free plan should not have access to Content/Layout/Type sections.
   useEffect(() => {
     if (!isFreePlan) return;
