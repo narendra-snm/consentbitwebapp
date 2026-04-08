@@ -135,8 +135,8 @@ export default function SiteSummaryCards({
              {regionMode}
             </p>
 
-           <p className="text-xs font-medium text-[#4B5563] mt-8.5">Last Updated</p>
-            <p className="mt-1 font-medium">
+           <p className="text-xs text-[#4B5563] mt-8.5">Last Updated</p>
+            <p className=" mt-1 font-medium ">
               {updatedLabel}
             </p>
           </div>

@@ -36,12 +36,11 @@ export default function FeedbackDesign() {
   }
 
   return (
-    <div className="bg-white pt-3.25 flex flex-col items-center gap-[24px]">
-      {/* Top row */}
-      <div className="flex gap-[16px]">
+    <div className=" bg-white pt-3.25 flex items-start justify-center">
+      <div className="grid w-full grid-cols-2 gap-[16px]">
         {/* Left Section - Supported tech tools */}
-        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] w-[566px] h-[116px] p-[14px]">
-          <h2
+        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] max-w-[566px] min-h-[116px] p-[14px]">
+          <h2 
             className="font-['DM_Sans:SemiBold',sans-serif] font-semibold text-[16px] text-black leading-[20px] mb-[7px]"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
@@ -65,8 +64,8 @@ export default function FeedbackDesign() {
         </div>
 
         {/* Right Section - Share your feedbacks */}
-        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] w-[566px] h-[116px] p-[14px]">
-          <h2
+        <div className="bg-[#f6f6f6] border border-[#ededed] rounded-[10px] max-w-[566px] min-h-[116px] p-[14px]">
+          <h2 
             className="font-['DM_Sans:SemiBold',sans-serif] font-semibold text-[16px] text-black leading-[20px] mb-[15px]"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
