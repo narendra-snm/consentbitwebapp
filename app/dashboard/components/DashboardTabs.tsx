@@ -6,7 +6,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useDashboardSession } from "../DashboardSessionProvider";
 
 /** Second path segment after /dashboard that is not a site id */
-const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain"]);
+const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain", "post-setup"]);
 
 type AnimatedIconProps = {
   className?: string;

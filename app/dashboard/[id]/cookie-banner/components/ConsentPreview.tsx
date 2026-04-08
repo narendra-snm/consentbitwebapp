@@ -17,7 +17,9 @@ function stripTrailingMoreInfo(text: string): string {
 // Keep parity with editor + CDN/embed so preview never "breaks" with long strings.
 const LIMITS = {
   title: 30,
-  message: 320,
+  // CCPA opt-out intro copy can be much longer than the cookie notice.
+  // Keep this generous so defaults + user edits aren't truncated in preview.
+  message: 600,
   button: 20,
   policyLabel: 30,
 } as const;
@@ -132,7 +134,8 @@ export default function ConsentPreview({
     saveMyPreferencesLabel?: string;
   };
 }) {
-  // Avoid unused prop warnings in strict TS configs.
+  // Site homepage iframe preview intentionally disabled — some sites block embedding (CSP/XFO)
+  // and it distracts from banner layout. Keep banner on a neutral canvas instead.
   void siteDomain;
   const { colors, alignment, bannerLayout, fontFamily: bannerFont, weight } =
     useAppContext();
@@ -248,6 +251,19 @@ export default function ConsentPreview({
   const [prefAnalytics, setPrefAnalytics] = useState(false);
   const [prefUserCategory, setPrefUserCategory] = useState(false);
 
+  // Small "Changes saved" toast anchored to the Save button.
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  useEffect(() => {
+    // `saveSuccess` is controlled by the parent and may reset before our desired toast duration.
+    // Trigger the toast on success; auto-hide is handled by the separate effect below.
+    if (saveSuccess) setShowSaveToast(true);
+  }, [saveSuccess]);
+  useEffect(() => {
+    if (!showSaveToast) return;
+    const t = window.setTimeout(() => setShowSaveToast(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [showSaveToast]);
+
   const safeContent = useMemo(() => {
     const c = content || {};
     return {
@@ -339,8 +355,17 @@ export default function ConsentPreview({
     <div className="w-full px-3.75">
       {/* Tabs */}
       <div className="flex items-center justify-between mb-4 mt-4.5">
-        {/* Free user: show ONLY selected tab based on dropdown selection. */}
-        {isFreeForced ? (
+        {/* IAB: show a single tab (GDPR) */}
+        {iabEnabled ? (
+          <div className="flex items-center gap-4">
+            <div
+              className="h-[30px] rounded-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]"
+              aria-label="GDPR tab"
+            >
+              <p className="font-medium text-base text-[#007aff]">GDPR</p>
+            </div>
+          </div>
+        ) : isFreeForced ? (
           <div className="flex items-center gap-4">
             <div
               className={`h-[30px] rounded-md px-3 flex items-center bg-[#edeefc] border-b-2 border-[#007aff]`}
@@ -411,14 +436,32 @@ export default function ConsentPreview({
 
         {/* Right Side Buttons */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={saveDisabled || saveBusy}
-            onClick={() => void onSaveChanges?.()}
-            aria-label={saveBusy ? 'Saving…' : 'Save changes'}
-            title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
-            className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
-          >
+          <div className="relative">
+            {showSaveToast ? (
+              <div
+                role="status"
+                className="absolute right-0 bottom-full mb-2 flex items-center justify-between gap-3 rounded-md bg-[#007aff] px-4 py-2 text-xs text-white shadow-md min-w-[220px]"
+              >
+                <span className="whitespace-nowrap">Changes saved</span>
+                <button
+                  type="button"
+                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-white/15"
+                  aria-label="Close saved notification"
+                  onClick={() => setShowSaveToast(false)}
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              disabled={saveDisabled || saveBusy}
+              onClick={() => void onSaveChanges?.()}
+              aria-label={saveBusy ? 'Saving…' : 'Save changes'}
+              title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
+              className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
+            >
             <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
               {saveBusy ? 'Saving…' : 'Save changes'}
             </span>
@@ -458,7 +501,8 @@ export default function ConsentPreview({
                 />
               </svg>
             )}
-          </button>
+            </button>
+          </div>
 
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
@@ -474,20 +518,7 @@ export default function ConsentPreview({
                 {publishBusy ? 'Publishing…' : 'Publish Changes'}
               </button>
             </div>
-            {saveSuccess ? (
-              <p className="text-xs text-[#15803d] max-w-[260px] text-right" role="status">
-                Changes saved.
-                {onDismissSaveSuccess ? (
-                  <button
-                    type="button"
-                    className="ml-2 underline text-[#166534]"
-                    onClick={() => onDismissSaveSuccess()}
-                  >
-                    Dismiss
-                  </button>
-                ) : null}
-              </p>
-            ) : null}
+            {/* Save toast now appears above the Save button */}
             {publishError ? (
               <div
                 role="alert"
@@ -533,19 +564,30 @@ export default function ConsentPreview({
         <div
           ref={previewAreaRef}
           className={`relative bg-gray-100 flex-1 flex flex-col min-h-0 ${
-            modalView === 'main' ? 'overflow-hidden' : 'overflow-y-auto justify-start p-6 pb-5'
+            modalView === 'main'
+              ? 'overflow-hidden'
+              : modalView === 'ccpa-optout'
+                ? 'overflow-y-auto justify-center items-center p-6 pb-5'
+                : 'overflow-y-auto justify-start p-6 pb-5'
           }`}
           style={bannerTypographyStyle}
         >
+          {/* Neutral preview canvas — banner overlays this area */}
+          {modalView === "main" ? (
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white via-slate-50 to-slate-100" />
+          ) : null}
           {!iabEnabled && <>{  modalView === 'main' ? (() => {
             // Banner card — shared across all layouts
             // Offset banner from floating trigger on the same side — mirrors CDN applyInitialBannerFloatingGutter.
             const isMobile = device === 'mobile';
-            const floatLeft = floatingButton.enabled && floatingButton.position === 'left';
-            const floatRight = floatingButton.enabled && floatingButton.position === 'right';
+            // Mobile preview: do not render the floating icon and do not reserve any gutter for it.
+            const floatingEnabledForPreview = floatingButton.enabled && !isMobile;
+            const floatLeft = floatingEnabledForPreview && floatingButton.position === 'left';
+            const floatRight = floatingEnabledForPreview && floatingButton.position === 'right';
             const bannerOnLeft = layoutPos !== 'banner' && (layoutPos === 'bottom-center' || layoutAlign === 'bottom-left');
             const bannerOnRight = layoutPos !== 'banner' && layoutAlign === 'bottom-right';
-            const mobileFullWidth = isMobile || device === 'tablet';
+            // Only force full-width on the smallest frame. Tablet should still reflect the selected layout.
+            const mobileFullWidth = isMobile;
             // On mobile/tablet: full-width, buttons stack per row
             const initialBannerShell =
               mobileFullWidth
@@ -559,7 +601,9 @@ export default function ConsentPreview({
                 className={`shadow-lg box-border relative rounded-md border border-[#e2e8f0] p-4 ${initialBannerShell}`}
                 style={{
                   backgroundColor: colors.bannerBg,
-                  borderRadius: isMobile ? 0 : `${initialLayout?.borderRadius ?? 12}px`,
+                  // On mobile preview keep the same rounding as the banner settings.
+                  // Width/position is controlled by the wrapper below.
+                  borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
                   // Width is controlled by the wrapper div; bannerCard just fills it.
                   width: '100%',
                   minWidth: (isMobile || layoutPos === 'banner') ? undefined : '280px',
@@ -592,18 +636,31 @@ export default function ConsentPreview({
                   ) : null}
                 </div>
                 {selectedBannerType === 'gdpr' ? (
-                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-col w-full' : 'flex-nowrap justify-end'}`}>
+                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-row flex-wrap w-full' : 'flex-nowrap justify-end'}`}>
                     {safeContent.customizeButton !== false ? (
-                      <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} onClick={openPreferences} type="button" style={preferenceStyle}>
+                      <button
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        onClick={openPreferences}
+                        type="button"
+                        style={preferenceStyle}
+                      >
                         {safeContent.preferencesLabel || t('preferences')}
                       </button>
                     ) : null}
                     {safeContent.rejectButton !== false ? (
-                      <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} type="button" style={acceptRejectStyle}>
+                      <button
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        type="button"
+                        style={acceptRejectStyle}
+                      >
                         {safeContent.rejectAll || t('rejectAll')}
                       </button>
                     ) : null}
-                    <button className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`} type="button" style={acceptRejectStyle}>
+                    <button
+                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                      type="button"
+                      style={acceptRejectStyle}
+                    >
                       {safeContent.acceptAll || t('acceptAll') || 'Ok, Got it'}
                     </button>
                   </div>
@@ -613,7 +670,7 @@ export default function ConsentPreview({
 
             // Full-width banner: banner renders at the bottom edge; pad the side the floating logo is on.
             if (layoutPos === 'banner') {
-              const bannerPad = floatingButton.enabled
+              const bannerPad = floatingEnabledForPreview
                 ? floatingButton.position === 'right' ? 'pr-14' : 'pl-14'
                 : '';
               return (
@@ -630,6 +687,10 @@ export default function ConsentPreview({
             const floatGutter = 56;
             const bannerPosStyle: React.CSSProperties = (() => {
               if (mobileFullWidth) {
+                // On phone preview keep banner inside the device frame (no overflow).
+                return { position: 'absolute', bottom: 12, left: 12, right: 12 };
+              }
+              if (layoutPos === 'banner') {
                 return { position: 'absolute', bottom: 0, left: 0, right: 0 };
               }
               if (layoutPos === 'bottom-center') {
@@ -638,17 +699,17 @@ export default function ConsentPreview({
               if (layoutAlign === 'bottom-right') {
                 const base = 32;
                 const offset = (floatRight && bannerOnRight) ? floatGutter : 0;
-                return { position: 'absolute', bottom: 32, right: base + offset };
+                return { position: 'absolute', bottom: base, right: base + offset };
               }
-              // bottom-left
+              // bottom-left (box)
               const base = 32;
               const offset = (floatLeft && bannerOnLeft) ? floatGutter : 0;
-              return { position: 'absolute', bottom: 32, left: base + offset };
+              return { position: 'absolute', bottom: base, left: base + offset };
             })();
 
             // Compute explicit wrapper width so absolute positioning anchors correctly.
             const bannerWidth = (() => {
-              if (mobileFullWidth) return '100%';
+              if (mobileFullWidth || layoutPos === 'banner') return '100%';
               const isBoldHeavy = weight === 'Black' || weight === 'Extra Bold';
               const maxBtnLen = Math.max(
                 (safeContent.acceptAll?.length ?? 0),
@@ -679,13 +740,10 @@ export default function ConsentPreview({
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, maxHeight: '72vh', ...previewAnimStyle }}
             >
               {/* Sticky header */}
-              <div className="flex items-start justify-between gap-2 px-5 pt-5 pb-3 shrink-0">
-                <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="flex-1 min-w-0 text-[14px] tracking-tight">
-                  {safeContent.preferenceTitle || t("cookiePreferences")}
-                </p>
+              <div className="relative px-5 pt-5 pb-3 shrink-0">
                 {content?.closeButton ? (
                   <button
-                    className="shrink-0 text-black opacity-70 leading-none"
+                    className="absolute top-4 right-5 shrink-0 text-black opacity-70 leading-none"
                     type="button"
                     onClick={() => setModalView("main")}
                     aria-label="Close preferences"
@@ -693,6 +751,12 @@ export default function ConsentPreview({
                     ×
                   </button>
                 ) : null}
+                <p
+                  style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                  className={`min-w-0 text-[14px] tracking-tight ${content?.closeButton ? 'pr-7' : ''}`}
+                >
+                  {safeContent.preferenceTitle || t("cookiePreferences")}
+                </p>
               </div>
 
               {/* Scrollable body */}
@@ -851,11 +915,19 @@ export default function ConsentPreview({
               </div>{/* end scrollable body */}
 
               {/* Sticky footer buttons */}
-              <div className="flex justify-end gap-3 px-5 py-4 shrink-0 flex-wrap border-t border-[#f0f0f0]">
+              <div
+                className={`px-5 py-4 shrink-0 border-t border-[#f0f0f0] ${
+                  device === 'mobile'
+                    ? 'flex flex-col gap-2'
+                    : 'flex justify-end gap-3 flex-wrap'
+                }`}
+              >
                 {content?.rejectButton !== false ? (
                   <button
                     style={acceptRejectStyle}
-                    className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer max-w-[220px] truncate whitespace-nowrap"
+                    className={`px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer ${
+                      device === 'mobile' ? 'w-full' : 'max-w-[220px] truncate whitespace-nowrap'
+                    }`}
                     type="button"
                     onClick={() => setModalView("main")}
                   >
@@ -864,7 +936,9 @@ export default function ConsentPreview({
                 ) : null}
                 <button
                   style={preferenceStyle}
-                  className="px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer max-w-[220px] truncate whitespace-nowrap"
+                  className={`px-5 py-2 min-w-[88px] border text-[11px] rounded-md hover:opacity-95 cursor-pointer ${
+                    device === 'mobile' ? 'w-full' : 'max-w-[220px] truncate whitespace-nowrap'
+                  }`}
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -875,23 +949,27 @@ export default function ConsentPreview({
           ) : (
             <div
               key={`ccpa-optout-${bannerAnimation}`}
-              className="rounded-md shadow-lg w-full min-w-0 p-4 border border-[#e2e8f0]"
+              className="relative rounded-md shadow-lg w-full min-w-0 p-4 border border-[#e2e8f0]"
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
             >
-              <div className="flex items-center justify-between mb-3">
-                <p style={headingStyle} className="flex-1 text-[13px] tracking-tight">
+              {content?.closeButton ? (
+                <button
+                  className="absolute top-3 right-3 text-black opacity-70 cursor-pointer leading-none"
+                  type="button"
+                  onClick={() => setModalView("main")}
+                  aria-label="Close opt-out"
+                >
+                  ×
+                </button>
+              ) : null}
+
+              <div className="mb-3">
+                <p
+                  style={headingStyle}
+                  className={`text-[13px] tracking-tight ${content?.closeButton ? 'pr-7' : ''}`}
+                >
                   {content?.ccpaOptOutTitle || t("optOutPreference")}
                 </p>
-                {content?.closeButton ? (
-                  <button
-                    className="text-black opacity-70 cursor-pointer"
-                    type="button"
-                    onClick={() => setModalView("main")}
-                    aria-label="Close opt-out"
-                  >
-                    ×
-                  </button>
-                ) : null}
               </div>
 
               <p style={bodyTextStyle} className="text-[11px] tracking-tight mb-3 leading-relaxed">
@@ -921,10 +999,10 @@ export default function ConsentPreview({
                 </span>
               </label>
 
-              <div className="flex gap-2">
+              <div className={`${device === 'mobile' ? 'flex flex-col gap-2' : 'flex gap-2'}`}>
                 <button
                   style={acceptRejectStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer "
+                  className={`${device === 'mobile' ? 'w-full' : 'flex-1'} px-3 py-[6px] border text-[11px] rounded cursor-pointer`}
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -932,7 +1010,7 @@ export default function ConsentPreview({
                 </button>
                 <button
                   style={preferenceStyle}
-                  className="flex-1 px-3 py-[6px] border text-[11px] rounded cursor-pointer break-words"
+                  className={`${device === 'mobile' ? 'w-full' : 'flex-1'} px-3 py-[6px] border text-[11px] rounded cursor-pointer break-words`}
                   type="button"
                   onClick={() => setModalView("main")}
                 >
@@ -944,7 +1022,11 @@ export default function ConsentPreview({
             </div>
             </div>
           )}</>}
-{iabEnabled && <CookieConsentBanner alignment={initialLayout?.alignment} device={device} config={{
+{iabEnabled && <CookieConsentBanner
+  key={`iab-${device}-${initialLayout?.position || 'banner'}-${initialLayout?.alignment || 'bottom-left'}-${floatingButton?.enabled ? 'fb-on' : 'fb-off'}-${floatingButton?.position || 'left'}`}
+  alignment={initialLayout?.alignment}
+  device={device}
+  config={{
   bannerBg:colors.bannerBg || "#FFFFFF",
   textColor:colors.textColor || "#000000",
   headingColor: colors.headingColor || "#000000",
@@ -953,13 +1035,16 @@ export default function ConsentPreview({
   SecButtonColor:colors.preferencesButtonBg || "#007AFF",
   SecButtonTextColor: colors.preferencesButtonText || "#FFFFFF",
   textAlign: alignment || "left",
-  fontWeight: "400",
+  fontWeight: weightLabelToNumeric(weight),
+  bannerEntranceAnimation: bannerAnimation,
+  floatingButtonEnabled: floatingButton?.enabled,
+  floatingButtonPosition: floatingButton?.position,
   borderRadius: initialLayout?.borderRadius || "12",
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
         </div>
       {/* Floating logo pinned to the preview frame corner — mirrors CDN position:fixed; bottom:16px; left/right:16px */}
-      {floatingButton.enabled ? (
+      {floatingButton.enabled && device !== "mobile" ? (
         <div
           className={`absolute bottom-4 z-20 pointer-events-none ${
             floatingButton.position === 'right' ? 'right-4' : 'left-4'
@@ -1039,7 +1124,10 @@ export default function ConsentPreview({
       <div
         className="fixed inset-0 z-[999999999999999999999] flex items-center justify-center bg-black/40 p-4"
         role="presentation"
-        onClick={() => onDismissPublishSuccess?.()}
+        onClick={() => {
+          if (publishBusy) return;
+          onDismissPublishSuccess?.();
+        }}
       >
         <div
           role="dialog"
@@ -1079,6 +1167,7 @@ export default function ConsentPreview({
             type="button"
             className="mt-6 w-full rounded-lg bg-[#2ec04f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#26a342] transition-colors cursor-pointer"
             onClick={() => onDismissPublishSuccess?.()}
+            disabled={publishBusy}
           >
             OK
           </button>

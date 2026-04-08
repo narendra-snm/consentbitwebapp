@@ -4,8 +4,8 @@ export const runtime = 'edge';
 import GettingStarted from "../components/GettingStarted";
 import InstallConsentModal from "../components/InstallConsentModal";
 import SiteSummaryCards from "../components/SiteSummaryCards";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import ComplianceAlert from "../components/ComplianceAlert";
 import FeedbackDesign from "../components/FeedbackDesign";
@@ -14,7 +14,6 @@ function DashboardSitePageInner() {
   const params = useParams<{ id: string }>();
   const siteId = params?.id;
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { loading, authenticated, sites, user, setActiveSiteId, refresh } = useDashboardSession();
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -36,29 +35,51 @@ const userName = useMemo(() => {
     if (siteId) setActiveSiteId(String(siteId));
   }, [authenticated, loading, router, setActiveSiteId, siteId]);
 
-  // After Stripe success redirect, poll until plan changes from "free" (webhook can lag).
+  // If we just created a site (free plan) or returned from Stripe, open the install modal
+  // on the very first paint (avoid "dashboard flash" before the modal appears).
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    const shouldOpen =
+      (p.get("postSetup") === "1" && (p.get("siteId") || "") === String(siteId || "")) ||
+      (p.get("upgraded") === "1" && (p.get("siteId") || "") === String(siteId || ""));
+    if (!shouldOpen) return;
+    setShowInstallModal(true);
+    try {
+      // Clean the URL immediately so refresh doesn't re-trigger.
+      router.replace(`/dashboard/${String(siteId || "")}`);
+    } catch {
+      // ignore
+    }
+  }, [router, siteId]);
+
+  // After Stripe payment, poll until the plan changes from "free".
+  // Uses a sessionStorage flag set by the upgrade page — avoids depending on ?success=1
+  // which gets cleared by router.replace() and cancels the polling timer.
   useEffect(() => {
-    const success = searchParams?.get("success");
-    if (success !== "1") return;
-    if (siteId) setActiveSiteId(String(siteId));
-    // Strip the query param immediately so back/refresh doesn't re-trigger.
-    router.replace(`/dashboard/${siteId}`);
+    const flagKey = `cb_post_payment_${siteId}`;
+    const hasFlag = typeof sessionStorage !== "undefined" && sessionStorage.getItem(flagKey) === "1";
+    // Also support legacy ?success=1 from the URL (strip it immediately).
+    const hasSuccessParam =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("success") === "1";
+    if (hasSuccessParam) router.replace(`/dashboard/${siteId}`);
+    if (!hasFlag && !hasSuccessParam) return;
+    if (hasFlag) sessionStorage.removeItem(flagKey);
+
     let attempts = 0;
-    let planBeforePayment: string | null = null;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
-      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
-      // Capture plan on the first fetch — this is what we're waiting to change.
-      if (planBeforePayment === null) planBeforePayment = planNow;
+      const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      // Keep polling until plan changes, or after 20 attempts (~40s).
-      if (planNow === planBeforePayment && attempts < 20) {
+      // Stop once the plan is known and not free, or after 20 attempts (~40s).
+      if ((!planNow || planNow === "free") && attempts < 20) {
         t = setTimeout(poll, 2000);
       }
     };
     void poll();
     return () => { if (t) clearTimeout(t); };
-  }, [refresh, router, searchParams, setActiveSiteId, siteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [siteId, router, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Avoid SSR/CSR mismatches in this client page (Suspense + session state).
   // if (!hydrated || loading){ return null};
@@ -92,10 +113,12 @@ const userName = useMemo(() => {
     );
   }
 
+  const showLoading = !hydrated || loading;
+
   return (
     <div className="px-4">
     <div className="max-w-[1148px] mx-auto pb-4 ">
-      {loading?<LoadingUI/>:<><ComplianceAlert
+      {showLoading?<LoadingUI/>:<><ComplianceAlert
         userName={userName}
         siteDomain={activeSite?.domain}
         bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
@@ -103,6 +126,7 @@ const userName = useMemo(() => {
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={siteId} />
       <InstallConsentModal
+        key={siteId ? String(siteId) : "install"}
         open={showInstallModal}
         scriptUrl={rawInstallScriptUrl}
         siteDomain={activeSite?.domain}

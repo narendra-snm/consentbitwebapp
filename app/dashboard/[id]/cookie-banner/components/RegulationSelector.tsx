@@ -6,11 +6,13 @@ import { useDashboardSession } from "@/app/dashboard/DashboardSessionProvider";
 export function RegulationSelector({
   site,
   loading,
+  disabled,
   effectivePlanId,
   onChange,
 }: {
   site?: any | null;
   loading?: boolean;
+  disabled?: boolean;
   effectivePlanId?: string;
   onChange?: (next: { bannerType: 'gdpr' | 'ccpa'; regionMode: 'gdpr' | 'ccpa' | 'both' }) => void | Promise<void>;
 }) {
@@ -80,8 +82,16 @@ export function RegulationSelector({
 
         {/* Select Button */}
         <button
-          onClick={() => { setOpen(!open); setShowUpgrade(false); }}
-          className="w-full h-12 px-4 flex items-center justify-between bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+          type="button"
+          disabled={Boolean(loading || disabled)}
+          onClick={() => {
+            if (loading || disabled) return;
+            setOpen(!open);
+            setShowUpgrade(false);
+          }}
+          className={`w-full h-12 px-4 flex items-center justify-between bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827] ${
+            loading || disabled ? 'opacity-60 cursor-not-allowed' : ''
+          }`}
           style={{ fontVariationSettings: "'opsz' 14" }}
           suppressHydrationWarning
         >

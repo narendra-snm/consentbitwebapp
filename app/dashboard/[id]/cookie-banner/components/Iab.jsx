@@ -13,7 +13,26 @@ const defaultStyleConfig = {
   fontWeight: "400",
   borderRadius: "12",
   bannerType: "banner", // "box" | "banner" | "popup"
+  bannerEntranceAnimation: "fade-in", // 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in'
+  // Preview-only: allow the outer editor to pass its floating-button state so we can avoid overlap.
+  floatingButtonEnabled: false,
+  floatingButtonPosition: "left",
 };
+
+function entranceAnimStyle(anim, opts = {}) {
+  const isCenter = opts?.isCenter === true;
+  const a = String(anim || "fade-in").toLowerCase();
+  if (isCenter) {
+    if (a === "slide-up") return "cbIabCenterSlideUp 0.4s ease-out both";
+    if (a === "slide-down") return "cbIabCenterSlideDown 0.4s ease-out both";
+    if (a === "zoom-in") return "cbIabCenterZoomIn 0.3s ease-out both";
+    return "cbIabFadeIn 0.3s ease-out both";
+  }
+  if (a === "slide-up") return "cbIabSlideUp 0.4s ease-out both";
+  if (a === "slide-down") return "cbIabSlideDown 0.4s ease-out both";
+  if (a === "zoom-in") return "cbIabZoomIn 0.3s ease-out both";
+  return "cbIabFadeIn 0.3s ease-out both";
+}
 
 // ─── Cookie Categories Data ──────────────────────────────────────────────────
 const cookieCategories = [
@@ -292,7 +311,7 @@ function CookieAccordion({ category, s }) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-              <span style={{ color: s.headingColor, fontWeight: "600", fontSize: "13px" }}>
+              <span style={{ flex: 1, minWidth: 0, color: s.headingColor, fontWeight: s.fontWeight, fontSize: "13px", textAlign: s.textAlign }}>
                 {category.name}
               </span>
               <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -368,7 +387,7 @@ function PurposeItem({ item, s }) {
         onClick={() => setOpen(!open)}
       >
         <Chevron open={open} />
-        <span style={{ flex: 1, fontSize: "13px", color: s.headingColor, fontWeight: "500" }}>{item.title}</span>
+        <span style={{ flex: 1, fontSize: "13px", color: s.headingColor, fontWeight: s.fontWeight, textAlign: s.textAlign }}>{item.title}</span>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }} onClick={(e) => e.stopPropagation()}>
           {item.hasLegitimate && (
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -409,7 +428,7 @@ function PurposeAccordion({ section, s }) {
         onClick={() => setOpen(!open)}
       >
         <Chevron open={open} />
-        <span style={{ flex: 1, fontSize: "13px", fontWeight: "600", color: s.headingColor }}>{section.title}</span>
+        <span style={{ flex: 1, fontSize: "13px", fontWeight: s.fontWeight, color: s.headingColor, textAlign: s.textAlign }}>{section.title}</span>
         {section.hasToggle && (
           <div onClick={(e) => e.stopPropagation()}>
             <Toggle checked={enabled} onChange={setEnabled} accentColor={s.SecButtonColor} />
@@ -443,7 +462,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 18px",
-    border: `2px solid ${s.buttonTextColor}`,
+    border: "none",
     cursor: "pointer",
     backgroundColor: s.buttonColor,
     color: s.buttonTextColor,
@@ -453,7 +472,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
     ...outlineBtn,
     backgroundColor: s.SecButtonColor,
     color: s.SecButtonTextColor,
-    border: `2px solid ${s.SecButtonTextColor}`,
+    border: "none",
   };
 
   const footerJustify = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-start" : "flex-end";
@@ -484,8 +503,10 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
         }}
       >
         {/* Header */}
-        <div style={{ padding: "18px 22px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <span style={{ color: s.headingColor, fontWeight: "700", fontSize: "15px" }}>Customise Consent Preferences</span>
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, gap: "12px" }}>
+          <span style={{ flex: 1, minWidth: 0, color: s.headingColor, fontWeight: s.fontWeight, fontSize: "15px", textAlign: s.textAlign }}>
+            Customise Consent Preferences
+          </span>
           <button
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "50%", display: "flex", color: s.textColor, opacity: 0.5 }}
@@ -513,7 +534,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
                 style={{
                   padding: "10px 16px",
                   fontSize: "12px",
-                  fontWeight: activeTab === tab.id ? "600" : s.fontWeight,
+                  fontWeight: s.fontWeight,
                   borderBottom: `2px solid ${activeTab === tab.id ? s.SecButtonColor : "transparent"}`,
                   color: activeTab === tab.id ? s.textColor : s.textColor,
                   background: "none",
@@ -617,13 +638,15 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
 function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical" }) {
   const br = `${s.borderRadius}px`;
   const btnSmallBr = `${Math.min(Number(s.borderRadius), 8)}px`;
+  const maybeBorder = (bg, borderColor) =>
+    String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
 
   const outlineBtn = {
     borderRadius: btnSmallBr,
     fontWeight: s.fontWeight,
     fontSize: "11px",
     padding: "10px 18px",
-    border: `2px solid ${s.SecButtonTextColor}`,
+    border: maybeBorder(s.SecButtonColor, s.SecButtonTextColor),
     cursor: "pointer",
     backgroundColor: s.SecButtonColor,
     color: s.SecButtonTextColor,
@@ -634,7 +657,7 @@ function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical"
     ...outlineBtn,
     backgroundColor: s.buttonColor,
     color: s.buttonTextColor,
-    border: `2px solid ${s.buttonColor}`,
+    border: "none",
   };
 
   return (
@@ -694,12 +717,14 @@ You have the option to manage your preferences and control how your information 
 
 // ─── Full-Width Banner Layout ─────────────────────────────────────────────────
 function FullBanner({ s, onCustomise, onReject, onAccept }) {
+  const maybeBorder = (bg, borderColor) =>
+    String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
   const outlineBtn = {
     borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 16px",
-    border: `2px solid ${s.buttonTextColor}`,
+    border: maybeBorder(s.buttonColor, s.buttonTextColor),
     cursor: "pointer",
     backgroundColor: s.buttonColor,
     color: s.buttonTextColor,
@@ -709,7 +734,7 @@ function FullBanner({ s, onCustomise, onReject, onAccept }) {
     ...outlineBtn,
     backgroundColor: s.SecButtonColor,
     color: s.SecButtonTextColor,
-    border: `2px solid ${s.SecButtonTextColor}`,
+    border: "none",
   };
   const btnJustifyVal = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start";
 console.log("btnJustifyVal:", btnJustifyVal);
@@ -720,7 +745,7 @@ console.log("btnJustifyVal:", btnJustifyVal);
         backgroundColor: s.bannerBg,
         borderTop: "1px solid #F0F0F0",
         boxShadow: "0 -4px 30px rgba(0,0,0,0.08)",
-        animation: "slideUpBanner 0.3s ease",
+        animation: entranceAnimStyle(s.bannerEntranceAnimation),
       }}
     >
       <div
@@ -750,7 +775,16 @@ You have the option to manage your preferences and control how your information 
           <button style={outlineBtn} onClick={onAccept}>Accept All</button>
         </div>
       </div>
-      <style>{`@keyframes slideUpBanner{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      <style>{`
+        @keyframes cbIabFadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes cbIabSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes cbIabSlideDown{from{transform:translateY(-24px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes cbIabZoomIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}
+        /* Centered layouts must preserve translateX(-50%) during transform animations */
+        @keyframes cbIabCenterSlideUp{from{transform:translateX(-50%) translateY(24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+        @keyframes cbIabCenterSlideDown{from{transform:translateX(-50%) translateY(-24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+        @keyframes cbIabCenterZoomIn{from{transform:translateX(-50%) scale(0.92);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+      `}</style>
     </div>
   );
 }
@@ -772,16 +806,21 @@ console.log(modalOpen)
   };
 console.log(device)
   const br = `${s.borderRadius}px`;
+  const floatGutterPx = s.floatingButtonEnabled ? 64 : 0; // icon (40px) + margin
 const positionStyles =
   s.bannerType === "box"
     ? alignment === "bottom-left"
       ? {
-          left: device === "desktop" ? "20px" : "0px",
+          left: device === "desktop"
+            ? `${20 + (s.floatingButtonPosition === "left" ? floatGutterPx : 0)}px`
+            : `${0 + (s.floatingButtonPosition === "left" ? floatGutterPx : 0)}px`,
           right: "auto",
         }
       : alignment === "bottom-right"
       ? {
-          right: device === "desktop" ? "20px" : "0px",
+          right: device === "desktop"
+            ? `${20 + (s.floatingButtonPosition === "right" ? floatGutterPx : 0)}px`
+            : `${0 + (s.floatingButtonPosition === "right" ? floatGutterPx : 0)}px`,
           left: "auto",
         }
       : {}
@@ -797,7 +836,7 @@ const positionStyles =
             width: "100%", maxWidth: "420px",
             boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
             borderRadius: br,
-            animation: "slideUp 0.4s cubic-bezier(0.25,0.46,0.45,0.94)",
+            animation: entranceAnimStyle(s.bannerEntranceAnimation),
              ...positionStyles,
           }}
         >
@@ -812,8 +851,7 @@ const positionStyles =
             width: "100%", maxWidth: "420px",
             boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
             borderRadius: br,
-            animation: "slideUp 0.4s cubic-bezier(0.25,0.46,0.45,0.94)",
-             ...positionStyles,
+            animation: entranceAnimStyle(s.bannerEntranceAnimation, { isCenter: true }),
           }}
         >
           <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
@@ -855,14 +893,17 @@ const positionStyles =
       />
 
       <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
         @keyframes popIn {
           from { transform: scale(0.88); opacity: 0; }
           to   { transform: scale(1);    opacity: 1; }
         }
+        @keyframes cbIabFadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes cbIabSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes cbIabSlideDown{from{transform:translateY(-24px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes cbIabZoomIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}
+        @keyframes cbIabCenterSlideUp{from{transform:translateX(-50%) translateY(24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+        @keyframes cbIabCenterSlideDown{from{transform:translateX(-50%) translateY(-24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+        @keyframes cbIabCenterZoomIn{from{transform:translateX(-50%) scale(0.92);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
       `}</style>
     </>
   );

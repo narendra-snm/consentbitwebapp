@@ -8,6 +8,7 @@ import {
   type ConsentLogCookie,
   type ConsentHistoryResponse,
   type CustomCookieRule,
+  type ConsentLogCookieRule,
 } from '@/lib/client-api';
 import LoadingPopup from '../scan/component/LoadingPopup';
 const svgPaths={
@@ -183,9 +184,9 @@ function normalizeCustomRuleCategory(cat: string): string {
 }
 
 function customRulesForAcceptedCategories(
-  rules: CustomCookieRule[],
+  rules: ConsentLogCookieRule[],
   categories: ConsentLog['categories'],
-): CustomCookieRule[] {
+): ConsentLogCookieRule[] {
   const c = normalizeCategories(categories);
   if (!c) return [];
   // CCPA accepted (doNotSell = false) → show all custom rules
@@ -400,7 +401,7 @@ export function ConsentLogsDashboard({
   }, [data]);
 
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
-  const customCookieRules: CustomCookieRule[] = data?.customCookieRules ?? [];
+  const customCookieRules: ConsentLogCookieRule[] = data?.customCookieRules ?? [];
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';

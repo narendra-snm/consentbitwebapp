@@ -22,8 +22,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: SidebarProps) {
-  const planKey = String(effectivePlanId || "free").toLowerCase();
-  const isFree = planKey === "free";
+  const planKey = String(effectivePlanId ?? "").toLowerCase();
+  const isFree = planKey === "free" || planKey === "";
 
   const menuItems = [
     { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },

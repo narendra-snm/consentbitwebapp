@@ -140,6 +140,12 @@ function formatCookieDuration(expires: string | null) {
   }
 }
 
+/** Cookie list: show cookie domain / provider; when unknown, show N/A (not available). */
+function cookieCellText(value: string | null | undefined): string {
+  const v = typeof value === 'string' ? value.trim() : '';
+  return v.length > 0 ? v : 'N/A';
+}
+
 const dm = { fontVariationSettings: "'opsz' 14" as const };
 
 type ScanCache = {
@@ -424,21 +430,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     }
   };
 
-  const handleCancelScan = () => {
-    if (scanPollRef.current) {
-      clearInterval(scanPollRef.current);
-      scanPollRef.current = null;
-    }
-    const pid = activeScanPlaceholderIdRef.current;
-    activeScanPlaceholderIdRef.current = null;
-    scanningRef.current = false;
-    setScanning(false);
-    if (pid) {
-      // Remove the placeholder row (queued/in-progress) from history
-      setScanHistory((prev) => prev.filter((s) => String(s.id) !== pid));
-    }
-  };
-
   const handleCancelSchedule = async (id: string) => {
     try {
       await deleteScheduledScan(id);
@@ -518,7 +509,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     setError(null);
     try {
       await deleteCustomCookieRule(id);
-      setCustomRules((prev) => prev.filter((r) => r.id !== id));
+      await loadData(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete rule');
     } finally {
@@ -754,8 +745,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                   <thead>
                     <tr className="border-b border-[#9FBCE4] bg-[#F2F7FF] text-sm ">
                       <th className="px-3 pl-5.5 py-4.5 font-medium text-[#0A091F]">Name</th>
+                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Cookie domain</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Provider</th>
-                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Domain</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Duration</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Source</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Description</th>
@@ -774,8 +765,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-4.5 text-[#0A091F]">{c.provider ?? '—'}</td>
-                        <td className="px-3 py-4.5 text-[#0A091F]">{c.domain || '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{cookieCellText(c.domain)}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{cookieCellText(c.provider)}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{formatCookieDuration(c.expires)}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{c.source ?? '—'}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{c.description || '—'}</td>
@@ -928,18 +919,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                           </div>
                           <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
                           <div className="flex items-center justify-end">
-                            {isActiveRow && (
-                              <button
-                                type="button"
-                                onClick={handleCancelScan}
-                                title="Cancel scan"
-                                className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 text-slate-500 hover:text-red-600 transition-colors"
-                              >
-                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                </svg>
-                              </button>
-                            )}
+                            {isActiveRow ? <div className="w-5 h-5" aria-hidden /> : null}
                           </div>
                         </div>
                       );
@@ -1033,7 +1013,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     <span className="font-['DM_Sans'] text-sm text-[#0a091f] capitalize" style={dm}>{rule.category}</span>
                     <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>{rule.duration || '—'}</span>
                     <span className="font-['DM_Sans'] text-[11px] text-[#6b7280] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
-                    {/* <button
+                    <button
                       type="button"
                       onClick={() => void handleDeleteRule(rule.id)}
                       disabled={deletingRuleId === rule.id}
@@ -1041,7 +1021,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                       style={dm}
                     >
                       {deletingRuleId === rule.id ? '…' : 'Delete'}
-                    </button> */}
+                    </button>
                   </div>
                 ))}
               </div>

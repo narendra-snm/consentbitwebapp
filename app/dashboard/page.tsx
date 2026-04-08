@@ -103,21 +103,32 @@ export default function DashboardPage() {
  useEffect(() => {
    const params = searchParams;
    if (!params) return;
-   if (params.get("postSetup") !== "1") return;
+  const isPostSetup = params.get("postSetup") === "1";
+  const isUpgraded = params.get("upgraded") === "1";
+  if (!isPostSetup && !isUpgraded) return;
 
-   const domain = params.get("domain") ?? "";
-   const siteId = params.get("siteId") ?? "";
-   const returnTo = params.get("returnTo") ?? "";
-   const sig = `${domain}|${siteId}|${returnTo}`;
+  const domain = params.get("domain") ?? "";
+  const siteId = params.get("siteId") ?? "";
+  const returnTo = params.get("returnTo") ?? "";
+  const sig = `${isPostSetup ? "postSetup" : "upgrade"}|${domain}|${siteId}|${returnTo}`;
    if (sig && lastPostSetupSig.current === sig) return;
    lastPostSetupSig.current = sig;
 
    // domain= case is handled by PostSetupOverlay (works on any dashboard page).
    // page.tsx only handles siteId= (StepWizard first-time flow on /dashboard).
-   if (domain) return;
+  if (isPostSetup && domain) return;
    if (siteId) setPendingPostSetupSiteId(String(siteId));
    if (returnTo) setPendingPostSetupReturnTo(String(returnTo));
    if (siteId) setWizardSkipped(true);
+
+  // Stripe webhooks can lag; also prevent session cache from re-seeding "free" after payment.
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("cbSessionCache");
+    }
+  } catch {
+    // ignore
+  }
  }, [searchParams]);
 
   // Detect ?upgraded=1&siteId=X&returnTo=Y on return from plan upgrade via UpgradePlanModal.
@@ -288,8 +299,6 @@ export default function DashboardPage() {
   };
 
 
-console.log("DashboardPage render", { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, showOnboarding });
-
   // Post-payment pending: show a clean full-screen loader so the user never sees dashboard skeleton.
   // Also keep showing loader when wizardSkipped=true but postSetupInstall not yet ready (avoids
   // flashing the wizard + dashboard before the install modal appears).
@@ -319,6 +328,7 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
       <div className="min-h-screen bg-[#E6F1FD]">
         <Header />
         <InstallConsentModal
+          key={postSetupInstall.siteId}
           open={true}
           scriptUrl={postSetupInstall.scriptUrl}
           siteDomain={postSetupInstall.siteDomain}
@@ -422,6 +432,7 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
       <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
       <GettingStarted activeSiteId={activeSiteId} />
       <InstallConsentModal
+        key={activeSite?.id ? `dash-${activeSite.id}` : "dash-install"}
         open={showInstallModal}
         scriptUrl={rawInstallScriptUrl}
         siteDomain={activeSite?.domain}
@@ -431,6 +442,7 @@ console.log("DashboardPage render", { loading, authenticated, user, sites, activ
       />
       {/* Post-payment: show install code after successful Stripe checkout */}
       <InstallConsentModal
+        key={postSetupInstall?.siteId ? `post-${postSetupInstall.siteId}` : "post-install"}
         open={postSetupInstall !== null}
         scriptUrl={postSetupInstall?.scriptUrl ?? ''}
         siteDomain={postSetupInstall?.siteDomain}

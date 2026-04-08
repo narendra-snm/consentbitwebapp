@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Accordion from "./ui/Accordion";
 
 // Keep parity with CDN/embed + Cookie Notice editor limits to avoid "preview looks broken" states.
-const LIMITS = { title: 30, message: 320, button: 20 } as const;
+// CCPA opt-out introduction copy is longer; allow more characters so defaults aren't truncated.
+const LIMITS = { title: 30, message: 600, button: 20 } as const;
 
 function clampLen(value: string, max: number): string {
   const s = value ?? "";

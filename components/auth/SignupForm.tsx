@@ -194,7 +194,7 @@ export function SignupForm() {
         {/* Helper Text */}
         <p className="text-sm text-[#262E84] text-center mb-10">
           {effectiveStep === 1
-            ? '*Please use the exact mail as the webflow native app/iframe native app'
+            ? 'Create your account to get started with cookie consent management.'
             : `A verification code has been sent to ${email}. Please check your inbox.`}
         </p>
 

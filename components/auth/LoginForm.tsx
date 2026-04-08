@@ -86,7 +86,7 @@ export function LoginForm() {
           {/* Helper Text */}
           <p className="text-sm text-[#262E84] text-center mt-5 mb-10">
             {step === 1
-              ? '*Please use the exact mail as the webflow native app/iframe native app'
+              ? 'Log in using the email you used for your initial app registration.'
               : `A verification code has been sent to ${email}. Please check your inbox.`}
           </p>
 

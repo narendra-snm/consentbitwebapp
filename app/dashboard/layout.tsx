@@ -21,9 +21,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <DashboardSessionProvider>
-      <div className=""> {children}</div>
-     
-       <Footer/>
+      <div className="min-h-screen flex flex-col">
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </div>
       <Suspense>
         <PostSetupOverlay />
         

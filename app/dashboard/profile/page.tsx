@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, renameSite, type BillingUsage } from "@/lib/client-api";
+import InstallConsentModal from "../components/InstallConsentModal";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
-const USAGE_TTL_MS = 60_000;
+// Keep usage cache short so metered pageviews/scans feel "live" without manual refresh.
+const USAGE_TTL_MS = 10_000;
 
 const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
@@ -62,19 +64,110 @@ function toPlanLabel(raw: unknown): PlanTier {
   return "Free";
 }
 
+/** Match AddNewSiteModal-style host comparison for duplicate site name / domain. */
+function normalizeSiteLabel(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0]
+    .split("?")[0]
+    .split("#")[0]
+    .replace(/\.+$/, "")
+    .toLowerCase();
+}
+
+function isDuplicateSiteNameForOthers(
+  sites: unknown,
+  excludeSiteId: string,
+  candidate: string,
+): boolean {
+  const cand = normalizeSiteLabel(candidate);
+  if (!cand) return false;
+  const rows = Array.isArray(sites) ? sites : [];
+  return rows.some((s: any) => {
+    if (String(s?.id) === String(excludeSiteId)) return false;
+    const name = normalizeSiteLabel(String(s?.name ?? ""));
+    const domain = normalizeSiteLabel(String(s?.domain ?? ""));
+    return (name && name === cand) || (domain && domain === cand);
+  });
+}
+
+/** Another site already uses this canonical domain (Site URL column). */
+function isDuplicateDomainForOthers(
+  sites: unknown,
+  excludeSiteId: string,
+  candidate: string,
+): boolean {
+  const cand = normalizeSiteLabel(candidate);
+  if (!cand) return false;
+  const rows = Array.isArray(sites) ? sites : [];
+  return rows.some((s: any) => {
+    if (String(s?.id) === String(excludeSiteId)) return false;
+    const domain = normalizeSiteLabel(String(s?.domain ?? ""));
+    return domain && domain === cand;
+  });
+}
+
+function validateManageDomain(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "Enter your website URL.";
+  const host = normalizeSiteLabel(trimmed);
+  if (!host.includes(".")) return "Enter a valid domain like example.com.";
+  if (/\s/.test(trimmed)) return "Domain cannot contain spaces.";
+  return null;
+}
+
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId, activeSiteId } =
+  const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId, activeSiteId, updateSiteInState, refresh } =
     useDashboardSession();
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     setHydrated(true);
   }, []);
+  const profileTabKey = useMemo(() => {
+    const uid = String(user?.id || "").trim();
+    // Per-user key is enough; usage/billing are scoped by selected org/site anyway.
+    return uid ? `cb_profile_active_tab:${uid}` : "cb_profile_active_tab";
+  }, [user?.id]);
+
   const [activeTab, setActiveTab] = useState<TabType>("general");
+
+  // Restore last selected tab when returning to profile page.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(profileTabKey);
+      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage") {
+        setActiveTab(raw);
+      }
+    } catch {
+      // ignore
+    }
+  }, [hydrated, profileTabKey]);
+
+  // Persist tab selection across navigation within the dashboard session.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(profileTabKey, activeTab);
+    } catch {
+      // ignore
+    }
+  }, [activeTab, hydrated, profileTabKey]);
   const isActive = (tab: TabType) => activeTab === tab;
+  const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
+  const [manageName, setManageName] = useState('');
+  const [manageDomain, setManageDomain] = useState('');
+  const [manageSaving, setManageSaving] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [installModal, setInstallModal] = useState<{ scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string } | null>(null);
 
   const ORGS_PER_PAGE = 5;
   const [orgPage, setOrgPage] = useState(1);
@@ -148,20 +241,26 @@ export default function SettingsPage() {
   const [usageError, setUsageError] = useState<string | null>(null);
 
   const fetchUsage = useCallback(
-    async (orgId: string, siteId: string | null, { silent = false } = {}) => {
+    async (
+      orgId: string,
+      siteId: string | null,
+      { silent = false, force = false }: { silent?: boolean; force?: boolean } = {},
+    ) => {
       const cacheKey = `${orgId}:${siteId || "org"}`;
       const now = Date.now();
 
       // 1. Memory cache hit
-      const mem = usageMemoryCache.get(cacheKey);
-      if (mem && now - mem.ts < USAGE_TTL_MS) {
-        setUsage(mem.data);
-        setUsageError(null);
-        return;
+      if (!force) {
+        const mem = usageMemoryCache.get(cacheKey);
+        if (mem && now - mem.ts < USAGE_TTL_MS) {
+          setUsage(mem.data);
+          setUsageError(null);
+          return;
+        }
       }
 
       // 2. sessionStorage hit
-      if (typeof window !== "undefined") {
+      if (!force && typeof window !== "undefined") {
         try {
           const raw = window.sessionStorage.getItem(`billing-usage:${cacheKey}`);
           if (raw) {
@@ -205,8 +304,27 @@ export default function SettingsPage() {
   // once and only loaded when usage was null, so switching sites never updated the numbers.
   useEffect(() => {
     if (!activeOrganizationId) return;
-    const silent = activeTab !== "usage";
-    void fetchUsage(activeOrganizationId, resolvedSiteId, { silent });
+    const shouldBeLive = activeTab === "usage" || activeTab === "billing";
+    void fetchUsage(activeOrganizationId, resolvedSiteId, {
+      silent: !shouldBeLive,
+      force: shouldBeLive,
+    });
+  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
+
+  // When the user comes back to the tab/window, refresh usage so it reflects latest meter values.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!activeOrganizationId) return;
+    if (activeTab !== "usage" && activeTab !== "billing") return;
+    const onFocus = () => {
+      void fetchUsage(activeOrganizationId, resolvedSiteId, { silent: true, force: true });
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
 
   // Keep first server+client paint identical to avoid hydration mismatch while session cache hydrates.
@@ -379,6 +497,7 @@ export default function SettingsPage() {
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[14px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{org.nextRenewal}</p>
                         ) : (
                           <button
+                            type="button"
                             onClick={() =>
                               router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
                             }
@@ -393,6 +512,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-end gap-[10px]">
                         {org.isPaid && (
                           <button
+                            type="button"
                             onClick={() =>
                               router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
                             }
@@ -402,9 +522,13 @@ export default function SettingsPage() {
                           </button>
                         )}
                         <button
-                          onClick={() =>
-                            router.push(org.siteId ? `/dashboard/${org.siteId}` : activeSiteId ? `/dashboard/${activeSiteId}` : "/dashboard")
-                          }
+                          type="button"
+                          onClick={() => {
+                            setManagingOrg(org);
+                            setManageName(org.siteName === "—" ? "" : org.siteName);
+                            setManageDomain(org.siteUrl === "—" ? "" : org.siteUrl);
+                            setManageError(null);
+                          }}
                           className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
                         >
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Manage</p>
@@ -537,6 +661,174 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+      {/* Manage Site Modal */}
+      {managingOrg && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[12px] shadow-xl max-w-md w-full p-6 relative">
+            <button
+              type="button"
+              onClick={() => setManagingOrg(null)}
+              className="absolute right-4 top-4 text-[#9ca3af] hover:text-[#374151] text-2xl leading-none"
+              disabled={manageSaving}
+            >
+              ×
+            </button>
+            <p className="font-semibold text-[16px] text-black mb-1">Manage Site</p>
+            <p className="text-[12px] text-[#6b7280] mb-5">
+              Update the display name and the website URL shown in the organization list.
+            </p>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-[12px] text-[#6b7280] mb-1">Site Name</label>
+                <input
+                  type="text"
+                  value={manageName}
+                  onChange={(e) => { setManageName(e.target.value); setManageError(null); }}
+                  disabled={manageSaving}
+                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                  placeholder="Enter site name"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] text-[#6b7280] mb-1">Website URL</label>
+                <input
+                  type="text"
+                  value={manageDomain}
+                  onChange={(e) => { setManageDomain(e.target.value); setManageError(null); }}
+                  disabled={manageSaving}
+                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                  placeholder="example.com"
+                />
+                <p className="text-[11px] text-[#9ca3af] mt-1">This updates the Site URL column (registered domain).</p>
+              </div>
+              <div className="flex justify-between text-[13px]">
+                <span className="text-[#6b7280]">Plan</span>
+                <span className="text-black font-medium">{managingOrg.plan}</span>
+              </div>
+              <div className="flex justify-between text-[13px]">
+                <span className="text-[#6b7280]">Created</span>
+                <span className="text-black font-medium">{managingOrg.createdDate}</span>
+              </div>
+              {managingOrg.nextRenewal && (
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-[#6b7280]">Next Renewal</span>
+                  <span className="text-black font-medium">{managingOrg.nextRenewal}</span>
+                </div>
+              )}
+            </div>
+
+            {manageError && (
+              <p className="text-[12px] text-red-600 mb-3">{manageError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setManagingOrg(null)}
+                disabled={manageSaving}
+                className="flex-1 h-[38px] rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={manageSaving || !manageName.trim() || !manageDomain.trim()}
+                onClick={async () => {
+                  if (!manageName.trim() || !manageDomain.trim() || !managingOrg.siteId) return;
+                  setManageError(null);
+                  const domainErr = validateManageDomain(manageDomain);
+                  if (domainErr) {
+                    setManageError(domainErr);
+                    return;
+                  }
+                  if (isDuplicateSiteNameForOthers(sites, managingOrg.siteId, manageName.trim())) {
+                    setManageError(
+                      "This site name is already used by another site in your account. Choose a different name.",
+                    );
+                    return;
+                  }
+                  if (isDuplicateDomainForOthers(sites, managingOrg.siteId, manageDomain.trim())) {
+                    setManageError(
+                      "This website URL is already used by another site in your account.",
+                    );
+                    return;
+                  }
+                  setManageSaving(true);
+                  try {
+                    const result = await renameSite(
+                      managingOrg.siteId,
+                      manageName.trim(),
+                      manageDomain.trim(),
+                    );
+                    const updatedSite = (result.site || {}) as Record<string, unknown>;
+                    const rawSite = (Array.isArray(sites) ? sites : []).find((s: any) => String(s.id) === managingOrg.siteId);
+                    // `refresh()` replaces the whole `sites` array — run it first, then merge the PATCH
+                    // response so a slightly stale dashboard-init cannot wipe name/domain in the UI.
+                    try {
+                      if (typeof sessionStorage !== "undefined") {
+                        sessionStorage.removeItem("cbSessionCache");
+                      }
+                    } catch {
+                      /* ignore */
+                    }
+                    await refresh({ showLoading: false });
+                    const normDomain = normalizeSiteLabel(manageDomain.trim());
+                    updateSiteInState({
+                      id: managingOrg.siteId,
+                      ...updatedSite,
+                      name: String(updatedSite.name ?? manageName.trim()),
+                      domain: String(updatedSite.domain ?? normDomain),
+                    });
+                    const scriptUrl =
+                      (updatedSite.embedScriptUrl as string | undefined) ??
+                      (updatedSite.embed_script_url as string | undefined) ??
+                      rawSite?.embedScriptUrl ??
+                      rawSite?.embed_script_url ??
+                      "";
+                    const cdnScriptId =
+                      (updatedSite.cdnScriptId as string | undefined) ??
+                      (updatedSite.cdn_script_id as string | undefined) ??
+                      rawSite?.cdnScriptId ??
+                      rawSite?.cdn_script_id;
+                    const domainForInstall =
+                      updatedSite.domain != null && String(updatedSite.domain).trim() !== ""
+                        ? String(updatedSite.domain)
+                        : normDomain;
+                    setManagingOrg(null);
+                    setInstallModal({
+                      scriptUrl,
+                      siteDomain: domainForInstall,
+                      siteId: managingOrg.siteId,
+                      cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
+                    });
+                  } catch (e: any) {
+                    setManageError(e.message || "Failed to update site");
+                  } finally {
+                    setManageSaving(false);
+                  }
+                }}
+                className="flex-1 h-[38px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {manageSaving ? 'Saving…' : 'Update'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Install ConsentBit modal — shown after successful site rename */}
+      {installModal && (
+        <InstallConsentModal
+          key={installModal.siteId}
+          open={true}
+          scriptUrl={installModal.scriptUrl}
+          siteDomain={installModal.siteDomain}
+          siteId={installModal.siteId}
+          cdnScriptId={installModal.cdnScriptId}
+          onClose={() => setInstallModal(null)}
+        />
+      )}
     </div>
   );
 }

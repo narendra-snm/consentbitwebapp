@@ -4,9 +4,10 @@
 
 export const runtime = 'edge';
 
-import { useParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react"; // useRef kept for proceedRef
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
 import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
+import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
@@ -14,15 +15,24 @@ type Plan = "basic" | "essential" | "growth" | "free" | null;
 export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
-  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId } =
+  const router = useRouter();
+  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId, sites } =
     useDashboardSession();
 
-  /** Which tier column is the active subscription (from /api/sites). */
-  const currentTier = String(effectivePlanId || "free").toLowerCase() as
-    | "free"
-    | "basic"
-    | "essential"
-    | "growth";
+  /** Same rules as the dashboard header: per-site plan from dashboard-init, with org fallback only when appropriate. */
+  const activeSite = useMemo(
+    () => (Array.isArray(sites) ? sites : []).find((s: { id?: string }) => String(s?.id) === siteId) ?? null,
+    [sites, siteId],
+  );
+
+  const currentTier = useMemo(() => {
+    const raw = resolvePlanTierForSiteContext({
+      activeSite,
+      sites: Array.isArray(sites) ? sites : [],
+      effectivePlanId,
+    });
+    return (raw || "free") as "free" | "basic" | "essential" | "growth";
+  }, [activeSite, sites, effectivePlanId]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
@@ -35,24 +45,24 @@ export default function PricingTable() {
     window.history.replaceState({}, "", window.location.pathname);
     sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
     // Clear session cache so polls fetch fresh plan data from the server.
-    try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+    try {
+      sessionStorage.removeItem("cbSessionCache");
+    } catch {
+      // ignore
+    }
     setPaymentProcessing(true);
     let attempts = 0;
-    let planBeforePayment: string | null = null;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
-      const planNow = String(await refresh({ showLoading: false }) || "free").toLowerCase();
-      // Capture the plan on the first poll (first fresh fetch from server after payment).
-      if (planBeforePayment === null) planBeforePayment = planNow;
+      const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      const planChanged = planNow !== planBeforePayment;
-      // Stop as soon as plan updates from the first-fetched value, or after 20 attempts (~30s).
-      if (!planChanged && attempts < 20) {
+      // Stop as soon as the plan is known and not free, or after 20 attempts (~30s).
+      if ((!planNow || planNow === "free") && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
-        // Clear stale session cache so dashboard loads fresh data.
-        try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
-        window.location.href = `/dashboard/${siteId}?success=1`;
+        // Use router.push so DashboardSessionProvider stays mounted and the updated
+        // plan in React state is immediately visible in the header — no cache needed.
+        router.push(`/dashboard/${siteId}`);
       }
     };
     void poll();
@@ -393,17 +403,17 @@ export default function PricingTable() {
           <Feature label="No of Domains" values={["01", "01", "01", "01"]} />
 
           <Feature
-            label="No of scans"
+            label="No of Scans"
             values={[
               "100",
               "750",
               "5000 scans",
-              "10000 pageviews/m ",
+              "10000 scans",
             ]}
           />
 
           <Feature
-            label="No of Page views"
+            label="No of Page Views"
             values={[
               "7500",
               "100,000 pageviews/m",
@@ -427,15 +437,13 @@ export default function PricingTable() {
             ]}
           />
 
-          {/* BUTTONS — "Current Plan" sits under the column that matches effectivePlanId (not always Free). */}
+          {/* BUTTONS — "Current Plan" matches resolvePlanTierForSiteContext for this site (same as header). */}
           <div className="p-4 border-t border-[#000000]/10"></div>
 
           <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "free" ? (
               <CurrentPlanButton />
-            ) : (
-              <span className="text-sm text-[#848199]">—</span>
-            )}
+            ) : null}
           </div>
 
           <div className="p-4 border-t border-[#000000]/10">
@@ -595,9 +603,9 @@ function Feature({
           `}
         >
          <p><span className={`${v==="NIL" ? "text-[#8E8E8E]" : ""}  ${(i===0 || i===1) && label==="Compliance" ? "text-[#8E8E8E]" : ""}`}>{v}</span></p> 
-         {i === 2 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 page views</p>)}
-         {i === 3 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.39 for additional 10000 page views</p>)}
-         {i === 3 && label === "No of scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 page views</p>)}
+         {i === 2 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 scans</p>)}
+         {i === 3 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.39 for additional 10000 scans</p>)}
+         {i === 3 && label === "No of scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 scans</p>)}
 
         </div>
       ))}

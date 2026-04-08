@@ -531,7 +531,10 @@ const [showTooltip, setShowTooltip] = useState(false);
       </p>
 
       <button
-        onClick={() => router.push("/upgrade")}
+        onClick={() => {
+          const id = siteData?.siteId ? String(siteData.siteId) : "";
+          router.push(id ? `/dashboard/${id}/upgrade` : "/dashboard");
+        }}
         className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
       >
         Get Pro Plan

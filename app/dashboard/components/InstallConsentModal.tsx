@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import { verifyScript } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
@@ -50,6 +50,7 @@ export default function InstallConsentModal({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
+  const previousBodyOverflow = useRef<string | null>(null);
 
   const absoluteScriptUrl = resolveInstallScriptUrl(
     scriptUrl,
@@ -62,13 +63,28 @@ export default function InstallConsentModal({
     ? `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${absoluteScriptUrl}"></script>\n<!-- End ConsentBit banner -->`
     : "";
 
+  // Reset verify UI whenever we show a different site — do not keep the previous site's domain in the input.
   useEffect(() => {
     if (!open) return;
-    setPublicUrl((prev) => (prev.trim() ? prev : siteDomain || ""));
+    setPublicUrl(siteDomain || "");
     setVerifyError(null);
     setCopyError(null);
     setVerified(false);
-  }, [open, siteDomain]);
+  }, [open, siteId, siteDomain]);
+
+  // Prevent background page scrolling while modal is open.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof document === "undefined") return;
+    if (previousBodyOverflow.current === null) {
+      previousBodyOverflow.current = document.body.style.overflow || "";
+    }
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow.current ?? "";
+      previousBodyOverflow.current = null;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -145,7 +161,7 @@ export default function InstallConsentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden />
 
       <div className="relative flex max-h-[95vh] w-full max-w-[1007px] flex-col rounded-[10px] bg-white shadow-xl">
