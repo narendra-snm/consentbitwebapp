@@ -806,7 +806,7 @@ console.log(modalOpen)
   };
 console.log(device)
   const br = `${s.borderRadius}px`;
-  const floatGutterPx = s.floatingButtonEnabled ? 64 : 0; // icon (40px) + margin
+  const floatGutterPx = s.floatingButtonEnabled && device !== "mobile" ? 60 : 0; // icon (40px) + margin
 const positionStyles =
   s.bannerType === "box"
     ? alignment === "bottom-left"

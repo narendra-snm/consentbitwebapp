@@ -545,7 +545,7 @@ export default function ConsentPreview({
 
       {/* Browser Preview */}
       <div
-        className={`${getDeviceFrameClasses()} relative rounded-md overflow-hidden shadow-lg flex flex-col `}
+        className={`${getDeviceFrameClasses()} relative rounded-md overflow-hidden shadow-lg flex flex-col ${device==="mobile"?"mx-auto":""}`}
       >
         {/* Browser Header */}
         <div className="h-[24px] bg-[#d9d9d9] opacity-50 flex items-center px-2 gap-2">
@@ -688,7 +688,7 @@ export default function ConsentPreview({
             const bannerPosStyle: React.CSSProperties = (() => {
               if (mobileFullWidth) {
                 // On phone preview keep banner inside the device frame (no overflow).
-                return { position: 'absolute', bottom: 12, left: 12, right: 12 };
+                return { position: 'absolute', bottom: 12, left: 0, right: 0 };
               }
               if (layoutPos === 'banner') {
                 return { position: 'absolute', bottom: 0, left: 0, right: 0 };

@@ -222,14 +222,33 @@ export default function Header() {
   const displayDomain =
     activeSite?.domain || activeSite?.name || (!loading ? "Select a site" : null);
 
-  const handleSelectSite = (site: any) => {
+  // const handleSelectSite = (site: any) => {
+    
+  //   const nextId = site?.id ? String(site.id) : null;
+  //   const currentId = pathSiteId || activeSiteId || null;
+  //   if (String(nextId || "") === String(currentId || "")) {
+  //     // No-op selection (already on this site) — don't navigate.
+  //     setDomainOpen(false);
+  //     return;
+  //   }
+
+  //   setActiveSiteId(nextId);
+  //   setDomainOpen(false);
+  //   if (!nextId) return;
+  //   if ((pathname || "").startsWith("/dashboard/profile")) return;
+  //   if ((pathname || "").startsWith("/dashboard/all-domain")) return;
+  //   // Preserve current tab/sub-route when switching sites
+  //   const currentSubPath = pathParts.slice(2).join('/');
+  //   const targetPath = currentSubPath ? `/dashboard/${nextId}/${currentSubPath}` : `/dashboard/${nextId}`;
+  //   if (targetPath !== (pathname || "")) {
+  //     router.push(targetPath);
+  //   }
+  // };
+const handleSelectSite = (site: any) => {
+    
     const nextId = site?.id ? String(site.id) : null;
     const currentId = pathSiteId || activeSiteId || null;
-    if (String(nextId || "") === String(currentId || "")) {
-      // No-op selection (already on this site) — don't navigate.
-      setDomainOpen(false);
-      return;
-    }
+    if( currentId==nextId) return
 
     setActiveSiteId(nextId);
     setDomainOpen(false);
@@ -240,9 +259,11 @@ export default function Header() {
     const currentSubPath = pathParts.slice(2).join('/');
     const targetPath = currentSubPath ? `/dashboard/${nextId}/${currentSubPath}` : `/dashboard/${nextId}`;
     if (targetPath !== (pathname || "")) {
+      console.log("Navigating to:", targetPath);
       router.push(targetPath);
     }
   };
+  
   return (
     <header className="w-full bg-white border-b border-[#00000010] px-8 py-6.5 flex items-center justify-between rounded-t-xl">
       {/* LEFT SECTION */}
