@@ -287,15 +287,55 @@ export async function updateSiteBannerSettings(payload: {
 }
 // site banner settings update ends here
 
+/** Preflight for Manage site URL: same account / other account / available. */
+export async function checkSiteDomainForRename(
+  websiteUrl: string,
+  excludeSiteId: string,
+): Promise<{
+  success: boolean;
+  available?: boolean;
+  domain?: string;
+  code?: string;
+  message?: string;
+  error?: string;
+}> {
+  const res = await fetch('/api/sites/check-domain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ websiteUrl, excludeSiteId }),
+  });
+  const text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return {
+      success: false,
+      available: false,
+      error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text,
+    };
+  }
+  if (!res.ok || data.success === false) {
+    return {
+      success: false,
+      available: false,
+      error: data.error || `Check failed: ${res.status}`,
+    };
+  }
+  return data;
+}
+
 export async function renameSite(
   siteId: string,
   name: string,
-  domain?: string,
+  domain: string,
 ): Promise<{ success: true; site: any }> {
-  const payload: { siteId: string; name: string; domain?: string } = { siteId, name };
-  if (domain != null && String(domain).trim() !== '') {
-    payload.domain = String(domain).trim();
-  }
+  const payload: { siteId: string; name: string; domain: string } = {
+    siteId,
+    name,
+    domain: String(domain ?? '').trim(),
+  };
   const res = await fetch('/api/sites', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -307,7 +347,13 @@ export async function renameSite(
   try { data = JSON.parse(text); } catch {
     data = { success: false, error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text };
   }
-  if (!res.ok || !data.success) throw new Error(data.error || `Rename failed: ${res.status}`);
+  if (!res.ok || !data.success) {
+    const err = new Error(data.error || `Rename failed: ${res.status}`) as Error & {
+      code?: string;
+    };
+    err.code = data.code;
+    throw err;
+  }
   return data as { success: true; site: any };
 }
 
@@ -598,6 +644,7 @@ export async function addCustomCookieRule(payload: {
   name: string;
   domain: string;
   category: string;
+  provider?: string;
   scriptUrlPattern?: string;
   description?: string;
   duration?: string;

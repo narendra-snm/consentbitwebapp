@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, renameSite, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, renameSite, checkSiteDomainForRename, type BillingUsage } from "@/lib/client-api";
+import {
+  normalizeSiteLabel,
+  isDuplicateDomainForOthers,
+  validateManageDomain,
+  deriveSiteNameFromDomain,
+} from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
@@ -64,60 +70,6 @@ function toPlanLabel(raw: unknown): PlanTier {
   return "Free";
 }
 
-/** Match AddNewSiteModal-style host comparison for duplicate site name / domain. */
-function normalizeSiteLabel(raw: string): string {
-  return String(raw || "")
-    .trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/^www\./i, "")
-    .split("/")[0]
-    .split("?")[0]
-    .split("#")[0]
-    .replace(/\.+$/, "")
-    .toLowerCase();
-}
-
-function isDuplicateSiteNameForOthers(
-  sites: unknown,
-  excludeSiteId: string,
-  candidate: string,
-): boolean {
-  const cand = normalizeSiteLabel(candidate);
-  if (!cand) return false;
-  const rows = Array.isArray(sites) ? sites : [];
-  return rows.some((s: any) => {
-    if (String(s?.id) === String(excludeSiteId)) return false;
-    const name = normalizeSiteLabel(String(s?.name ?? ""));
-    const domain = normalizeSiteLabel(String(s?.domain ?? ""));
-    return (name && name === cand) || (domain && domain === cand);
-  });
-}
-
-/** Another site already uses this canonical domain (Site URL column). */
-function isDuplicateDomainForOthers(
-  sites: unknown,
-  excludeSiteId: string,
-  candidate: string,
-): boolean {
-  const cand = normalizeSiteLabel(candidate);
-  if (!cand) return false;
-  const rows = Array.isArray(sites) ? sites : [];
-  return rows.some((s: any) => {
-    if (String(s?.id) === String(excludeSiteId)) return false;
-    const domain = normalizeSiteLabel(String(s?.domain ?? ""));
-    return domain && domain === cand;
-  });
-}
-
-function validateManageDomain(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return "Enter your website URL.";
-  const host = normalizeSiteLabel(trimmed);
-  if (!host.includes(".")) return "Enter a valid domain like example.com.";
-  if (/\s/.test(trimmed)) return "Domain cannot contain spaces.";
-  return null;
-}
-
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
@@ -163,7 +115,6 @@ export default function SettingsPage() {
   }, [activeTab, hydrated, profileTabKey]);
   const isActive = (tab: TabType) => activeTab === tab;
   const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
-  const [manageName, setManageName] = useState('');
   const [manageDomain, setManageDomain] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -448,7 +399,7 @@ export default function SettingsPage() {
 
                   {/* Column Headers — same grid as rows */}
                   <div className={`grid ${TABLE_GRID} gap-x-4 items-center`}>
-                    {["Site URL", "SIte Name", "Created Date", "Plan", "Next renewal"].map((col) => (
+                    {["Site URL", "Site Name", "Created Date", "Plan", "Next renewal"].map((col) => (
                       <p key={col} className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black tracking-[-0.5px]" style={{ fontVariationSettings: "'opsz' 14" }}>
                         {col}
                       </p>
@@ -525,7 +476,6 @@ export default function SettingsPage() {
                           type="button"
                           onClick={() => {
                             setManagingOrg(org);
-                            setManageName(org.siteName === "—" ? "" : org.siteName);
                             setManageDomain(org.siteUrl === "—" ? "" : org.siteUrl);
                             setManageError(null);
                           }}
@@ -667,7 +617,9 @@ export default function SettingsPage() {
           <div className="bg-white rounded-[12px] shadow-xl max-w-md w-full p-6 relative">
             <button
               type="button"
-              onClick={() => setManagingOrg(null)}
+              onClick={() => {
+                setManagingOrg(null);
+              }}
               className="absolute right-4 top-4 text-[#9ca3af] hover:text-[#374151] text-2xl leading-none"
               disabled={manageSaving}
             >
@@ -675,27 +627,19 @@ export default function SettingsPage() {
             </button>
             <p className="font-semibold text-[16px] text-black mb-1">Manage Site</p>
             <p className="text-[12px] text-[#6b7280] mb-5">
-              Update the display name and the website URL shown in the organization list.
+              Update the registered website URL for this site. The name shown in your list uses the same host.
             </p>
 
             <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-[12px] text-[#6b7280] mb-1">Site Name</label>
-                <input
-                  type="text"
-                  value={manageName}
-                  onChange={(e) => { setManageName(e.target.value); setManageError(null); }}
-                  disabled={manageSaving}
-                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
-                  placeholder="Enter site name"
-                />
-              </div>
               <div>
                 <label className="block text-[12px] text-[#6b7280] mb-1">Website URL</label>
                 <input
                   type="text"
                   value={manageDomain}
-                  onChange={(e) => { setManageDomain(e.target.value); setManageError(null); }}
+                  onChange={(e) => {
+                    setManageDomain(e.target.value);
+                    setManageError(null);
+                  }}
                   disabled={manageSaving}
                   className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
                   placeholder="example.com"
@@ -725,7 +669,9 @@ export default function SettingsPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setManagingOrg(null)}
+                onClick={() => {
+                  setManagingOrg(null);
+                }}
                 disabled={manageSaving}
                 className="flex-1 h-[38px] rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb] disabled:opacity-50"
               >
@@ -733,19 +679,13 @@ export default function SettingsPage() {
               </button>
               <button
                 type="button"
-                disabled={manageSaving || !manageName.trim() || !manageDomain.trim()}
+                disabled={manageSaving || !manageDomain.trim()}
                 onClick={async () => {
-                  if (!manageName.trim() || !manageDomain.trim() || !managingOrg.siteId) return;
+                  if (!manageDomain.trim() || !managingOrg.siteId) return;
                   setManageError(null);
                   const domainErr = validateManageDomain(manageDomain);
                   if (domainErr) {
                     setManageError(domainErr);
-                    return;
-                  }
-                  if (isDuplicateSiteNameForOthers(sites, managingOrg.siteId, manageName.trim())) {
-                    setManageError(
-                      "This site name is already used by another site in your account. Choose a different name.",
-                    );
                     return;
                   }
                   if (isDuplicateDomainForOthers(sites, managingOrg.siteId, manageDomain.trim())) {
@@ -754,11 +694,27 @@ export default function SettingsPage() {
                     );
                     return;
                   }
+                  const derivedName = deriveSiteNameFromDomain(manageDomain.trim());
                   setManageSaving(true);
                   try {
+                    const preflight = await checkSiteDomainForRename(
+                      manageDomain.trim(),
+                      managingOrg.siteId,
+                    );
+                    if (!preflight.success) {
+                      setManageError(preflight.error || "Could not validate this website URL.");
+                      return;
+                    }
+                    if (preflight.available === false) {
+                      setManageError(
+                        preflight.message ||
+                          "This website URL is not available. Choose a different URL.",
+                      );
+                      return;
+                    }
                     const result = await renameSite(
                       managingOrg.siteId,
-                      manageName.trim(),
+                      derivedName,
                       manageDomain.trim(),
                     );
                     const updatedSite = (result.site || {}) as Record<string, unknown>;
@@ -777,7 +733,7 @@ export default function SettingsPage() {
                     updateSiteInState({
                       id: managingOrg.siteId,
                       ...updatedSite,
-                      name: String(updatedSite.name ?? manageName.trim()),
+                      name: String(updatedSite.name ?? derivedName),
                       domain: String(updatedSite.domain ?? normDomain),
                     });
                     const scriptUrl =
@@ -803,7 +759,26 @@ export default function SettingsPage() {
                       cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
                     });
                   } catch (e: any) {
-                    setManageError(e.message || "Failed to update site");
+                    const code = e?.code as string | undefined;
+                    if (code === "DOMAIN_EXISTS_OTHER_ACCOUNT") {
+                      setManageError(
+                        "This website URL is already registered to another ConsentBit account.",
+                      );
+                    } else if (code === "DOMAIN_EXISTS_SAME_ACCOUNT") {
+                      setManageError(
+                        "This website URL is already used by another site in your account.",
+                      );
+                    } else if (code === "DUPLICATE_SITE_NAME") {
+                      setManageError(
+                        "This site name is already used by another site in your account. Choose a different URL.",
+                      );
+                    } else if (code === "DOMAIN_REQUIRED" || code === "INVALID_DOMAIN") {
+                      setManageError(
+                        e.message || "Enter a valid website URL.",
+                      );
+                    } else {
+                      setManageError(e.message || "Failed to update site");
+                    }
                   } finally {
                     setManageSaving(false);
                   }

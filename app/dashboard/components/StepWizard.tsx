@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Check, Copy, Share2 } from "lucide-react";
+import { Globe, Check, Copy } from "lucide-react";
 import Image from "next/image";
 import { PricingTable } from "./PricingTable";
 import { firstSetup, verifyScript } from "@/lib/client-api";
@@ -488,12 +488,8 @@ const [showTooltip, setShowTooltip] = useState(false);
                   onClick={handleCopy}
                   className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg  text-xs font-medium  hover:bg-gray-50 transition-colors"
                 >
-                  
                   {copied ? "Copied!" : "Copy"}
                   <Copy size={16} />
-                </button>
-                <button className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg text-xs font-medium  hover:bg-gray-50 transition-colors">
-                  <Share2 size={16} />
                 </button>
               </div>
              <div className="relative"> <button
