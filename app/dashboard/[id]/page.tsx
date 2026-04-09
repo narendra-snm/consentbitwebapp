@@ -132,7 +132,7 @@ const userName = useMemo(() => {
         siteDomain={activeSite?.domain}
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
-        onClose={() => setShowInstallModal(false)}
+        onClose={() => { document.body.style.overflow = ""; setShowInstallModal(false); }}
       />
       <FeedbackDesign />
       </>}

@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
 
     // Debug: log decoded scan history payload (worker envelope already decoded).
     // Safe-ish: do not log request cookies or headers.
-    console.log('[scan-history] decoded response', JSON.stringify({ siteId, data }, null, 2));
 
     return NextResponse.json(data, { status });
   } catch (error: unknown) {

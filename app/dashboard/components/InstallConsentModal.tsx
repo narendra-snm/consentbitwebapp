@@ -50,8 +50,6 @@ export default function InstallConsentModal({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
-  const previousBodyOverflow = useRef<string | null>(null);
-
   const absoluteScriptUrl = resolveInstallScriptUrl(
     scriptUrl,
     siteId ?? null,
@@ -76,13 +74,9 @@ export default function InstallConsentModal({
   useEffect(() => {
     if (!open) return;
     if (typeof document === "undefined") return;
-    if (previousBodyOverflow.current === null) {
-      previousBodyOverflow.current = document.body.style.overflow || "";
-    }
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previousBodyOverflow.current ?? "";
-      previousBodyOverflow.current = null;
+      document.body.style.overflow = "";
     };
   }, [open]);
 

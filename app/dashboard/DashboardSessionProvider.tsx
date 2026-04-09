@@ -357,7 +357,7 @@ export function DashboardSessionProvider({
     const isStripeReturn = p.get("upgraded") === "1" || p.get("postSetup") === "1";
     if (!isStripeReturn) return;
 
-    // Prevent stale cached "free" from re-seeding state after payment.
+    // Prevent stale cached data from re-seeding state after payment.
     try {
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.removeItem(SESSION_CACHE_KEY);
@@ -366,7 +366,13 @@ export function DashboardSessionProvider({
       // ignore
     }
 
-    const PAID = new Set(["basic", "essential", "growth"]);
+    // Derive siteId from the current path so we can read the target plan stored before Stripe redirect.
+    const pathSiteId = pickActiveSiteIdFromPath(pathnameRef.current);
+    const targetPlan = pathSiteId
+      ? (() => { try { return (sessionStorage.getItem(`cb_target_plan_${pathSiteId}`) || "").trim().toLowerCase(); } catch { return ""; } })()
+      : "";
+    console.log("[SessionPoll] start — targetPlan:", targetPlan, "pathSiteId:", pathSiteId);
+
     const maxTicks = 24; // ~36s @ 1500ms
     let ticks = 0;
     let stopped = false;
@@ -374,9 +380,9 @@ export function DashboardSessionProvider({
       if (stopped) return;
       ticks += 1;
       const planNow = String(await refresh({ showLoading: false }) || "").trim().toLowerCase();
-      const stateNow = stateRef.current;
-      const anyPaidSite = (stateNow?.sites || []).some((s: any) => PAID.has(String(pickPlanIdFromSite(s) || "").toLowerCase()));
-      if (PAID.has(planNow) || PAID.has(String(stateNow?.effectivePlanId || "")) || anyPaidSite || ticks >= maxTicks) {
+      console.log(`[SessionPoll] tick ${ticks} — planNow: "${planNow}" | targetPlan: "${targetPlan}" | match: ${planNow === targetPlan}`);
+      if (planNow === targetPlan || ticks >= maxTicks) {
+        console.log(`[SessionPoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max ticks"}`);
         stopped = true;
         window.clearInterval(interval);
       }

@@ -44,22 +44,27 @@ export default function PricingTable() {
     // Clean URL so refresh doesn't re-trigger; also clear the stripe-redirect flag.
     window.history.replaceState({}, "", window.location.pathname);
     sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
+    // Read and clear the target plan we stored before redirecting to Stripe.
+    const targetPlan = (sessionStorage.getItem(`cb_target_plan_${siteId}`) || "").trim().toLowerCase();
+    sessionStorage.removeItem(`cb_target_plan_${siteId}`);
     // Clear session cache so polls fetch fresh plan data from the server.
     try {
       sessionStorage.removeItem("cbSessionCache");
     } catch {
       // ignore
     }
+    console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
     let attempts = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      // Stop as soon as the plan is known and not free, or after 20 attempts (~30s).
-      if ((!planNow || planNow === "free") && attempts < 20) {
+      console.log(`[UpgradePoll] attempt ${attempts} — planNow: "${planNow}" | targetPlan: "${targetPlan}" | match: ${planNow === targetPlan}`);
+      if (planNow !== targetPlan && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
+        console.log(`[UpgradePoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max attempts"} | navigating to dashboard`);
         // Use router.push so DashboardSessionProvider stays mounted and the updated
         // plan in React state is immediately visible in the header — no cache needed.
         router.push(`/dashboard/${siteId}`);
@@ -217,6 +222,8 @@ export default function PricingTable() {
       }
 
       sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
+      // Store the target plan so the post-redirect poll can wait for the right plan.
+      sessionStorage.setItem(`cb_target_plan_${siteId}`, plan);
       window.location.href = url;
       // Do NOT reset checkoutLoading here — keep overlay visible until browser navigates away.
     } catch (e) {

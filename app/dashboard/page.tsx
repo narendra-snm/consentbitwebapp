@@ -335,6 +335,7 @@ export default function DashboardPage() {
           siteId={postSetupInstall.siteId}
           cdnScriptId={postSetupInstall.cdnScriptId}
           onClose={() => {
+            document.body.style.overflow = "";
             const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
             const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : null;
             setPostSetupInstall(null);

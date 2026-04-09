@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       body: JSON.stringify(body),
     });
 
-    console.log('[Next proxy][request-code] worker response', { status, success: data?.success, hasRequestId: Boolean(data?.requestId) });
     return NextResponse.json(data, { status });
   } catch (error: any) {
     console.error('Request-code API error:', error);

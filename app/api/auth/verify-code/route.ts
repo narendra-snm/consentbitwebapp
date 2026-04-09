@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       body: JSON.stringify(body),
     });
 
-    console.log('[Next proxy][verify-code] worker response', { status, success: data?.success });
 
     const res = NextResponse.json(data, { status });
 

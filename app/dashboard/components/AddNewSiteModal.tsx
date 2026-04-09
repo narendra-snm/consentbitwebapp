@@ -100,8 +100,6 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [mounted, setMounted] = useState(false);
   const checkoutTab = useRef<Window | null>(null);
-  const previousBodyOverflow = useRef<string | null>(null);
-
   useLayoutEffect(() => {
     setMounted(true);
     function onPageShow(e: PageTransitionEvent) {
@@ -117,14 +115,9 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   // Prevent background page scrolling while modal is open.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    // Store initial value once so we can restore accurately.
-    if (previousBodyOverflow.current === null) {
-      previousBodyOverflow.current = document.body.style.overflow || "";
-    }
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previousBodyOverflow.current ?? "";
-      previousBodyOverflow.current = null;
+      document.body.style.overflow = "";
     };
   }, []);
 
