@@ -214,14 +214,14 @@ export async function firstSetup(payload: {
     console.error('firstSetup: Error response:', errorText);
     let message = errorText;
     try {
-      const parsed = JSON.parse(errorText) as { error?: string; message?: string };
+      const parsed = decodeEnvelope(JSON.parse(errorText));
       message = parsed?.error || parsed?.message || message;
     } catch {
       // non-json response
     }
     throw new Error(message || `Setup failed: ${res.status}`);
   }
-  
+
   return parseApiResponse(res);
 }
 //first setup ends here

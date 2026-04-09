@@ -15,7 +15,6 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
-import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -983,12 +982,8 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
               onChange={setFloatingButton}
             />
 
-            <BannerLinkSection
-              effectivePlanId={effectivePlanId}
-              consentType={consentType}
-            />
 
-          </>
+</>
         )}
         {active === "Layout" && (
           <BannerControl value={appearance.layout} onChange={(layout) => setAppearance((a) => ({ ...a, layout }))} />
