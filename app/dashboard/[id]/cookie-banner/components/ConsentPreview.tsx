@@ -69,7 +69,6 @@ export default function ConsentPreview({
   saveDisabled = true,
   saveBusy = false,
   saveSuccess = false,
-  onDismissSaveSuccess,
   onPublishChanges,
   publishBusy = false,
   publishDisabled = false,
@@ -99,7 +98,6 @@ export default function ConsentPreview({
   /** When true, Save is not clickable (no pending edits or request in flight). */
   saveDisabled?: boolean;
   saveSuccess?: boolean;
-  onDismissSaveSuccess?: () => void;
   /** Push live to the embed (same API as save; shows success dialog). Available even when nothing changed (re-publish). */
   onPublishChanges?: () => void | Promise<void>;
   saveBusy?: boolean;
@@ -354,7 +352,7 @@ export default function ConsentPreview({
     <>
     <div className="w-full px-3.75">
       {/* Tabs */}
-      <div className="flex items-center justify-between mb-4 mt-4.5">
+      <div className="flex items-center justify-between mb-4 mt-4.5 overflow-visible">
         {/* IAB: show a single tab (GDPR) */}
         {iabEnabled ? (
           <div className="flex items-center gap-4">
@@ -435,8 +433,8 @@ export default function ConsentPreview({
         )}
 
         {/* Right Side Buttons */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex items-center gap-3 overflow-visible">
+          <div className="relative overflow-visible">
             {showSaveToast ? (
               <div
                 role="status"
@@ -462,7 +460,7 @@ export default function ConsentPreview({
               title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
               className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
             >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">
               {saveBusy ? 'Saving…' : 'Save changes'}
             </span>
             {saveBusy ? (
@@ -514,7 +512,7 @@ export default function ConsentPreview({
                 }}
                 className="relative group px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
               >
-                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">Push changes live to your website</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Push changes live to your website</span>
                 {publishBusy ? 'Publishing…' : 'Publish Changes'}
               </button>
             </div>
@@ -537,7 +535,7 @@ export default function ConsentPreview({
             onClick={onNext}
             className="relative group px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
           >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">Go to next step</span>
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Go to next step</span>
             Next
           </button>
         </div>
@@ -1122,56 +1120,21 @@ export default function ConsentPreview({
 
     {publishSuccess ? (
       <div
-        className="fixed inset-0 z-[999999999999999999999] flex items-center justify-center bg-black/40 p-4"
-        role="presentation"
-        onClick={() => {
-          if (publishBusy) return;
-          onDismissPublishSuccess?.();
-        }}
+        className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] flex items-center justify-between gap-4 rounded-xl px-5 py-3.5 shadow-lg w-full max-w-[600px]"
+        style={{ background: "linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)" }}
+        role="alert"
       >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="publish-success-title"
-          aria-describedby="publish-success-desc"
-          className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[#dcfce7]">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M20 6L9 17l-5-5"
-                stroke="#15803d"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <h2
-            id="publish-success-title"
-            className="mt-3 font-['DM_Sans'] text-lg font-semibold text-[#15803d]"
-            style={{ fontVariationSettings: "'opsz' 14" }}
-          >
-            Banner updated successfully
-          </h2>
-          <p
-            id="publish-success-desc"
-            className="mt-2 font-['DM_Sans'] text-sm leading-relaxed text-[#374151]"
-            style={{ fontVariationSettings: "'opsz' 14" }}
-          >
-            
-            
-          </p>
-          <button
-            type="button"
-            className="mt-6 w-full rounded-lg bg-[#2ec04f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#26a342] transition-colors cursor-pointer"
-            onClick={() => onDismissPublishSuccess?.()}
-            disabled={publishBusy}
-          >
-            OK
-          </button>
+        <div className="flex items-center gap-3">
+          <img src="/asset/Success-icon.png" alt="Success" width={28} height={28} className="shrink-0" />
+          <span className="text-white font-medium text-sm">Banner updated successfully</span>
         </div>
+        <button
+          type="button"
+          onClick={() => onDismissPublishSuccess?.()}
+          className="shrink-0 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium px-4 py-1.5 transition-colors"
+        >
+          Close
+        </button>
       </div>
     ) : null}
     </>

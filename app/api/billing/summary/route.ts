@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverFetchJson } from "@/lib/server-api";
+import { serverFetch } from "@/lib/server-api";
 
 export const runtime = 'edge';
 
@@ -13,11 +13,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "organizationId required" }, { status: 400 });
     }
 
-    const { data, status } = await serverFetchJson(
+    const res = await serverFetch(
       `/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}`,
       { method: "GET", cookies: cookie },
     );
-    return NextResponse.json(data, { status });
+    const text = await res.text();
+    return new Response(text, {
+      status: res.status,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...(res.headers.get('X-Content-Encoded') ? { 'X-Content-Encoded': '1' } : {}),
+      },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to load billing summary";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -95,3 +95,33 @@ export async function serverFetchJson(
   return { data, status: res.status, headers: res.headers };
 }
 
+/**
+ * Proxy a worker response to the browser with the base64 envelope intact.
+ * Use this instead of NextResponse.json(data) so the client can decode it.
+ * Pass requestUrl to strip the Secure flag from Set-Cookie on HTTP (dev).
+ */
+export async function proxyWorkerResponse(
+  endpoint: string,
+  options: Parameters<typeof serverFetch>[1] = {},
+  { forwardSetCookie = false, requestUrl = '' }: { forwardSetCookie?: boolean; requestUrl?: string } = {},
+): Promise<Response> {
+  const res = await serverFetch(endpoint, options);
+  const text = await res.text().catch(() => '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+  };
+  if (res.headers.get('X-Content-Encoded')) headers['X-Content-Encoded'] = '1';
+  if (forwardSetCookie) {
+    let setCookie = res.headers.get('set-cookie') ?? res.headers.get('Set-Cookie');
+    if (setCookie) {
+      try {
+        if (requestUrl && new URL(requestUrl).protocol === 'http:') {
+          setCookie = setCookie.replace(/\s*;\s*Secure/gi, '');
+        }
+      } catch (_) {}
+      headers['Set-Cookie'] = setCookie;
+    }
+  }
+  return new Response(text, { status: res.status, headers });
+}
+

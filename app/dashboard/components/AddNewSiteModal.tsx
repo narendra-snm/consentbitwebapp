@@ -83,6 +83,7 @@ const plans: PricingPlan[] = [
   },
 ];
 
+
 export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
   const { refresh, activeOrganizationId, sites } = useDashboardSession();
@@ -323,41 +324,31 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       <div className="relative mx-2 bg-white rounded-[10px] max-w-[1136px] shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Submitting overlay */}
         {submitting && (
-          <div className="absolute inset-0 bg-white/75 z-50 flex flex-col items-center justify-center rounded-[10px] gap-3">
-            <svg
-              className="animate-spin h-8 w-8 text-[#007AFF]"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <p className="text-sm text-[#007AFF] font-medium">
-              {selectedPlan === "free" ? "Setting up your site…" : "Redirecting to checkout…"}
-            </p>
+          <div className="absolute inset-0 bg-[#E6F1FD] z-50 flex flex-col items-center justify-center rounded-[10px] gap-6">
+            <div className="w-12 h-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
+            <div className="text-center">
+              <p className="text-[18px] font-semibold text-[#111827]">
+                {selectedPlan === "free" ? "Setting up your site..." : "Proceeding to payment..."}
+              </p>
+              <p className="text-sm text-[#6b7280] mt-1">
+                {selectedPlan === "free" ? "Please wait a moment." : "You will be redirected to Stripe shortly."}
+              </p>
+            </div>
           </div>
         )}
 
-
         {/* Checkout pending full-page overlay */}
         {checkoutPending && (
-          <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm">
-            <svg
-              className="animate-spin h-10 w-10 text-[#007AFF] mb-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <p className="text-[#231d4f] font-semibold text-lg mb-1">Complete your payment in the new tab</p>
-            <p className="text-gray-500 text-sm mb-7">Waiting for confirmation from Stripe…</p>
+          <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-[#E6F1FD] gap-6">
+            <div className="w-12 h-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
+            <div className="text-center">
+              <p className="text-[18px] font-semibold text-[#111827]">Complete your payment in the new tab</p>
+              <p className="text-sm text-[#6b7280] mt-1">Waiting for confirmation from Stripe…</p>
+            </div>
             <button
               type="button"
               onClick={handleCancelCheckout}
-              className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 bg-white"
             >
               Cancel
             </button>
@@ -439,7 +430,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                 className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] opacity-60 text-[#161616] text-[14px] tracking-[-0.28px]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
-                Add a new website to your organization. Enter your website URL. You can configure banner settings in the Cookie Banner tab.
+                Add a new website to your organization by entering your website URL. You can configure banner settings in the Cookie Banner tab.
               </p>
             </div>
           </div>

@@ -25,9 +25,12 @@ interface BillingDetailsCardProps {
   country?: string;
   address?: string;
   pm?: PaymentMethod | null;
-  portalLoading?: boolean;
-  onEditCard?: () => void;
+  /** Header button — "Visit Stripe portal to edit billing details →" */
   onVisitStripePortal?: () => void;
+  /** Pencil icon on card — edit payment method */
+  onEditCard?: () => void;
+  /** Footer link — "Open Stripe portal ↗" */
+  onOpenPortal?: () => void;
 }
 
 function VuesaxLinearMessageEdit() {
@@ -78,18 +81,18 @@ export default function BillingDetailsCard({
   country,
   address,
   pm,
-  portalLoading = false,
-  onEditCard,
   onVisitStripePortal,
+  onEditCard,
+  onOpenPortal,
 }: BillingDetailsCardProps) {
-  const safeName = name || "—";
-  const safeEmail = email || "—";
+  const safeName    = name    || "—";
+  const safeEmail   = email   || "—";
   const safeCountry = country || "—";
   const safeAddress = address || "—";
 
-  const brand = pm?.brand?.toLowerCase() || "";
+  const brand        = pm?.brand?.toLowerCase() || "";
   const isMastercard = brand === "mastercard";
-  const isVisa = brand === "visa";
+  const isVisa       = brand === "visa";
 
   return (
     <div className="w-full max-w-[554px] bg-[#e6f1fd] border border-[#ebebeb] rounded-[10px] p-[20px]">
@@ -101,19 +104,17 @@ export default function BillingDetailsCard({
           Billing Details
         </h2>
 
+        {/* Header portal button */}
         <button
           type="button"
           onClick={onVisitStripePortal}
-          disabled={portalLoading}
-          className="bg-white px-[11px] py-[8px] rounded-[8px] min-h-[41px] disabled:opacity-50 whitespace-nowrap"
+          className="bg-white px-[11px] py-[8px] rounded-[8px] min-h-[41px] whitespace-nowrap hover:bg-gray-50 transition-colors"
         >
           <p
             className="font-['DM_Sans:Medium',sans-serif] font-medium text-[14px] text-black leading-[20px]"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
-            {portalLoading
-              ? "Opening…"
-              : "Visit Stripe portal to edit billing details →"}
+            Visit Stripe portal to edit billing details →
           </p>
         </button>
       </div>
@@ -199,7 +200,6 @@ export default function BillingDetailsCard({
         <div className="relative">
           <div
             className="rounded-[14px] overflow-hidden px-5 pt-5 pb-4 min-h-[202px] flex flex-col justify-between bg-[linear-gradient(117.61deg,_#E2EDFF_-10.2%,_#007AFF_87.03%)]"
-            
           >
             <div className="absolute top-3 right-3 flex items-center gap-1.5">
               <p
@@ -211,12 +211,12 @@ export default function BillingDetailsCard({
                 portal
               </p>
 
+              {/* Edit card button — opens Stripe portal to edit card */}
               <button
                 type="button"
-                onClick={onEditCard ?? onVisitStripePortal}
-                disabled={portalLoading}
-                title="Edit in Stripe portal"
-                className="bg-[#f9f9fa] border border-[#e5e5e5] p-[8px] rounded-[8px] size-[36px] flex items-center justify-center hover:bg-white/80 transition disabled:opacity-50"
+                onClick={onEditCard}
+                title="Edit payment method in Stripe portal"
+                className="bg-[#f9f9fa] border border-[#e5e5e5] p-[8px] rounded-[8px] size-[36px] flex items-center justify-center hover:bg-white/80 transition-colors"
               >
                 <VuesaxLinearMessageEdit />
               </button>
@@ -278,11 +278,11 @@ export default function BillingDetailsCard({
             </div>
           </div>
 
+          {/* Footer portal link — opens Stripe portal */}
           <button
             type="button"
-            onClick={onVisitStripePortal}
-            disabled={portalLoading}
-            className="mt-[8px] ml-auto flex items-start gap-[4px] disabled:opacity-50"
+            onClick={onOpenPortal}
+            className="mt-[8px] ml-auto flex items-start gap-[4px] hover:opacity-70 transition-opacity"
           >
             <span
               className="font-['DM_Sans:Bold',sans-serif] font-bold text-[12px] text-[#292d32] tracking-[-1px] leading-[14px] text-right"
@@ -301,11 +301,10 @@ export default function BillingDetailsCard({
 
           <button
             type="button"
-            onClick={onVisitStripePortal}
-            disabled={portalLoading}
-            className="text-[13px] text-[#007AFF] hover:underline disabled:opacity-50"
+            onClick={onOpenPortal}
+            className="text-[13px] text-[#007AFF] hover:underline"
           >
-            {portalLoading ? "Opening…" : "Add payment method"}
+            Add payment method
           </button>
         </div>
       )}

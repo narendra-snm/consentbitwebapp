@@ -57,7 +57,7 @@ type Props = {
 const invoiceCache = new Map<string, { rows: BillingInvoice[]; ts: number }>();
 invoiceCache.clear();
 const summaryCache = new Map<string, { data: BillingSummary; ts: number }>();
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 10_000;
 /** Bump when invoice API shape/proxy changes so we do not reuse empty cached rows forever. */
 const INVOICE_STORAGE_KEY = "billing-invoices:v3";
 
@@ -360,17 +360,39 @@ export default function BillingPage({
     }
   };
 
+  const openPortal = async () => {
+    if (!organizationId) return;
+    const returnUrl = typeof window !== "undefined" ? window.location.href : "";
+    const { url } = await createBillingPortalSession(organizationId, returnUrl);
+    window.location.assign(url);
+  };
+
   const handleOpenPortal = async () => {
     if (!organizationId) return;
     setPortalLoading(true);
-    try {
-      const returnUrl = typeof window !== "undefined" ? window.location.href : "";
-      const { url } = await createBillingPortalSession(organizationId, returnUrl);
-      window.location.assign(url);
-    } catch (e) {
+    try { await openPortal(); } catch (e) {
       alert(e instanceof Error ? e.message : "Could not open billing portal");
-    } finally {
-      setPortalLoading(false);
+    } finally { setPortalLoading(false); }
+  };
+
+  const handleVisitPortal = async () => {
+    if (!organizationId) return;
+    try { await openPortal(); } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not open billing portal");
+    }
+  };
+
+  const handleEditCard = async () => {
+    if (!organizationId) return;
+    try { await openPortal(); } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not open billing portal");
+    }
+  };
+
+  const handleOpenPortalFooter = async () => {
+    if (!organizationId) return;
+    try { await openPortal(); } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not open billing portal");
     }
   };
 
@@ -692,44 +714,6 @@ export default function BillingPage({
             <span className="text-[18px] font-black text-[#007AFF]">{planLabel}</span>
           </div>
 
-          {planEditableSiteId ? (
-            <div className="py-4 border-b border-gray-200 space-y-3">
-              <div>
-                <p className="text-[13px] font-medium text-black">Site for this plan</p>
-                <p className="text-[12px] text-[#6b7280] mt-0.5">
-                  Matches the site selected in the dashboard header. The list label uses the same host as this URL.
-                </p>
-              </div>
-              <div>
-                <label className="block text-[12px] text-[#6b7280] mb-1" htmlFor="billing-plan-site-url">
-                  Website URL
-                </label>
-                <input
-                  id="billing-plan-site-url"
-                  type="text"
-                  value={planSiteDomain}
-                  onChange={(e) => {
-                    setPlanSiteDomain(e.target.value);
-                    setPlanSiteError(null);
-                  }}
-                  disabled={planSiteSaving}
-                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
-                  placeholder="example.com"
-                />
-              </div>
-              {planSiteError ? (
-                <p className="text-[12px] text-red-600">{planSiteError}</p>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void handleSavePlanSiteDetails()}
-                disabled={planSiteSaving || !planSiteDomain.trim()}
-                className="w-full sm:w-auto min-h-[36px] px-4 rounded-lg bg-[#007AFF] hover:bg-blue-700 text-white text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {planSiteSaving ? "Saving…" : "Save site details"}
-              </button>
-            </div>
-          ) : null}
 
           <div className="pt-3 pb-3 border-b border-gray-200">
             <div className="grid grid-cols-3 gap-6">
@@ -800,12 +784,12 @@ export default function BillingPage({
 <BillingDetailsCard
   name={userName}
   email={userEmail}
-  country="United States"
-  address="—"
+  country={summary?.billingCountry || "—"}
+  address={summary?.billingAddress || "—"}
   pm={pm}
-  portalLoading={portalLoading}
-  onEditCard={handleOpenPortal}
-  onVisitStripePortal={handleOpenPortal}
+  onVisitStripePortal={handleVisitPortal}
+  onEditCard={handleEditCard}
+  onOpenPortal={handleOpenPortalFooter}
 />
       </div>
     </div>

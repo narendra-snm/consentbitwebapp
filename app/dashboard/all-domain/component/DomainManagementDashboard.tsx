@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
-import { cancelSubscription, deleteSite } from '@/lib/client-api';
+import { cancelSubscription } from '@/lib/client-api';
+import ErrorPopup from '../../components/ErrorPopup';
+import LoadingPopup2 from '../../[id]/scan/component/LoadingPopup';
 
 const svgPaths = {
   p10d33ac0: "M6.28298 3.04688L6.06631 6.40354C6.02964 6.92687 5.99964 7.33354 5.06964 7.33354H2.92964C1.99964 7.33354 1.96964 6.92687 1.93298 6.40354L1.71631 3.04688",
@@ -11,7 +12,7 @@ const svgPaths = {
   p478eb80: "M7 1.99382C5.89 1.88382 4.77333 1.82715 3.66 1.82715C3 1.82715 2.34 1.86048 1.68 1.92715L1 1.99382",
 };
 
-type DomainStatus = 'Active' | 'Cancelled' | 'Cancelling' | 'Expired';
+type DomainStatus = 'Active' | 'Cancelled' | 'Cancelling' | 'Expired' | 'Inactive';
 type SortKey = 'domain' | 'status' | 'billing' | 'expiration' | 'created';
 
 interface Domain {
@@ -30,10 +31,11 @@ interface Domain {
 
 const StatusBadge = ({ status }: { status: DomainStatus }) => {
   const styles: Record<DomainStatus, { bg: string; text: string; dotColor: string }> = {
-    Active: { bg: 'bg-[#b6f5cf]', text: 'text-[#118a41]', dotColor: '#118A41' },
+    Active:    { bg: 'bg-[#b6f5cf]', text: 'text-[#118a41]', dotColor: '#118A41' },
     Cancelled: { bg: 'bg-[#f5b6b6]', text: 'text-[#8a1111]', dotColor: '#c0392b' },
-    Cancelling: { bg: 'bg-[#fde8cc]', text: 'text-[#9a5000]', dotColor: '#e07000' },
-    Expired: { bg: 'bg-[#eeecec]', text: 'text-[#717171]', dotColor: '#717171' },
+    Cancelling:{ bg: 'bg-[#FFE5CC]', text: 'text-[#FF6B00]', dotColor: '#FF6B00' },
+    Expired:   { bg: 'bg-[#fee2e2]', text: 'text-[#b91c1c]', dotColor: '#b91c1c' },
+    Inactive:  { bg: 'bg-[#e5e7eb]', text: 'text-[#6b7280]', dotColor: '#9ca3af' },
   };
 
   const style = styles[status];
@@ -66,13 +68,6 @@ const ChevronIcon = () => (
   </svg>
 );
 
-const CopyIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-    <path d={svgPaths.p1b386300.replace('3.27284 4.43681', '1 1')} />
-    <rect x="1" y="1" width="8" height="8" rx="1.2" stroke="#3b82f6" strokeWidth="1" />
-    <rect x="4" y="4" width="8" height="8" rx="1.2" fill="white" stroke="#3b82f6" strokeWidth="1" />
-  </svg>
-);
 
 const ThreeDotMenu = () => (
   <div className="w-[17px] h-[3px] flex items-center justify-center">
@@ -84,11 +79,11 @@ const ThreeDotMenu = () => (
   </div>
 );
 
-const statusOrder: Record<DomainStatus, number> = { Active: 0, Cancelling: 1, Cancelled: 2, Expired: 3 };
+const statusOrder: Record<DomainStatus, number> = { Active: 0, Cancelling: 1, Cancelled: 2, Expired: 3, Inactive: 4 };
 const billingOrder: Record<string, number> = { Monthly: 0, Yearly: 1 };
 
 const TABLE_GRID =
-  'grid grid-cols-[minmax(160px,1.8fr)_minmax(95px,0.8fr)_minmax(105px,0.8fr)_minmax(105px,0.8fr)_minmax(170px,1.2fr)_minmax(90px,0.7fr)_auto] gap-x-[16px]';
+  'grid grid-cols-[minmax(160px,1.8fr)_minmax(95px,0.8fr)_minmax(105px,0.8fr)_minmax(105px,0.8fr)_minmax(170px,1.2fr)_minmax(90px,0.7fr)_auto] gap-x-[16px] [&>*:nth-child(6)]:pl-[32px]';
 
 type FilterStatus = 'all' | DomainStatus;
 type FilterBilling = 'all' | 'Monthly' | 'Yearly';
@@ -152,11 +147,9 @@ function FilterChip({ label, value, options, onChange }: FilterChipProps) {
 }
 
 export function DomainManagementDashboard() {
-  const router = useRouter();
-  const { sites, loading, refresh } = useDashboardSession();
+  const { sites, loading, refresh, updateSiteInState } = useDashboardSession();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -168,8 +161,15 @@ export function DomainManagementDashboard() {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  const [hydrated, setHydrated] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => { setHydrated(true); setNowMs(Date.now()); }, []);
+
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [showCancelLoading, setShowCancelLoading] = useState(false);
+  const [confirmDomain, setConfirmDomain] = useState<Domain | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortAsc, setSortAsc] = useState(false);
   const [filterDomain, setFilterDomain] = useState('');
@@ -177,7 +177,7 @@ export function DomainManagementDashboard() {
   const [filterBilling, setFilterBilling] = useState<FilterBilling>('all');
   const [filterExpiration, setFilterExpiration] = useState<FilterExpiration>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 10;
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey(prev => {
@@ -202,25 +202,33 @@ export function DomainManagementDashboard() {
         site?.subscriptionCancelAtPeriodEnd ?? site?.subscription_cancel_at_period_end ??
         site?.cancelAtPeriodEnd ?? site?.cancel_at_period_end ?? 0,
       ) === 1;
-      const explicitlyCancelled = site?.status === 'cancelled' || site?.subscriptionStatus === 'canceled' || site?.subscription_status === 'canceled';
-
-      const status: DomainStatus = !verified
-        ? 'Expired'
-        : explicitlyCancelled
-          ? 'Cancelled'
-          : cancelAtPeriodEnd
-            ? 'Cancelling'
-            : 'Active';
-
-      const rawInterval = site?.interval ?? site?.billing_interval ?? site?.subscriptionInterval ?? site?.subscription_interval ?? null;
-      const rawPlan = site?.planId ?? site?.plan_id ?? site?.subscription_plan ?? site?.plan ?? 'free';
-      const planLower = String(rawPlan).toLowerCase();
-      const billingPeriod: Domain['billingPeriod'] = planLower === 'free' ? null
-        : String(rawInterval || '').toLowerCase() === 'yearly' ? 'Yearly' : 'Monthly';
+      const explicitlyCancelled =
+        site?._optimisticCancelled === true ||
+        site?.status === 'cancelled' ||
+        site?.subscriptionStatus === 'canceled' ||
+        site?.subscription_status === 'canceled';
 
       const subscriptionEnd = site?.subscriptionCurrentPeriodEnd ?? site?.subscription_current_period_end ??
         site?.currentPeriodEnd ?? site?.current_period_end ?? site?.nextRenewal ?? site?.next_renewal ?? null;
       const expTs = subscriptionEnd ? new Date(subscriptionEnd).getTime() : 0;
+      const periodExpired = nowMs > 0 && expTs > 0 && expTs < nowMs;
+
+      const status: DomainStatus =
+        (cancelAtPeriodEnd || explicitlyCancelled) && !periodExpired
+          ? 'Cancelling'
+          : (cancelAtPeriodEnd || explicitlyCancelled) && periodExpired
+            ? 'Expired'
+            : !verified
+              ? 'Inactive'
+              : 'Active';
+
+      const rawInterval = site?.interval ?? site?.billing_interval ?? site?.subscriptionInterval ?? site?.subscription_interval ?? null;
+      const rawPlan = site?.planId ?? site?.plan_id ?? site?.subscription_plan ?? site?.plan ?? 'free';
+      const planLower = String(rawPlan).toLowerCase();
+      const intervalLower = String(rawInterval || '').toLowerCase();
+      const billingPeriod: Domain['billingPeriod'] = planLower === 'free' ? null
+        : (intervalLower === 'yearly' || intervalLower === 'year') ? 'Yearly' : 'Monthly';
+
       const expirationDate = subscriptionEnd
         ? new Date(subscriptionEnd).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" })
         : "N/A";
@@ -242,7 +250,7 @@ export function DomainManagementDashboard() {
         stripeSubscriptionId: site?.stripeSubscriptionId ? String(site.stripeSubscriptionId) : null,
       };
     });
-  }, [sites]);
+  }, [sites, nowMs]);
 
   const hasActiveFilters =
     filterDomain.trim().length > 0 || filterStatus !== 'all' || filterBilling !== 'all' || filterExpiration !== 'all';
@@ -292,48 +300,109 @@ export function DomainManagementDashboard() {
     setCurrentPage(1);
   }, []);
 
-  const handleCopyLicenseKey = (domain: Domain) => {
-    if (!domain.licenseKey) return;
-    navigator.clipboard.writeText(domain.licenseKey).then(() => {
-      setCopiedId(domain.id);
-      setTimeout(() => setCopiedId(null), 1500);
-    });
+
+  const handleCancelSubscription = (domain: Domain) => {
+    setConfirmDomain(domain);
   };
 
-  const handleDeleteDomain = async (domain: Domain) => {
-    const ok = window.confirm(`Delete domain "${domain.url}"? This action cannot be undone.`);
-    if (!ok) return;
+  const confirmCancel = async () => {
+    if (!confirmDomain) return;
+    const domain = confirmDomain;
+    setConfirmDomain(null);
     setActionError(null);
+    setCancelSuccess(false);
     setActionLoadingId(domain.id);
+    setShowCancelLoading(true);
     try {
-      await deleteSite(domain.id);
+      await cancelSubscription({
+        subscriptionId: domain.subscriptionId,
+        stripeSubscriptionId: domain.stripeSubscriptionId,
+      });
+      // Optimistically patch — sets cancelAtPeriodEnd so status shows "Cancelling"
+      // (active until period ends). Also sets _optimisticCancelled as a fallback flag.
+      updateSiteInState({
+        id: domain.id,
+        _optimisticCancelled: true,
+        cancelAtPeriodEnd: 1,
+        cancel_at_period_end: 1,
+        subscriptionCancelAtPeriodEnd: 1,
+        subscription_cancel_at_period_end: 1,
+      });
       await refresh({ showLoading: false });
+      setCancelSuccess(true);
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed to delete domain');
+      setActionError(e instanceof Error ? e.message : 'Failed to cancel subscription');
     } finally {
       setActionLoadingId(null);
+      setShowCancelLoading(false);
     }
-  };
-
-  const SortableColHeader = ({ label, sortK }: { label: string; sortK: SortKey }) => {
-    const active = sortKey === sortK;
-    return (
-      <button
-        type="button"
-        onClick={() => handleSort(sortK)}
-        className="flex items-center gap-1 text-left w-full"
-        style={{ fontFamily: 'DM Sans, sans-serif' }}
-      >
-        <span className={`text-xs tracking-[-0.5px] ${active ? 'text-[#1d4ed8] font-semibold' : 'text-[#6b7280] font-medium'}`}>{label}</span>
-        <span className={`text-[10px] ${active ? 'text-[#1d4ed8]' : 'text-[#9ca3af]'}`} aria-hidden>
-          {active ? (sortAsc ? '↑' : '↓') : '↕'}
-        </span>
-      </button>
-    );
   };
 
   return (
     <div className="w-full max-w-[1121px] mx-auto">
+      <LoadingPopup2
+        show={showCancelLoading}
+        title="Cancelling Subscription"
+        subtitle="Please wait while we process your request"
+      />
+
+      {actionError && (
+        <ErrorPopup message={actionError} onClose={() => setActionError(null)} />
+      )}
+
+      {cancelSuccess && (
+        <div
+          className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] flex items-center justify-between gap-4 rounded-xl px-5 py-3.5 shadow-lg w-full max-w-[600px]"
+          style={{ background: "linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)" }}
+          role="alert"
+        >
+          <div className="flex items-center gap-3">
+            <img src="/asset/Success-icon.png" alt="Success" width={28} height={28} className="shrink-0" />
+            <span className="text-white font-medium text-sm">Subscription cancelled successfully</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCancelSuccess(false)}
+            className="shrink-0 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium px-4 py-1.5 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+      {confirmDomain && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDomain(null)} />
+          <div className="relative w-full max-w-[420px] rounded-2xl bg-white shadow-xl p-7" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-[#0a091f] mb-2" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              Cancel Subscription
+            </h2>
+            <p className="text-sm text-[#4b5563] leading-relaxed mb-7" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              Are you sure you want to cancel the subscription for{' '}
+              <span className="font-semibold text-[#0a091f]">{confirmDomain.url}</span>?
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDomain(null)}
+                className="rounded-lg border border-[#e5e7eb] px-5 py-2.5 text-sm text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                style={{ fontFamily: 'DM Sans, sans-serif' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmCancel()}
+                className="rounded-lg bg-[#c0392b] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#a93226] transition-colors"
+                style={{ fontFamily: 'DM Sans, sans-serif' }}
+              >
+                Yes, Cancel Subscription
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Title */}
       <h1
         className="text-[20px] tracking-[-1px] text-black mb-[18px] mt-3.5"
@@ -369,8 +438,8 @@ export function DomainManagementDashboard() {
             { label: 'All statuses', value: 'all' },
             { label: 'Active', value: 'Active' },
             { label: 'Cancelling', value: 'Cancelling' },
-            { label: 'Cancelled', value: 'Cancelled' },
             { label: 'Expired', value: 'Expired' },
+            { label: 'Inactive', value: 'Inactive' },
           ]}
         />
 
@@ -417,27 +486,26 @@ export function DomainManagementDashboard() {
         )}
       </div>
 
-      {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
 
-      {/* Table with blue border */}
-      <div className="w-full rounded-[10px] border border-[#2563eb] shadow-sm overflow-visible">
+      {/* Table */}
+      <div className="w-full rounded-[10px] overflow-visible">
         {/* Header */}
-        <div className={`${TABLE_GRID} px-[20px] py-[12px] bg-white border-b border-[#e5e7eb] items-center rounded-t-[10px]`}>
-          <SortableColHeader label="Active" sortK="domain" />
-          <SortableColHeader label="Status" sortK="status" />
-          <SortableColHeader label="Billing Period" sortK="billing" />
-          <SortableColHeader label="Expiration Date" sortK="expiration" />
-          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>License Key</span>
-          <SortableColHeader label="Created" sortK="created" />
+        <div className={`${TABLE_GRID} px-[20px] py-[18px] items-center rounded-t-[10px]`} style={{ backgroundColor: '#F3F4F6' }}>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Active</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Status</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Billing Period</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Expiration Date</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Site ID</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Created</span>
           <div className="w-[17px]" aria-hidden />
         </div>
 
         {/* Rows */}
         <div className="bg-white rounded-b-[10px] overflow-visible">
-          {pagedRows.map(domain => (
+          {!hydrated ? null : pagedRows.map(domain => (
             <div
               key={domain.id}
-              className={`${TABLE_GRID} px-[20px] py-[14px] border-b border-[#f0f0f0] last:border-b-0 last:pb-[28px] relative group hover:bg-[#f9fafb] transition-colors items-center`}
+              className={`${TABLE_GRID} px-[20px] py-[14px] relative group hover:bg-[#f9fafb] transition-colors items-center`}
             >
               {/* Domain URL */}
               <div
@@ -474,16 +542,16 @@ export function DomainManagementDashboard() {
               </div>
 
               {/* License Key */}
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2">
                 {domain.licenseKey ? (
                   <>
                     <span
-                      className="text-[#374151] text-[11px] tracking-[-0.3px] font-mono truncate"
+                      className="text-[#374151] text-[11px] tracking-[-0.3px] font-mono"
                       title={domain.licenseKey}
                     >
                       {domain.licenseKey}
                     </span>
-                    <button
+                    {/* <button
                       type="button"
                       onClick={() => handleCopyLicenseKey(domain)}
                       className="shrink-0 text-[#3b82f6] hover:text-[#1d4ed8] transition-colors"
@@ -500,7 +568,7 @@ export function DomainManagementDashboard() {
                           <rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1.2" fill="white" stroke="#3b82f6" strokeWidth="1" />
                         </svg>
                       )}
-                    </button>
+                    </button> */}
                   </>
                 ) : (
                   <span className="text-[#9ca3af] text-[11px]">—</span>
@@ -535,26 +603,9 @@ export function DomainManagementDashboard() {
                 >
                   <button
                     type="button"
-                    disabled={!domain.licenseKey || actionLoadingId === domain.id}
-                    onClick={() => { setOpenMenuId(null); handleCopyLicenseKey(domain); }}
-                    className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#f5f7fa] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <rect x="1" y="1" width="8" height="8" rx="1.2" stroke="#4B5563" strokeWidth="1" />
-                      <rect x="5" y="5" width="8" height="8" rx="1.2" fill="white" stroke="#4B5563" strokeWidth="1" />
-                    </svg>
-                    <span
-                      className="text-[#4b5563] text-[13px] tracking-[-0.5px]"
-                      style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}
-                    >
-                      Copy License key
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={actionLoadingId === domain.id}
-                    onClick={() => { setOpenMenuId(null); void handleDeleteDomain(domain); }}
-                    className="flex items-center gap-[8px] py-[6px] px-[8px] hover:bg-[#fff0f0] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={['Cancelling', 'Cancelled', 'Expired'].includes(domain.status) || actionLoadingId === domain.id}
+                    onClick={() => { if (['Cancelling', 'Cancelled', 'Expired'].includes(domain.status)) return; setOpenMenuId(null); void handleCancelSubscription(domain); }}
+                    className="flex items-center gap-[8px] py-[6px] px-[8px] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#fff0f0] disabled:hover:bg-transparent"
                   >
                     <svg width="14" height="14" viewBox="0 0 8 8" fill="none">
                       <path d={svgPaths.p478eb80} stroke="#8A1111" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.8" />
@@ -565,10 +616,11 @@ export function DomainManagementDashboard() {
                       className="text-[#8A1111] text-[13px] tracking-[-0.5px]"
                       style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}
                     >
-                      {actionLoadingId === domain.id ? 'Deleting…' : 'Delete Domain'}
+                      {actionLoadingId === domain.id ? 'Cancelling…' : 'Cancel Subscription'}
                     </span>
                   </button>
                 </div>
+
               )}
             </div>
           ))}

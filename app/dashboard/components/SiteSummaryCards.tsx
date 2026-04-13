@@ -81,7 +81,7 @@ export default function SiteSummaryCards({
 
             </div>
             <div>
-            <p className="text-xs ">Cookie banner status</p>
+            <p className="text-xs ">Cookie Banner Status</p>
 
             <p className={`font-medium text-xl mt-1 flex items-center gap-1 ${isVerified ? "text-emerald-600" : "text-[#AC2734]"}`}>
               {isVerified ? "Active" : "Inactive"} <CircularArrow/>
@@ -163,7 +163,7 @@ export default function SiteSummaryCards({
 
   {/* Header */}
   <h3 className=" font-semibold  mb-3.25">
-    Cookie summary
+   Summary
   </h3>
 
   <div className="grid grid-cols-2 gap-4">

@@ -18,7 +18,7 @@ function DashboardSitePageInner() {
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
+  useLayoutEffect(() => setHydrated(true), []);
   const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
   const userEmail = user?.email ?? "";
 const userName = useMemo(() => {

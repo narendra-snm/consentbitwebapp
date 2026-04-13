@@ -26,7 +26,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
             href="https://docs.consentbit.com"
             target="_blank"
             rel="noreferrer"
-            className="bg-[#007AFF] text-white text-sm px-4 py-1.5 rounded-md"
+            className="bg-[#007AFF] text-white text-sm px-4 py-1.5 rounded-md whitespace-nowrap"
           >
             help Doc
           </a>
@@ -35,7 +35,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
             href="https://docs.consentbit.com/support"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center font-medium gap-1 text-[#007AFF] text-[15px] cursor-pointer"
+            className="flex items-center font-medium gap-1 text-[#007AFF] text-[15px] cursor-pointer whitespace-nowrap"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M7.99992 1.33333C4.32392 1.33333 1.33325 4.324 1.33325 8V10.762C1.33325 11.4447 1.93125 12 2.66659 12H3.33325C3.51006 12 3.67963 11.9298 3.80466 11.8047C3.92968 11.6797 3.99992 11.5101 3.99992 11.3333V7.90467C3.99992 7.72786 3.92968 7.55829 3.80466 7.43326C3.67963 7.30824 3.51006 7.238 3.33325 7.238H2.72792C3.09859 4.658 5.31859 2.66667 7.99992 2.66667C10.6813 2.66667 12.9013 4.658 13.2719 7.238H12.6666C12.4898 7.238 12.3202 7.30824 12.1952 7.43326C12.0702 7.55829 11.9999 7.72786 11.9999 7.90467V12C11.9999 12.7353 11.4019 13.3333 10.6666 13.3333H9.33325V12.6667H6.66658V14.6667H10.6666C12.1373 14.6667 13.3333 13.4707 13.3333 12C14.0686 12 14.6666 11.4447 14.6666 10.762V8C14.6666 4.324 11.6759 1.33333 7.99992 1.33333Z" fill="#007AFF"/>
