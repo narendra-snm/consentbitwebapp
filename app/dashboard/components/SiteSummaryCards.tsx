@@ -163,7 +163,7 @@ export default function SiteSummaryCards({
 
   {/* Header */}
   <h3 className=" font-semibold  mb-3.25">
-    Cookie summary
+   Summary
   </h3>
 
   <div className="grid grid-cols-2 gap-4">

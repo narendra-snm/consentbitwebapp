@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addCustomCookieRule,
+  addExpectedCookie,
   deleteCustomCookieRule,
   deleteScheduledScan,
   getCustomCookieRules,
@@ -20,6 +21,7 @@ import {
 import { ScheduleScanModal } from './ScheduleScanModal';
 import { UpgradePlanModal } from '../../components/UpgradePlanModal';
 import LoadingPopup2 from './component/LoadingPopup';
+import ErrorPopup from '../../components/ErrorPopup';
 
 import { useDashboardSession } from '../../DashboardSessionProvider';
 
@@ -177,6 +179,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   );
   const sitesRef = useRef(siteList);
   sitesRef.current = siteList;
+  const historyRef = useRef<HTMLDivElement>(null);
   const currentSite = useMemo(() => siteList.find((s: any) => String(s?.id) === String(siteId)), [siteList, siteId]);
   const siteDomain = useMemo(() => {
     const d = (currentSite as any)?.domain ?? '';
@@ -217,6 +220,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const [showNoSiteModal, setShowNoSiteModal] = useState(false);
   const [scanLimitReached, setScanLimitReached] = useState(false);
   const [siteNotVerified, setSiteNotVerified] = useState(false);
+  const [scanSuccess, setScanSuccess] = useState(false);
   const [showScanInitPopup, setShowScanInitPopup] = useState(false);
   const [bottomTab, setBottomTab] = useState<'history' | 'rules'>('history');
   const [historyPage, setHistoryPage] = useState(1);
@@ -250,7 +254,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       for (let i = 0; i < history.length; i++) {
         const row = history[i];
         const needsCategories = !row.categories?.length && derivedCategories.length > 0;
-        const needsCookieCount = (row.cookiesFound === 0 || row.cookiesFound == null) && totalCookies > 0;
+        // Only inflate cookie count for truly legacy scans (no scanDuration) that predate
+        // count tracking. Completed scans with a real scanDuration that found 0 cookies
+        // should show 0 — not be inflated by manually-added or unrelated cookies.
+        const needsCookieCount = (row.cookiesFound === 0 || row.cookiesFound == null) && totalCookies > 0 && row.scanDuration == null;
         if (needsCategories || needsCookieCount) {
           history[i] = {
             ...row,
@@ -316,6 +323,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     return scanHistory.length > 0 ? scanHistory[0] : null;
   }, [scanHistory]);
 
+  const hasScanInProgress = useMemo(() => {
+    return scanHistory.some((s) => {
+      const status = String(s.scanStatus).toLowerCase();
+      return status === 'in_progress' || status === 'pending' || status === 'queued';
+    });
+  }, [scanHistory]);
+
   const nextScheduledScan = useMemo(() => {
     if (scheduledScans.length === 0) return null;
     return [...scheduledScans].sort(
@@ -326,13 +340,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   const categoryCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    ALL_CATEGORIES.forEach((c) => {
-      m[c] = cookiesByCategory[c]?.length ?? 0;
+    ALL_CATEGORIES.forEach((cat) => {
+      m[cat] = (cookiesByCategory[cat] ?? []).length;
     });
     return m;
   }, [cookiesByCategory]);
 
-  const selectedCookies = cookiesByCategory[selectedCategory] || [];
+  const selectedCookies = (cookiesByCategory[selectedCategory] || []);
   const cookieTotalPages = Math.ceil(selectedCookies.length / COOKIE_PAGE_SIZE);
   const pagedCookies = selectedCookies.slice((cookiePage - 1) * COOKIE_PAGE_SIZE, cookiePage * COOKIE_PAGE_SIZE);
 
@@ -347,7 +361,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     setError(null);
     setShowScanInitPopup(true);
     setBottomTab('history');
-    setTimeout(() => setShowScanInitPopup(false), 2000);
+    setTimeout(() => {
+      setShowScanInitPopup(false);
+      historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 2000);
     try {
       const result = await scanSiteNow(siteId);
       const targetId = result.scanHistoryId ? String(result.scanHistoryId) : null;
@@ -409,22 +426,26 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               void refresh({ showLoading: false });
               scanningRef.current = false;
               setScanning(false);
+              setScanSuccess(true);
             }
           } catch { /* keep polling on error */ }
         }, 4000);
-        // Safety stop after 2 minutes
+        // Safety stop after 3 minutes — fetch latest state so hasScanInProgress can resolve
         setTimeout(() => {
           clearInterval(poll);
           scanPollRef.current = null;
           activeScanPlaceholderIdRef.current = null;
           scanningRef.current = false;
           setScanning(false);
-        }, 2 * 60 * 1000);
+          setError('Scan is taking longer than expected. Please refresh the page to check the status.');
+          loadData(false);
+        }, 3 * 60 * 1000);
       } else {
         await loadData(false);
         void refresh({ showLoading: false });
         scanningRef.current = false;
         setScanning(false);
+        setScanSuccess(true);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Scan failed';
@@ -477,7 +498,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     setAddCookieError(null);
     setSavingCustomCookie(true);
     try {
-      await addCustomCookieRule({
+      const cookiePayload = {
         siteId,
         name: customCookieForm.name.trim(),
         domain: siteDomain,
@@ -486,7 +507,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         duration: customCookieForm.duration.trim() || undefined,
         scriptUrlPattern: customCookieForm.scriptUrlPattern.trim() || undefined,
         description: customCookieForm.description.trim() || undefined,
-      });
+      };
+      await Promise.all([
+        addCustomCookieRule(cookiePayload),
+        addExpectedCookie(cookiePayload),
+      ]);
       setShowAddCookie(false);
       setAddCookieError(null);
       setCustomCookieForm({ name: '', domain: '', provider: '', duration: '', scriptUrlPattern: '', description: '', category: 'necessary' });
@@ -548,6 +573,33 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1194px] bg-white p-0">
+      {siteNotVerified && (
+        <ErrorPopup
+          message="Script not detected on site"
+          onClose={() => setSiteNotVerified(false)}
+        />
+      )}
+
+      {scanSuccess && (
+        <div
+          className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] flex items-center justify-between gap-4 rounded-xl px-5 py-3.5 shadow-lg w-full max-w-[600px]"
+          style={{ background: "linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)" }}
+          role="alert"
+        >
+          <div className="flex items-center gap-3">
+            <img src="/asset/Success-icon.png" alt="Success" width={28} height={28} className="shrink-0" />
+            <span className="text-white font-medium text-sm">Scanning completed</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setScanSuccess(false)}
+            className="shrink-0 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium px-4 py-1.5 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+
       <LoadingPopup2
         show={showScanInitPopup}
         title="Scan Initiated"
@@ -622,10 +674,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
           {siteNotVerified ? (
             <div className="flex flex-col items-end gap-1">
-              <span className="font-['DM_Sans'] text-xs font-medium text-[#ef4444]" style={dm}>
-                Script not detected on site
-              </span>
               <button
+                id="cookie-scan-primary-cta"
                 type="button"
                 disabled
                 className="h-10 rounded-lg bg-[#e5e7eb] px-5 font-['DM_Sans'] text-[15px] font-normal leading-5 text-[#9ca3af] cursor-not-allowed"
@@ -640,6 +690,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 Monthly scan limit reached
               </span>
               <button
+                id="cookie-scan-primary-cta"
                 type="button"
                 onClick={() => setShowUpgradeModal(true)}
                 className="h-10 rounded-lg bg-[#f59e0b] px-5 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#d97706]"
@@ -653,11 +704,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
               id="cookie-scan-primary-cta"
               type="button"
               onClick={handleScanNow}
-              disabled={scanning || showNoSiteModal}
+              disabled={scanning || hasScanInProgress || showNoSiteModal}
               className="h-10 rounded-lg bg-[#007aff] px-8 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
               style={dm}
             >
-              {scanning ? 'Scanning…' : 'Scan Now'}
+              {scanning || hasScanInProgress ? 'Scanning…' : 'Scan Now'}
             </button>
           )}
         </div>
@@ -770,7 +821,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                   <thead>
                     <tr className="border-b border-[#9FBCE4] bg-[#F2F7FF] text-sm ">
                       <th className="px-3 pl-5.5 py-4.5 font-medium text-[#0A091F]">Name</th>
-                      <th className="px-3 py-4.5 font-medium text-[#0A091F]">Cookie domain</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Provider</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Duration</th>
                       <th className="px-3 py-4.5 font-medium text-[#0A091F]">Source</th>
@@ -790,11 +840,10 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-4.5 text-[#0A091F]">{cookieCellText(c.domain)}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{cookieCellText(c.provider)}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{formatCookieDuration(c.expires)}</td>
                         <td className="px-3 py-4.5 text-[#0A091F]">{c.source ?? '—'}</td>
-                        <td className="px-3 py-4.5 text-[#0A091F]">{c.description || '—'}</td>
+                        <td className="px-3 py-4.5 text-[#0A091F]">{c.description || 'Not Available'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -835,7 +884,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       </div>
 
       {/* ── Scan History / My Cookie Rules tabs ─────────────────────────── */}
-      <div className="pb-10">
+      <div ref={historyRef} className="pb-10">
         {/* Tab bar */}
         <div className="flex items-center gap-0 border-b border-[#e5e7eb] mb-5">
           <button

@@ -15,7 +15,6 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
-import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -30,31 +29,8 @@ import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 
-/** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
-type RegulationSnapshot = {
-  bannerType: "gdpr" | "ccpa";
-  regionMode: "gdpr" | "ccpa" | "both";
-};
-
-export default function page({ siteId }: { siteId: string }) {
-  const [active, setActive] = useState("General");
-  const router = useRouter();
-  const [savingContent, setSavingContent] = useState(false);
-  /** Which action triggered the in-flight persist (for button labels). */
-  const [persistKind, setPersistKind] = useState<"save" | "publish" | null>(null);
-  const [publishError, setPublishError] = useState<string | null>(null);
-  const [publishSuccess, setPublishSuccess] = useState(false);
-  const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const dismissSaveSuccess = useCallback(() => setSaveSuccess(false), []);
-
-  /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
-  const [previewRevision, setPreviewRevision] = useState(0);
-  const [openAccordionKey, setOpenAccordionKey] = useState<
-    "cookieNotice" | "preferenceBanner" | null
-  >("cookieNotice");
-  const [showInstallModal, setShowInstallModal] = useState(false);
-  const [contentSettings, setContentSettings] = useState({
+function makeDefaultContentSettings() {
+  return {
     title: "We value your privacy",
     acceptAll: "Accept",
     preferencesLabel: "Preference",
@@ -81,7 +57,40 @@ export default function page({ siteId }: { siteId: string }) {
       optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
       saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
     },
-  });
+  };
+}
+
+const ResetIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 6.5A4.5 4.5 0 1 1 6.5 11" stroke="#374151" strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M2 9.5V6.5H5" stroke="#374151" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+/** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
+type RegulationSnapshot = {
+  bannerType: "gdpr" | "ccpa";
+  regionMode: "gdpr" | "ccpa" | "both";
+};
+
+export default function page({ siteId }: { siteId: string }) {
+  const [active, setActive] = useState("General");
+  const router = useRouter();
+  const [savingContent, setSavingContent] = useState(false);
+  /** Which action triggered the in-flight persist (for button labels). */
+  const [persistKind, setPersistKind] = useState<"save" | "publish" | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishSuccess, setPublishSuccess] = useState(false);
+  const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
+  const [previewRevision, setPreviewRevision] = useState(0);
+  const [openAccordionKey, setOpenAccordionKey] = useState<
+    "cookieNotice" | "preferenceBanner" | null
+  >("cookieNotice");
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
   const [customizationBase, setCustomizationBase] = useState<any>(null);
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
@@ -268,7 +277,15 @@ export default function page({ siteId }: { siteId: string }) {
       region_mode: next.regionMode,
     });
 
-    iabEnabled && setIabEnabled(false);
+    if (iabEnabled) {
+      setIabEnabled(false);
+      // Clear sessionStorage immediately so it doesn't re-hydrate IAB on the next render.
+      try {
+        if (typeof window !== "undefined" && iabSessionKey) {
+          window.sessionStorage.setItem(iabSessionKey, "0");
+        }
+      } catch { /* ignore */ }
+    }
     // Persist to backend in the background; UI doesn't wait or revert on failure.
     updateSiteBannerSettings({
       name: String(site.name || site.domain || ''),
@@ -661,6 +678,20 @@ export default function page({ siteId }: { siteId: string }) {
     const id = window.setTimeout(() => setSaveSuccess(false), 4000);
     return () => window.clearTimeout(id);
   }, [saveSuccess]);
+
+  const [showIabUpgrade, setShowIabUpgrade] = useState(false);
+  const iabUpgradeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showIabUpgrade) return;
+    function handleClick(e: MouseEvent) {
+      if (iabUpgradeRef.current && !iabUpgradeRef.current.contains(e.target as Node)) {
+        setShowIabUpgrade(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showIabUpgrade]);
+
   const iabSessionKey = useMemo(() => {
     const sid = String(site?.id || siteId || "").trim();
     return sid ? `cb_iab_enabled:${sid}` : "";
@@ -668,7 +699,19 @@ export default function page({ siteId }: { siteId: string }) {
 
   const [iabEnabled, setIabEnabled] = useState(false);
   const [iabHydrated, setIabHydrated] = useState(false);
-console.log(site)
+
+  // Clear this site's IAB sessionStorage key when leaving the page so switching
+  // back always re-derives the toggle from the backend banner_type, not stale storage.
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof window !== "undefined" && iabSessionKey) {
+          window.sessionStorage.removeItem(iabSessionKey);
+        }
+      } catch { /* ignore */ }
+    };
+  }, [iabSessionKey]);
+
   // Preserve IAB toggle state per-site across dashboard navigation (sessionStorage).
   // This is intentionally "session" scope (not permanent) so it survives tab changes but resets on browser close.
   useEffect(() => {
@@ -705,13 +748,16 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       setActive("General");
     }
   }, [active, isFreePlan]);
+  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId)).planId
+
+  console.log(sites.find((s: any) => String(s?.id) === String(activeSiteId)), "site data in page component");
   return (
     <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
         iabEnabled={iabEnabled}
-        effectivePlanId={effectivePlanId}
+        effectivePlanId={data}
       />
       <div className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
@@ -735,9 +781,13 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
               </div>
 
               <p className="text-[15px] leading-[22px] text-black tracking-tight">
-                The selected template (opt-out banner) supports CCA/CPRA
-                (California), VCDPA (Virginia), CPA (Colorado), CTDPA
-                (Connecticut), & UCPA (Utah)
+                {iabEnabled
+                  ? "The selected template supports IAB TCF v2.3 — a standardised framework for managing vendor consent across the EU/EEA."
+                  : consentType === "ccpa"
+                  ? "The selected template (opt-out banner) supports CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
+                  : consentType === "both"
+                  ? "The selected template supports GDPR (EU/EEA) opt-in consent and CCPA/CPRA (California) opt-out consent."
+                  : "The selected template (opt-in banner) supports GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa)."}
               </p>
             </div>
 
@@ -754,16 +804,16 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       Enable IAB TCF Support
     </p>
 
-    {/* Toggle + Tooltip Wrapper */}
-    <div className="relative group">
-      
+    {/* Toggle + Upgrade card Wrapper */}
+    <div ref={iabUpgradeRef} className="relative">
+
       {/* Toggle */}
       <div
         className={`relative ${
           !isToggleEnabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
         }`}
         onClick={async () => {
-          if (!isToggleEnabled) return;
+          if (!isToggleEnabled) { setShowIabUpgrade(true); return; }
           // Persist immediately on user action (don't wait for effects),
           // so switching pages/tabs right after toggling keeps the state.
           try {
@@ -819,31 +869,21 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       </div>
 
       {/* Tooltip (only when disabled) */}
-     {!isToggleEnabled && (
-  <div className="absolute right-0 bottom-[120%] hidden group-hover:block z-50">
-    
+     {!isToggleEnabled && showIabUpgrade && (
+  <div className="absolute right-0 top-[calc(100%+8px)] z-50">
     <div className="w-[222px] bg-white rounded-xl shadow-xl border border-gray-200 p-2 pt-4">
-      
-      {/* Title */}
-      <p className="font-semibold   mb-1">
-        Upgrade to Pro
-      </p>
-
-      {/* Description */}
+      <p className="font-semibold mb-1">Upgrade to Pro</p>
       <p className="text-sm text-[#1A5EA1] leading-relaxed mb-3">
         To enable this feature, please switch to the Essential or Growth plan.
       </p>
-
-      {/* Button */}
-      <button onClick={()=>router.push(`/dashboard/${siteId}/upgrade`)} className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition">
+      <button
+        onClick={() => { setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
+        className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
+      >
         Get Pro Plan
-        <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>
-</svg>
-</span>
+        <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/></svg></span>
       </button>
     </div>
-
   </div>
 )}
     </div>
@@ -853,7 +893,16 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
         )}
         {active === "Content" && (
           <>
-            
+            <div className="flex justify-end mb-3">
+              <button
+                type="button"
+                onClick={() => setContentSettings(makeDefaultContentSettings())}
+                className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
+              >
+                <ResetIcon />
+                Reset updates
+              </button>
+            </div>
             <CookieNoticeAccordion2
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
@@ -983,21 +1032,29 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
               onChange={setFloatingButton}
             />
 
-            <BannerLinkSection
-              effectivePlanId={effectivePlanId}
-              consentType={consentType}
-            />
 
-          </>
+</>
         )}
         {active === "Layout" && (
           <BannerControl value={appearance.layout} onChange={(layout) => setAppearance((a) => ({ ...a, layout }))} />
         )}
         {active === "Colors" && (
-          <ColorPickerPanel
-            value={appearance.colors}
-            onChange={(colors) => setAppearance((a) => ({ ...a, colors }))}
-          />
+          <>
+            <div className="flex justify-end mb-3">
+              <button
+                type="button"
+                onClick={() => setAppearance((a) => ({ ...a, colors: DEFAULT_APPEARANCE.colors }))}
+                className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
+              >
+                <ResetIcon />
+                Reset to default
+              </button>
+            </div>
+            <ColorPickerPanel
+              value={appearance.colors}
+              onChange={(colors) => setAppearance((a) => ({ ...a, colors }))}
+            />
+          </>
         )}
         {active === "Type" && (
           <FontPickerPanel
@@ -1022,7 +1079,6 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
         }
         saveBusy={savingContent && persistKind === "save"}
         saveSuccess={saveSuccess}
-        onDismissSaveSuccess={dismissSaveSuccess}
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
         publishDisabled={!mounted || !site?.id || savingContent}

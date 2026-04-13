@@ -12,6 +12,44 @@ import { useDashboardSession } from "../../DashboardSessionProvider";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
+
+/** Mail success animation shown after payment */
+function MailSuccessAnimation() {
+  return (
+    <div className="relative flex items-center justify-center w-[160px] h-[160px]">
+      {/* Outer pulsing ring */}
+      <div className="absolute inset-0 rounded-full bg-[#6366f1]/10"
+        style={{ animation: "mailPulse 1.8s ease-out infinite" }} />
+      {/* Circle bg */}
+      <div className="w-[140px] h-[140px] rounded-full flex items-center justify-center"
+        style={{ background: "linear-gradient(135deg,#6366f1 0%,#4338ca 100%)" }}>
+        {/* Envelope SVG */}
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none"
+          style={{ animation: "mailBounce 0.6s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+          {/* Envelope body */}
+          <rect x="8" y="18" width="48" height="34" rx="4" fill="white" fillOpacity="0.95"/>
+          {/* Envelope flap */}
+          <path d="M8 22l24 16 24-16" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          {/* Checkmark badge */}
+          <circle cx="46" cy="44" r="10" fill="#22c55e"/>
+          <path d="M41 44l3.5 3.5L51 40" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <style>{`
+        @keyframes mailPulse {
+          0%   { transform: scale(1);   opacity: 0.6; }
+          70%  { transform: scale(1.25); opacity: 0; }
+          100% { transform: scale(1.25); opacity: 0; }
+        }
+        @keyframes mailBounce {
+          0%   { transform: scale(0.4) translateY(20px); opacity: 0; }
+          100% { transform: scale(1)   translateY(0);    opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
@@ -44,22 +82,27 @@ export default function PricingTable() {
     // Clean URL so refresh doesn't re-trigger; also clear the stripe-redirect flag.
     window.history.replaceState({}, "", window.location.pathname);
     sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
+    // Read and clear the target plan we stored before redirecting to Stripe.
+    const targetPlan = (sessionStorage.getItem(`cb_target_plan_${siteId}`) || "").trim().toLowerCase();
+    sessionStorage.removeItem(`cb_target_plan_${siteId}`);
     // Clear session cache so polls fetch fresh plan data from the server.
     try {
       sessionStorage.removeItem("cbSessionCache");
     } catch {
       // ignore
     }
+    console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
     let attempts = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      // Stop as soon as the plan is known and not free, or after 20 attempts (~30s).
-      if ((!planNow || planNow === "free") && attempts < 20) {
+      console.log(`[UpgradePoll] attempt ${attempts} — planNow: "${planNow}" | targetPlan: "${targetPlan}" | match: ${planNow === targetPlan}`);
+      if (planNow !== targetPlan && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
+        console.log(`[UpgradePoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max attempts"} | navigating to dashboard`);
         // Use router.push so DashboardSessionProvider stays mounted and the updated
         // plan in React state is immediately visible in the header — no cache needed.
         router.push(`/dashboard/${siteId}`);
@@ -86,6 +129,7 @@ export default function PricingTable() {
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoOn, setPromoOn] = useState(false);
+  const [promoError, setPromoError] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -166,6 +210,10 @@ export default function PricingTable() {
   const applyPromo = () => {
     if (promoInput.trim() === "TESTWEB") {
       setPromoOn(true);
+      setPromoError(false);
+    } else {
+      setPromoOn(false);
+      setPromoError(true);
     }
   };
 
@@ -217,6 +265,8 @@ export default function PricingTable() {
       }
 
       sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
+      // Store the target plan so the post-redirect poll can wait for the right plan.
+      sessionStorage.setItem(`cb_target_plan_${siteId}`, plan);
       window.location.href = url;
       // Do NOT reset checkoutLoading here — keep overlay visible until browser navigates away.
     } catch (e) {
@@ -331,20 +381,24 @@ export default function PricingTable() {
 
   if (checkoutLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-4">
-        <div className="w-12 h-12 rounded-full border-4 border-[#007aff] border-t-transparent animate-spin" />
-        <p className="text-[18px] font-semibold text-[#111827]">Proceeding to payment…</p>
-        <p className="text-sm text-[#6b7280]">You will be redirected to Stripe shortly.</p>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6">
+        <div className="w-12 h-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
+        <div className="text-center">
+          <p className="text-[18px] font-semibold text-[#111827]">Proceeding to payment...</p>
+          <p className="text-sm text-[#6b7280] mt-1">You will be redirected to Stripe shortly.</p>
+        </div>
       </div>
     );
   }
 
   if (paymentProcessing) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-6">
-        <div className="w-14 h-14 rounded-full border-4 border-[#2ec04f] border-t-transparent animate-spin" />
-        <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
-        <p className="text-sm text-[#6b7280]">Updating your plan — redirecting to dashboard shortly…</p>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6">
+        <MailSuccessAnimation />
+        <div className="text-center">
+          <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
+          <p className="text-sm text-[#6b7280] mt-1">Updating your plan — redirecting to dashboard shortly…</p>
+        </div>
       </div>
     );
   }
@@ -478,49 +532,60 @@ export default function PricingTable() {
           {/* PROMO */}
           <div  className={` rounded-[15px] p-7 relative border-white ${!selected ? 'opacity-50' : ''}`}>
 <img src="/images/smallbox.png" alt="promo" className="absolute inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
-            <div className="text-lg font-semibold mb-1">Promo code</div>
+            <div className="relative z-10 text-lg font-semibold mb-1">Promo code</div>
             {!selected && (
-              <p className="text-xs text-[#6b7280] mb-3">Select a plan to apply a promo code.</p>
+              <p className="relative z-10 text-xs text-[#6b7280] mb-3">Select a plan to apply a promo code.</p>
             )}
             {selected && <div className="mb-4" />}
 
-            <div className="flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg overflow-hidden">
+            <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
 
-              <div className="relative flex-1">
-                <input
-                  value={promoInput}
-                  onChange={(e) => { setPromoInput(e.target.value); setPromoOn(false); }}
-                  disabled={!selected}
-                  className="w-full px-4 py-3 pr-8 outline-none disabled:cursor-not-allowed bg-white"
-                  placeholder="Enter promo code"
-                />
-                {promoInput && (
-                  <button
-                    type="button"
-                    onClick={() => { setPromoOn(false); setPromoInput(''); }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
+              <input
+                value={promoInput}
+                onChange={(e) => { setPromoInput(e.target.value); setPromoOn(false); setPromoError(false); }}
+                disabled={!selected}
+                className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg"
+                placeholder="Enter promo code"
+              />
+
+              {promoInput && (
+                <button
+                  type="button"
+                  onClick={() => { setPromoOn(false); setPromoInput(''); setPromoError(false); }}
+                  className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                >
+                  ×
+                </button>
+              )}
 
               <button
+                type="button"
                 onClick={applyPromo}
-                disabled={!selected}
-                className="bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!selected || !promoInput.trim()}
+                className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-             <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" stroke-width="2" stroke-linecap="round"/>
-</svg>
-   Apply
+                <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                Apply
               </button>
 
             </div>
 
             {promoOn && (
-              <div className="mt-3 text-[17px] font-medium text-[#111827] text-[#15803d]">
+              <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
                 Promo applied. You pay ${total}
+              </div>
+            )}
+
+            {promoError && (
+              <div className="relative z-10 mt-3 flex items-center gap-1.5 text-sm text-[#ef4444]">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="7.5" cy="7.5" r="6.5" stroke="#ef4444" strokeWidth="1.5"/>
+                  <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
+                </svg>
+                Invalid promo code. Please try again.
               </div>
             )}
 
@@ -603,9 +668,9 @@ function Feature({
           `}
         >
          <p><span className={`${v==="NIL" ? "text-[#8E8E8E]" : ""}  ${(i===0 || i===1) && label==="Compliance" ? "text-[#8E8E8E]" : ""}`}>{v}</span></p> 
-         {i === 2 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 scans</p>)}
-         {i === 3 && label === "No of Page views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.39 for additional 10000 scans</p>)}
-         {i === 3 && label === "No of scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $.49 for additional 10000 scans</p>)}
+         {i === 2 && label === "No of Page Views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.49 for additional 10000 page views</p>)}
+         {i === 3 && label === "No of Page Views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.39 for additional 10000 page views</p>)}
+         {i === 3 && label === "No of Scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.49 for additional 10000 scans</p>)}
 
         </div>
       ))}

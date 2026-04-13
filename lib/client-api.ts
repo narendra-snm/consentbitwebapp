@@ -214,14 +214,14 @@ export async function firstSetup(payload: {
     console.error('firstSetup: Error response:', errorText);
     let message = errorText;
     try {
-      const parsed = JSON.parse(errorText) as { error?: string; message?: string };
+      const parsed = decodeEnvelope(JSON.parse(errorText));
       message = parsed?.error || parsed?.message || message;
     } catch {
       // non-json response
     }
     throw new Error(message || `Setup failed: ${res.status}`);
   }
-  
+
   return parseApiResponse(res);
 }
 //first setup ends here
@@ -530,6 +530,8 @@ export type BillingSummary = {
   cancel_at_period_end?: boolean;       // snake_case alias
   paymentMethod?: { brand: string; last4: string; exp_month: number; exp_year: number } | null;
   domainsLimit?: number;
+  billingCountry?: string | null;
+  billingAddress?: string | null;
 };
 export async function getBillingSummary(organizationId: string): Promise<BillingSummary> {
   const res = await fetch(`/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}`, { credentials: "include" });
@@ -637,6 +639,27 @@ export async function getCustomCookieRules(siteId: string): Promise<{ rules: Cus
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Failed to load cookie rules: ${res.status}`);
   return data as { rules: CustomCookieRule[] };
+}
+
+export async function addExpectedCookie(payload: {
+  siteId: string;
+  name: string;
+  domain: string;
+  category: string;
+  provider?: string;
+  duration?: string;
+  scriptUrlPattern?: string;
+  description?: string;
+}): Promise<{ success: boolean }> {
+  const res = await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to add cookie: ${res.status}`);
+  return data;
 }
 
 export async function addCustomCookieRule(payload: {

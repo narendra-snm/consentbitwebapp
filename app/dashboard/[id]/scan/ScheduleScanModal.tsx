@@ -111,7 +111,14 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
         <DatePicker
           selected={date}
           onChange={(d: Date | null) => {
-            if (d) setDate(d);
+            if (!d) return;
+            // react-datepicker resets the time to 00:00 when the user clicks a new day.
+            // Preserve the previously chosen hours/minutes so selecting a date doesn't wipe the time.
+            const next = new Date(d);
+            if (d.getHours() === 0 && d.getMinutes() === 0) {
+              next.setHours(date.getHours(), date.getMinutes(), 0, 0);
+            }
+            setDate(next);
           }}
           inline
           showTimeSelect

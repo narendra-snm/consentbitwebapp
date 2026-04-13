@@ -18,7 +18,7 @@ function DashboardSitePageInner() {
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
+  useLayoutEffect(() => setHydrated(true), []);
   const rawInstallScriptUrl = activeSite?.scriptUrl ?? "";
   const userEmail = user?.email ?? "";
 const userName = useMemo(() => {
@@ -132,7 +132,7 @@ const userName = useMemo(() => {
         siteDomain={activeSite?.domain}
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
-        onClose={() => setShowInstallModal(false)}
+        onClose={() => { document.body.style.overflow = ""; setShowInstallModal(false); }}
       />
       <FeedbackDesign />
       </>}

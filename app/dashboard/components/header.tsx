@@ -105,16 +105,20 @@ export default function Header() {
 
   const pathSiteId = useMemo(() => pickSiteIdFromDashboardPath(pathname), [pathname]);
 
-  // URL wins: context `activeSiteId` can lag one tick behind `/dashboard/[id]/...`, so we used to show sites[0] (wrong plan).
+  // activeSiteId wins for display: it's updated synchronously on dropdown select (before pathname updates),
+  // so it never lags. pathname is used only as a fallback for direct URL navigation.
   const activeSite = useMemo(() => {
+    // 1. activeSiteId is set immediately on dropdown select — use it first to avoid flicker.
+    if (activeSiteId) {
+      const byId = sites.find((s: any) => String(s?.id) === String(activeSiteId));
+      if (byId) return byId;
+    }
+    // 2. Fall back to URL (covers direct navigation / page refresh before context syncs).
     const pathId = pickSiteIdFromDashboardPath(pathname);
     if (pathId) {
-      const match = sites.find((s: any) => String(s?.id) === pathId);
-      if (match) return match;
-      // URL names a site — do not use sites[0] (different plan) while list is still syncing.
-      if (sites.length > 0) return null;
+      return sites.find((s: any) => String(s?.id) === pathId) || null;
     }
-    return sites.find((s: any) => String(s?.id) === String(activeSiteId)) || sites[0] || null;
+    return sites[0] || null;
   }, [sites, pathname, activeSiteId]);
 
   /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */

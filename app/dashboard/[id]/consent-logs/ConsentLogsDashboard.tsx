@@ -229,6 +229,79 @@ function displayStatus(status: string | null) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function detectMethod(log: ConsentLog): string {
+  const method = (log.consentMethod ?? '').toLowerCase();
+  if (method.includes('iab') || method.includes('tcf')) return 'IAB/GDPR';
+  if (method.includes('ccpa') || method.includes('usp')) return 'CCPA';
+  if (method.includes('gdpr')) return 'GDPR';
+  const c = normalizeCategories(log.categories);
+  if (c && c.ccpa) return 'CCPA';
+  return 'GDPR';
+}
+
+function MethodBadge({ method }: { method: string }) {
+  const styles: Record<string, { bg: string; text: string }> = {
+    GDPR: { bg: '#e6f1fd', text: '#1d4ed8' },
+    CCPA: { bg: '#fde8cc', text: '#9a5000' },
+    'IAB/GDPR': { bg: '#ede9fe', text: '#6d28d9' },
+  };
+  const s = styles[method] ?? { bg: '#f3f4f6', text: '#374151' };
+  return (
+    <span
+      style={{ background: s.bg, color: s.text, fontFamily: 'DM Sans, sans-serif' }}
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
+    >
+      {method}
+    </span>
+  );
+}
+
+function PaginationBar({
+  current,
+  total,
+  onChange,
+}: {
+  current: number;
+  total: number;
+  onChange: (p: number) => void;
+}) {
+  if (total <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-1 mt-3">
+      <button
+        type="button"
+        disabled={current === 1}
+        onClick={() => onChange(current - 1)}
+        className="px-3 py-1 rounded-md text-xs font-medium border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        ‹
+      </button>
+      {Array.from({ length: total }, (_, i) => i + 1).map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onChange(p)}
+          className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
+            p === current
+              ? 'bg-[#2563eb] border-[#2563eb] text-white'
+              : 'border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+          }`}
+        >
+          {p}
+        </button>
+      ))}
+      <button
+        type="button"
+        disabled={current === total}
+        onClick={() => onChange(current + 1)}
+        className="px-3 py-1 rounded-md text-xs font-medium border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
 function ImportIcon() {
   return (
     <div className="size-[24px] shrink-0">
@@ -321,6 +394,10 @@ export function ConsentLogsDashboard({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [consentPage, setConsentPage] = useState(1);
+  const [cookiePage, setCookiePage] = useState(1);
+  const CONSENT_PAGE_SIZE = 10;
+  const COOKIE_PAGE_SIZE = 10;
 
   useEffect(() => {
     setMounted(true);
@@ -400,7 +477,12 @@ export function ConsentLogsDashboard({
     );
   }, [data]);
 
+  const consentTotalPages = Math.max(1, Math.ceil(consentRows.length / CONSENT_PAGE_SIZE));
+  const pagedConsentRows = consentRows.slice((consentPage - 1) * CONSENT_PAGE_SIZE, consentPage * CONSENT_PAGE_SIZE);
+
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
+  const cookieTotalPages = Math.max(1, Math.ceil(cookies.length / COOKIE_PAGE_SIZE));
+  const pagedCookies = cookies.slice((cookiePage - 1) * COOKIE_PAGE_SIZE, cookiePage * COOKIE_PAGE_SIZE);
   const customCookieRules: ConsentLogCookieRule[] = data?.customCookieRules ?? [];
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
@@ -757,7 +839,7 @@ export function ConsentLogsDashboard({
                       </td>
                     </tr>
                   ) : (
-                    consentRows.map((row) => (
+                    pagedConsentRows.map((row) => (
                       <tr key={row.id} className="border-b border-black/10">
                         <td
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-black/10"
@@ -772,10 +854,9 @@ export function ConsentLogsDashboard({
                           {displayStatus(row.status)}
                         </td>
                         <td
-                          className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-black/10"
-                          style={dm}
+                          className="px-[16px] py-[9px] whitespace-nowrap border-b border-black/10"
                         >
-                          {row.consentMethod?.trim() || '—'}
+                          <MethodBadge method={detectMethod(row)} />
                         </td>
                         <td
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
@@ -794,6 +875,7 @@ export function ConsentLogsDashboard({
                 </tbody>
               </table>
             </div>
+            <PaginationBar current={consentPage} total={consentTotalPages} onChange={(p) => setConsentPage(p)} />
           </div>
 
           <div className="mt-[59px]">
@@ -861,7 +943,7 @@ export function ConsentLogsDashboard({
                       </td>
                     </tr>
                   ) : (
-                    cookies.map((cookie) => (
+                    pagedCookies.map((cookie) => (
                       <tr key={cookie.id}>
                         <td
                           className="px-[16px] py-4.5 font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-black/10"
@@ -879,14 +961,14 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-4.5 font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-black/10"
                           style={dm}
                         >
-                          {cookie.provider?.trim() || '—'}
+                          {cookie.provider?.trim() || 'Not available'}
                         </td>
                         <td
                           className="px-[16px] py-4.5 font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
                           style={dm}
                         >
                           <div className="min-w-[420px] whitespace-normal break-words">
-                            {cookie.description?.trim() || '—'}
+                            {cookie.description?.trim() || 'Not available'}
                           </div>
                         </td>
                         {/* <td className="px-[16px] py-[9px] border-b border-black/10">
@@ -904,6 +986,7 @@ export function ConsentLogsDashboard({
                 </tbody>
               </table>
             </div>
+            <PaginationBar current={cookiePage} total={cookieTotalPages} onChange={(p) => setCookiePage(p)} />
           </div>
         </div>
       </div>

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Check, Copy } from "lucide-react";
-import Image from "next/image";
+import { Check, Copy } from "lucide-react";
 import { PricingTable } from "./PricingTable";
-import { firstSetup, verifyScript } from "@/lib/client-api";
+import { firstSetup, verifyScript, checkDomainAvailability } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
@@ -100,8 +99,6 @@ export default function StepWizard({
         {/* Step Content */}
         {step === 1 && (
           <StepOne
-            userName={userName}
-            step={step}
             nextStep={nextStep}
             onSetupComplete={(data) => setSiteData(data)}
           />
@@ -207,11 +204,8 @@ function StepCircle({
 
 function StepOne({
   nextStep,
-  userName,
   onSetupComplete,
-  step
 }: {
-  step: number;
   nextStep: () => void;
   userName?: string;
   onSetupComplete: (data: { domain: string }) => void;
@@ -219,24 +213,23 @@ function StepOne({
   const { sites } = useDashboardSession();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   function normalizeDomain(raw: string): string {
     const v = raw.trim();
     if (!v) return "";
     const noProto = v.replace(/^https?:\/\//i, "");
     const noWww = noProto.replace(/^www\./i, "");
-    // Remove path/query/hash if present
     const hostOnly = noWww.split("/")[0].split("?")[0].split("#")[0];
     return hostOnly.replace(/\.+$/, "").toLowerCase();
   }
 
-  function handleNext() {
+  async function handleNext() {
     const cleanDomain = normalizeDomain(domain);
     if (!cleanDomain) {
       setError('Please enter a valid domain');
       return;
     }
-    // Must contain at least one dot and a valid TLD (e.g. example.com)
     if (!/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/.test(cleanDomain)) {
       setError('Please enter a valid domain (e.g. yoursite.com)');
       return;
@@ -249,7 +242,20 @@ function StepOne({
       setError("This domain is already added in your account. Please open it from the dashboard.");
       return;
     }
+    // Check if domain is already used by another account
+    setChecking(true);
     setError(null);
+    try {
+      const res = await checkDomainAvailability({ websiteUrl: cleanDomain });
+      if (!res?.available) {
+        setError(res?.message || "This domain is already in use by another account.");
+        return;
+      }
+    } catch {
+      // Don't block on transient failures — backend will enforce on submit
+    } finally {
+      setChecking(false);
+    }
     onSetupComplete({ domain: cleanDomain });
     nextStep();
   }
@@ -283,13 +289,13 @@ function StepOne({
       <div className="flex justify-end items-center">
         <button
           onClick={handleNext}
-          disabled={!domain.trim()}
+          disabled={!domain.trim() || checking}
           className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm px-6 py-3.5 rounded-md font-medium transition-colors flex items-center gap-2"
         >
-          Next <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {checking ? "Checking…" : <>Next <span><svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="white"/>
 </svg>
-</span>
+</span></>}
         </button>
       </div>
     </>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import { verifyScript } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
+import ErrorPopup from "./ErrorPopup";
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -48,10 +49,9 @@ export default function InstallConsentModal({
   const [publicUrl, setPublicUrl] = useState(siteDomain || "");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [scriptNotDetected, setScriptNotDetected] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
-  const previousBodyOverflow = useRef<string | null>(null);
-
   const absoluteScriptUrl = resolveInstallScriptUrl(
     scriptUrl,
     siteId ?? null,
@@ -68,6 +68,7 @@ export default function InstallConsentModal({
     if (!open) return;
     setPublicUrl(siteDomain || "");
     setVerifyError(null);
+    setScriptNotDetected(false);
     setCopyError(null);
     setVerified(false);
   }, [open, siteId, siteDomain]);
@@ -76,13 +77,9 @@ export default function InstallConsentModal({
   useEffect(() => {
     if (!open) return;
     if (typeof document === "undefined") return;
-    if (previousBodyOverflow.current === null) {
-      previousBodyOverflow.current = document.body.style.overflow || "";
-    }
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previousBodyOverflow.current ?? "";
-      previousBodyOverflow.current = null;
+      document.body.style.overflow = "";
     };
   }, [open]);
 
@@ -117,6 +114,7 @@ export default function InstallConsentModal({
 
   const handleVerify = async () => {
     setVerifyError(null);
+    setScriptNotDetected(false);
     setVerified(false);
     const url = normalizePublicUrl(publicUrl);
     if (!url) {
@@ -140,9 +138,7 @@ export default function InstallConsentModal({
         if (typeof window !== "undefined" && "debug" in res && res.debug) {
           console.warn("[ConsentBit] Verify script — not found. Debug from worker:", res.debug);
         }
-        setVerifyError(
-          "Script not found on that page yet. Install the snippet in <head>, publish your site, then try again.",
-        );
+        setScriptNotDetected(true);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
@@ -162,6 +158,12 @@ export default function InstallConsentModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {scriptNotDetected && (
+        <ErrorPopup
+          message="Script not detected on site"
+          onClose={() => setScriptNotDetected(false)}
+        />
+      )}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden />
 
       <div className="relative flex max-h-[95vh] w-full max-w-[1007px] flex-col rounded-[10px] bg-white shadow-xl">
@@ -216,7 +218,7 @@ export default function InstallConsentModal({
             <input
               type="text"
               value={publicUrl}
-              onChange={(e) => { setPublicUrl(e.target.value); setVerifyError(null); }}
+              onChange={(e) => { setPublicUrl(e.target.value); setVerifyError(null); setScriptNotDetected(false); }}
               placeholder={siteDomain || "yoursite.com"}
               disabled={verifying}
               className="h-12 w-full min-w-[319px] max-w-[319px] pr-[70px] rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -250,7 +252,7 @@ export default function InstallConsentModal({
           ) : null}
 
           <p className="mb-5.5 text-xs text-[#4b5563]">
-            Use the same domain you added for this site
+            Please enter your website domain and click “Verify” to confirm your installation and complete the setup
             {siteDomain ? (
               <>
                 : <span className="font-medium">{siteDomain}</span>

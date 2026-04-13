@@ -335,6 +335,7 @@ export default function DashboardPage() {
           siteId={postSetupInstall.siteId}
           cdnScriptId={postSetupInstall.cdnScriptId}
           onClose={() => {
+            document.body.style.overflow = "";
             const sid = postSetupInstall?.siteId ? String(postSetupInstall.siteId) : "";
             const target = sid ? computeReturnTarget(sid, postSetupInstall?.returnTo || null) : null;
             setPostSetupInstall(null);
@@ -421,9 +422,9 @@ export default function DashboardPage() {
   if (authenticated && !showOnboarding) {
     return (
       <>
-      <Header/>
+      
       <div className="max-w-[1148px] mx-auto pb-4 px-4">
-      <DashboardTabs/>
+     
       <ComplianceAlert
         userName={userName}
         siteDomain={activeSite?.domain}

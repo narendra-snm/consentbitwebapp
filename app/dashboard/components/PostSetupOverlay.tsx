@@ -52,25 +52,21 @@ export default function PostSetupOverlay() {
   useLayoutEffect(() => {
     function check() {
       const { postSetup, domain, siteId, upgraded } = getPostSetupParams();
-      console.log("[PostSetupOverlay] URL check:", { postSetup, domain, siteId, upgraded });
 
       if (postSetup === "1" && domain) {
         const sig = `domain:${domain}`;
         if (lastSig.current === sig) return;
         lastSig.current = sig;
-        console.log("[PostSetupOverlay] Setting pendingDomain:", domain);
         setPendingDomain(normalizeDomain(domain));
       } else if (postSetup === "1" && siteId) {
         const sig = `siteId:${siteId}`;
         if (lastSig.current === sig) return;
         lastSig.current = sig;
-        console.log("[PostSetupOverlay] Setting pendingSiteId:", siteId);
         setPendingSiteId(siteId);
       } else if (upgraded === "1" && siteId) {
         const sig = `upgraded:${siteId}`;
         if (lastSig.current === sig) return;
         lastSig.current = sig;
-        console.log("[PostSetupOverlay] Setting pendingSiteId (upgraded):", siteId);
         setPendingSiteId(siteId);
       }
     }
@@ -105,7 +101,6 @@ export default function PostSetupOverlay() {
       if (ev.key !== "cb_post_setup" || !ev.newValue) return;
       try {
         const parsed = JSON.parse(ev.newValue) as { domain?: string; siteId?: string };
-        console.log("[PostSetupOverlay] Storage event:", parsed);
         const domain = parsed.domain ?? "";
         const siteId = parsed.siteId ?? "";
         if (domain) {
@@ -133,16 +128,13 @@ export default function PostSetupOverlay() {
     let cancelled = false;
     let poll: ReturnType<typeof setInterval> | null = null;
 
-    console.log("[PostSetupOverlay] Calling firstSetup for domain:", domain);
     firstSetup({ websiteUrl: domain })
       .then((result) => {
-        console.log("[PostSetupOverlay] firstSetup result:", result);
         // Do NOT check cancelled here — firstSetup is one-shot and must complete.
         const siteId = result?.siteId ?? result?.site?.id;
         const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
         const cdnScriptId = result?.site?.cdnScriptId;
         if (siteId && scriptUrl) {
-          console.log("[PostSetupOverlay] Setting postSetupInstall with scriptUrl:", scriptUrl);
           setPostSetupInstall({ scriptUrl, siteId: String(siteId), siteDomain: domain, cdnScriptId });
           try {
             const u = new URL(window.location.href);
@@ -156,7 +148,6 @@ export default function PostSetupOverlay() {
             // ignore
           }
         } else if (siteId) {
-          console.log("[PostSetupOverlay] No scriptUrl yet, polling for siteId:", siteId);
           setPendingSiteId(String(siteId));
         } else {
           console.warn("[PostSetupOverlay] firstSetup returned no siteId or scriptUrl");
@@ -212,7 +203,6 @@ export default function PostSetupOverlay() {
       const scriptUrl =
         match?.embedScriptUrl ?? match?.embed_script_url ??
         match?.scriptUrl ?? match?.script_url ?? null;
-      console.log("[PostSetupOverlay] tryResolve - match:", match, "scriptUrl:", scriptUrl);
       if (match && scriptUrl) {
         setPostSetupInstall({
           scriptUrl: String(scriptUrl),
@@ -243,7 +233,13 @@ export default function PostSetupOverlay() {
 
   function handleClose() {
     const newSiteId = postSetupInstall?.siteId;
+    // Always restore scroll before unmounting the modal.
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
     setPostSetupInstall(null);
+    setPendingDomain(null);
+    setPendingSiteId(null);
     lastSig.current = "";
     // Refresh session so dashboard header + site list reflect the new site/plan immediately.
     void refreshRef.current({ showLoading: false });
