@@ -330,7 +330,7 @@ export default function ConsentPreview({
       case "tablet":
         return "maxw-[820px] w-full h-[500px]";
       case "mobile":
-        return "max-w-[390px] w-full h-[680px]";
+        return "max-w-[410px] w-full h-[680px]";
       default:
         return 'max-w-[1139px] w-full h-[444px]';
     }
