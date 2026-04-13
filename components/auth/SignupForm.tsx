@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
+import Toast from "./Toast";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -165,6 +166,7 @@ export function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="w-full">
+      <Toast message={error || "An error occurred. Please try again."} isVisible={!!error} onClose={() => setError(null)} />
       <div className="flex flex-col items-center w-full max-w-[463px] mx-auto">
         {/* Title */}
         <h1 className="text-[40px] font-normal text-[#2C3E8F] mb-6">
@@ -223,11 +225,11 @@ export function SignupForm() {
 
         {/* Error — min-h reserves space so nothing shifts when error appears */}
         <div className="w-full mt-3 min-h-[40px]">
-          {error && (
+          {/* {error && (
             <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}
             </div>
-          )}
+          )} */}
         </div>
 
         <Link href="/login" className="text-sm text-[#262E84] text-center mt-1">

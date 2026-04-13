@@ -91,25 +91,56 @@ export function PricingTable({
 
         {/* Header */}
         <div className="bg-[#E6F1FD]/50 px-9 py-3.75 flex items-center justify-between">
-          <div className="flex items-center gap-2 bg-[#f1f5f9] rounded-[22px] p-1">
-            <button
-              type="button"
-              onClick={() => setBillingInterval('month')}
-              className={`${billingInterval === 'month' ? 'bg-[#007aff] text-white' : 'text-[#848199]'} px-5.75 py-3 rounded-[22px] text-sm font-extrabold`}
-            >
-              MONTHLY
-            </button>
-            <button
-              type="button"
-              onClick={() => setBillingInterval('year')}
-              className={`${billingInterval === 'year' ? 'bg-[#007aff] text-white px-5.75 rounded-[22px]' : 'text-[#848199]'} py-3 text-sm font-extrabold`}
-            >
-              YEARLY (20% OFF)
-            </button>
-          </div>
+     <div
+  className="p-[1px] rounded-[22px] inline-block"
+  style={{
+    background:
+      billingInterval === 'year'
+        ? 'linear-gradient(90deg, #007AFF 0%, #F3F8FE 70%)'
+        : 'linear-gradient(90deg, #F3F8FE 30.59%, #007AFF 100%)',
+  }}
+>
+  <div className="flex items-center gap-3 bg-white rounded-[22px] relative px-1 py-1">
+    
+    {/* MONTHLY */}
+    <button
+      type="button"
+      onClick={() => setBillingInterval('month')}
+      className={`
+        relative rounded-[22px] text-sm font-extrabold transition-all duration-200
+        ${
+          billingInterval === 'month'
+            ? 'bg-[#007aff] text-white scale-[1.2] z-10 px-7 py-3'
+            : 'text-[#848199] scale-100 px-6 py-3'
+        }
+      `}
+    >
+      MONTHLY
+    </button>
 
-          <div className="text-[#5243c2] text-sm font-extrabold">
+    {/* YEARLY */}
+    <button
+      type="button"
+      onClick={() => setBillingInterval('year')}
+      className={`
+        relative rounded-[22px] text-sm font-extrabold transition-all duration-200
+        ${
+          billingInterval === 'year'
+            ? 'bg-[#007aff] text-white scale-[1.2] z-10 px-7 py-3'
+            : 'text-[#848199] scale-100 px-6 py-3'
+        }
+      `}
+    >
+      YEARLY (20% OFF)
+    </button>
+
+  </div>
+</div>
+
+          <div className="  font-medium">
+            <span className=" bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
             FOR ALL PLANS 14 DAYS TRIAL IS AVAILABLE
+          </span>
           </div>
         </div>
 
