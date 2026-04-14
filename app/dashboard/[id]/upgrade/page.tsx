@@ -107,6 +107,7 @@ export default function PricingTable() {
       date_of_purchase: params.get("date")           ?? "",
     };
     setPaymentDetails(details);
+    console.log("[UpgradeRedirect] Captured payment details from URL params:", details);
     console.log("[Payment Success] Transaction details:", details);
     console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
