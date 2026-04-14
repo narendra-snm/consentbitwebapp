@@ -81,7 +81,7 @@ export default function SiteSummaryCards({
 
             </div>
             <div>
-            <p className="text-xs ">Cookie Banner Status</p>
+            <p className="text-sm ">Cookie banner status</p>
 
             <p className={`font-medium text-xl mt-1 flex items-center gap-1 ${isVerified ? "text-emerald-600" : "text-[#AC2734]"}`}>
               {isVerified ? "Active" : "Inactive"} <CircularArrow/>
@@ -89,7 +89,7 @@ export default function SiteSummaryCards({
             </p>
 </div>
 </div>
-            <p className="text-xs flex gap-1 mt-4.5">
+            <p className="text-sm flex gap-1 mt-4.5">
               <svg className="mt-0.5" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.25 2.91667H6.41667V7H5.25V2.91667ZM5.25 7.58333H6.41667V8.75H5.25V7.58333Z" fill="black"/>
 <path d="M11.4958 3.08758L8.57908 0.170917C8.52501 0.116642 8.46073 0.0735995 8.38995 0.0442665C8.31917 0.0149334 8.24328 -0.000110512 8.16667 6.11143e-07H3.5C3.42338 -0.000110512 3.3475 0.0149334 3.27672 0.0442665C3.20594 0.0735995 3.14166 0.116642 3.08758 0.170917L0.170917 3.08758C0.116642 3.14166 0.0735995 3.20594 0.0442665 3.27672C0.0149334 3.3475 -0.000110512 3.42338 6.11143e-07 3.5V8.16667C6.11143e-07 8.32183 0.0612506 8.47 0.170917 8.57908L3.08758 11.4958C3.14166 11.55 3.20594 11.5931 3.27672 11.6224C3.3475 11.6517 3.42338 11.6668 3.5 11.6667H8.16667C8.32183 11.6667 8.47 11.6054 8.57908 11.4958L11.4958 8.57908C11.55 8.52501 11.5931 8.46073 11.6224 8.38995C11.6517 8.31917 11.6668 8.24328 11.6667 8.16667V3.5C11.6668 3.42338 11.6517 3.3475 11.6224 3.27672C11.5931 3.20594 11.55 3.14166 11.4958 3.08758ZM10.5 7.92517L7.92517 10.5H3.7415L1.16667 7.92517V3.7415L3.7415 1.16667H7.92517L10.5 3.7415V7.92517Z" fill="black"/>
@@ -107,7 +107,7 @@ export default function SiteSummaryCards({
             <button
               type="button"
               onClick={onOpenInstall}
-              className="text-[#007AFF] text-xs  font-medium mt-3.5"
+              className="text-[#007AFF] text-sm  font-medium mt-3.5"
             >
               Get your installation code ↓
             </button>
@@ -116,13 +116,13 @@ export default function SiteSummaryCards({
 
           {/* Banner Type */}
           <div>
-            <p className="text-xs text-[#4B5563]">Banner Type</p>
+            <p className="text-sm text-[#4B5563]">Banner Type</p>
             <p className=" font-medium  mt-1">
               {bannerType}
             </p>
 
             
-            <p className="text-xs text-[#4B5563] mt-8.5">Created</p>
+            <p className="text-sm text-[#4B5563] mt-8.5">Created</p>
             <p className=" font-medium  mt-1">
               {createdLabel}
             </p>
@@ -130,12 +130,12 @@ export default function SiteSummaryCards({
 
           {/* Created */}
           <div>
-            <p className="text-xs text-[#4B5563]">Region Mode</p>
+            <p className="text-sm text-[#4B5563]">Region Mode</p>
             <p className=" font-medium  mt-1">
              {regionMode}
             </p>
 
-           <p className="text-xs text-[#4B5563] mt-8.5">Last Updated</p>
+           <p className="text-sm text-[#4B5563] mt-8.5">Last Updated</p>
             <p className=" mt-1 font-medium ">
               {updatedLabel}
             </p>
@@ -194,7 +194,7 @@ export default function SiteSummaryCards({
     <p className="text-[22px] font-semibold text-gray-800">
       {site?.cookieCount ?? "—"}
     </p>
-    <p className="text-xs text-[#4B5563]">
+    <p className="text-sm text-[#4B5563]">
       Total cookies
     </p>
   </div>
@@ -203,7 +203,7 @@ export default function SiteSummaryCards({
     <p className="text-[22px] font-semibold text-gray-800">
       {site?.cookieCategories ?? "—"}
     </p>
-    <p className="text-xs text-[#4B5563]">
+    <p className="text-sm text-[#4B5563]">
       Categories
     </p>
   </div>
@@ -212,7 +212,7 @@ export default function SiteSummaryCards({
     </div>
 
     {/* Scan info */}
-    <div className="text-xs text-gray-600 flex flex-col justify-between">
+    <div className="text-sm text-gray-600 flex flex-col justify-between">
 
       <div>
         <p className="text-[#4B5563]">Last successful scan</p>

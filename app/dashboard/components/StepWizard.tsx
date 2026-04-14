@@ -264,8 +264,7 @@ function StepOne({
     <>
       <div className={`mb-3.5 `}>
         <div className="flex justify-between items-center mb-3.5">
-          <label className="text-[15px] text-black ">Domain*</label>
-          <span className="text-[15px] text-[#00000050]">What is your sites domain?</span>
+          <label className="text-[15px] text-black ">What is your sites domain?*</label>
         </div>
 
         <div className="relative">
@@ -274,7 +273,7 @@ function StepOne({
             value={domain}
             onChange={(e) => { setDomain(e.target.value); setError(null); }}
             placeholder="Yoursite.com"
-            className="placeholder:text-[#000000] placeholder:text-base w-full px-4 py-3.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="placeholder:text-[#00000050] placeholder:text-base w-full px-4 py-3.5 border border-gray-300 rounded-md text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <div className="absolute top-1/2 -translate-y-1/2 right-3"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="24" height="24" rx="12" fill="#E6F1FD"/>

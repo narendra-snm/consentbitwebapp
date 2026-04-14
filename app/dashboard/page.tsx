@@ -422,9 +422,9 @@ export default function DashboardPage() {
   if (authenticated && !showOnboarding) {
     return (
       <>
-      <Header/>
+      
       <div className="max-w-[1148px] mx-auto pb-4 px-4">
-      <DashboardTabs/>
+     
       <ComplianceAlert
         userName={userName}
         siteDomain={activeSite?.domain}

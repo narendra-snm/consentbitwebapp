@@ -167,7 +167,7 @@ export default function InstallConsentModal({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden />
 
       <div className="relative flex max-h-[95vh] w-full max-w-[1007px] flex-col rounded-[10px] bg-white shadow-xl">
-        <div className="flex items-center justify-between bg-[#E6F1FD] px-7 py-6">
+        <div className="flex items-center justify-between bg-[#E6F1FD] rounded-t-[10px] px-7 py-6">
           <h2 className="text-base font-semibold text-[#111827]">Install ConsentBit on your website</h2>
           <button type="button" onClick={onClose} className="rounded p-1 hover:bg-black/5" aria-label="Close">
             <X size={18} className="text-gray-600" />

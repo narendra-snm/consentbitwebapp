@@ -614,7 +614,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
         {/* Footer */}
         <div
           style={{
-            padding: "14px 22px",
+            padding: "14px 3px",
             borderTop: "1px solid #F0F0F0",
             backgroundColor: s.bannerBg,
             flexShrink: 0,
