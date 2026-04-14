@@ -52,6 +52,12 @@ performance:
 marketing:
   'Marketing cookies (also referred to as advertising cookies) are used to track visitors across websites using cookies, pixels, and similar tracking technologies. These cookies may be set by us or third-party advertising partners to deliver personalized ads and measure the effectiveness of marketing campaigns.',
 
+advertisement:
+  'Advertisement cookies are used to provide visitors with relevant ads and marketing campaigns. These cookies track visitors across websites and collect information to provide customized ads.',
+
+behavioral:
+  'Behavioral cookies are used to understand how visitors interact with the website. These cookies help provide information on metrics such as visitor behavior, session recordings, and user experience.',
+
 uncategorized:
   'Uncategorized cookies are cookies that are currently being reviewed and have not yet been assigned to a specific category.',
 

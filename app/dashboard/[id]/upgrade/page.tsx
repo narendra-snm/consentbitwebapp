@@ -75,6 +75,7 @@ export default function PricingTable() {
   }, [activeSite, sites, effectivePlanId]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  
   const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
