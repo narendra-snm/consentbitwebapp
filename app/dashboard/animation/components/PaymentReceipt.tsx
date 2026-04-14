@@ -21,7 +21,7 @@ function SuccessBanner() {
   );
 }
 
-function ReceiptCard() {
+function ReceiptCard({ details }: { details: any }) {
   // Generate random data
   const receiptData = useMemo(() => {
     const amounts = ['$49.99', '$89.99', '$129.99', '$149.99', '$199.99', '$249.99'];
@@ -49,14 +49,16 @@ function ReceiptCard() {
     ];
 
     return {
-      amount: amounts[Math.floor(Math.random() * amounts.length)],
-      txnId: txnIds[Math.floor(Math.random() * txnIds.length)],
-      cardLast4: lastFourDigits[Math.floor(Math.random() * lastFourDigits.length)],
-      date: dates[Math.floor(Math.random() * dates.length)],
-      merchant: merchants[Math.floor(Math.random() * merchants.length)]
+      amount: details?.amount || amounts[Math.floor(Math.random() * amounts.length)],
+      txnId: details?.invoice_id || txnIds[Math.floor(Math.random() * txnIds.length)],
+      cardLast4: details?.card_last_four || lastFourDigits[Math.floor(Math.random() * lastFourDigits.length)],
+      date: details?.date || dates[Math.floor(Math.random() * dates.length)],
+      merchant: details?.payment_status || merchants[Math.floor(Math.random() * merchants.length)]
     };
   }, []);
-
+const dateLabel = details.date_of_purchase
+      ? new Date(details.date_of_purchase).toLocaleString()
+      : "—";
   return (
     <div className="rounded-[6px] rotate-[5deg] absolute left-1/2 top-[100px] max-w-[244px] -translate-x-1/2 w-[266px] rounded-[12px] bg-[#ECECF0] ">
      
@@ -66,41 +68,41 @@ function ReceiptCard() {
             Amount
           </p>
           <p className="font-['DM_Sans:Bold',sans-serif] font-bold leading-[24px] text-[#0f172a] text-[12px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-            {receiptData.amount}
+            {receiptData.amount} {details.currency || 'USD'}
           </p>
         </div>
         <div className="h-px bg-[#e2e8f0] mb-4" />
         <div className="flex flex-col gap-2">
           <div className="flex items-start justify-between">
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#64748b] text-[12px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-              Transaction ID
+              Invoice ID
             </p>
-            <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#0f172a] text-[12px] text-right" style={{ fontVariationSettings: "'opsz' 14" }}>
+            <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#0f172a] text-[9px] text-right" style={{ fontVariationSettings: "'opsz' 14" }}>
               {receiptData.txnId}
             </p>
           </div>
-          <div className="flex items-start justify-between">
+          {/* <div className="flex items-start justify-between">
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#64748b] text-[12px]" style={{ fontVariationSettings: "'opsz' 14" }}>
               Payment Method
             </p>
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#0f172a] text-[12px] text-right" style={{ fontVariationSettings: "'opsz' 14" }}>
               **** {receiptData.cardLast4}
             </p>
-          </div>
+          </div> */}
           <div className="flex items-start justify-between">
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#64748b] text-[12px]" style={{ fontVariationSettings: "'opsz' 14" }}>
               Date
             </p>
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#0f172a] text-[12px] text-right" style={{ fontVariationSettings: "'opsz' 14" }}>
-              {receiptData.date}
+              {dateLabel}
             </p>
           </div>
           <div className="flex items-start justify-between">
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#64748b] text-[12px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-              Merchant
+             Status
             </p>
             <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[18px] text-[#0f172a] text-[12px] text-right" style={{ fontVariationSettings: "'opsz' 14" }}>
-              {receiptData.merchant}
+              {details.payment_status}
             </p>
           </div>
         </div>
@@ -109,7 +111,7 @@ function ReceiptCard() {
   );
 }
 
-export default function PaymentReceipt() {
+export default function PaymentReceipt({ details, OnClick }: { details: any, OnClick: () => void }) {
   const randomEmail = useMemo(() => {
     const emails = [
       "customer@example.com",
@@ -127,7 +129,7 @@ export default function PaymentReceipt() {
         <div className="relative w-[451px] h-[500px]">
              <img src="/images/open.svg" alt="Dashboard Overview" />
           
-          <ReceiptCard />
+          <ReceiptCard details={details} />
         </div>
 
         <div className="flex flex-col items-center gap-3">
@@ -137,17 +139,17 @@ export default function PaymentReceipt() {
 </svg>
 
             <p className="text-[11px] leading-[18px]">
-              Receipt sent to {randomEmail}
+              Receipt sent to {details.customer_email}
             </p>
           </div>
 
-          <button className="h-[44px] px-6 rounded-[8px] bg-[#007aff] text-white font-semibold text-[14px] shadow-sm hover:bg-[#0051d5] transition-colors">
+          <button onClick={()=>window.open(details.invoice_url)} className="h-[44px] px-6 rounded-[8px] bg-[#007aff] text-white font-semibold text-[14px] shadow-sm hover:bg-[#0051d5] transition-colors">
             Download Receipt
           </button>
 
-          <p className="text-[10px] leading-[18px] text-[#717182] opacity-60">
+          {/* <p className="text-[10px] leading-[18px] text-[#717182] opacity-60">
             Need help? Contact our support team at support@techstore.com
-          </p>
+          </p> */}
         </div>
       </div>
     </div>

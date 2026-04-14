@@ -9,6 +9,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; /
 import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import LoadingScreen from "../../animation/components/LoadingScreen";
+import PaymentDone from "../../animation/components/PaymentDone";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
@@ -73,6 +75,7 @@ export default function PricingTable() {
   }, [activeSite, sites, effectivePlanId]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  
   const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
@@ -107,7 +110,6 @@ export default function PricingTable() {
       date_of_purchase: params.get("date")           ?? "",
     };
     setPaymentDetails(details);
-    console.log("[UpgradeRedirect] Captured payment details from URL params:", details);
     console.log("[Payment Success] Transaction details:", details);
     console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
@@ -123,7 +125,7 @@ export default function PricingTable() {
         console.log(`[UpgradePoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max attempts"} | navigating to dashboard`);
         // Use router.push so DashboardSessionProvider stays mounted and the updated
         // plan in React state is immediately visible in the header — no cache needed.
-        router.push(`/dashboard/${siteId}`);
+        // router.push(`/dashboard/${siteId}`);
       }
     };
     void poll();
@@ -377,7 +379,9 @@ export default function PricingTable() {
       </button>
     );
   };
-
+function redirectToDashboard() {
+  router.push(`/dashboard/${siteId}`);
+}
   if (returnedFromStripe) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-3">
@@ -402,13 +406,7 @@ export default function PricingTable() {
 
   if (checkoutLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6">
-        <div className="w-12 h-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
-        <div className="text-center">
-          <p className="text-[18px] font-semibold text-[#111827]">Proceeding to payment...</p>
-          <p className="text-sm text-[#6b7280] mt-1">You will be redirected to Stripe shortly.</p>
-        </div>
-      </div>
+      <LoadingScreen/>
     );
   }
 
@@ -424,39 +422,41 @@ export default function PricingTable() {
       ? new Date(paymentDetails.date_of_purchase).toLocaleString()
       : "—";
 
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6 px-4">
-        <MailSuccessAnimation />
-        <div className="text-center">
-          <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
-          <p className="text-sm text-[#6b7280] mt-1">Updating your plan — redirecting to dashboard shortly…</p>
-        </div>
-        {paymentDetails.amount && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e7eb] w-full max-w-sm px-6 py-5 flex flex-col gap-3 text-sm">
-            <Row label="Plan"           value={planLabel} />
-            <Row label="Amount"         value={amountLabel} />
-            <Row label="Billing"        value={fmt(paymentDetails.interval)} />
-            <Row label="Status"         value={fmt(paymentDetails.payment_status)} />
-            <Row label="Transaction ID" value={fmt(paymentDetails.transaction_id)} mono />
-            {paymentDetails.invoice_id && (
-              <Row label="Invoice ID"   value={paymentDetails.invoice_id} mono />
-            )}
-            <Row label="Email"          value={fmt(paymentDetails.customer_email)} />
-            <Row label="Date"           value={dateLabel} />
-            {paymentDetails.invoice_url && (
-              <a
-                href={paymentDetails.invoice_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 text-center text-[#007aff] text-xs font-medium hover:underline"
-              >
-                View Invoice ↗
-              </a>
-            )}
-          </div>
-        )}
-      </div>
-    );
+    // return (
+    //   <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6 px-4">
+    //     <MailSuccessAnimation />
+    //     <div className="text-center">
+    //       <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
+    //       <p className="text-sm text-[#6b7280] mt-1">Updating your plan — redirecting to dashboard shortly…</p>
+    //     </div>
+    //     {paymentDetails.amount && (
+    //       <div className="bg-white rounded-2xl shadow-sm border border-[#e5e7eb] w-full max-w-sm px-6 py-5 flex flex-col gap-3 text-sm">
+    //         <Row label="Plan"           value={planLabel} />
+    //         <Row label="Amount"         value={amountLabel} />
+    //         <Row label="Billing"        value={fmt(paymentDetails.interval)} />
+    //         <Row label="Status"         value={fmt(paymentDetails.payment_status)} />
+    //         <Row label="Transaction ID" value={fmt(paymentDetails.transaction_id)} mono />
+    //         {paymentDetails.invoice_id && (
+    //           <Row label="Invoice ID"   value={paymentDetails.invoice_id} mono />
+    //         )}
+    //         <Row label="Email"          value={fmt(paymentDetails.customer_email)} />
+    //         <Row label="Date"           value={dateLabel} />
+    //         {paymentDetails.invoice_url && (
+    //           <a
+    //             href={paymentDetails.invoice_url}
+    //             target="_blank"
+    //             rel="noopener noreferrer"
+    //             className="mt-1 text-center text-[#007aff] text-xs font-medium hover:underline"
+    //           >
+    //             View Invoice ↗
+    //           </a>
+    //         )}
+    //       </div>
+    //     )}
+    //   </div>
+    // );
+ return <PaymentDone details={paymentDetails} OnClick={redirectToDashboard}/>
+ 
   }
 
   return (
