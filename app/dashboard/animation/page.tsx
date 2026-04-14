@@ -63,7 +63,7 @@ console.log('Current Screen:', currentScreen);
     exit={{ opacity: 0, y: 100 }}      // optional: slide down on exit
     transition={{ duration: 0.2, ease: 'easeOut' }}
           >
-            <PaymentReceipt />
+            <PaymentReceipt details={{name:"jds"}}/>
            
         
           </motion.div>

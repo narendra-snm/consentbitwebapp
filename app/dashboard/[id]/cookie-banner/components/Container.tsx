@@ -748,7 +748,7 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       setActive("General");
     }
   }, [active, isFreePlan]);
-  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId)).planId
+  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId
 
   console.log(sites.find((s: any) => String(s?.id) === String(activeSiteId)), "site data in page component");
   return (

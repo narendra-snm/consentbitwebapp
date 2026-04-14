@@ -2,8 +2,7 @@ import { motion } from "motion/react";
 
 export default function LoadingScreen() {
   return (
-    <div className="relative flex h-full min-h-screen w-full items-center justify-center overflow-hidden rounded-[24px]">
-      <div className="flex flex-col items-center gap-6">
+<div className="fixed bg-[#E6F1FD] inset-0 z-50 flex h-[100vh] w-[100vw] items-center justify-center overflow-hidden rounded-[24px]">      <div className="flex flex-col items-center gap-6">
         <div className="relative h-[110px] w-[110px]">
           <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#DDE3FF] to-[#F7F9FF]" />
 
