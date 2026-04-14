@@ -211,23 +211,25 @@ export default function BillingPage({
     return () => { cancelled = true; };
   }, [organizationId]);
 
-  // Load billing summary (for payment method + billing details)
+  // Load billing summary (for payment method + billing details).
+  // Re-fetch when activeSiteId changes — each site may have different billing address/country.
   useEffect(() => {
     if (!organizationId) { setSummary(null); return; }
+    const cacheKey = `${organizationId}:${activeSiteId || ""}`;
     const now = Date.now();
-    const cached = summaryCache.get(organizationId);
+    const cached = summaryCache.get(cacheKey);
     if (cached && now - cached.ts < CACHE_TTL_MS) { setSummary(cached.data); return; }
     let cancelled = false;
-    getBillingSummary(organizationId)
+    getBillingSummary(organizationId, activeSiteId)
       .then((data) => {
         if (!cancelled) {
           setSummary(data);
-          summaryCache.set(organizationId, { data, ts: Date.now() });
+          summaryCache.set(cacheKey, { data, ts: Date.now() });
         }
       })
       .catch(() => { /* silently ignore — payment method section will be hidden */ });
     return () => { cancelled = true; };
-  }, [organizationId]);
+  }, [organizationId, activeSiteId]);
 
   // Derive unique years from raw invoices for the Year dropdown
   const availableYears = useMemo<number[]>(() => {

@@ -463,6 +463,51 @@ export async function getBillingUsage(
 }
 // billing usage ends here
 
+// request scan topup email starts here
+export async function requestScanTopupEmail(payload: {
+  organizationId: string;
+  siteId: string;
+  packs?: number;
+}): Promise<{ success: true; message: string }> {
+  const res = await fetch("/api/billing/request-scan-topup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...payload, packs: payload.packs ?? 1 }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Request failed: ${res.status}`);
+  return data;
+}
+// request scan topup email ends here
+
+// add scans to next renewal starts here
+export async function addScansToNextRenewal(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  packs: number;
+}): Promise<{
+  success: true;
+  invoiceItemId: string;
+  packs: number;
+  scansAdded: number;
+  chargedAtRenewal: number;
+  currency: string;
+}> {
+  const res = await fetch("/api/billing/add-scans", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Add scans failed: ${res.status}`);
+  }
+  return data;
+}
+// add scans to next renewal ends here
+
 // subscription upgrade starts here
 export async function upgradeSubscription(payload: {
   siteId: string;
@@ -533,8 +578,9 @@ export type BillingSummary = {
   billingCountry?: string | null;
   billingAddress?: string | null;
 };
-export async function getBillingSummary(organizationId: string): Promise<BillingSummary> {
-  const res = await fetch(`/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}`, { credentials: "include" });
+export async function getBillingSummary(organizationId: string, siteId?: string | null): Promise<BillingSummary> {
+  const siteParam = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
+  const res = await fetch(`/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}${siteParam}`, { credentials: "include" });
   const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || "Failed to load billing summary");
   return data as BillingSummary;

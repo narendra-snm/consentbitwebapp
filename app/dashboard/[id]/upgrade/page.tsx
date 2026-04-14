@@ -73,6 +73,7 @@ export default function PricingTable() {
   }, [activeSite, sites, effectivePlanId]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
   useEffect(() => {
@@ -91,6 +92,22 @@ export default function PricingTable() {
     } catch {
       // ignore
     }
+    // Capture and log payment details passed as URL params from the redirect handler
+    const details = {
+      amount:          params.get("amount")         ?? "",
+      currency:        params.get("currency")        ?? "",
+      transaction_id:  params.get("transaction_id") ?? "",
+      plan_id:         params.get("plan_id")         ?? "",
+      plan_type:       params.get("plan_type")       ?? "",
+      interval:        params.get("interval")        ?? "",
+      invoice_id:      params.get("invoice_id")      ?? "",
+      invoice_url:     params.get("invoice_url")     ?? "",
+      customer_email:  params.get("email")           ?? "",
+      payment_status:  params.get("payment_status")  ?? "",
+      date_of_purchase: params.get("date")           ?? "",
+    };
+    setPaymentDetails(details);
+    console.log("[Payment Success] Transaction details:", details);
     console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
     let attempts = 0;
@@ -134,6 +151,7 @@ export default function PricingTable() {
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
   const [mounted, setMounted] = useState(false);
+
 
   // useLayoutEffect fires before the browser paints — check sessionStorage here so the
   // correct screen (cancel or upgrade) is shown on the very first paint with no flash.
@@ -236,7 +254,9 @@ export default function PricingTable() {
     setCheckoutLoading(true);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const successUrl = origin ? `${origin}/dashboard/${siteId}/upgrade?upgraded=1` : undefined;
+      const finalUrl = `${origin}/dashboard/${siteId}/upgrade?upgraded=1`;
+      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+      const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";
 
@@ -392,13 +412,48 @@ export default function PricingTable() {
   }
 
   if (paymentProcessing) {
+    const fmt = (v: string) => v || "—";
+    const planLabel = paymentDetails.plan_id
+      ? paymentDetails.plan_id.charAt(0).toUpperCase() + paymentDetails.plan_id.slice(1)
+      : paymentDetails.plan_type || "—";
+    const amountLabel = paymentDetails.amount
+      ? `${paymentDetails.currency || "USD"} $${paymentDetails.amount}`
+      : "—";
+    const dateLabel = paymentDetails.date_of_purchase
+      ? new Date(paymentDetails.date_of_purchase).toLocaleString()
+      : "—";
+
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E6F1FD] gap-6 px-4">
         <MailSuccessAnimation />
         <div className="text-center">
           <p className="text-[18px] font-semibold text-[#111827]">Payment processed!</p>
           <p className="text-sm text-[#6b7280] mt-1">Updating your plan — redirecting to dashboard shortly…</p>
         </div>
+        {paymentDetails.amount && (
+          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e7eb] w-full max-w-sm px-6 py-5 flex flex-col gap-3 text-sm">
+            <Row label="Plan"           value={planLabel} />
+            <Row label="Amount"         value={amountLabel} />
+            <Row label="Billing"        value={fmt(paymentDetails.interval)} />
+            <Row label="Status"         value={fmt(paymentDetails.payment_status)} />
+            <Row label="Transaction ID" value={fmt(paymentDetails.transaction_id)} mono />
+            {paymentDetails.invoice_id && (
+              <Row label="Invoice ID"   value={paymentDetails.invoice_id} mono />
+            )}
+            <Row label="Email"          value={fmt(paymentDetails.customer_email)} />
+            <Row label="Date"           value={dateLabel} />
+            {paymentDetails.invoice_url && (
+              <a
+                href={paymentDetails.invoice_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 text-center text-[#007aff] text-xs font-medium hover:underline"
+              >
+                View Invoice ↗
+              </a>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -675,5 +730,16 @@ function Feature({
         </div>
       ))}
     </>
+  );
+}
+
+function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-start gap-4">
+      <span className="text-[#6b7280] shrink-0">{label}</span>
+      <span className={`text-[#111827] text-right break-all ${mono ? "font-mono text-xs" : "font-medium"}`}>
+        {value}
+      </span>
+    </div>
   );
 }
