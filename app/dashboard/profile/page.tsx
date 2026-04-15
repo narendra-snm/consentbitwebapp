@@ -541,7 +541,7 @@ export default function SettingsPage() {
             <div className="text-left">
               <BillingPage
                 currentPlan={currentPlan}
-                domainCount={domainCount}
+                domainCount={usage?.sitesLimit ?? domainCount}
                 organizationId={activeOrganizationId}
                 activeSiteId={resolvedSiteId}
                 scansCount={usage?.scansUsed ?? 0}
