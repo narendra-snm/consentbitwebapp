@@ -1,8 +1,5 @@
-name = "consentbit-frontend"
-main = ".open-next/worker.js"         # or .open-next/_worker.js if that’s what OpenNext generates
-compatibility_date = "2026-04-16"
-compatibility_flags = ["nodejs_compat"]
+name = "consentbitfrontend"
+pages_build_output_dir = ".open-next"
+compatibility_date = "2026-03-23"
+compatibility_flags = ["nodejs_compat_v2"]
 
-[assets]
-directory = ".open-next/assets"       # depends on your OpenNext output structure
-binding = "ASSETS"
