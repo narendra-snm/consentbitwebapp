@@ -1,4 +1,5 @@
 
+import { Suspense } from "react";
 import { LoginForm } from "../../components/auth/LoginForm";
 import  Footer  from "@/components/auth/Footer";
 export default function LoginPage() {
@@ -17,14 +18,13 @@ export default function LoginPage() {
       </div>
     <div
       className="min-h-[calc(100vh-140px)] flex flex-col items-center justify-center bg-cover bg-center px-6"
-     
-    >
-      {/* Logo */}
-     
 
+    >
       {/* Login Section */}
-      <LoginForm /> 
-      
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
+
     </div>
      <Footer/>
     </div>

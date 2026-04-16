@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "functions": {
+    "/dashboard/[id]": {},
+    "/dashboard/[id]/consent-logs": {},
+    "/dashboard/[id]/cookie-banner": {},
+    "/dashboard/[id]/scan": {},
+    "/dashboard/[id]/upgrade": {}
+  }
+}
