@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import LoadingScreen from "../animation/components/LoadingScreen";
+import PaymentDone from "../animation/components/PaymentDone";
 
 const svgPaths = {
   p131d6680: "M11.8618 9.49625C11.5149 8.89875 10.9993 7.20813 10.9993 5C10.9993 3.67392 10.4725 2.40215 9.53481 1.46447C8.59713 0.526784 7.32536 0 5.99928 0C4.67319 0 3.40142 0.526784 2.46374 1.46447C1.52606 2.40215 0.999276 3.67392 0.999276 5C0.999276 7.20875 0.483026 8.89875 0.136151 9.49625C0.0475697 9.64815 0.000609559 9.82073 5.89435e-06 9.99657C-0.000597771 10.1724 0.0451765 10.3453 0.132712 10.4978C0.220248 10.6503 0.34645 10.777 0.498591 10.8652C0.650732 10.9534 0.823433 10.9999 0.999276 11H3.5499C3.66526 11.5645 3.97204 12.0718 4.41836 12.4361C4.86468 12.8004 5.42314 12.9994 5.99928 12.9994C6.57542 12.9994 7.13387 12.8004 7.58019 12.4361C8.02651 12.0718 8.33329 11.5645 8.44865 11H10.9993C11.1751 10.9998 11.3477 10.9532 11.4997 10.865C11.6518 10.7768 11.7779 10.65 11.8654 10.4975C11.9528 10.345 11.9986 10.1722 11.9979 9.99641C11.9973 9.82062 11.9503 9.64811 11.8618 9.49625ZM5.99928 12C5.68916 11.9999 5.3867 11.9037 5.13352 11.7246C4.88035 11.5455 4.6889 11.2924 4.58553 11H7.41303C7.30965 11.2924 7.11821 11.5455 6.86503 11.7246C6.61185 11.9037 6.30939 11.9999 5.99928 12ZM0.999276 10C1.48053 9.1725 1.99928 7.255 1.99928 5C1.99928 3.93913 2.4207 2.92172 3.17085 2.17157C3.92099 1.42143 4.93841 1 5.99928 1C7.06014 1 8.07756 1.42143 8.8277 2.17157C9.57785 2.92172 9.99928 3.93913 9.99928 5C9.99928 7.25312 10.5168 9.17062 10.9993 10H0.999276Z",
@@ -279,7 +281,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           url.searchParams.set("postSetup", "1");
           url.searchParams.set("siteId", newSiteId);
           url.searchParams.set("domain", domain);
-          router.push(url.pathname + url.search + (url.hash || ""));
+          // router.push(url.pathname + url.search + (url.hash || ""));
         } else {
           const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
           url.searchParams.set("postSetup", "1");
@@ -292,6 +294,10 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           return;
         }
         const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+        const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
+        const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
+        const cancelUrl = `${origin}${returnTo}`;
         const data = await createCheckoutSession({
           organizationId: activeOrganizationId,
           planId: planId as "basic" | "essential" | "growth",
@@ -299,13 +305,11 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           siteId: null,
           siteName: domain,
           siteDomain: domain,
-          // Complete in a separate Stripe tab, then bring the opener back to the same sub-tab and show install code.
-          successUrl: `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`,
-          cancelUrl: `${origin}${returnTo}`,
+          successUrl,
+          cancelUrl,
         });
-        // Redirect in the same tab; set flag so back-button return shows cancel screen.
         sessionStorage.setItem('cb_stripe_redirect_modal', '1');
-        window.location.assign(data.url);
+        window.location.href = data.url;
       }
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "Failed to add website");
@@ -322,17 +326,14 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
       {/* Modal */}
       <div className="relative mx-2 bg-white rounded-[10px] max-w-[1136px] shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Submitting overlay */}
-        {submitting && (
+        {/* Submitting overlay — LoadingScreen for paid plans, spinner for free */}
+        {submitting && selectedPlan !== "free" && <LoadingScreen />}
+        {submitting && selectedPlan === "free" && (
           <div className="absolute inset-0 bg-[#E6F1FD] z-50 flex flex-col items-center justify-center rounded-[10px] gap-6">
             <div className="w-12 h-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
             <div className="text-center">
-              <p className="text-[18px] font-semibold text-[#111827]">
-                {selectedPlan === "free" ? "Setting up your site..." : "Proceeding to payment..."}
-              </p>
-              <p className="text-sm text-[#6b7280] mt-1">
-                {selectedPlan === "free" ? "Please wait a moment." : "You will be redirected to Stripe shortly."}
-              </p>
+              <p className="text-[18px] font-semibold text-[#111827]">Setting up your site...</p>
+              <p className="text-sm text-[#6b7280] mt-1">Please wait a moment.</p>
             </div>
           </div>
         )}
