@@ -34,3 +34,14 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Deploy on Cloudflare Pages
+
+This app uses [`@cloudflare/next-on-pages`](https://github.com/cloudflare/next-on-pages). **Node.js compatibility is enabled in code** via the repo root [`wrangler.toml`](./wrangler.toml):
+
+- `compatibility_flags = ["nodejs_compat"]` — required so the Worker can run Next.js
+- `pages_build_output_dir = ".vercel/output/static"` — output of `npx @cloudflare/next-on-pages`
+- `name` must match your **Cloudflare Pages project name** (e.g. `consentbitfrontend`)
+
+Build command (example): `npx @cloudflare/next-on-pages@1`  
+More detail: [docs/CLOUDFLARE_PAGES.md](./docs/CLOUDFLARE_PAGES.md).

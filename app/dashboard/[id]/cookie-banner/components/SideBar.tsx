@@ -1,22 +1,40 @@
 
-
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
 import svgPaths from "./svg";
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex w-full">
+      {children}
+      <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 interface SidebarProps {
   
   active: string;
   setActive: (active: string) => void;
+  iabEnabled: boolean;
+  effectivePlanId?: string;
 }
 
-export function Sidebar({ active, setActive   }: SidebarProps) {
+export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: SidebarProps) {
+  // Defer plan check until after mount to avoid server/client hydration mismatch.
+  // Server doesn't have session data, so effectivePlanId is always empty there.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
+  const planKey = mounted ? String(effectivePlanId ?? "").toLowerCase() : "";
+  const isFree = planKey === "free" || planKey === "";
   const menuItems = [
-    { name: "General", icon: "general" },
-    { name: "Content", icon: "content" },
-    { name: "Layout", icon: "layout" },
-    { name: "Colors", icon: "colors" },
-    { name: "Type", icon: "type" },
+    { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },
+    { name: "Content", icon: "content", tip: "Edit banner title, description, button labels and cookie policy link." },
+    { name: "Layout", icon: "layout", tip: "Set banner position, shape, border radius and animation style." },
+    { name: "Colors", icon: "colors", tip: "Customise background, text and button colors." },
+    { name: "Type", icon: "type", tip: "Choose font family, weight and text alignment for the banner." },
   ];
 
   return (
@@ -24,15 +42,21 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
 
       {menuItems.map((item) => {
         const isActive = active === item.name;
+        const lockedForFree =
+          isFree &&
+          (item.name === "Content" ||
+            item.name === "Layout" ||
+            item.name === "Colors" ||
+            item.name === "Type");
+        const disabled = (iabEnabled && item.name === "Content") || lockedForFree;
 
         return (
+          <Tooltip key={item.name} text={disabled ? (lockedForFree ? "Upgrade your plan to unlock this tab." : "Not available in this mode.") : item.tip}>
           <button
-            key={item.name}
             onClick={() => setActive(item.name)}
-            className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all
-              
+            disabled={disabled}
+            className={`relative flex items-center gap-4 px-6 h-16 text-left transition-all w-full
               ${isActive ? "bg-[#E6F1FD]" : "hover:bg-gray-50"}
-              
             `}
           >
             {/* Active blue vertical bar */}
@@ -59,20 +83,20 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
 
               {item.icon === "content" && (
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M12.3701 8.87988H17.6201" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.37988 8.87988L7.12988 9.62988L9.37988 7.37988" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12.3701 15.8799H17.6201" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.37988 15.8799L7.12988 16.6299L9.37988 14.3799" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.3701 8.87988H17.6201" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6.37988 8.87988L7.12988 9.62988L9.37988 7.37988" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M12.3701 15.8799H17.6201" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6.37988 15.8799L7.12988 16.6299L9.37988 14.3799" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
               )}
                 {item.icon === "layout" && (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M5 22H7C9 22 10 21 10 19V17C10 15 9 14 7 14H5C3 14 2 15 2 17V19C2 21 3 22 5 22Z" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6 10C8.20914 10 10 8.20914 10 6C10 3.79086 8.20914 2 6 2C3.79086 2 2 3.79086 2 6C2 8.20914 3.79086 10 6 10Z" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M18 22C20.2091 22 22 20.2091 22 18C22 15.7909 20.2091 14 18 14C15.7909 14 14 15.7909 14 18C14 20.2091 15.7909 22 18 22Z" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M5 22H7C9 22 10 21 10 19V17C10 15 9 14 7 14H5C3 14 2 15 2 17V19C2 21 3 22 5 22Z" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6 10C8.20914 10 10 8.20914 10 6C10 3.79086 8.20914 2 6 2C3.79086 2 2 3.79086 2 6C2 8.20914 3.79086 10 6 10Z" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M18 22C20.2091 22 22 20.2091 22 18C22 15.7909 20.2091 14 18 14C15.7909 14 14 15.7909 14 18C14 20.2091 15.7909 22 18 22Z" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
 
@@ -80,23 +104,23 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
 
                 {item.icon === "colors" && (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M7.01012 18.0001L3.00012 13.9901C1.66012 12.6501 1.66012 11.32 3.00012 9.98004L9.68012 3.30005L17.0301 10.6501C17.4001 11.0201 17.4001 11.6201 17.0301 11.9901L11.0101 18.0101C9.69012 19.3301 8.35012 19.3301 7.01012 18.0001Z" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M8.34961 1.94995L9.68961 3.28992" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M2.07031 11.92L17.1903 11.26" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3 22H16" stroke="#2A2E33" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M18.85 15C18.85 15 17 17.01 17 18.24C17 19.26 17.83 20.09 18.85 20.09C19.87 20.09 20.7 19.26 20.7 18.24C20.7 17.01 18.85 15 18.85 15Z" stroke="#2A2E33" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.01012 18.0001L3.00012 13.9901C1.66012 12.6501 1.66012 11.32 3.00012 9.98004L9.68012 3.30005L17.0301 10.6501C17.4001 11.0201 17.4001 11.6201 17.0301 11.9901L11.0101 18.0101C9.69012 19.3301 8.35012 19.3301 7.01012 18.0001Z" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M8.34961 1.94995L9.68961 3.28992" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M2.07031 11.92L17.1903 11.26" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M3 22H16" stroke="#2A2E33" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M18.85 15C18.85 15 17 17.01 17 18.24C17 19.26 17.83 20.09 18.85 20.09C19.87 20.09 20.7 19.26 20.7 18.24C20.7 17.01 18.85 15 18.85 15Z" stroke="#2A2E33" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
 
               )}
                 {item.icon === "type" && (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M1.99023 5.93007V4.42007C1.99023 3.40007 2.82023 2.57007 3.84023 2.57007H16.7602C17.7802 2.57007 18.6102 3.40007 18.6102 4.42007V5.93007" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M10.2998 18.1001V3.32007" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.8999 18.1001H12.4799" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M13.6802 10.3401H20.6902C21.4202 10.3401 22.0102 10.9301 22.0102 11.6601V12.4601" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.0801 21.4301V10.8701" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M13.9399 21.4299H18.2199" stroke="#292D32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1.99023 5.93007V4.42007C1.99023 3.40007 2.82023 2.57007 3.84023 2.57007H16.7602C17.7802 2.57007 18.6102 3.40007 18.6102 4.42007V5.93007" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M10.2998 18.1001V3.32007" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6.8999 18.1001H12.4799" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M13.6802 10.3401H20.6902C21.4202 10.3401 22.0102 10.9301 22.0102 11.6601V12.4601" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M16.0801 21.4301V10.8701" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M13.9399 21.4299H18.2199" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
 
@@ -107,11 +131,13 @@ export function Sidebar({ active, setActive   }: SidebarProps) {
             <span
               className={`text-base font-medium tracking-tight
                 ${isActive ? "text-[#007AFF]" : "text-[#111827]"}
+                ${disabled ? "text-gray-400 cursor-not-allowed" : ""}
               `}
             >
               {item.name}
             </span>
           </button>
+          </Tooltip>
         );
       })}
     </div>

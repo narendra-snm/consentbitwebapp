@@ -1,8 +1,29 @@
-import { useState } from "react";
+import React from "react";
 
-export function FloatingButtonSettings() {
-  const [floatingEnabled, setFloatingEnabled] = useState(true);
-  const [position, setPosition] = useState<"left" | "right">("left");
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[220px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+export type FloatingButtonState = {
+  enabled: boolean;
+  position: "left" | "right";
+};
+
+export function FloatingButtonSettings({
+  value,
+  onChange,
+}: {
+  value: FloatingButtonState;
+  onChange: (next: FloatingButtonState) => void;
+}) {
+  const { enabled: floatingEnabled, position } = value;
 
   return (
     <div className="w-full max-w-[409px] mx-auto">
@@ -17,10 +38,12 @@ export function FloatingButtonSettings() {
             Floating button
           </label>
 
-          <ToggleSwitch
-            checked={floatingEnabled}
-            onChange={() => setFloatingEnabled(!floatingEnabled)}
-          />
+          <Tooltip text="Show a persistent floating button so visitors can reopen the consent banner at any time.">
+            <ToggleSwitch
+              checked={floatingEnabled}
+              onChange={() => onChange({ ...value, enabled: !floatingEnabled })}
+            />
+          </Tooltip>
         </div>
 
         {/* Position */}
@@ -35,45 +58,48 @@ export function FloatingButtonSettings() {
           <div className="flex items-center gap-8">
 
             {/* Bottom Left */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="position"
-                value="left"
-                checked={position === "left"}
-                onChange={() => setPosition("left")}
-                className="w-5 h-5 accent-[#007aff]"
-              />
-
-              <span
-                className="font-['DM_Sans'] text-[15px] text-[#111827]"
-                style={{ fontVariationSettings: "'opsz' 14" }}
-              >
-                Bottom left
+            <div className="relative group">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="position"
+                  value="left"
+                  checked={position === "left"}
+                  onChange={() => onChange({ ...value, position: "left" })}
+                  className="w-5 h-5 accent-[#007aff]"
+                />
+                <span className="font-['DM_Sans'] text-[15px] text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  Bottom left
+                </span>
+              </label>
+              <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+                Pin the floating button to the bottom-left corner.
               </span>
-            </label>
+            </div>
 
             {/* Bottom Right */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="position"
-                value="right"
-                checked={position === "right"}
-                onChange={() => setPosition("right")}
-                className="w-5 h-5 accent-[#007aff]"
-              />
-
-              <span
-                className="font-['DM_Sans'] text-[15px] text-[#111827]"
-                style={{ fontVariationSettings: "'opsz' 14" }}
-              >
-                Bottom right
+            <div className="relative group">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="position"
+                  value="right"
+                  checked={position === "right"}
+                  onChange={() => onChange({ ...value, position: "right" })}
+                  className="w-5 h-5 accent-[#007aff]"
+                />
+                <span className="font-['DM_Sans'] text-[15px] text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  Bottom right
+                </span>
+              </label>
+              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-normal text-[#374151] shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-normal">
+                Pin the floating button to the bottom-right corner.
               </span>
-            </label>
+            </div>
 
           </div>
         </div>
+
       </div>
     </div>
   );

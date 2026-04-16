@@ -1,0 +1,248 @@
+// Local translations used by the cookie banner preview.
+export const TRANSLATIONS: Record<string, Record<string, string>> = {
+  en: {
+    title: 'We value your privacy',
+    description:
+      'We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.',
+    privacyPolicy: 'Privacy Policy',
+    acceptAll: 'Accept',
+    rejectAll: 'Reject',
+    customise: 'Preference',
+    save: 'Save Preference',
+    back: 'Back',
+    doNotSell: 'Do Not Share My Personal Information',
+    cookiePreferences: 'Cookie Preferences',
+    managePreferences:
+      'By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.',
+    essentialDescription:
+      "Essential cookies enable core site functions like security and accessibility. They don't store personal data and cant be disabled.",
+    analyticsDescription:
+      'These cookies collect anonymous  data to help us improve website functionality and enhance user experience.',
+    marketingDescription:
+      'These cookies track users across websites to deliver relevant ads and may process personal data, requiring explicit consent.',
+    preferencesDescription:
+      'These cookies remember settings like language or region and store display preferences to offer a more personalized, seamless experience.',
+    ccpaDescription:
+      'We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.',
+    ccpaOptOut:
+      'We use cookies and similar technologies to personalize and enhance your experience. Some of these technologies may involve the "sale" or "sharing" of your personal information under state privacy laws.',
+    optOutPreference: 'Opt-out Preference',
+    ccpaOptOutPreferenceIntro:
+      'We use third-party cookies that help us analyze how you use this website, store your preferences, and provide the content and advertisements that are relevant to you. We do not sell your information. However, you can opt out of these cookies by checking Do Not Share My Personal Information and clicking the Save My Preferences button. Once you opt out, you can opt in again at any time by unchecking Do Not Share My Personal Information and clicking the Save My Preferences button.',
+    saveMyPreferences: 'Save my preferences',
+    limitUse: 'Limit the use of my sensitive personal information',
+    confirmChoice: 'Confirm My Choice',
+    cancel: 'Cancel',
+    essential: 'Essential',
+    strictlyNecessary: 'Strictly Necessary',
+    necessary: 'Necessary',
+    alwaysOn: 'always on',
+    alwaysActive: 'Always Active',
+    analytics: 'Analytics',
+    marketing: 'Marketing',
+    functional: 'Functional',
+    performance: 'Performance',
+    advertisement: 'Advertisement',
+    preferences: 'Preferences',
+  },
+  es: {
+    title: 'Valoramos su privacidad',
+    description:
+      'Utilizamos cookies para mejorar su experiencia de navegación, mostrar anuncios o contenido personalizados y analizar su tráfico. Al hacer clic en Aceptar todo, acepta nuestro uso de cookies.',
+    privacyPolicy: 'Política de Privacidad',
+    acceptAll: 'Aceptar Todo',
+    rejectAll: 'Rechazar Todo',
+    customise: 'Personalizar',
+    save: 'Guardar',
+    back: 'Atrás',
+    doNotSell: 'No Compartir Mi Información Personal',
+    cookiePreferences: 'Preferencias de Cookies',
+    managePreferences: 'Gestiona tus preferencias de cookies.',
+    ccpaDescription:
+      'Puede optar por no vender o compartir su información personal para publicidad.',
+    ccpaOptOut:
+      'Utilizamos cookies y tecnologías similares para personalizar y mejorar su experiencia. Algunas de estas tecnologías pueden implicar la "venta" o "compartición" de su información personal según las leyes de privacidad estatales.',
+    limitUse: 'Limitar el uso de mi información personal sensible',
+    confirmChoice: 'Confirmar Mi Elección',
+    cancel: 'Cancelar',
+    essential: 'Esencial',
+    necessary: 'Necesario',
+    alwaysOn: 'siempre activo',
+    analytics: 'Analítica',
+    marketing: 'Marketing',
+    functional: 'Funcional',
+    performance: 'Rendimiento',
+    advertisement: 'Publicidad',
+    preferences: 'Preferencias',
+  },
+  fr: {
+    title: 'Nous respectons votre vie privée',
+    description:
+      'Nous utilisons des cookies pour améliorer votre expérience de navigation, diffuser des publicités ou du contenu personnalisés et analyser notre trafic. En cliquant sur Tout accepter, vous acceptez notre utilisation des cookies.',
+    privacyPolicy: 'Politique de Confidentialité',
+    acceptAll: 'Tout Accepter',
+    rejectAll: 'Tout Rejeter',
+    customise: 'Personnaliser',
+    save: 'Enregistrer',
+    back: 'Retour',
+    doNotSell: 'Ne Pas Partager Mes Informations Personnelles',
+    cookiePreferences: 'Préférences de Cookies',
+    managePreferences: 'Gérez vos préférences de cookies.',
+    ccpaDescription:
+      'Vous pouvez refuser la vente ou le partage de vos informations personnelles à des fins publicitaires.',
+    ccpaOptOut:
+      'Nous utilisons des cookies et des technologies similaires pour personnaliser et améliorer votre expérience. Certaines de ces technologies peuvent impliquer la "venta" ou le "partage" de vos informations personnelles selon les lois de confidentialité des États.',
+    limitUse: 'Limiter l\'utilisation de mes informations personnelles sensibles',
+    confirmChoice: 'Confirmer Mon Choix',
+    cancel: 'Annuler',
+    essential: 'Essentiel',
+    necessary: 'Nécessaire',
+    alwaysOn: 'toujours actif',
+    analytics: 'Analyse',
+    marketing: 'Marketing',
+    functional: 'Fonctionnel',
+    performance: 'Performance',
+    advertisement: 'Publicité',
+    preferences: 'Préférences',
+  },
+  de: {
+    title: 'Wir schätzen Ihre Privatsphäre',
+    description:
+      'Wir verwenden Cookies, um Ihr Browsing-Erlebnis zu verbessern, personalisierte Anzeigen oder Inhalte bereitzustellen und unseren Traffic zu analysieren. Durch Klicken auf "Alle akzeptieren" stimmen Sie unserer Verwendung von Cookies zu.',
+    privacyPolicy: 'Datenschutzrichtlinie',
+    acceptAll: 'Alle Akzeptieren',
+    rejectAll: 'Alle Ablehnen',
+    customise: 'Anpassen',
+    save: 'Speichern',
+    back: 'Zurück',
+    doNotSell: 'Meine Persönlichen Informationen Nicht Teilen',
+    cookiePreferences: 'Cookie-Einstellungen',
+    managePreferences: 'Verwalten Sie Ihre Cookie-Einstellungen.',
+    ccpaDescription:
+      'Sie können dem Verkauf oder der Weitergabe Ihrer persönlichen Informationen für Werbezwecke widersprechen.',
+    ccpaOptOut:
+      'Wir verwenden Cookies und ähnliche Technologien, um Ihre Erfahrung zu personalisieren und zu verbessern. Einige dieser Technologien können den "Verkauf" oder die "Weitergabe" Ihrer persönlichen Informationen gemäß den staatlichen Datenschutzgesetzen beinhalten.',
+    limitUse: 'Die Verwendung meiner sensiblen persönlichen Informationen einschränken',
+    confirmChoice: 'Meine Wahl Bestätigen',
+    cancel: 'Abbrechen',
+    essential: 'Essentiell',
+    necessary: 'Notwendig',
+    alwaysOn: 'immer aktiv',
+    analytics: 'Analyse',
+    marketing: 'Marketing',
+    functional: 'Funktional',
+    performance: 'Leistung',
+    advertisement: 'Werbung',
+    preferences: 'Präferenzen',
+  },
+  it: {
+    title: 'Rispettiamo la tua privacy',
+    description:
+      'Utilizziamo i cookie per migliorare la tua esperienza di navigazione, fornire annunci o contenuti personalizzati e analizzare il nostro traffico. Cliccando su Accetta tutto, acconsenti al nostro utilizzo dei cookie.',
+    privacyPolicy: 'Informativa sulla Privacy',
+    acceptAll: 'Accetta Tutto',
+    rejectAll: 'Rifiuta Tutto',
+    customise: 'Personalizza',
+    save: 'Salva',
+    back: 'Indietro',
+    doNotSell: 'Non Condividere le Mie Informazioni Personali',
+    cookiePreferences: 'Preferenze Cookie',
+    managePreferences: 'Gestisci le tue preferenze sui cookie.',
+    ccpaDescription:
+      'Puoi rifiutare la vendita o la condivisione delle tue informazioni personali per la pubblicità.',
+    ccpaOptOut:
+      'Utilizziamo cookie e tecnologie simili per personalizzare e migliorare la tua esperienza. Alcune di queste tecnologie possono comportare la "vendita" o la "condivisione" delle tue informazioni personali secondo le leggi sulla privacy statali.',
+    limitUse: 'Limitare l\'uso delle mie informazioni personali sensibili',
+    confirmChoice: 'Conferma la Mia Scelta',
+    cancel: 'Annulla',
+    essential: 'Essenziale',
+    necessary: 'Necessario',
+    alwaysOn: 'sempre attivo',
+    analytics: 'Analisi',
+    marketing: 'Marketing',
+    functional: 'Funzionale',
+    performance: 'Prestazioni',
+    advertisement: 'Pubblicità',
+    preferences: 'Preferenze',
+  },
+  pt: {
+    title: 'Valorizamos sua privacidade',
+    description:
+      'Usamos cookies para melhorar sua experiência de navegação, exibir anúncios ou conteúdo personalizados e analisar nosso tráfego. Ao clicar em Aceitar Tudo, você concorda com o uso de cookies.',
+    privacyPolicy: 'Política de Privacidade',
+    acceptAll: 'Aceitar Tudo',
+    rejectAll: 'Rejeitar Tudo',
+    customise: 'Personalizar',
+    save: 'Salvar',
+    back: 'Voltar',
+    doNotSell: 'Não Compartilhar Minhas Informações Pessoais',
+    cookiePreferences: 'Preferências de Cookies',
+    managePreferences: 'Gerencie suas preferências de cookies.',
+    ccpaDescription:
+      'Você pode optar por não vender ou compartilhar suas informações pessoais para publicidade.',
+    ccpaOptOut:
+      'Usamos cookies e tecnologias semelhantes para personalizar e melhorar sua experiência. Algumas dessas tecnologias podem envolver a "venda" ou "compartilhamento" de suas informações pessoais sob as leis de privacidade estaduais.',
+    limitUse: 'Limitar o uso das minhas informações pessoais sensíveis',
+    confirmChoice: 'Confirmar Minha Escolha',
+    cancel: 'Cancelar',
+    essential: 'Essencial',
+    necessary: 'Necessário',
+    alwaysOn: 'sempre ativo',
+    analytics: 'Análise',
+    marketing: 'Marketing',
+    functional: 'Funcional',
+    performance: 'Desempenho',
+    advertisement: 'Publicidade',
+    preferences: 'Preferências',
+  },
+  nl: {
+    title: 'We waarderen uw privacy',
+    description:
+      'We gebruiken cookies om uw browse-ervaring te verbeteren, gepersonaliseerde advertenties of inhoud te tonen en ons verkeer te analyseren. Door op Alles Accepteren te klikken, stemt u in met ons gebruik van cookies.',
+    privacyPolicy: 'Privacybeleid',
+    acceptAll: 'Alles Accepteren',
+    rejectAll: 'Alles Weigeren',
+    customise: 'Aanpassen',
+    save: 'Opslaan',
+    back: 'Terug',
+    doNotSell: 'Mijn Persoonlijke Informatie Niet Delen',
+    cookiePreferences: 'Cookievoorkeuren',
+    managePreferences: 'Beheer uw cookievoorkeuren.',
+    ccpaDescription:
+      'U kunt zich afmelden voor de verkoop of het delen van uw persoonlijke informatie voor advertenties.',
+    ccpaOptOut:
+      'We gebruiken cookies en vergelijkbare technologieën om uw ervaring te personaliseren en te verbeteren. Sommige van deze technologieën kunnen de "verkoop" of "deling" van uw persoonlijke informatie onder de staatswetten voor privacy inhouden.',
+    limitUse: 'Het gebruik van mijn gevoelige persoonlijke informatie beperken',
+    confirmChoice: 'Mijn Keuze Bevestigen',
+    cancel: 'Annuleren',
+    essential: 'Essentieel',
+    necessary: 'Noodzakelijk',
+    alwaysOn: 'altijd actief',
+    analytics: 'Analyse',
+    marketing: 'Marketing',
+    functional: 'Functioneel',
+    performance: 'Prestaties',
+    advertisement: 'Advertentie',
+    preferences: 'Voorkeuren',
+  },
+};
+
+export function getTranslation(language: string, key: string): string {
+  const lang = TRANSLATIONS[language] || TRANSLATIONS.en;
+  return lang[key] || TRANSLATIONS.en[key] || key;
+}
+
+export function getBannerLanguage(config: {
+  language?: string;
+  autoDetectLanguage?: boolean;
+}): string {
+  if (config.autoDetectLanguage && typeof window !== 'undefined') {
+    const navAny = navigator as any;
+    const browserLang = (navigator.language || navAny.userLanguage || 'en')
+      .split('-')[0]
+      .toLowerCase();
+    return TRANSLATIONS[browserLang] ? browserLang : 'en';
+  }
+  return config.language || 'en';
+}
+

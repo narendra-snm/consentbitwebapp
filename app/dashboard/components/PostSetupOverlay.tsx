@@ -1,0 +1,297 @@
+"use client";
+
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useDashboardSession } from "../DashboardSessionProvider";
+import { firstSetup } from "@/lib/client-api";
+import InstallConsentModal from "./InstallConsentModal";
+
+function normalizeDomain(raw: string) {
+  return String(raw || "").trim()
+    .replace(/^https?:\/\//i, "").replace(/^www\./i, "")
+    .split("/")[0].split("?")[0].split("#")[0]
+    .replace(/\.+$/, "").toLowerCase();
+}
+
+function getPostSetupParams(): { postSetup: string; domain: string; siteId: string; upgraded: string } {
+  if (typeof window === "undefined") return { postSetup: "", domain: "", siteId: "", upgraded: "" };
+  const p = new URLSearchParams(window.location.search);
+  return {
+    postSetup: p.get("postSetup") ?? "",
+    domain: p.get("domain") ?? "",
+    siteId: p.get("siteId") ?? "",
+    upgraded: p.get("upgraded") ?? "",
+  };
+}
+
+export default function PostSetupOverlay() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { authenticated, sites, refresh, setActiveSiteId } = useDashboardSession();
+
+  /** Keep callback identity out of effect dependency arrays (fixed length — avoids React "deps changed size" error). */
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const setActiveSiteIdRef = useRef(setActiveSiteId);
+  setActiveSiteIdRef.current = setActiveSiteId;
+
+  const [pendingSiteId, setPendingSiteId] = useState<string | null>(null);
+  const [pendingDomain, setPendingDomain] = useState<string | null>(null);
+  const [postSetupInstall, setPostSetupInstall] = useState<{
+    scriptUrl: string;
+    siteId: string;
+    siteDomain: string;
+    cdnScriptId?: string;
+  } | null>(null);
+  const lastSig = useRef("");
+
+  // Read params from window.location synchronously before paint to avoid flash
+  useLayoutEffect(() => {
+    function check() {
+      const { postSetup, domain, siteId, upgraded } = getPostSetupParams();
+
+      if (postSetup === "1" && domain) {
+        const sig = `domain:${domain}`;
+        if (lastSig.current === sig) return;
+        lastSig.current = sig;
+        setPendingDomain(normalizeDomain(domain));
+      } else if (postSetup === "1" && siteId) {
+        const sig = `siteId:${siteId}`;
+        if (lastSig.current === sig) return;
+        lastSig.current = sig;
+        setPendingSiteId(siteId);
+      } else if (upgraded === "1" && siteId) {
+        const sig = `upgraded:${siteId}`;
+        if (lastSig.current === sig) return;
+        lastSig.current = sig;
+        setPendingSiteId(siteId);
+      }
+    }
+
+    check();
+    window.addEventListener("popstate", check);
+    return () => window.removeEventListener("popstate", check);
+  }, [pathname, searchParams]); // re-run whenever path OR search params change
+
+  // Keep /dashboard/[id]/... in sync with ?siteId= during post-setup so the header shows the new site.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    const post = p.get("postSetup") === "1";
+    const up = p.get("upgraded") === "1";
+    if (!post && !up) return;
+    const siteId = p.get("siteId");
+    if (!siteId) return;
+    const parts = (pathname || "").split("/").filter(Boolean);
+    if (parts[0] !== "dashboard" || parts.length < 2) return;
+    const seg = parts[1];
+    if (["profile", "all-domain", "post-setup"].includes(seg)) return;
+    if (seg === siteId) return;
+    const sub = parts.slice(2).join("/");
+    const nextPath = sub ? `/dashboard/${siteId}/${sub}` : `/dashboard/${siteId}`;
+    router.replace(nextPath + window.location.search + (window.location.hash || ""));
+  }, [pathname, searchParams, router]);
+
+  // Handle storage event (opener tab redirect via PostSetupClient)
+  useEffect(() => {
+    function onStorage(ev: StorageEvent) {
+      if (ev.key !== "cb_post_setup" || !ev.newValue) return;
+      try {
+        const parsed = JSON.parse(ev.newValue) as { domain?: string; siteId?: string };
+        const domain = parsed.domain ?? "";
+        const siteId = parsed.siteId ?? "";
+        if (domain) {
+          const sig = `domain:${domain}`;
+          if (lastSig.current === sig) return;
+          lastSig.current = sig;
+          setPendingDomain(normalizeDomain(domain));
+        } else if (siteId) {
+          const sig = `siteId:${siteId}`;
+          if (lastSig.current === sig) return;
+          lastSig.current = sig;
+          setPendingSiteId(siteId);
+        }
+      } catch {}
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // New site: call firstSetup(domain) then resolve
+  useEffect(() => {
+    if (!pendingDomain || !authenticated) return;
+    const domain = pendingDomain;
+    setPendingDomain(null);
+    let cancelled = false;
+    let poll: ReturnType<typeof setInterval> | null = null;
+
+    firstSetup({ websiteUrl: domain })
+      .then((result) => {
+        // Do NOT check cancelled here — firstSetup is one-shot and must complete.
+        const siteId = result?.siteId ?? result?.site?.id;
+        const scriptUrl = result?.site?.embedScriptUrl ?? result?.scriptUrl ?? result?.site?.scriptUrl;
+        const cdnScriptId = result?.site?.cdnScriptId;
+        if (siteId && scriptUrl) {
+          setPostSetupInstall({ scriptUrl, siteId: String(siteId), siteDomain: domain, cdnScriptId });
+          try {
+            const u = new URL(window.location.href);
+            u.pathname = `/dashboard/${String(siteId)}`;
+            u.searchParams.set("postSetup", "1");
+            u.searchParams.set("siteId", String(siteId));
+            u.searchParams.set("domain", domain);
+            routerRef.current.replace(u.pathname + u.search + u.hash);
+            setActiveSiteIdRef.current(String(siteId));
+          } catch {
+            // ignore
+          }
+        } else if (siteId) {
+          setPendingSiteId(String(siteId));
+        } else {
+          console.warn("[PostSetupOverlay] firstSetup returned no siteId or scriptUrl");
+        }
+        void refreshRef.current({ showLoading: false });
+        let ticks = 0;
+        poll = setInterval(() => {
+          if (cancelled) { if (poll) clearInterval(poll); return; }
+          ticks += 1;
+          void refreshRef.current({ showLoading: false });
+          if (ticks >= 16) { if (poll) clearInterval(poll); poll = null; }
+        }, 1500);
+      })
+      .catch((err) => {
+        console.error("[PostSetupOverlay] firstSetup error:", err);
+      });
+
+    return () => {
+      cancelled = true;
+      if (poll) clearInterval(poll);
+    };
+  }, [pendingDomain, authenticated]);
+
+  // Existing site: resolve from sites list
+  useEffect(() => {
+    if (!pendingSiteId || !authenticated) return;
+    const id = pendingSiteId;
+    let cancelled = false;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
+    const domainHint = (() => {
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const d = p.get("domain");
+        return d ? normalizeDomain(d) : "";
+      } catch {
+        return "";
+      }
+    })();
+
+    setPostSetupInstall((prev) =>
+      prev?.siteId === id
+        ? prev
+        : { scriptUrl: "", siteId: id, siteDomain: domainHint }
+    );
+
+    const tryResolve = async () => {
+      if (cancelled) return;
+      const match = (Array.isArray(sites) ? sites : []).find(
+        (s: any) => String(s?.id) === id
+      );
+      const scriptUrl =
+        match?.embedScriptUrl ?? match?.embed_script_url ??
+        match?.scriptUrl ?? match?.script_url ?? null;
+      if (match && scriptUrl) {
+        setPostSetupInstall({
+          scriptUrl: String(scriptUrl),
+          siteId: String(match.id),
+          siteDomain: String(match.domain || domainHint || ""),
+          cdnScriptId: match?.cdnScriptId ? String(match.cdnScriptId) : undefined,
+        });
+        setActiveSiteIdRef.current(String(match.id));
+        setPendingSiteId(null);
+        return;
+      }
+      attempts += 1;
+      if (attempts <= 20) {
+        try { await refreshRef.current({ showLoading: false }); } catch {}
+        t = setTimeout(tryResolve, 1500);
+      } else {
+        console.warn("[PostSetupOverlay] Gave up resolving siteId:", id);
+        setPendingSiteId(null);
+      }
+    };
+
+    void tryResolve();
+    return () => {
+      cancelled = true;
+      if (t) clearTimeout(t);
+    };
+  }, [pendingSiteId, authenticated, sites]);
+
+  function handleClose() {
+    const newSiteId = postSetupInstall?.siteId;
+    // Always restore scroll before unmounting the modal.
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
+    setPostSetupInstall(null);
+    setPendingDomain(null);
+    setPendingSiteId(null);
+    lastSig.current = "";
+    // Refresh session so dashboard header + site list reflect the new site/plan immediately.
+    void refreshRef.current({ showLoading: false });
+    if (newSiteId) {
+      routerRef.current.replace(`/dashboard/${newSiteId}`);
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("postSetup");
+      url.searchParams.delete("upgraded");
+      url.searchParams.delete("siteId");
+      url.searchParams.delete("domain");
+      routerRef.current.replace(url.pathname + (url.search || "") + (url.hash || ""));
+    }
+  }
+
+  // Keep the full-screen overlay up until we have a usable scriptUrl.
+  // For `siteId` flows we optimistically set `postSetupInstall` immediately (scriptUrl=""),
+  // so `postSetupInstall !== null` alone isn't enough to consider it ready.
+  const isPending =
+    Boolean(pendingDomain || pendingSiteId) &&
+    (!postSetupInstall || String(postSetupInstall.scriptUrl || "").trim() === "");
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-[#E6F1FD] flex flex-col fixed inset-0 z-50">
+        <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10 rounded-t-xl">
+          <img src="/images/ConsentBit-logo-Dark.png" alt="logo" className="h-6" />
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <svg className="animate-spin h-8 w-8 text-[#007AFF]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <p className="text-[#374151] text-sm font-medium">
+            {pendingDomain ? "Setting up your site…" : "Payment succeeded — updating your plan…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!postSetupInstall) return null;
+
+  return (
+    <InstallConsentModal
+      key={postSetupInstall.siteId}
+      open
+      scriptUrl={postSetupInstall.scriptUrl}
+      siteDomain={postSetupInstall.siteDomain}
+      siteId={postSetupInstall.siteId}
+      cdnScriptId={postSetupInstall.cdnScriptId}
+      onClose={handleClose}
+    />
+  );
+}

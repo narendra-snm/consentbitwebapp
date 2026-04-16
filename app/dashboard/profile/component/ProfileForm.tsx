@@ -1,4 +1,12 @@
-export default function ProfileDisplay() {
+type Props = {
+  name?: string;
+  email?: string;
+};
+
+export default function ProfileDisplay({ name, email }: Props) {
+  const displayName = String(name || "").trim() || "—";
+  const displayEmail = String(email || "").trim() || "—";
+
   return (
     <div className="flex gap-[227px] pl-5 bg-white w-full justify-between max-w-[1193px]">
       
@@ -9,7 +17,7 @@ export default function ProfileDisplay() {
         <div>
           <p className=" text-[#4B5563] mb-2">Name</p>
           <div className="min-h-[48px] flex items-center px-3 border border-[#E5E5E5] rounded-md  text-[#111827] bg-white">
-            John Doe
+            {displayName}
           </div>
         </div>
 
@@ -17,7 +25,7 @@ export default function ProfileDisplay() {
         <div>
           <p className="text-[#4B5563] mb-2">Email</p>
           <div className="min-h-[48px] flex items-center px-3 border border-[#E5E5E5] rounded-md  text-[#111827] bg-white">
-            JohnDoe@sample.com
+            {displayEmail}
           </div>
         </div>
 
@@ -36,12 +44,12 @@ export default function ProfileDisplay() {
 
   {/* Name */}
   <p className="">
-    John Doe
+    {displayName}
   </p>
 
   {/* Email */}
   <p className=" mt-3">
-    Sample@sample.com
+    {displayEmail}
   </p>
 
 </div>

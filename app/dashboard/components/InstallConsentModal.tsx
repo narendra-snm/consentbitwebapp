@@ -1,127 +1,276 @@
 "use client";
 
-import { X, Copy, Share2, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Copy, Check } from "lucide-react";
+import { verifyScript } from "@/lib/client-api";
+import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
+import ErrorPopup from "./ErrorPopup";
 
-export default function InstallConsentModal({ open }: any) {
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export default function InstallConsentModal({
+  open,
+  scriptUrl,
+  siteDomain,
+  siteId,
+  cdnScriptId,
+  onClose,
+}: {
+  open: boolean;
+  scriptUrl: string;
+  siteDomain?: string;
+  siteId?: string;
+  /** Preferred embed id when rebuilding URL from env (matches Site.cdnScriptId). */
+  cdnScriptId?: string;
+  onClose?: () => void;
+}) {
+  const [copiedIcon, setCopiedIcon] = useState(false);
+  const [copiedBtn, setCopiedBtn] = useState(false);
+  const [publicUrl, setPublicUrl] = useState(siteDomain || "");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [scriptNotDetected, setScriptNotDetected] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
+  const absoluteScriptUrl = resolveInstallScriptUrl(
+    scriptUrl,
+    siteId ?? null,
+    cdnScriptId ?? null,
+  );
+  // No async/defer — the script must execute synchronously as the browser parses <head>
+  // so the consent blocker is installed before any tracking scripts that follow it.
+  const installCode = absoluteScriptUrl
+    ? `<!-- Start ConsentBit banner -->\n<script id="consentbit" type="text/javascript" src="${absoluteScriptUrl}"></script>\n<!-- End ConsentBit banner -->`
+    : "";
+
+  // Reset verify UI whenever we show a different site — do not keep the previous site's domain in the input.
+  useEffect(() => {
+    if (!open) return;
+    setPublicUrl(siteDomain || "");
+    setVerifyError(null);
+    setScriptNotDetected(false);
+    setCopyError(null);
+    setVerified(false);
+  }, [open, siteId, siteDomain]);
+
+  // Prevent background page scrolling while modal is open.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   if (!open) return null;
 
+  const normalizePublicUrl = (value: string) => {
+    const v = value.trim();
+    if (!v) return "";
+    if (/^https?:\/\//i.test(v)) return v;
+    return `https://${v}`;
+  };
+
+  const handleCopy = async (which: "icon" | "btn") => {
+    setCopyError(null);
+    if (!installCode) {
+      setCopyError("Missing script URL for this site.");
+      return;
+    }
+    const ok = await copyToClipboard(installCode);
+    if (ok) {
+      if (which === "icon") {
+        setCopiedIcon(true);
+        window.setTimeout(() => setCopiedIcon(false), 2000);
+      } else {
+        setCopiedBtn(true);
+        window.setTimeout(() => setCopiedBtn(false), 2000);
+      }
+    } else {
+      setCopyError("Could not copy — select the code and copy manually (Ctrl/Cmd+C).");
+    }
+  };
+
+  const handleVerify = async () => {
+    setVerifyError(null);
+    setScriptNotDetected(false);
+    setVerified(false);
+    const url = normalizePublicUrl(publicUrl);
+    if (!url) {
+      setVerifyError("Enter your website domain or URL.");
+      return;
+    }
+    if (!absoluteScriptUrl) {
+      setVerifyError("Missing script URL for this site.");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await verifyScript({
+        publicUrl: url,
+        scriptUrl: absoluteScriptUrl,
+        siteId,
+      });
+      if (res.found) {
+        setVerified(true);
+      } else {
+        if (typeof window !== "undefined" && "debug" in res && res.debug) {
+          console.warn("[ConsentBit] Verify script — not found. Debug from worker:", res.debug);
+        }
+        setScriptNotDetected(true);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.includes("403")) {
+        setVerifyError("The URL you entered was not found or is incorrect. Please check the domain and try again.");
+      } else if (msg.includes("404")) {
+        setVerifyError("Page not found. Check the domain is correct and the site is live.");
+      } else if (msg.includes("fetch") || msg.includes("network") || msg.toLowerCase().includes("failed to fetch")) {
+        setVerifyError("Could not reach that URL. Make sure the domain is correct and the site is publicly accessible.");
+      } else {
+        setVerifyError(msg || "Verification failed. Check the domain and try again.");
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {scriptNotDetected && (
+        <ErrorPopup
+          message="Script not detected on site"
+          onClose={() => setScriptNotDetected(false)}
+        />
+      )}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden />
 
-      {/* Overlay */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        // onClick={onclose}
-      />
-
-      {/* Modal */}
-<div className="relative w-full max-w-[1007px] max-h-[95vh] bg-white rounded-[10px] shadow-xl flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-7 py-6 bg-[#E6F1FD]">
-          <h2 className="text-sm font-semibold ">
-            A Install ConsentBit on your website
-          </h2>
-
-          <button 
-          // onClick={onclose}
-          >
+      <div className="relative flex max-h-[95vh] w-full max-w-[1007px] flex-col rounded-[10px] bg-white shadow-xl">
+        <div className="flex items-center justify-between bg-[#E6F1FD] rounded-t-[10px] px-7 py-6">
+          <h2 className="text-base font-semibold text-[#111827]">Install ConsentBit on your website</h2>
+          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-black/5" aria-label="Close">
             <X size={18} className="text-gray-600" />
           </button>
         </div>
 
-        <div className="px-8 py-6 overflow-y-auto">
+        <div className="overflow-y-auto px-8 py-6">
+          <h3 className="mb-5 mt-0.5 font-bold">Step 1: Copy this banner installation code</h3>
 
-          {/* STEP 1 */}
-          <h3 className=" font-bold mt-0.5 mb-5">
-            Step 1: Copy this banner installation code
-          </h3>
-
-          {/* Code Box */}
-          <div className="relative bg-[#F9F9FA] border border-[#E5E5E5] p-5 pb-8.5 rounded-md   text-[#161616] mb-3.75">
-
-            <p className="pr-10">
-              {"<!-- Start cookieyes banner -->"}
-              {" <script id='cookieyes' type='text/javascript' src='https://cdn-cookieyes.com/client_data/.../script.js'></script> "}
-              {"<!-- End cookieyes banner -->"}
-            </p>
-<svg width="24" className="absolute right-4 bottom-4  text-gray-500 cursor-pointer" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M16 12.9V17.1C16 20.6 14.6 22 11.1 22H6.9C3.4 22 2 20.6 2 17.1V12.9C2 9.4 3.4 8 6.9 8H11.1C14.6 8 16 9.4 16 12.9Z" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M22 6.9V11.1C22 14.6 20.6 16 17.1 16H16V12.9C16 9.4 14.6 8 11.1 8H8V6.9C8 3.4 9.4 2 12.9 2H17.1C20.6 2 22 3.4 22 6.9Z" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3 mb-9.25">
-
-            <button className="flex items-center gap-2 px-2.75 py-3.5 text-xs bg-[#E6F1FD] rounded-md hover:bg-gray-200">
-              Copy code
-              <Copy size={14}  className="ml-5.5"/>
+          <div className="relative mb-3.75 rounded-md border border-[#E5E5E5] bg-[#F9F9FA] p-5 pb-8.5 pr-14 text-[#161616]">
+            <p className="whitespace-pre-wrap break-all pr-2 font-mono text-sm">{installCode}</p>
+            <button
+              type="button"
+              onClick={() => void handleCopy("icon")}
+              className="absolute bottom-4 right-4 rounded p-1 text-gray-500 hover:bg-black/5 hover:text-gray-800"
+              aria-label={copiedIcon ? "Copied" : "Copy installation code"}
+              title={copiedIcon ? "Copied" : "Copy"}
+            >
+              {copiedIcon ? <Check size={22} className="text-emerald-600" /> : <Copy size={22} />}
             </button>
+          </div>
 
-            <button className="flex items-center gap-2 px-2.75 py-3.5 text-xs bg-[#E6F1FD] rounded-md hover:bg-gray-200">
-              Send code to a team mate
-              <Share2 size={14} />
+          <div className="mb-9.25 flex gap-3">
+            <button
+              type="button"
+              onClick={() => void handleCopy("btn")}
+              className="flex items-center gap-2 rounded-md bg-[#E6F1FD] px-2.75 py-3.5 text-xs hover:bg-gray-200"
+            >
+              {copiedBtn ? "Copied!" : "Copy code"}
+              <Copy size={14} className="ml-2" />
             </button>
-
           </div>
 
-          {/* Instruction */}
-          <p className="font-semibold mb-5">
-            Paste the code right after the opening{" "}
-            <span className="bg-blue-100 text-blue-700 px-1 rounded">
-              {"<head>"}
-            </span>{" "}
-            tag in your site's source code.
+          <p className="mb-5 font-semibold">
+            Paste the code as the <strong>first script</strong> inside the opening{" "}
+            <span className="rounded bg-blue-100 px-1 text-blue-700">{"<head>"}</span> tag — before any other scripts — so tracking is blocked before consent.
           </p>
 
-          <p className="text-xs  mb-1">
-            Refer to our platform-wise guides for instructions.
-          </p>
-
-          {/* Platform Icons */}
-          <div className="flex gap-2 mb-7.25">
-                      <img src="/images/allplatform.svg" alt="Verification" className="" />
-
+          <p className="mb-1 text-xs">Refer to our platform-wise guides for instructions.</p>
+          <div className="mb-7.25 flex gap-2">
+            <img src="/images/allplatform.png" alt="Supported platforms" />
           </div>
 
-          {/* STEP 3 */}
-          <h3 className=" font-bold  mb-2.5">
-            Step 3: Verify your installation.
-          </h3>
+          <h3 className="mb-2.5 font-bold">Step 2: Verify your installation.</h3>
+          <p className="mb-2 text-xs">Enter your website domain</p>
 
-          <p className="text-xs  mb-2">
-            Enter your website domain
-          </p>
-
-          {/* Domain input */}
-          <div className="flex items-center gap-2 mb-2.25">
-
+          <div className="mb-2.25 flex flex-wrap items-center gap-2 w-fit relative">
             <input
               type="text"
-              placeholder="Yoursite.com"
-              className="border rounded-lg px-3 py-2 text-sm w-[319px] h-[48px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={publicUrl}
+              onChange={(e) => { setPublicUrl(e.target.value); setVerifyError(null); setScriptNotDetected(false); }}
+              placeholder={siteDomain || "yoursite.com"}
+              disabled={verifying}
+              className="h-12 w-full min-w-[319px] max-w-[319px] pr-[70px] rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <div
+              className={`flex h-9 w-12.5 items-center justify-center rounded-md absolute top-[50%] transform -translate-y-1/2 right-1.5 ${
+                verified ? "bg-emerald-500 text-[#2EC04F]" : "bg-slate-300 text-slate-300"
+              }`}
+              title={verified ? "Verified" : "Not verified yet"}
+            >
+            <svg width="50" height="36" viewBox="0 0 50 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="50" height="36" rx="5" fill="currentColor"/>
+<path d="M18.267 18.7468L22.6662 23.4874C22.866 23.7028 23.2074 23.7003 23.4041 23.4821L32.5738 13.3075" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>
 
-            <div className="bg-green-500 text-white p-2 rounded-md">
-              <Check size={16} />
             </div>
-
           </div>
 
-          <p className="text-xs  mb-5.5">
-            Your site domain <br />
-            Yoursite.com <br />
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+          {copyError ? (
+            <p className="mb-2 text-sm text-amber-800" role="status">
+              {copyError}
+            </p>
+          ) : null}
+          {verifyError ? (
+            <p className="mb-3 text-sm text-red-600" role="alert">
+              {verifyError}
+            </p>
+          ) : null}
+          {verified ? (
+            <p className="mb-3 text-sm font-medium text-emerald-700">Verified — we found the ConsentBit script on your page.</p>
+          ) : null}
+
+          <p className="mb-5.5 text-xs text-[#4b5563]">
+            Please enter your website domain and click “Verify” to confirm your installation and complete the setup
+            {siteDomain ? (
+              <>
+                : <span className="font-medium">{siteDomain}</span>
+              </>
+            ) : (
+              "."
+            )}
           </p>
 
-          {/* Verify Button */}
-          <button className="bg-[#007AFF] text-white px-10.5 py-3.5 rounded-lg text-sm hover:bg-blue-700">
-            Verify
+          <button
+            type="button"
+            disabled={verifying}
+            onClick={() => void handleVerify()}
+            className="rounded-lg bg-[#007AFF] px-10.5 py-3.5 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {verifying ? "Verifying…" : "Verify"}
           </button>
-
         </div>
-        
       </div>
     </div>
   );

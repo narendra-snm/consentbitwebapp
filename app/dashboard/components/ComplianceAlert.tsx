@@ -3,27 +3,35 @@
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 
-export default function ComplianceAlert() {
+export default function ComplianceAlert({
+  userName,
+  siteDomain,
+  bannerActive,
+}: {
+  userName?: string;
+  siteDomain?: string;
+  bannerActive?: boolean;
+}) {
   const [visible, setVisible] = useState(true);
 
   if (!visible) return null;
-
+const show=false
   return (
     <div className="w-full  mt-4.25">
 
       {/* Greeting */}
       <p className="text-[17px]  ">
-        Hi sam! <br />
+        Hi {userName || "there"}! <br />
         </p>
       <p className="text-[17px] text-[#4B5563] mb-5">
         You are currently viewing the dashboard for{" "}
-        <span className="text-blue-600 font-medium cursor-pointer hover:underline">
-          acme.com
+        <span className="text-[#0777E6] font-medium cursor-pointer hover:underline">
+          {siteDomain || "—"}
         </span>
       </p>
 
       {/* Alert Box */}
-      <div className="flex items-start justify-between relative pr-13.5 bg-[#FFEFEF] border border-[#FFEFEF] rounded-[10px] p-4">
+      { show && <div className="flex items-start justify-between relative pr-13.5 bg-[#FFEFEF] border border-[#FFEFEF] rounded-[10px] p-4">
 
         {/* Left */}
         <div className="flex gap-3 ">
@@ -37,10 +45,10 @@ export default function ComplianceAlert() {
           {/* Text */}
           <div>
             <p className="text-sm font-bold text-[#AC2734]">
-              Compliance alert: Cookie banner missing
+              Compliance alert: Cookie banner {bannerActive ? "active" : "missing"}
             </p>
 
-            <p className="text-sm text-[#AC2734] mt-1 max-w-[808px] font-semibold">
+            <p className="text-sm text-[#AC2734] mt-1 max-w-[808px] font-medium">
               Your site currently sets no cookies, but future updates or
               third-party tools could introduce them without warning. This can
               put you at risk of non-compliance with US state privacy laws.
@@ -52,20 +60,20 @@ export default function ComplianceAlert() {
         <div className="flex items-center gap-4">
 
           {/* Button */}
-          <button className="bg-[#007AFF] py-2 px-2.5 mt-2 hover:bg-blue-700 text-white text-sm  rounded-md font-medium">
-            Enable consent banner
+          <button className="bg-[#007AFF] py-2 px-2.5 mt-2 hover:bg-blue-700 text-white text-[15px] rounded-md ">
+            {bannerActive ? "Review banner settings" : "Enable consent banner"}
           </button>
 
           {/* Close */}
           <button
             onClick={() => setVisible(false)}
-            className="text-gray-400 hover:text-gray-600 absolute top-2 right-2"
+            className="text-gray-400 hover:text-gray-600 absolute top-6 right-2.75"
           >
-            <X size={16} />
+            <X size={16} className="text-[#2B2B2B]"/>
           </button>
 
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
