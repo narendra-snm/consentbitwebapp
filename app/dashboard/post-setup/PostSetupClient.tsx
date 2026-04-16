@@ -1,9 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PaymentDone from "../animation/components/PaymentDone";
-import { firstSetup } from "@/lib/client-api";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface PaymentDetails {
+  domain: string;
+  amount: string;
+  currency: string;
+  transaction_id: string;
+  plan_id: string;
+  plan_type: string;
+  interval: string;
+  invoice_id: string;
+  invoice_url: string;
+  customer_email: string;
+  payment_status: string;
+  date_of_purchase: string;
+}
+
+const EMPTY_DETAILS: PaymentDetails = {
+  domain: "",
+  amount: "",
+  currency: "",
+  transaction_id: "",
+  plan_id: "",
+  plan_type: "",
+  interval: "",
+  invoice_id: "",
+  invoice_url: "",
+  customer_email: "",
+  payment_status: "",
+  date_of_purchase: "",
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeDomain(raw: string): string {
   const v = String(raw || "").trim();
@@ -18,73 +49,69 @@ export function PostSetupClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const domain = normalizeDomain(searchParams?.get("domain") || "");
-  const urlSiteId = String(searchParams?.get("siteId") || "").trim();
-  const returnToRaw = String(searchParams?.get("returnTo") || "").trim();
-  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/dashboard";
+  const [dashUrl, setDashUrl] = useState<string | null>(null);
+  // ─── NEW: holds all payment details parsed from the URL ───────────────────
+  const [details, setDetails] = useState<PaymentDetails>(EMPTY_DETAILS);
+  // ──────────────────────────────────────────────────────────────────────────
 
-  const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
-  // siteId resolved by firstSetup(); starts with whatever the URL already has
-  const [resolvedSiteId, setResolvedSiteId] = useState<string>(urlSiteId);
-  const redirected = useRef(false);
-  const setupCalled = useRef(false);
-
-  // Read payment details from URL params (appended by the worker redirect handler)
   useEffect(() => {
-    const p = searchParams;
-    setPaymentDetails({
-      amount:           p?.get("amount")           ?? "",
-      currency:         p?.get("currency")          ?? "",
-      transaction_id:   p?.get("transaction_id")    ?? "",
-      plan_id:          p?.get("plan_id")            ?? "",
-      plan_type:        p?.get("plan_type")          ?? "",
-      interval:         p?.get("interval")           ?? "",
-      invoice_id:       p?.get("invoice_id")         ?? "",
-      invoice_url:      p?.get("invoice_url")        ?? "",
-      customer_email:   p?.get("email")              ?? "",
-      payment_status:   p?.get("payment_status")     ?? "",
-      date_of_purchase: p?.get("date")               ?? "",
-    });
-  }, [searchParams]);
+    if (typeof window === "undefined") return;
 
-  // Call firstSetup in the background so we have the real siteId ready before the user clicks Skip.
-  // This mirrors the upgrade page: it already has a siteId, we resolve ours here.
-  useEffect(() => {
-    if (!domain || setupCalled.current) return;
-    setupCalled.current = true;
-    firstSetup({ websiteUrl: domain })
-      .then((result) => {
-        const sid = String(result?.siteId ?? result?.site?.id ?? "").trim();
-        if (sid) setResolvedSiteId(sid);
-      })
-      .catch(() => {
-        // If firstSetup fails, doRedirect falls back to domain flow
-      });
-  }, [domain]);
+    const params = new URLSearchParams(window.location.search);
 
-  function doRedirect() {
-    if (redirected.current) return;
-    redirected.current = true;
+    // ── 1. Parse domain / routing params ──────────────────────────────────
+    const domain = normalizeDomain(params.get("domain") || "");
+    const siteId = String(params.get("siteId") || "").trim();
+    const returnToRaw = String(params.get("returnTo") || "").trim();
+    const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/dashboard";
 
-    if (!domain && !urlSiteId) {
-      // router.replace("/dashboard");
+    if (!domain && !siteId) {
+      router.replace("/dashboard");
       return;
     }
 
-    // Build the post-setup URL. Use siteId when resolved (like upgrade page going to /dashboard/${siteId}),
-    // fall back to domain so PostSetupOverlay can call firstSetup itself.
+    // ── 2. Build the dashboard redirect URL ───────────────────────────────
     const base = returnTo.startsWith("/dashboard") ? returnTo : "/dashboard";
     const url = new URL(base, window.location.origin);
     url.searchParams.set("postSetup", "1");
-    if (resolvedSiteId) {
-      url.searchParams.set("siteId", resolvedSiteId);
-    } else if (domain) {
-      url.searchParams.set("domain", domain);
-    } else {
-      url.searchParams.set("siteId", urlSiteId);
-    }
-    const dashUrl = url.pathname + url.search + (url.hash || "");
+    if (domain) url.searchParams.set("domain", domain);
+    else url.searchParams.set("siteId", siteId);
+    setDashUrl(url.pathname + url.search + (url.hash || ""));
 
+    // ── 3. Parse all payment detail params from URL ───────────────────────
+    const parsed: PaymentDetails = {
+      domain,
+      amount:           params.get("amount")          ?? "",
+      currency:         params.get("currency")         ?? "",
+      transaction_id:   params.get("transaction_id")  ?? "",
+      plan_id:          params.get("plan_id")          ?? "",
+      plan_type:        params.get("plan_type")        ?? "",
+      interval:         params.get("interval")         ?? "",
+      invoice_id:       params.get("invoice_id")       ?? "",
+      invoice_url:      params.get("invoice_url")      ?? "",
+      customer_email:   params.get("email")            ?? "",
+      payment_status:   params.get("payment_status")   ?? "",
+      date_of_purchase: params.get("date")             ?? "",
+    };
+    setDetails(parsed);
+    console.log("[PostSetup] Payment details:", parsed);
+    // ─────────────────────────────────────────────────────────────────────
+
+    // ── 4. Pre-write storage so the opener tab can pick it up ─────────────
+    try {
+      localStorage.setItem(
+        "cb_post_setup",
+        JSON.stringify({ domain, siteId, returnTo, ts: Date.now() })
+      );
+    } catch {
+      // ignore — storage blocked in some contexts
+    }
+  }, [router, searchParams]);
+
+  const handleContinue = useCallback(() => {
+    if (!dashUrl) return;
+
+    // Best case: navigate the original tab and close this one.
     try {
       if (window.opener && !window.opener.closed) {
         window.opener.location.replace(dashUrl);
@@ -92,21 +119,65 @@ export function PostSetupClient() {
         return;
       }
     } catch {
-      // ignore and fall back
+      // cross-origin or blocked — fall through
     }
 
-    // Hard navigation so PostSetupOverlay mounts fresh with the correct URL params
-    window.location.href = dashUrl;
-  }
+    // Fallback: navigate this tab directly.
+    router.replace(dashUrl);
+  }, [dashUrl, router]);
 
-  // Auto-redirect after 6 seconds
-  useEffect(() => {
-    const t = setTimeout(doRedirect, 6000);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  return (
+    <div className="min-h-screen bg-[#E6F1FD] flex flex-col items-center justify-center gap-6">
+      {/* Payment success animation — receives the full details object */}
+      <PaymentDone details={details} OnClick={handleContinue} />
 
-  console.log("Payment details post-setup:", paymentDetails);
+      {/* CTA block fades in once dashUrl is resolved */}
+      <div
+        className={`flex flex-col items-center gap-4 transition-all duration-500 ${
+          dashUrl ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+        }`}
+      >
+        <div className="text-center">
+          <p className="text-[18px] font-semibold text-[#111827]">
+            Payment successful!
+          </p>
+          <p className="text-sm text-[#6b7280] mt-1">
+            Your site is ready. Head to the dashboard to install the banner.
+          </p>
+          {/* Optionally surface key receipt info */}
+          {details.customer_email && (
+            <p className="text-xs text-[#9ca3af] mt-1">
+              Receipt sent to{" "}
+              <span className="font-medium text-[#6b7280]">
+                {details.customer_email}
+              </span>
+            </p>
+          )}
+          {details.invoice_url && (
+            <a
+              href={details.invoice_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[#007AFF] underline mt-1 inline-block"
+            >
+              View invoice
+            </a>
+          )}
+        </div>
 
-  return <PaymentDone details={paymentDetails} OnClick={doRedirect} />;
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={!dashUrl}
+          className="px-8 py-3 bg-[#007AFF] text-white rounded-[8px] font-semibold text-[15px] hover:bg-[#005FCC] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        >
+          Go to Dashboard
+        </button>
+
+        <p className="text-xs text-[#9ca3af]">
+          You can also close this tab manually.
+        </p>
+      </div>
+    </div>
+  );
 }
