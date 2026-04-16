@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import React from 'react'
 
 export default function layout({children}:{children:React.ReactNode}) {

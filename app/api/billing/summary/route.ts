@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverFetch } from "@/lib/server-api";
 
-export const runtime = 'edge';
+
 
 export async function GET(request: NextRequest) {
   try {

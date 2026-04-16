@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import { LoginForm } from "../../components/auth/LoginForm";
 import  Footer  from "@/components/auth/Footer";
 export default function LoginPage() {

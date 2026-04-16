@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverFetchJson } from '@/lib/server-api';
 
-export const runtime = 'edge';
+
 
 interface SessionData {
   success: boolean;

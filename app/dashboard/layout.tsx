@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import type React from "react";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
