@@ -8,13 +8,15 @@ export async function GET(request: NextRequest) {
     const cookie = request.headers.get("cookie") || "";
     const { searchParams } = new URL(request.url);
     const organizationId = (searchParams.get("organizationId") || "").trim();
+    const siteId = (searchParams.get("siteId") || "").trim();
 
     if (!organizationId) {
       return NextResponse.json({ error: "organizationId required" }, { status: 400 });
     }
 
+    const siteParam = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
     const res = await serverFetch(
-      `/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}`,
+      `/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}${siteParam}`,
       { method: "GET", cookies: cookie },
     );
     const text = await res.text();
