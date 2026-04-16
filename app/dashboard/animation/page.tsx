@@ -1,3 +1,5 @@
+export default function AnimationPage() { return null; }
+
 // "use client";
 // import { useState, useEffect } from 'react';
 // import { motion, AnimatePresence } from 'motion/react';

@@ -219,6 +219,7 @@ export default function BillingPage({
     const now = Date.now();
     const cached = summaryCache.get(cacheKey);
     if (cached && now - cached.ts < CACHE_TTL_MS) { setSummary(cached.data); return; }
+    setSummary(null);
     let cancelled = false;
     getBillingSummary(organizationId, activeSiteId)
       .then((data) => {
@@ -366,7 +367,7 @@ export default function BillingPage({
     if (!organizationId) return;
     const returnUrl = typeof window !== "undefined" ? window.location.href : "";
     const { url } = await createBillingPortalSession(organizationId, returnUrl);
-    window.location.assign(url);
+    window.open(url, "_blank");
   };
 
   const handleOpenPortal = async () => {

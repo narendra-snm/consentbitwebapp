@@ -40,8 +40,10 @@ const userName = useMemo(() => {
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const p = new URLSearchParams(window.location.search);
+    // If domain= is present, PostSetupOverlay is handling the install modal — don't double-open.
+    const hasDomain = Boolean(p.get("domain"));
     const shouldOpen =
-      (p.get("postSetup") === "1" && (p.get("siteId") || "") === String(siteId || "")) ||
+      (!hasDomain && p.get("postSetup") === "1" && (p.get("siteId") || "") === String(siteId || "")) ||
       (p.get("upgraded") === "1" && (p.get("siteId") || "") === String(siteId || ""));
     if (!shouldOpen) return;
     setShowInstallModal(true);
