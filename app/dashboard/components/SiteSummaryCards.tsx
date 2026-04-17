@@ -1,4 +1,4 @@
-import { Globe, ArrowRight } from "lucide-react";
+
 import Link from "next/link";
 
 import BouncyIcon from "./ui/BouncyIcon"
@@ -57,7 +57,7 @@ export default function SiteSummaryCards({
 
         {/* Header */}
         <div className="flex items-center gap-2 mb-3.25  font-medium ">
-          <Globe size={16} />
+         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
           {displayName}
         </div>
 
@@ -153,7 +153,7 @@ export default function SiteSummaryCards({
             Customize cookie banner
           </span>
 
-          <ArrowRight size={18} className="text-blue-600" />
+         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right text-blue-600" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
         </Link>
       </div>
 
@@ -251,7 +251,7 @@ export default function SiteSummaryCards({
       Manage cookies
     </span>
 
-    <ArrowRight size={18} className="text-blue-600" />
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right text-blue-600" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
   </Link>
 
 </div>

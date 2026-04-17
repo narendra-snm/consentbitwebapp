@@ -10,7 +10,6 @@
     "pages:build": "npx @cloudflare/next-on-pages"
   },
   "dependencies": {
-    "lucide-react": "^0.577.0",
     "motion": "^12.38.0",
     "next": "16.1.6",
     "react": "19.2.3",

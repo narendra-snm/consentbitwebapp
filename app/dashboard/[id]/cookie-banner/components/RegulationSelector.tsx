@@ -96,7 +96,17 @@ export function RegulationSelector({
           suppressHydrationWarning
         >
           <span suppressHydrationWarning>{value}</span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          <svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="16"
+  height="16"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  strokeWidth="2"
+>
+  <path d="M6 9l6 6 6-6" />
+</svg>
         </button>
 
         {/* Dropdown */}
