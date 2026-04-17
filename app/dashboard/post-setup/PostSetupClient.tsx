@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import PaymentDone from "../animation/components/PaymentDone";
+import PaymentDone from "@/components/animations//PaymentDone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PaymentDetails {

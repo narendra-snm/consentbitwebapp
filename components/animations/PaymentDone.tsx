@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import PaymentReceipt from './PaymentReceipt';
 import DashboardOverview from './DashboardOverview';
-import { useSearchParams } from "next/navigation";
+
 type Screen = 'receipt' | 'dashboard';
 
 export default function PaymentDone({ details,OnClick }: { details: any, OnClick: () => void }) {
