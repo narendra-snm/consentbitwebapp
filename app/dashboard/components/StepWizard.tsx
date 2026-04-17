@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+
 import { PricingTable } from "./PricingTable";
 import { firstSetup, verifyScript, checkDomainAvailability } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
@@ -194,7 +194,25 @@ function StepCircle({
             :step===2 && number===3?"bg-white text-[#007AFF]": "bg-[#F5F0F0] text-[#007AFF]"
         }`}
       >
-        {completed ? <Check className="w-5 h-5" /> : number}
+        {completed ? (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="lucide lucide-check w-5 h-5"
+    aria-hidden="true"
+  >
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+) : (
+  number
+)}
       </div>
 
       <span className={`text-lg font-medium ${isActive  ? "" : "text-black/50"}`}>{label}</span>
@@ -489,13 +507,28 @@ const [showTooltip, setShowTooltip] = useState(false);
             </div>
             <div className="flex items-center justify-between">
               <div className="flex gap-2">
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg  text-xs font-medium  hover:bg-gray-50 transition-colors"
-                >
-                  {copied ? "Copied!" : "Copy"}
-                  <Copy size={16} />
-                </button>
+               <button
+  onClick={handleCopy}
+  className="flex items-center gap-2 px-3 py-2.5 bg-[#E6F1FD] border border-[#E5E5E5] rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+>
+  {copied ? "Copied!" : "Copy"}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="lucide lucide-copy"
+    aria-hidden="true"
+  >
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+</button>
               </div>
              <div className="relative"> <button
                 type="button"
