@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+
 import Accordion from "./ui/Accordion";
 import ToggleSwitch from "./ui/ToggleSwitch";
 
