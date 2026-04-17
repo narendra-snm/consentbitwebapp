@@ -1,4 +1,4 @@
-import { Headphones, SlidersHorizontal, Paintbrush, CreditCard } from "lucide-react";
+"use client";
 import Link from "next/link";
 
 export default function GettingStarted({ activeSiteId }: { activeSiteId?: string | null }) {

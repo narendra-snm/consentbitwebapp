@@ -1,5 +1,21 @@
+"use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+ const ChevronDown = ({ size = 16, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "@/app/dashboard/DashboardSessionProvider";
 
@@ -96,7 +112,17 @@ export function RegulationSelector({
           suppressHydrationWarning
         >
           <span suppressHydrationWarning>{value}</span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          <svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="16"
+  height="16"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  strokeWidth="2"
+>
+  <path d="M6 9l6 6 6-6" />
+</svg>
         </button>
 
         {/* Dropdown */}

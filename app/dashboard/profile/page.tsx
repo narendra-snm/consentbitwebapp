@@ -295,7 +295,7 @@ export default function SettingsPage() {
       <div className="h-[1px] bg-black/10 w-full" />
 
       {/* Header */}
-      <div className="pl-[205px] pr-8 flex items-center justify-between border-b border-black/10">
+      <div className="pl-[205.5px] pr-8 flex items-center justify-between border-b border-black/10">
         <p className=" pl-5.5 py-5.5 border-l border-black/10 font-semibold leading-[20px] text-[16px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
           Profile Settings
         </p>
