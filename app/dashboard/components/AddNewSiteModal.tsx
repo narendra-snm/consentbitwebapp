@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";

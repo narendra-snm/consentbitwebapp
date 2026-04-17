@@ -1,4 +1,4 @@
-import type React from 'react';
+"use client";
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
 
