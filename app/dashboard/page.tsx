@@ -2,9 +2,10 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import DashboardTabs from "./components/DashboardTabs";
+
 import GettingStarted from "./components/GettingStarted";
 import Header from "./components/header";
+import DashboardTabs from './components/DashboardTabs'
 import InstallConsentModal from "./components/InstallConsentModal";
 import SiteSummaryCards from "./components/SiteSummaryCards";
 import StepWizard from "./components/StepWizard";
@@ -422,7 +423,10 @@ export default function DashboardPage() {
   if (authenticated && !showOnboarding) {
     return (
       <>
-      
+      <Header />
+        <div className="max-w-[1148px] mx-auto pb-4.25 w-full">
+          <DashboardTabs />
+        </div>
       <div className="max-w-[1148px] mx-auto pb-4 px-4">
      
       <ComplianceAlert

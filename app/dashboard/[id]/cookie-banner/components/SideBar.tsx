@@ -1,5 +1,5 @@
-
-import React, { useEffect, useState } from "react";
+"use client";
+import  { useEffect, useState } from "react";
 import svgPaths from "./svg";
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {

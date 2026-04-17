@@ -1,7 +1,7 @@
 
 import { Suspense } from "react";
 import { PostSetupClient } from "./PostSetupClient";
-import LoadingScreen from "../animation/components/LoadingScreen";
+import LoadingScreen from "@/components/animations//LoadingScreen";
 
 export default function PostSetupPage() {
   return (

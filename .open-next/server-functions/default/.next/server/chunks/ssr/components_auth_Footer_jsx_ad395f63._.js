@@ -1,3 +1,0 @@
-module.exports=[31634,a=>{"use strict";var b=a.i(7997);function c(){return(0,b.jsxs)("footer",{className:"w-full  min-h-[40px] px-5 flex items-center justify-between text-xs bg-[#030306] text-white backdrop-blur-[44px] ",children:[(0,b.jsx)("span",{children:"© 2026 All rights reserved ConsentBit"}),(0,b.jsxs)("span",{className:"opacity-70",children:["A service by ",(0,b.jsx)("a",{href:"https://www.seattlenewmedia.com/",target:"_blank",className:"",children:"Seattle New Media"})]})]})}a.s(["default",()=>c])}];
-
-//# sourceMappingURL=components_auth_Footer_jsx_ad395f63._.js.map

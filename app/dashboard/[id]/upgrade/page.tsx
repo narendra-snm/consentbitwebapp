@@ -9,8 +9,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; /
 import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
-import LoadingScreen from "../../animation/components/LoadingScreen";
-import PaymentDone from "../../animation/components/PaymentDone";
+import LoadingScreen from "@/components/animations/LoadingScreen";
+import PaymentDone from "@/components/animations//PaymentDone";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 

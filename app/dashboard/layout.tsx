@@ -25,10 +25,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <DashboardSessionProvider>
       <div className="min-h-screen flex flex-col">
-        <Header />
+        {/* <Header />
         <div className="max-w-[1148px] mx-auto pb-4.25 w-full">
           <DashboardTabs />
-        </div>
+        </div> */}
         <main className="flex-1">{children}</main>
         <Footer />
       </div>
