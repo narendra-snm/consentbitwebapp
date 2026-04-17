@@ -1,3 +1,8 @@
+export const runtime = 'edge';
+
+
+
+
 import { proxyWorkerResponse } from '@/lib/server-api';
 
 

@@ -1,8 +1,13 @@
+export const runtime = 'edge';
+
+
+
+
+
 import { NextResponse } from 'next/server';
 import { serverFetch } from '@/lib/server-api';
 
 
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {

@@ -1,3 +1,7 @@
+export const runtime = 'edge';
+
+
+
 import { serverFetch } from '@/lib/server-api';
 
 
