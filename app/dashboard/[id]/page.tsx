@@ -135,6 +135,7 @@ const userName = useMemo(() => {
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => { document.body.style.overflow = ""; setShowInstallModal(false); }}
+        onVerified={() => refresh({ showLoading: false })}
       />
       <FeedbackDesign />
       </>}

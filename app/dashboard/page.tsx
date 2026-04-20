@@ -447,6 +447,7 @@ export default function DashboardPage() {
         siteId={activeSite?.id ? String(activeSite.id) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
+        onVerified={() => refresh({ showLoading: false })}
       />
       {/* Post-payment: show install code after successful Stripe checkout */}
       <InstallConsentModal
