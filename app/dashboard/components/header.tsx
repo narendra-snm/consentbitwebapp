@@ -81,6 +81,7 @@ export default function Header() {
   }, [stripeReturnPending]);
   const [hydrated, setHydrated] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<'pageview' | 'scan'>('pageview');
   const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
   const [pageviewUsage, setPageviewUsage] = useState<{ used: number; limit: number } | null>(null);
   const [scanOverLimit, setScanOverLimit] = useState(false);
@@ -198,13 +199,13 @@ export default function Header() {
       title: 'Pageview limit reached',
       desc: `${pageviewUsage.used.toLocaleString()} / ${pageviewUsage.limit.toLocaleString()} pageviews used. Tracking paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('pageview'); setShowUpgradeModal(true); },
     }] : []),
     ...(scanOverLimit && scanUsage ? [{
       title: 'Scan limit reached',
       desc: `${scanUsage.used.toLocaleString()} / ${scanUsage.limit.toLocaleString()} scans used. Scheduled scans are paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('scan'); setShowUpgradeModal(true); },
     }] : []),
   ];
 
@@ -538,7 +539,7 @@ const handleSelectSite = (site: any) => {
           currentPlanId={resolvedPlanKey}
           organizationId={activeOrganizationId ?? null}
           siteId={activeSiteId}
-          reason="pageview"
+          reason={upgradeReason}
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
