@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+"use client";
+import  { useState } from 'react';
 import { useAppContext } from "@/app/context/AppProvider";
 import type { TypeSettings } from './bannerAppearance';
 

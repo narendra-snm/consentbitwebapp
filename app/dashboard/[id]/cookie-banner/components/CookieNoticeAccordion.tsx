@@ -1,11 +1,42 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 const svgPaths =  {
 p10f04680: "M1.00001 1.00001L4.84084 5.19456C5.23724 5.62746 5.91949 5.62746 6.31588 5.19457L10.1567 1.00001",
 p1382e600: "M16.2 0H1.8C0.8073 0 0 0.797333 0 1.77778V14.2222C0 15.2027 0.8073 16 1.8 16H16.2C17.1927 16 18 15.2027 18 14.2222V1.77778C18 0.797333 17.1927 0 16.2 0ZM1.8 14.2222V3.55556H16.2L16.2018 14.2222H1.8Z",
 p2ab11100: "M6.5637 5.59375L3.2274 8.88886L6.5637 12.184L7.8363 10.9271L5.7726 8.88886L7.8363 6.85064L6.5637 5.59375ZM11.4363 5.59375L10.1637 6.85064L12.2274 8.88886L10.1637 10.9271L11.4363 12.184L14.7726 8.88886L11.4363 5.59375Z",
 }
+export const ChevronDown = ({ size = 16, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
 
+export const ChevronUp = ({ size = 16, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <polyline points="6 15 12 9 18 15" />
+  </svg>
+);
 export function CookieNoticeAccordion() {
   const [isOpen, setIsOpen] = useState(true);
   const [settings, setSettings] = useState({
