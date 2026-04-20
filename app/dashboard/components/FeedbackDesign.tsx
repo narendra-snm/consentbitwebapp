@@ -56,7 +56,7 @@ export default function FeedbackDesign() {
             <div className="relative h-[31px] w-full mix-blend-multiply">
               <img
                 alt="Tech tools"
-                className="h-8 object-cover absolute left-[-0.96%] top-[-9.68%]"
+                className=" object-cover left-[-0.96%] top-[-9.68%]"
                 src={platform.src}
               />
             </div>
@@ -93,7 +93,7 @@ export default function FeedbackDesign() {
             </div>
           ) : (
             <>
-              <div className="relative w-[529px] h-[51px]">
+              <div className="relative  h-[51px]">
                 <input
                   type="text"
                   value={input}

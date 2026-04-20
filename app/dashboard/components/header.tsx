@@ -540,6 +540,7 @@ const handleSelectSite = (site: any) => {
           organizationId={activeOrganizationId ?? null}
           siteId={activeSiteId}
           reason={upgradeReason}
+          usage={upgradeReason === 'scan' ? scanUsage : pageviewUsage}
           onClose={() => setShowUpgradeModal(false)}
         />
       )}

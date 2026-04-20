@@ -674,6 +674,7 @@ function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical"
       >
        Your privacy matters to us
       </p>
+      <button onClick={onReject} type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
       <p
         style={{
           color: s.textColor,

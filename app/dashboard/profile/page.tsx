@@ -628,7 +628,7 @@ export default function SettingsPage() {
             </button>
             <p className="font-semibold text-[16px] text-black mb-1">Change Site URL</p>
             <p className="text-[12px] text-[#6b7280] mb-5">
-              Moving to a new domain? Transfer this site to a different URL — your settings, plan, and history stay the same.
+              Move your site to a new domain. Settings, plans, and history will remain unchanged.
             </p>
 
             <div className="space-y-3 mb-5">
