@@ -30,12 +30,14 @@ export function UpgradePlanModal({
   organizationId,
   siteId,
   reason,
+  usage,
   onClose,
 }: {
   currentPlanId: string;
   organizationId: string | null;
   siteId: string | null;
   reason: 'scan' | 'pageview';
+  usage?: { used: number; limit: number } | null;
   onClose: () => void;
 }) {
   const current = (currentPlanId || 'free').toLowerCase() as PlanTier;
@@ -82,9 +84,10 @@ export function UpgradePlanModal({
     }
   }
 
-  const reasonLabel = reason === 'scan'
-    ? 'monthly scan limit'
-    : 'monthly pageview limit';
+  const isScan = reason === 'scan';
+  const usageText = usage
+    ? `${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()}`
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -101,14 +104,14 @@ export function UpgradePlanModal({
         </div>
 
         <h2 className="mb-2 text-center font-['DM_Sans'] text-xl font-semibold text-[#0a091f]">
-          {PLAN_LABELS[current]} plan limit reached
+          {PLAN_LABELS[current]} Plan Limit Reached
         </h2>
         <p className="mb-6 text-center font-['DM_Sans'] text-sm text-[#4b5563]">
-          You&apos;ve reached your {reasonLabel} on the{' '}
-          <strong>{PLAN_LABELS[current]}</strong> plan.
+          Your monthly {isScan ? 'scan' : 'pageview'} limit has been reached
+          {usageText ? ` (${usageText})` : ''}.{' '}
           {nextPlan
-            ? ` Upgrade to ${PLAN_LABELS[nextPlan]} to continue.`
-            : ' You are on the highest plan. Please contact support.'}
+            ? `Upgrade to ${PLAN_LABELS[nextPlan]} to continue using the service.`
+            : 'You are on the highest plan. Please contact support.'}
         </p>
 
         {nextPlan && PLAN_FEATURES[nextPlan] && (

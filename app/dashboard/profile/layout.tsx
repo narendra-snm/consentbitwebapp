@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import React from 'react'
 import Header from '../components/header';
 

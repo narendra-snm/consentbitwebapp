@@ -353,9 +353,13 @@ const tabs = [
 
 export default function DashboardTabs() {
   const pathname = usePathname();
-  const { activeSiteId } = useDashboardSession();
+  const { activeSiteId, sites } = useDashboardSession();
   const [hydrated, setHydrated] = useState(false);
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+
+  const activeSite = sites?.find((s: any) => String(s?.id) === String(activeSiteId));
+  const isLegacySite = !!(activeSite as any)?.isLegacy;
+  const LEGACY_DISABLED_TABS = new Set(["cookie-banner", "upgrade"]);
 
   useEffect(() => {
     setHydrated(true);
@@ -386,10 +390,24 @@ export default function DashboardTabs() {
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const href = tab.slug ? `${basePath}/${tab.slug}` : basePath;
+          const isDisabled = isLegacySite && LEGACY_DISABLED_TABS.has(tab.slug);
 
-          const isActive = tab.slug
+          const isActive = !isDisabled && (tab.slug
             ? pathname.startsWith(href)
-            : pathname === "/dashboard" || pathname === basePath;
+            : pathname === "/dashboard" || pathname === basePath);
+
+          if (isDisabled) {
+            return (
+              <div
+                key={tab.name}
+                title="Not available for legacy sites"
+                className="flex items-center gap-2 px-5 py-3.75 rounded-lg text-base opacity-40 cursor-not-allowed select-none text-[#4B5563]"
+              >
+                <Icon size={18} draw={false} className="shrink-0" />
+                <span>{tab.name}</span>
+              </div>
+            );
+          }
 
           return (
             <Link

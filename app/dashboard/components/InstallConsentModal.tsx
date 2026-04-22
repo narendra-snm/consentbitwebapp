@@ -35,6 +35,7 @@ export default function InstallConsentModal({
   siteId,
   cdnScriptId,
   onClose,
+  onVerified,
 }: {
   open: boolean;
   scriptUrl: string;
@@ -43,6 +44,7 @@ export default function InstallConsentModal({
   /** Preferred embed id when rebuilding URL from env (matches Site.cdnScriptId). */
   cdnScriptId?: string;
   onClose?: () => void;
+  onVerified?: () => void;
 }) {
   const [copiedIcon, setCopiedIcon] = useState(false);
   const [copiedBtn, setCopiedBtn] = useState(false);
@@ -134,6 +136,7 @@ export default function InstallConsentModal({
       });
       if (res.found) {
         setVerified(true);
+        onVerified?.();
       } else {
         if (typeof window !== "undefined" && "debug" in res && res.debug) {
           console.warn("[ConsentBit] Verify script — not found. Debug from worker:", res.debug);

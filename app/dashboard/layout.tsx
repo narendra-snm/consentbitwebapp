@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import type React from "react";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
@@ -12,6 +12,7 @@ import DashboardTabs from "./components/DashboardTabs";
 // Never cache this layout — it contains authenticated user data.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const runtime = "nodejs";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();

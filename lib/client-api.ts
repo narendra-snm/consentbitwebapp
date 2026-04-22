@@ -279,7 +279,7 @@ export async function updateSiteBannerSettings(payload: {
   });
   const text = await res.text();
   let data: any;
-  try { data = JSON.parse(text); } catch {
+  try { const p = JSON.parse(text); data = p?.d ? JSON.parse(atob(p.d)) : p; } catch {
     data = { success: false, error: text.trimStart().startsWith('<') ? `Something went wrong. Please try again.` : text };
   }
   if (!res.ok || !data.success) throw new Error(data.error || `Update site failed: ${res.status}`);
@@ -299,16 +299,24 @@ export async function checkSiteDomainForRename(
   message?: string;
   error?: string;
 }> {
-  const res = await fetch('/api/sites/check-domain', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ websiteUrl, excludeSiteId }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/sites/check-domain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ websiteUrl, excludeSiteId }),
+    });
+  } catch (fetchErr) {
+    console.log('[checkSiteDomainForRename] fetch threw:', fetchErr);
+    return { success: false, available: false, error: String(fetchErr) };
+  }
   const text = await res.text();
+  console.log('[checkSiteDomainForRename] status:', res.status, 'body:', text);
   let data: any;
   try {
-    data = JSON.parse(text);
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
   } catch {
     return {
       success: false,
@@ -344,7 +352,10 @@ export async function renameSite(
   });
   const text = await res.text();
   let data: any;
-  try { data = JSON.parse(text); } catch {
+  try {
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
+  } catch {
     data = { success: false, error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text };
   }
   if (!res.ok || !data.success) {

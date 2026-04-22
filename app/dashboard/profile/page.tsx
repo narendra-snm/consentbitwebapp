@@ -1,6 +1,7 @@
-
 "use client";
+
 export const runtime = 'edge';
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
@@ -625,14 +626,14 @@ export default function SettingsPage() {
             >
               ×
             </button>
-            <p className="font-semibold text-[16px] text-black mb-1">Manage Site</p>
+            <p className="font-semibold text-[16px] text-black mb-1">Change Site URL</p>
             <p className="text-[12px] text-[#6b7280] mb-5">
-              Update the registered website URL for this site. The name shown in your list uses the same host.
+              Move your site to a new domain. Settings, plans, and history will remain unchanged.
             </p>
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-[12px] text-[#6b7280] mb-1">Website URL</label>
+                <label className="block text-[12px] font-medium text-[#374151] mb-1">New Website URL</label>
                 <input
                   type="text"
                   value={manageDomain}
@@ -641,10 +642,10 @@ export default function SettingsPage() {
                     setManageError(null);
                   }}
                   disabled={manageSaving}
-                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                  className="w-full h-[42px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
                   placeholder="example.com"
                 />
-                <p className="text-[11px] text-[#9ca3af] mt-1">This updates the Site URL column (registered domain).</p>
+                <p className="text-[11px] text-[#9ca3af] mt-1.5">Your consent banner will be linked to this domain.</p>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-[#6b7280]">Plan</span>
@@ -783,9 +784,9 @@ export default function SettingsPage() {
                     setManageSaving(false);
                   }
                 }}
-                className="flex-1 h-[38px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 h-[42px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {manageSaving ? 'Saving…' : 'Update'}
+                {manageSaving ? 'Saving…' : 'Save New URL'}
               </button>
             </div>
           </div>

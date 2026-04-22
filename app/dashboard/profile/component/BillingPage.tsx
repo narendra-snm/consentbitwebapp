@@ -1,6 +1,6 @@
 
 "use client";
-export const runtime = 'edge';
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getBillingInvoices,
@@ -317,7 +317,9 @@ export default function BillingPage({
     const derivedName = deriveSiteNameFromDomain(planSiteDomain.trim());
     setPlanSiteSaving(true);
     try {
+      console.log('[BillingPage] calling checkSiteDomainForRename', planSiteDomain.trim(), planEditableSiteId);
       const preflight = await checkSiteDomainForRename(planSiteDomain.trim(), planEditableSiteId);
+      console.log('[BillingPage] preflight result:', preflight);
       if (!preflight.success) {
         setPlanSiteError(preflight.error || "Could not validate this website URL.");
         return;

@@ -1,7 +1,9 @@
+export const runtime = 'edge';
+
 import { NextResponse } from 'next/server';
 import { serverFetch } from '@/lib/server-api';
 
-export const runtime = 'edge';
+
 
 export async function POST(request: Request) {
   try {
@@ -22,4 +24,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, found: false, error: message }, { status: 500 });
   }
 }
-

@@ -1,5 +1,5 @@
 "use client";
-export const runtime = 'edge';
+
 
 import GettingStarted from "../components/GettingStarted";
 import InstallConsentModal from "../components/InstallConsentModal";
@@ -135,6 +135,7 @@ const userName = useMemo(() => {
         siteId={siteId ? String(siteId) : undefined}
         cdnScriptId={activeSite?.cdnScriptId ? String(activeSite.cdnScriptId) : undefined}
         onClose={() => { document.body.style.overflow = ""; setShowInstallModal(false); }}
+        onVerified={() => refresh({ showLoading: false })}
       />
       <FeedbackDesign />
       </>}

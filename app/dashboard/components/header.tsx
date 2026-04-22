@@ -81,6 +81,7 @@ export default function Header() {
   }, [stripeReturnPending]);
   const [hydrated, setHydrated] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<'pageview' | 'scan'>('pageview');
   const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
   const [pageviewUsage, setPageviewUsage] = useState<{ used: number; limit: number } | null>(null);
   const [scanOverLimit, setScanOverLimit] = useState(false);
@@ -198,13 +199,13 @@ export default function Header() {
       title: 'Pageview limit reached',
       desc: `${pageviewUsage.used.toLocaleString()} / ${pageviewUsage.limit.toLocaleString()} pageviews used. Tracking paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('pageview'); setShowUpgradeModal(true); },
     }] : []),
     ...(scanOverLimit && scanUsage ? [{
       title: 'Scan limit reached',
       desc: `${scanUsage.used.toLocaleString()} / ${scanUsage.limit.toLocaleString()} scans used. Scheduled scans are paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('scan'); setShowUpgradeModal(true); },
     }] : []),
   ];
 
@@ -345,6 +346,7 @@ const handleSelectSite = (site: any) => {
                 {sites.map((s: any) => {
                   const domain = s?.domain || s?.name || s?.id;
                   const siteUrl = s?.domain ? (s.domain.startsWith("http") ? s.domain : `https://${s.domain}`) : null;
+                  const isLegacy = !!(s as any)?.isLegacy;
                   return (
                     <div
                       key={s.id}
@@ -353,7 +355,14 @@ const handleSelectSite = (site: any) => {
                         activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
                       }`}
                     >
-                      <span className="truncate">{domain}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{domain}</span>
+                        {isLegacy && (
+                          <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E]">
+                            Legacy
+                          </span>
+                        )}
+                      </div>
                       {siteUrl && (
                         <a
                           href={siteUrl}
@@ -538,7 +547,8 @@ const handleSelectSite = (site: any) => {
           currentPlanId={resolvedPlanKey}
           organizationId={activeOrganizationId ?? null}
           siteId={activeSiteId}
-          reason="pageview"
+          reason={upgradeReason}
+          usage={upgradeReason === 'scan' ? scanUsage : pageviewUsage}
           onClose={() => setShowUpgradeModal(false)}
         />
       )}
