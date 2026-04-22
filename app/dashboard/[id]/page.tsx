@@ -16,6 +16,7 @@ function DashboardSitePageInner() {
   const router = useRouter();
   const { loading, authenticated, sites, user, setActiveSiteId, refresh } = useDashboardSession();
   const activeSite = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
+  const isLegacySite = !!(activeSite as any)?.isLegacy;
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   useLayoutEffect(() => setHydrated(true), []);
@@ -125,8 +126,8 @@ const userName = useMemo(() => {
         siteDomain={activeSite?.domain}
         bannerActive={Boolean(activeSite?.verified === 1 || activeSite?.verified === true)}
       />
-      <SiteSummaryCards site={activeSite} onOpenInstall={() => setShowInstallModal(true)} />
-      <GettingStarted activeSiteId={siteId} />
+      <SiteSummaryCards site={activeSite} onOpenInstall={isLegacySite ? undefined : () => setShowInstallModal(true)} isLegacy={isLegacySite} />
+      <GettingStarted activeSiteId={siteId} isLegacy={isLegacySite} />
       <InstallConsentModal
         key={siteId ? String(siteId) : "install"}
         open={showInstallModal}
