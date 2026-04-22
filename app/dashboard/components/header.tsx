@@ -346,6 +346,7 @@ const handleSelectSite = (site: any) => {
                 {sites.map((s: any) => {
                   const domain = s?.domain || s?.name || s?.id;
                   const siteUrl = s?.domain ? (s.domain.startsWith("http") ? s.domain : `https://${s.domain}`) : null;
+                  const isLegacy = !!(s as any)?.isLegacy;
                   return (
                     <div
                       key={s.id}
@@ -354,7 +355,14 @@ const handleSelectSite = (site: any) => {
                         activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
                       }`}
                     >
-                      <span className="truncate">{domain}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{domain}</span>
+                        {isLegacy && (
+                          <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E]">
+                            Legacy
+                          </span>
+                        )}
+                      </div>
                       {siteUrl && (
                         <a
                           href={siteUrl}
