@@ -75,6 +75,23 @@ type RegulationSnapshot = {
 
 export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
+  /** Collapsible editor panel — only toggleable at lg (1024-1279px); always open at xl+. */
+  const [editorOpen, setEditorOpen] = useState(true);
+  /** True only when viewport is in [1024, 1280) — drives overlay/slide behavior. */
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const w = window.innerWidth;
+      setIsOverlayMode(w >= 1024 && w < 1280);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  /** When a sidebar item changes `active`, ensure the editor panel is open. */
+  useEffect(() => {
+    setEditorOpen(true);
+  }, [active]);
   const router = useRouter();
   const [savingContent, setSavingContent] = useState(false);
   /** Which action triggered the in-flight persist (for button labels). */
@@ -752,14 +769,50 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
   const resolvedPlanId = sitePlanId || effectivePlanId || "";
 
   return (
-    <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
+    <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
         iabEnabled={iabEnabled}
         effectivePlanId={resolvedPlanId}
       />
-      <div className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]">
+      {/* Panel toggle — only visible at lg (1024-1279px) */}
+      <button
+        type="button"
+        onClick={() => setEditorOpen((o) => !o)}
+        aria-label={editorOpen ? 'Hide editor panel' : 'Show editor panel'}
+        className={`${
+          isOverlayMode ? 'flex' : 'hidden'
+        } absolute z-40 top-24 items-center justify-center h-12 w-5 bg-white border border-[#e5e5e5] rounded-r-md hover:bg-gray-50 shadow-sm transition-[left] duration-300`}
+        style={{ left: editorOpen ? '620px' : '172px' }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2">
+          <path
+            d={editorOpen ? 'M15 18l-6-6 6-6' : 'M9 6l6 6-6 6'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <div
+        className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]"
+        style={
+          isOverlayMode
+            ? {
+                position: 'absolute',
+                top: 0,
+                left: '172px',
+                width: '454px',
+                zIndex: 30,
+                background: '#fff',
+                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                transform: editorOpen ? 'translateX(0)' : 'translateX(calc(-100% - 172px))',
+                transition: 'transform 300ms',
+                pointerEvents: editorOpen ? 'auto' : 'none',
+              }
+            : undefined
+        }
+      >
         {/* Consent Template Card */}
         {active === "General" && (
           <div>

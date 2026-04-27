@@ -1013,9 +1013,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                         >
                           <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
                           <div>{statusBadge(row.scanStatus)}</div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
                           <div
-                            className="font-['DM_Sans'] text-xs text-[#0a091f] truncate min-w-0"
+                            className="font-['DM_Sans'] text-sm text-[#0a091f] truncate min-w-0"
                             style={dm}
                             title={
                               !isInProgress && row.categories?.length
@@ -1027,13 +1027,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                               ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
                               : '—'}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>
                             {isInProgress ? '—' : (row.cookiesFound ?? '—')}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>
                             {isInProgress ? '—' : (row.scriptsFound ?? '—')}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
+                          <div className="font-['DM_Sans'] text-sm text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
                           <div className="flex items-center justify-end">
                             {isActiveRow ? <div className="w-5 h-5" aria-hidden /> : null}
                           </div>
@@ -1044,7 +1044,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 {/* Pagination */}
                 {scanHistory.length > HISTORY_PAGE_SIZE && (
                   <div className="flex items-center justify-between border-t border-[#e5e7eb] px-4 py-3 bg-white">
-                    <span className="font-['DM_Sans'] text-xs text-[#6b7280]" style={dm}>
+                    <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>
                       Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, scanHistory.length)} of {scanHistory.length}
                     </span>
                     <div className="flex items-center gap-1">

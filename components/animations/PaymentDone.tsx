@@ -75,16 +75,34 @@ export default function PaymentDone({ details, OnClick }: { details: any; OnClic
         }
       `}</style>
 
-      <div className="fixed bg-[#E6F1FD] inset-0 z-50 flex min-h-[100vh] w-[100vw] items-center justify-center overflow-hidden rounded-[24px]">
-        <button
-          className="bg-[#FFFFFF] fixed top-5 right-5 flex items-center rounded-lg text-[14px] font-medium text-[#007aff] hover:text-[#0051d5] text-xs py-3.5 px-3.75 gap-1"
-          onClick={OnClick}
-        >
-          Skip to Dashboard{" "}
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="#007aff" />
-          </svg>
-        </button>
+      <div className="fixed bg-[#E6F1FD] inset-0 z-50 flex min-h-[100vh] w-[100vw] items-center justify-center flex-col  ">
+<div className="flex items-center justify-between px-4 py-4 fixed top-0 left-0 w-full  z-50 border-b border-black/10">  {/* Left: Logo */}
+  <img
+    alt="Consentbit"
+    className="w-[100px] xl:w-[170px] h-auto"
+    src="/images/ConsentBit-logo-Dark.png"
+  />
+
+  {/* Right: Button */}
+  <button
+    className="bg-[#FFFFFF] flex items-center rounded-lg text-[14px] font-medium text-[#007aff] hover:text-[#0051d5] text-xs py-3.5 px-3.75 gap-1"
+    onClick={OnClick}
+  >
+    Skip to Dashboard
+    <svg
+      width="9"
+      height="9"
+      viewBox="0 0 9 9"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z"
+        fill="#007aff"
+      />
+    </svg>
+  </button>
+</div>
 
         <div>
           {/* Receipt screen — fades out then unmounts */}

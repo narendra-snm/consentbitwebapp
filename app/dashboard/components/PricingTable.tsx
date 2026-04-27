@@ -145,8 +145,8 @@ export function PricingTable({
         </div>
 
         {/* Pricing Table */}
-        <div className="px-6">
-          <div className="grid grid-cols-[200px_220px_220px_316px_1fr] text-left">
+        <div className="px-6 pt-5 overflow-auto xl:overflow-hidden">
+          <div className="grid grid-cols-[200px_220px_220px_316px_316px] text-left">
 
             {/* Header Row */}
             <div></div>
