@@ -124,7 +124,7 @@ export default function PaymentReceipt({ details, OnClick }: { details: any, OnC
   }, []);
 
   return (
-    <div className="relative w-full min-h-screen bg-[#eaf2ff] overflow-hidden rounded-[24px] flex items-center justify-center p-6">
+    <div className=" pt-[100px] relative w-full min-h-screen bg-[#eaf2ff] overflow-hidden rounded-[24px] flex items-center justify-center p-6">
       <div className="w-full max-w-[720px] flex flex-col items-center ">
         <div className="relative w-[451px] h-[500px]">
              <img src="/images/open.svg" alt="Dashboard Overview" />

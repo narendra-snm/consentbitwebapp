@@ -29,48 +29,51 @@ interface PlanConfig {
 
 // ─── Plan config ──────────────────────────────────────────────────────────────
 
+// Prices match app/dashboard/[id]/upgrade/page.tsx — monthly base; yearly = 20% off.
+// Feature lists match the upgrade comparison grid (domains / scans / pageviews / IAB-TCF / compliance).
 const PLANS: Record<PlanId, PlanConfig> = {
   basic: {
     name: 'Basic',
     monthly: 9,
-    yearly: 6.3,
-    yearlyTotal: 75.6,
+    yearly: Math.round(9 * 0.8),
+    yearlyTotal: Math.round(9 * 12 * 0.8),
     domains: 1,
     features: [
-      'GDPR + CCPA + IAB TCF v2.2',
-      'Geo-targeted display',
       '1 domain',
-      'Basic analytics',
+      '750 scans',
+      '100,000 pageviews/month',
+      'GDPR / CCPA compliance',
     ],
   },
   essential: {
     name: 'Essential',
     monthly: 20,
-    yearly: 14,
-    yearlyTotal: 168,
-    domains: 3,
+    yearly: Math.round(20 * 0.8),
+    yearlyTotal: Math.round(20 * 12 * 0.8),
+    domains: 1,
     popular: true,
     features: [
-      'GDPR + CCPA + IAB TCF v2.2',
-      'Geo-targeted display',
-      'One-click consent layouts',
-      '3 domains',
-      'Smart content PDF export',
+      '1 domain',
+      '5,000 scans',
+      '500,000 pageviews/month',
+      '+ $0.49 / 10,000 extra pageviews',
+      'IAB / TCF v2.2 included',
+      'GDPR + CCPA compliance',
     ],
   },
   growth: {
     name: 'Growth',
-    monthly: 49,
-    yearly: 34.3,
-    yearlyTotal: 411.6,
-    domains: 10,
+    monthly: 56,
+    yearly: Math.round(56 * 0.8),
+    yearlyTotal: Math.round(56 * 12 * 0.8),
+    domains: 1,
     features: [
-      'GDPR + CCPA + IAB TCF v2.2',
-      'Geo-targeted display',
-      'One-click consent layouts',
-      '10 domains',
-      'Smart content PDF export',
-      'Priority support',
+      '1 domain',
+      '10,000 scans (+ $0.49 / 10k extra)',
+      '2,000,000 pageviews/month',
+      '+ $0.39 / 10,000 extra pageviews',
+      'IAB / TCF v2.2 included',
+      'GDPR + CCPA compliance',
     ],
   },
 };
@@ -117,6 +120,33 @@ function isValidDomain(v: string) {
 
 function cleanDomain(v: string) {
   return v.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase().trim();
+}
+
+/** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }) — same as lib/client-api.ts. */
+function decodeEnvelope(parsed: unknown): unknown {
+  if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
+    try {
+      const binary = atob((parsed as { d: string }).d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      /* fall through */
+    }
+  }
+  return parsed;
+}
+
+async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    return decodeEnvelope(JSON.parse(text)) as Record<string, unknown>;
+  } catch {
+    return {
+      success: false,
+      error: text.trimStart().startsWith('<') ? 'Something went wrong. Please try again.' : text,
+    };
+  }
 }
 
 function trialEndLabel() {
@@ -349,6 +379,9 @@ function CheckoutForm({
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<string, string>>>({});
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  /** Read-only "synced account" card view when email + domain came pre-filled; toggled by "Change site". */
+  const [editAccount, setEditAccount] = useState(!initEmail || !initDomain);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -432,14 +465,14 @@ function CheckoutForm({
         }),
       });
 
-      const data = (await res.json()) as {
+      const data = (await parseApiResponse(res)) as {
         success: boolean;
         error?: string;
         requiresAction?: boolean;
         clientSecret?: string;
         subscriptionId?: string;
       };
-
+console.log(data);
       if (!data.success) {
         setError(data.error || 'Something went wrong. Please try again.');
         setIsSubmitting(false);
@@ -469,7 +502,8 @@ function CheckoutForm({
           }),
         });
 
-        const d2 = (await res2.json()) as { success: boolean; error?: string };
+        const d2 = (await parseApiResponse(res2)) as { success: boolean; error?: string };
+        
         if (!d2.success) {
           setError(d2.error || 'Account setup failed after payment. Please contact support.');
           setIsSubmitting(false);
@@ -477,7 +511,8 @@ function CheckoutForm({
         }
       }
 
-      router.push('/dashboard?postSetup=1');
+      setShowSuccess(true);
+      setIsSubmitting(false);
     } catch {
       setError('An unexpected error occurred. Please try again.');
       setIsSubmitting(false);
@@ -488,9 +523,45 @@ function CheckoutForm({
     PLATFORM_LABELS[platform.toLowerCase()] || (platform ? platform : '');
 
   return (
+    <>
+    {showSuccess && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fadeIn"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900">You&apos;re all set!</h2>
+          <p className="mt-1.5 text-sm text-gray-600">
+            Your 14-day free trial has started. No charge until {trialEndLabel()}.
+          </p>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard?postSetup=1')}
+              className="w-full rounded-[10px] bg-[#262E84] py-3 text-sm font-semibold text-white transition hover:bg-[#1e246c]"
+            >
+              Go to dashboard →
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSuccess(false)}
+              className="w-full rounded-[10px] border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+            >
+              Stay on this page
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Platform badge */}
-      {platformLabel && (
+      {/* {platformLabel && (
         <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#262E84] text-sm font-bold text-white">
             {platformLabel[0]}
@@ -504,48 +575,129 @@ function CheckoutForm({
             </p>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* 1 — Your account */}
       <FormSection n={1} title="Your account">
-        <div className="space-y-3">
-          <Field label="Your email" error={fieldErrors.email}>
-            <input
-              type="email"
-              value={email}
-              onChange={e => handleEmailChange(e.target.value)}
-              placeholder="you@example.com"
-              className={inputCls(!!fieldErrors.email)}
-            />
-          </Field>
-          <Field
-            label="Your domain"
-            hint="Where ConsentBit will be installed, e.g. example.com"
-            error={fieldErrors.domain}
-          >
-            <input
-              type="text"
-              value={domain}
-              onChange={e => {
-                setDomain(e.target.value);
-                clearErr('domain');
-              }}
-              placeholder="example.com"
-              className={inputCls(!!fieldErrors.domain)}
-            />
-          </Field>
-          <p className="text-xs text-gray-400">
-            You&apos;ll be able to log in to your ConsentBit dashboard with this email.
-          </p>
-        </div>
+        {!editAccount ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              {platformLabel
+                ? `We've set up your account automatically using your ${platformLabel} identity and site.`
+                : "We've set up your account automatically using your identity and site."}
+            </p>
+
+            {/* Account email card */}
+            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Account email</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{email}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+                Verified
+              </span>
+            </div>
+
+            {/* Domain card */}
+            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Domain</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{domain}</p>
+              </div>
+              {platformLabel && (
+                <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-[#262E84]">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#262E84] text-white text-[9px] font-bold">
+                    {platformLabel[0]}
+                  </span>
+                  {platformLabel}
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500">
+              {platformLabel
+                ? `Synced from your connected ${platformLabel} site. `
+                : 'Loaded from your session. '}
+              <button
+                type="button"
+                onClick={() => setEditAccount(true)}
+                className="font-semibold text-[#262E84] hover:underline"
+              >
+                Change site
+              </button>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Field label="Your email" error={fieldErrors.email}>
+              <input
+                type="email"
+                value={email}
+                onChange={e => handleEmailChange(e.target.value)}
+                placeholder="you@example.com"
+                className={inputCls(!!fieldErrors.email)}
+              />
+            </Field>
+            <Field
+              label="Your domain"
+              hint="Where ConsentBit will be installed, e.g. example.com"
+              error={fieldErrors.domain}
+            >
+              <input
+                type="text"
+                value={domain}
+                onChange={e => {
+                  setDomain(e.target.value);
+                  clearErr('domain');
+                }}
+                placeholder="example.com"
+                className={inputCls(!!fieldErrors.domain)}
+              />
+            </Field>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">
+                You&apos;ll be able to log in to your ConsentBit dashboard with this email.
+              </p>
+              {initEmail && initDomain && (
+                <button
+                  type="button"
+                  onClick={() => setEditAccount(false)}
+                  className="shrink-0 text-xs font-semibold text-[#262E84] hover:underline"
+                >
+                  Use synced account
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </FormSection>
 
       {/* 2 — Billing contact */}
       <FormSection n={2} title="Billing contact">
-        <div className="space-y-2.5">
-          <p className="text-xs text-gray-500">
-            Billing email is only for Stripe invoices — separate from your account email.
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            By default we send Stripe invoices to your account email. Uncheck to use a different address.
           </p>
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={!separateBilling}
+              onChange={e => handleSeparateBillingChange(!e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 accent-[#262E84]"
+            />
+            <span className="font-medium">Use account email for billing as well</span>
+          </label>
           <Field label="Billing email" error={fieldErrors.billingEmail}>
             <input
               type="email"
@@ -559,15 +711,6 @@ function CheckoutForm({
               className={inputCls(!!fieldErrors.billingEmail, !separateBilling)}
             />
           </Field>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={separateBilling}
-              onChange={e => handleSeparateBillingChange(e.target.checked)}
-              className="rounded border-gray-300 accent-[#262E84]"
-            />
-            Use a different email for billing invoices
-          </label>
         </div>
       </FormSection>
 
@@ -589,7 +732,7 @@ function CheckoutForm({
               {i === 'monthly' ? 'Monthly' : 'Yearly'}
               {i === 'yearly' && (
                 <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                  SAVE 30%
+                  SAVE 20%
                 </span>
               )}
             </button>
@@ -736,7 +879,7 @@ function CheckoutForm({
         <button
           type="submit"
           disabled={isSubmitting || !stripe}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
             <>
@@ -766,6 +909,7 @@ function CheckoutForm({
         </p>
       </div>
     </form>
+    </>
   );
 }
 
@@ -789,11 +933,13 @@ function CheckoutPageInner() {
   const platform = params.get('platform') ?? '';
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
+    <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
       <div className="mx-auto max-w-5xl">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <span className="text-xl font-bold text-[#262E84]">ConsentBit</span>
+          <img alt="Consentbit" className="mx-auto w-[100px] xl:w-[170px] h-auto" src="/images/ConsentBit-logo-Dark.png"></img>
+        
+       
         </div>
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_340px]">
