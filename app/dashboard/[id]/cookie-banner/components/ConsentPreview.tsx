@@ -457,12 +457,8 @@ export default function ConsentPreview({
               disabled={saveDisabled || saveBusy}
               onClick={() => void onSaveChanges?.()}
               aria-label={saveBusy ? 'Saving…' : 'Save changes'}
-              title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
-              className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
+              className="relative w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
             >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">
-              {saveBusy ? 'Saving…' : 'Save changes'}
-            </span>
             {saveBusy ? (
               <svg className="h-5 w-5 animate-spin text-[#007aff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -510,9 +506,8 @@ export default function ConsentPreview({
                 onClick={() => {
                   void onPublishChanges?.();
                 }}
-                className="relative group px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                className="px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
               >
-                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Push changes live to your website</span>
                 {publishBusy ? 'Publishing…' : 'Publish Changes'}
               </button>
             </div>
@@ -533,9 +528,8 @@ export default function ConsentPreview({
           <button
             type="button"
             onClick={onNext}
-            className="relative group px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
+            className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
           >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Go to next step</span>
             Next
           </button>
         </div>

@@ -359,7 +359,7 @@ export default function DashboardTabs() {
 
   const activeSite = sites?.find((s: any) => String(s?.id) === String(activeSiteId));
   const isLegacySite = !!(activeSite as any)?.isLegacy;
-  const LEGACY_DISABLED_TABS = new Set(["cookie-banner", "upgrade"]);
+  const LEGACY_DISABLED_TABS = new Set<string>();
 
   useEffect(() => {
     setHydrated(true);

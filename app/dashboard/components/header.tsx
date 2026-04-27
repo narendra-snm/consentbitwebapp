@@ -260,14 +260,8 @@ const handleSelectSite = (site: any) => {
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
 
-    const LEGACY_DISABLED_SLUGS = new Set(["cookie-banner", "upgrade"]);
     const currentSubPath = pathParts.slice(2).join('/');
-    const isNextLegacy = !!(site as any)?.isLegacy;
-
-    // If switching to a legacy site while on a disabled tab, go to base dashboard
-    const targetSubPath = (isNextLegacy && LEGACY_DISABLED_SLUGS.has(currentSubPath))
-      ? ''
-      : currentSubPath;
+    const targetSubPath = currentSubPath;
 
     const targetPath = targetSubPath ? `/dashboard/${nextId}/${targetSubPath}` : `/dashboard/${nextId}`;
     if (targetPath !== (pathname || "")) {

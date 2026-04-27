@@ -28,7 +28,7 @@ export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: Side
   useEffect(() => setMounted(true), []);
 
   const planKey = mounted ? String(effectivePlanId ?? "").toLowerCase() : "";
-  const isFree = planKey === "free" || planKey === "";
+  const isFree = planKey === "free";
   const menuItems = [
     { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },
     { name: "Content", icon: "content", tip: "Edit banner title, description, button labels and cookie policy link." },

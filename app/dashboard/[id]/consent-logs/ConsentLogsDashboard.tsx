@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   getConsentHistory,
+  getLegacyConsentMonthly,
   type ConsentLog,
   type ConsentLogCookie,
   type ConsentHistoryResponse,
@@ -385,90 +386,80 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 export function ConsentLogsDashboard({
   siteId,
   siteDomain,
+  legacyDomain,
+  isLegacy = false,
 }: {
   siteId: string;
   siteDomain: string;
+  legacyDomain?: string;
+  isLegacy?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [consentPage, setConsentPage] = useState(1);
   const [cookiePage, setCookiePage] = useState(1);
   const CONSENT_PAGE_SIZE = 10;
   const COOKIE_PAGE_SIZE = 10;
 
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const fetchData = useCallback(
-    async (showLoader: boolean) => {
-      if (showLoader) setLoading(true);
-      else setRefreshing(true);
-
-      setLoadError(null);
-
-      try {
-        const res = await getConsentHistory(siteId, 200, 0);
-        setData(res);
-        writeConsentCache(siteId, res);
-      } catch (err: unknown) {
-        setLoadError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [siteId],
-  );
-
   useEffect(() => {
     let active = true;
 
-    const run = async () => {
-      const cached = readConsentCache(siteId);
-      if (cached && active) {
-        setData(cached);
-        setLoading(false);
-        try {
-          const res = await getConsentHistory(siteId, 200, 0);
-          if (!active) return;
-          setData(res);
-          writeConsentCache(siteId, res);
-        } catch (err: unknown) {
-          if (!active) return;
-          setLoadError(err instanceof Error ? err.message : 'Failed to load');
-        } finally {
-          if (active) setRefreshing(false);
-        }
-        return;
-      }
+    setData(null);
+    setLoading(true);
+    setLoadError(null);
 
-      if (active) setLoading(true);
+    const doFetch = async () => {
       try {
-        const res = await getConsentHistory(siteId, 200, 0);
+        const res = isLegacy
+          ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+          : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
         setData(res);
-        writeConsentCache(siteId, res);
+        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
       } catch (err: unknown) {
         if (!active) return;
         setLoadError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
-        if (active) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
-    void run();
+    void doFetch();
 
-    return () => {
-      active = false;
+    return () => { active = false; };
+  }, [siteId, isLegacy, selectedYear, selectedMonth]);
+
+  const handleRefresh = useCallback(() => {
+    setData(null);
+    setLoading(true);
+    setLoadError(null);
+
+    const doFetch = async () => {
+      try {
+        const res = isLegacy
+          ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+          : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
+        setData(res);
+        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
+      } catch (err: unknown) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [siteId]);
+
+    void doFetch();
+  }, [siteId, isLegacy, selectedYear, selectedMonth]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -487,6 +478,12 @@ export function ConsentLogsDashboard({
   const totalEvents = data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';
+
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const isCurrentPeriod =
+    selectedYear === String(now.getFullYear()) &&
+    selectedMonth === String(now.getMonth() + 1).padStart(2, '0');
+  const selectedMonthName = MONTH_NAMES[parseInt(selectedMonth, 10) - 1];
 
   const buildProofHtml = useCallback(
     (rows: ConsentLog[]) => {
@@ -701,14 +698,27 @@ export function ConsentLogsDashboard({
 
   const handleDownloadRowPdf = useCallback(
     (row: ConsentLog) => {
-      openPrintWindow(buildProofHtml([row]), `Proof of Consent - ${displayDomain}`);
+      const apiPath = isLegacy
+        ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+        : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
+      const a = document.createElement('a');
+      a.href = apiPath;
+      a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
     },
-    [buildProofHtml, displayDomain, openPrintWindow],
+    [isLegacy, siteId],
   );
 
-  const handleRefresh = useCallback(() => {
-    void fetchData(false);
-  }, [fetchData]);
+  const downloadCsv = useCallback(() => {
+    const params = new URLSearchParams({ siteId, year: selectedYear, month: selectedMonth });
+    const apiPath = isLegacy
+      ? `/api/legacy-consent-csv?${params.toString()}`
+      : `/api/consent-csv?${params.toString()}`;
+    const a = document.createElement('a');
+    a.href = apiPath;
+    a.download = '';
+    a.click();
+  }, [siteId, isLegacy, selectedYear, selectedMonth]);
 
   return (
     <>
@@ -730,12 +740,16 @@ export function ConsentLogsDashboard({
             <div className="flex items-start justify-between gap-6 flex-wrap mb-[31px] pl-[21px] pr-7.5">
               <div className="flex flex-wrap items-center gap-[60px]">
                 <div>
-                  <h1
-                    className="font-['DM_Sans'] font-semibold text-[14px] text-black mb-[11px]"
-                    style={dm}
-                  >
-                    Site: {displayDomain}
-                  </h1>
+                  <div className="flex items-center gap-2 mb-[11px]">
+                    <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
+                      Site: {displayDomain}
+                    </h1>
+                    {isLegacy && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
+                        Legacy data
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-start gap-[107px]">
@@ -771,20 +785,52 @@ export function ConsentLogsDashboard({
                 </div>
               </div>
 
+              <div className="flex items-center gap-3 mt-[18px] flex-wrap">
+                {/* Month / Year picker */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      setSelectedMonth(e.target.value);
+                      setConsentPage(1);
+                    }}
+                    disabled={loading}
+                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                  >
+                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((name, i) => (
+                      <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => {
+                      setSelectedYear(e.target.value);
+                      setConsentPage(1);
+                    }}
+                    disabled={loading}
+                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                  >
+                    {Array.from({ length: 4 }, (_, i) => String(now.getFullYear() - i)).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
               <button
                 type="button"
                 onClick={handleRefresh}
-                disabled={refreshing || loading}
-                className="flex items-center gap-1 mt-[18px] disabled:opacity-50"
+                disabled={loading}
+                className="flex items-center gap-1 disabled:opacity-50"
               >
                 <p
                   className="font-['DM_Sans'] font-medium text-[#007aff] text-[15px] tracking-[-0.3px]"
                   style={dm}
                 >
-                  {refreshing ? 'Refreshing…' : 'Refresh'}
+                  {loading ? 'Loading…' : 'Refresh'}
                 </p>
-                <RefreshIcon spinning={refreshing} />
+                <RefreshIcon spinning={loading} />
               </button>
+              </div>
             </div>
 
             <div className="w-full h-px bg-black/10 mb-[4px]" />
@@ -834,8 +880,9 @@ export function ConsentLogsDashboard({
                         className="px-[16px] py-[24px] text-center font-['DM_Sans'] text-[14px] text-[#4b5563]"
                         style={dm}
                       >
-                        No consent logs yet. Consent events will appear here once visitors interact
-                        with your banner.
+                        {isCurrentPeriod
+                          ? 'No consent logs yet. Consent events will appear here once visitors interact with your banner.'
+                          : `No consent data found for ${selectedMonthName} ${selectedYear}.`}
                       </td>
                     </tr>
                   ) : (
@@ -876,6 +923,20 @@ export function ConsentLogsDashboard({
               </table>
             </div>
             <PaginationBar current={consentPage} total={consentTotalPages} onChange={(p) => setConsentPage(p)} />
+
+            {/* Export CSV — available for both legacy and webapp users */}
+            {consentRows.length > 0 && (
+              <div className="flex justify-end px-2 mt-3">
+                <button
+                  type="button"
+                  onClick={downloadCsv}
+                  className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors"
+                >
+                  <ImportIcon />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-[59px]">

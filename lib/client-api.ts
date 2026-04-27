@@ -931,15 +931,46 @@ export type ConsentHistoryResponse = {
   offset: number;
 };
 
+const EMPTY_CONSENT_RESPONSE: ConsentHistoryResponse = {
+  success: true,
+  consents: [],
+  cookies: [],
+  customCookieRules: [],
+  total: 0,
+  limit: 0,
+  offset: 0,
+};
+
+export async function getLegacyConsentMonthly(
+  siteId: string,
+  year: string,
+  month: string,
+  domain?: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, ...(domain ? { domain } : {}) });
+  const res = await fetch(`/api/legacy-consent-monthly?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  // Treat not-found / access errors as empty data — the site may not have legacy
+  // records yet, or may not be fully registered; surfacing a red banner is confusing.
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
 export async function getConsentHistory(
   siteId: string,
   limit: number = 100,
   offset: number = 0,
+  year?: string,
+  month?: string,
 ): Promise<ConsentHistoryResponse> {
-  const res = await fetch(
-    `/api/consent-history?siteId=${encodeURIComponent(siteId)}&limit=${limit}&offset=${offset}`,
-    { credentials: 'include' },
-  );
+  const params = new URLSearchParams({
+    siteId,
+    limit: String(limit),
+    offset: String(offset),
+    ...(year ? { year } : {}),
+    ...(month ? { month } : {}),
+  });
+  const res = await fetch(`/api/consent-history?${params.toString()}`, { credentials: 'include' });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
   return data;

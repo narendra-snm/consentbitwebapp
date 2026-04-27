@@ -7,7 +7,8 @@ import { proxyWorkerResponse } from '@/lib/server-api';
 
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body = await request.json() as any;
   const normalizedBody =
     body && typeof body === 'object'
       ? { ...body, password_hash: body.password_hash ?? body.passwordHash }

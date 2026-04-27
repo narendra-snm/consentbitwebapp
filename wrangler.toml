@@ -3,3 +3,17 @@ pages_build_output_dir = ".vercel/output/static"
 compatibility_date = "2026-03-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
+[[d1_databases]]
+binding = "CONSENT_WEBAPP"
+database_name = "consent-webapp"
+database_id = "bc37fa30-5060-491d-b19c-f3eeb7b1fd00"
+
+[[kv_namespaces]]
+binding = "WEBFLOW_AUTHENTICATION"
+id = "aa64050ef7804e7783fe9680daae80c5"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "cookies-data"
+preview_bucket_name = "cookies-data-dev"
+

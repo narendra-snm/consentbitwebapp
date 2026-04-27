@@ -143,7 +143,7 @@ export default function page({ siteId }: { siteId: string }) {
 
   const isFreePlan = useMemo(() => {
     const v = String(effectivePlanId ?? "").toLowerCase();
-    return v === "free" || v.startsWith("free");
+    return v === "free";
   }, [effectivePlanId]);
 
   const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
@@ -748,16 +748,16 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       setActive("General");
     }
   }, [active, isFreePlan]);
-  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId
+  const sitePlanId = sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId;
+  const resolvedPlanId = sitePlanId || effectivePlanId || "";
 
-  console.log(sites.find((s: any) => String(s?.id) === String(activeSiteId)), "site data in page component");
   return (
     <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
         iabEnabled={iabEnabled}
-        effectivePlanId={data}
+        effectivePlanId={resolvedPlanId}
       />
       <div className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]">
         {/* Consent Template Card */}
