@@ -282,7 +282,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           url.searchParams.set("postSetup", "1");
           url.searchParams.set("siteId", newSiteId);
           url.searchParams.set("domain", domain);
-          // router.push(url.pathname + url.search + (url.hash || ""));
+          router.push(url.pathname + url.search + (url.hash || ""));
         } else {
           const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
           url.searchParams.set("postSetup", "1");

@@ -585,18 +585,20 @@ export function DomainManagementDashboard() {
                 </span>
               </div>
 
-              {/* Three Dot Menu */}
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); setOpenMenuId(prev => prev === domain.id ? null : domain.id); }}
-                >
-                  <ThreeDotMenu />
-                </button>
-              </div>
+              {/* Three Dot Menu — only for sites with an active subscription */}
+              {domain.billingPeriod !== null && (
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setOpenMenuId(prev => prev === domain.id ? null : domain.id); }}
+                  >
+                    <ThreeDotMenu />
+                  </button>
+                </div>
+              )}
 
               {/* Dropdown Menu */}
-              {openMenuId === domain.id && (
+              {openMenuId === domain.id && domain.billingPeriod !== null && (
                 <div
                   ref={menuRef}
                   className="absolute right-[40px] top-[50%] transform -translate-y-1/2 bg-white shadow-lg rounded-[8px] py-[6px] px-[8px] z-10 border border-[#e5e7eb] min-w-[168px]"
@@ -620,7 +622,6 @@ export function DomainManagementDashboard() {
                     </span>
                   </button>
                 </div>
-
               )}
             </div>
           ))}
