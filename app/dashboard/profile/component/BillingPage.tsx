@@ -107,6 +107,11 @@ export default function BillingPage({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!cancelError) return;
+    const t = setTimeout(() => setCancelError(null), 5000);
+    return () => clearTimeout(t);
+  }, [cancelError]);
 
   /** Site selected in header (or first site) — editable registered URL on the plan card */
   const [planSiteDomain, setPlanSiteDomain] = useState("");
@@ -771,16 +776,16 @@ export default function BillingPage({
                     : "at period end"}
                 </span>
               </div>
-            ) : (
+            ) : currentPlan !== "Free" ? (
               <button
                 type="button"
                 onClick={() => { setCancelError(null); setShowCancelModal(true); }}
-                disabled={currentPlan === "Free" || cancelLoading}
+                disabled={cancelLoading}
                 className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 text-[#4B5563] py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancel Subscription
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 

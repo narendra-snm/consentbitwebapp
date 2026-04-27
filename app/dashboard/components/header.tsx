@@ -250,21 +250,21 @@ export default function Header() {
   //   }
   // };
 const handleSelectSite = (site: any) => {
-    
     const nextId = site?.id ? String(site.id) : null;
     const currentId = pathSiteId || activeSiteId || null;
-    if( currentId==nextId) return
+    if (currentId == nextId) return;
 
     setActiveSiteId(nextId);
     setDomainOpen(false);
     if (!nextId) return;
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
-    // Preserve current tab/sub-route when switching sites
+
     const currentSubPath = pathParts.slice(2).join('/');
-    const targetPath = currentSubPath ? `/dashboard/${nextId}/${currentSubPath}` : `/dashboard/${nextId}`;
+    const targetSubPath = currentSubPath;
+
+    const targetPath = targetSubPath ? `/dashboard/${nextId}/${targetSubPath}` : `/dashboard/${nextId}`;
     if (targetPath !== (pathname || "")) {
-      console.log("Navigating to:", targetPath);
       router.push(targetPath);
     }
   };
@@ -358,9 +358,7 @@ const handleSelectSite = (site: any) => {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="truncate">{domain}</span>
                         {isLegacy && (
-                          <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E]">
-                            Legacy
-                          </span>
+                          <span className="shrink-0 w-2 h-2 rounded-full bg-[#F59E0B] inline-block" />
                         )}
                       </div>
                       {siteUrl && (

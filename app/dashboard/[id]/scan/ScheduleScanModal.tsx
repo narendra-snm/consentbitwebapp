@@ -112,10 +112,17 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
           selected={date}
           onChange={(d: Date | null) => {
             if (!d) return;
-            // react-datepicker resets the time to 00:00 when the user clicks a new day.
-            // Preserve the previously chosen hours/minutes so selecting a date doesn't wipe the time.
             const next = new Date(d);
-            if (d.getHours() === 0 && d.getMinutes() === 0) {
+            // react-datepicker resets the time to 00:00 when clicking a new day in the calendar.
+            // Detect this by checking whether only the date changed but hours/minutes stayed at 0
+            // while the previous selection was not at midnight — if so, restore the previous time.
+            // If the user actually selected 12:00 AM, d's date will match the current date state,
+            // meaning only the time changed, so we let it through.
+            const dateChanged =
+              d.getFullYear() !== date.getFullYear() ||
+              d.getMonth() !== date.getMonth() ||
+              d.getDate() !== date.getDate();
+            if (dateChanged && d.getHours() === 0 && d.getMinutes() === 0) {
               next.setHours(date.getHours(), date.getMinutes(), 0, 0);
             }
             setDate(next);

@@ -30,7 +30,12 @@ export default function ConsentLogsPage() {
     return label || '—';
   }, [loading, resolved]);
 
+  const isLegacy = !!(resolved as any)?.isLegacy;
+  const platformSiteId = (resolved as any)?.platformSiteId ?? (resolved as any)?.platformsiteid ?? null;
+  const effectiveSiteId = isLegacy && platformSiteId ? String(platformSiteId) : String(siteId);
+  const siteDomainRaw = (resolved as any)?.domain ?? (resolved as any)?.Domain ?? '';
+
   if (!siteId) return null;
 
-  return <ConsentLogsDashboard siteId={String(siteId)} siteDomain={siteDomain} />;
+  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} />;
 }

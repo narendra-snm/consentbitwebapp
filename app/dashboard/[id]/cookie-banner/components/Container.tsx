@@ -160,7 +160,7 @@ export default function page({ siteId }: { siteId: string }) {
 
   const isFreePlan = useMemo(() => {
     const v = String(effectivePlanId ?? "").toLowerCase();
-    return v === "free" || v.startsWith("free");
+    return v === "free";
   }, [effectivePlanId]);
 
   const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
@@ -765,16 +765,16 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       setActive("General");
     }
   }, [active, isFreePlan]);
-  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId
+  const sitePlanId = sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId;
+  const resolvedPlanId = sitePlanId || effectivePlanId || "";
 
-  console.log(sites.find((s: any) => String(s?.id) === String(activeSiteId)), "site data in page component");
   return (
     <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
         iabEnabled={iabEnabled}
-        effectivePlanId={data}
+        effectivePlanId={resolvedPlanId}
       />
       {/* Panel toggle — only visible at lg (1024-1279px) */}
       <button
