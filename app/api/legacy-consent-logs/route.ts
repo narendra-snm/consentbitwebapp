@@ -74,7 +74,7 @@ async function getKvConsentData(
       cursor = list.cursor ?? undefined;
 
       await Promise.all(
-        list.keys.map(async (key) => {
+        list.keys.map(async (key: { name: string }) => {
           const visitorId = key.name.split(':').slice(2).join(':');
           if (!visitorId || visitors[visitorId]) return;
           const raw = await kv.get(key.name);

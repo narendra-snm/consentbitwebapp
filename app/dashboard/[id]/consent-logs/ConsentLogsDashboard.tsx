@@ -744,11 +744,6 @@ export function ConsentLogsDashboard({
                     <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
                       Site: {displayDomain}
                     </h1>
-                    {isLegacy && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
-                        Legacy data
-                      </span>
-                    )}
                   </div>
                 </div>
 

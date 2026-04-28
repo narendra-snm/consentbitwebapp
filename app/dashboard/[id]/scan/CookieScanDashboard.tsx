@@ -379,7 +379,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ domain: siteDomain, legacySource, cdnScriptId, siteId }),
         });
-        const data = await res.json().catch(() => ({ found: false, inHead: false }));
+        const data = await res.json().catch(() => ({ found: false, inHead: false })) as { found: boolean; inHead: boolean };
         if (legacySource === 'webflow' && !data.inHead) {
           setShowWebflowUpdateModal(true);
           setLegacyScriptCheckLoading(false);

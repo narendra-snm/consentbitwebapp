@@ -73,8 +73,8 @@ export function PricingTable({
         siteName: domain || null,
         siteDomain: domain || null,
         successUrl: domain
-          ? `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`
-          : `${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`,
+          ? `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`)}`
+          : `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`)}`  ,
         cancelUrl: `${origin}/dashboard`,
       });
       window.location.assign(data.url);
