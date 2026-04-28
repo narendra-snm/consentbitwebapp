@@ -2,7 +2,7 @@
 /**
  * Decode a base64 transport envelope produced by the worker's security middleware.
  * Response shape: { d: "<base64 UTF-8 JSON>" }
- * Falls through for plain JSON responsess (backward-compat / public endpoints).
+ * Falls through for plain JSON responsesss (backward-compat / public endpoints).
  */
 function decodeEnvelope(parsed: any): any {
   if (parsed && typeof parsed.d === 'string') {
