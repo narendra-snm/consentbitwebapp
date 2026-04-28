@@ -21,7 +21,7 @@ export default function FeedbackDesign() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
       });
-      const data = await res.json();
+      const data = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || data?.success === false) {
         setError(data?.error || 'Failed to submit feedback.');
       } else {
