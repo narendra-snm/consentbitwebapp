@@ -357,9 +357,6 @@ const handleSelectSite = (site: any) => {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="truncate">{domain}</span>
-                        {isLegacy && (
-                          <span className="shrink-0 w-2 h-2 rounded-full bg-[#F59E0B] inline-block" />
-                        )}
                       </div>
                       {siteUrl && (
                         <a
