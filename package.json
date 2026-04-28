@@ -19,6 +19,10 @@
     "react-datepicker": "^9.1.0",
     "react-dom": "19.2.3"
   },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "1.31.1",
+    "lightningcss-linux-x64-musl": "1.31.1"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260422.1",
     "@tailwindcss/postcss": "^4",
