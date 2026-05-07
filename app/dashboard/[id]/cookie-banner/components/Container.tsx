@@ -322,6 +322,7 @@ export default function page({ siteId }: { siteId: string }) {
       try {
         const res = await getBannerCustomization(String(site.id));
         const customization = res?.customization || null;
+        console.log("Fetched banner customization:", customization);
         if (cancelled) return;
         setCustomizationBase(customization);
         const en = customization?.translations?.en || {};
