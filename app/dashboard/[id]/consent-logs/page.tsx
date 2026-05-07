@@ -32,10 +32,14 @@ export default function ConsentLogsPage() {
 
   const isLegacy = !!(resolved as any)?.isLegacy;
   const platformSiteId = (resolved as any)?.platformSiteId ?? (resolved as any)?.platformsiteid ?? null;
-  const effectiveSiteId = isLegacy && platformSiteId ? String(platformSiteId) : String(siteId);
+  // Migrated webapp users (isLegacy + platformSiteId) write new consents to the Consent table
+  // using their webapp siteId — read from the new API, not the legacy store.
+  const isWebappMigrated = isLegacy && !!platformSiteId;
+  const effectiveSiteId = String(siteId); // always use webapp siteId
+  const effectiveIsLegacy = isLegacy && !isWebappMigrated; // only pure legacy sites use legacy API
   const siteDomainRaw = (resolved as any)?.domain ?? (resolved as any)?.Domain ?? '';
 
   if (!siteId) return null;
 
-  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} />;
+  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={effectiveIsLegacy} />;
 }
