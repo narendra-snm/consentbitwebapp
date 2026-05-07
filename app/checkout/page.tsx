@@ -351,6 +351,7 @@ interface CheckoutFormProps {
   email: string;
   domain: string;
   platform: string;
+  wfSiteId?: string;
   planId: PlanId;
   interval: Interval;
   onPlanChange: (p: PlanId) => void;
@@ -361,6 +362,7 @@ function CheckoutForm({
   email: initEmail,
   domain: initDomain,
   platform,
+  wfSiteId,
   planId,
   interval,
   onPlanChange,
@@ -458,10 +460,12 @@ function CheckoutForm({
         body: JSON.stringify({
           paymentMethodId: paymentMethod!.id,
           email: email.trim().toLowerCase(),
+          billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
           domain: cleanedDomain,
           siteName: cleanedDomain,
           planId,
           interval,
+          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
         }),
       });
 
@@ -495,10 +499,12 @@ console.log(data);
           body: JSON.stringify({
             subscriptionId: data.subscriptionId,
             email: email.trim().toLowerCase(),
+            billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
             domain: cleanedDomain,
             siteName: cleanedDomain,
             planId,
             interval,
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
           }),
         });
 
@@ -931,6 +937,7 @@ function CheckoutPageInner() {
   const email = (params.get('email') ?? '').trim().toLowerCase();
   const domain = cleanDomain(params.get('domain') ?? '');
   const platform = params.get('platform') ?? '';
+  const wfSiteId = params.get('platformId') ?? params.get('wfSiteId') ?? '';
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
@@ -951,6 +958,7 @@ function CheckoutPageInner() {
                   email={email}
                   domain={domain}
                   platform={platform}
+                  wfSiteId={wfSiteId}
                   planId={planId}
                   interval={interval}
                   onPlanChange={setPlanId}

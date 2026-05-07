@@ -235,6 +235,10 @@ function detectMethod(log: ConsentLog): string {
   if (method.includes('iab') || method.includes('tcf')) return 'IAB/GDPR';
   if (method.includes('ccpa') || method.includes('usp')) return 'CCPA';
   if (method.includes('gdpr')) return 'GDPR';
+  // Prefer explicit bannerType/regulation from the record over categories structure
+  const bt = (log.bannerType ?? log.regulation ?? '').toUpperCase();
+  if (bt.includes('GDPR')) return 'GDPR';
+  if (bt.includes('CCPA') || bt.includes('USP') || bt.includes('VCDPA') || bt.includes('CPA')) return 'CCPA';
   const c = normalizeCategories(log.categories);
   if (c && c.ccpa) return 'CCPA';
   return 'GDPR';

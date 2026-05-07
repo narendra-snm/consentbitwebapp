@@ -223,6 +223,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
   const isLegacySite = !!(currentSite as any)?.isLegacy;
   const legacySource: string = (currentSite as any)?.legacySource ?? '';
   const cdnScriptId: string = (currentSite as any)?.cdnScriptId ?? (currentSite as any)?.cdnscriptid ?? '';
+  const platformSiteId = (currentSite as any)?.platformSiteId ?? (currentSite as any)?.platformsiteid ?? null;
+  // Migrated webapp users skip the frontend script check — backend scanSite.js handles their verification
+  const isWebappMigrated = isLegacySite && !!platformSiteId;
 
   const hasDraftRules = useMemo(() => customRules.some((r) => r.published === 0), [customRules]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -368,10 +371,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       void logout();
       return;
     }
+    setShowWebflowUpdateModal(false);
 
     // For legacy sites, verify the ConsentBit script is present in <head> before scanning.
     // Webflow: script must be in <head> — show "Update your app" modal and block if not.
-    if (isLegacySite && (legacySource === 'webflow' || legacySource === 'framer')) {
+    if (isLegacySite && !isWebappMigrated && (legacySource === 'webflow' || legacySource === 'framer')) {
       setLegacyScriptCheckLoading(true);
       try {
         const res = await fetch('/api/check-legacy-script', {
@@ -385,6 +389,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           setLegacyScriptCheckLoading(false);
           return;
         }
+        setShowWebflowUpdateModal(false);
       } catch {
         // Network error — allow scan to proceed rather than hard-blocking
       } finally {
@@ -488,7 +493,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       if (msg.toLowerCase().includes('scan limit') || msg.toLowerCase().includes('limit reached')) {
         setScanLimitReached(true);
       } else if (msg.toLowerCase().includes('not verified') || msg.toLowerCase().includes('site_not_verified')) {
-        setSiteNotVerified(true);
+        if (isWebappMigrated) {
+          setShowWebflowUpdateModal(true);
+        } else {
+          setSiteNotVerified(true);
+        }
       } else {
         setError(msg);
       }
