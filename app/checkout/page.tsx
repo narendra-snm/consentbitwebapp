@@ -373,7 +373,10 @@ function CheckoutForm({
   const router = useRouter();
 
   const [email, setEmail] = useState(initEmail);
-  const [domain, setDomain] = useState(initDomain);
+  /** Account email starts read-only; toggled to an editable input via the Edit button. */
+  const [editEmail, setEditEmail] = useState(false);
+  // Domain is locked — derived from URL params, never editable from the UI.
+  const domain = initDomain;
   const [billingEmail, setBillingEmail] = useState(initEmail);
   const [separateBilling, setSeparateBilling] = useState(false);
   const [nameOnCard, setNameOnCard] = useState('');
@@ -382,8 +385,6 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  /** Read-only "synced account" card view when email + domain came pre-filled; toggled by "Change site". */
-  const [editAccount, setEditAccount] = useState(!initEmail || !initDomain);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -583,17 +584,17 @@ console.log(data);
         </div>
       )} */}
 
-      {/* 1 — Your account */}
+      {/* 1 — Your account (locked, synced from URL params) */}
       <FormSection n={1} title="Your account">
-        {!editAccount ? (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600">
-              {platformLabel
-                ? `We've set up your account automatically using your ${platformLabel} identity and site.`
-                : "We've set up your account automatically using your identity and site."}
-            </p>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            {platformLabel
+              ? `We've set up your account automatically using your ${platformLabel} identity and site.`
+              : "We've set up your account automatically using your identity and site."}
+          </p>
 
-            {/* Account email card */}
+          {/* Account email — read-only by default with Edit toggle */}
+          {!editEmail ? (
             <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
                 <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -602,91 +603,72 @@ console.log(data);
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Account email</p>
-                <p className="text-sm font-semibold text-gray-900 truncate">{email}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{email || '—'}</p>
               </div>
               <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
                 Verified
               </span>
-            </div>
-
-            {/* Domain card */}
-            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
-                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Domain</p>
-                <p className="text-sm font-semibold text-gray-900 truncate">{domain}</p>
-              </div>
-              {platformLabel && (
-                <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-[#262E84]">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#262E84] text-white text-[9px] font-bold">
-                    {platformLabel[0]}
-                  </span>
-                  {platformLabel}
-                </span>
-              )}
-            </div>
-
-            <p className="text-xs text-gray-500">
-              {platformLabel
-                ? `Synced from your connected ${platformLabel} site. `
-                : 'Loaded from your session. '}
               <button
                 type="button"
-                onClick={() => setEditAccount(true)}
-                className="font-semibold text-[#262E84] hover:underline"
+                onClick={() => setEditEmail(true)}
+                className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#262E84] hover:bg-gray-50"
               >
-                Change site
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
               </button>
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Field label="Your email" error={fieldErrors.email}>
-              <input
-                type="email"
-                value={email}
-                onChange={e => handleEmailChange(e.target.value)}
-                placeholder="you@example.com"
-                className={inputCls(!!fieldErrors.email)}
-              />
-            </Field>
-            <Field
-              label="Your domain"
-              hint="Where ConsentBit will be installed, e.g. example.com"
-              error={fieldErrors.domain}
-            >
-              <input
-                type="text"
-                value={domain}
-                onChange={e => {
-                  setDomain(e.target.value);
-                  clearErr('domain');
-                }}
-                placeholder="example.com"
-                className={inputCls(!!fieldErrors.domain)}
-              />
-            </Field>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">
-                You&apos;ll be able to log in to your ConsentBit dashboard with this email.
-              </p>
-              {initEmail && initDomain && (
+            </div>
+          ) : (
+            <Field label="Account email" error={fieldErrors.email}>
+              <div className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => handleEmailChange(e.target.value)}
+                  placeholder="you@example.com"
+                  autoFocus
+                  className={inputCls(!!fieldErrors.email)}
+                />
                 <button
                   type="button"
-                  onClick={() => setEditAccount(false)}
-                  className="shrink-0 text-xs font-semibold text-[#262E84] hover:underline"
+                  onClick={() => setEditEmail(false)}
+                  className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                 >
-                  Use synced account
+                  Done
                 </button>
-              )}
+              </div>
+            </Field>
+          )}
+
+          {/* Domain card */}
+          <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+              <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <circle cx="12" cy="12" r="9" />
+                <path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
+              </svg>
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Domain</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{domain || '—'}</p>
+            </div>
+            {platformLabel && (
+              <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-[#262E84]">
+                <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#262E84] text-white text-[9px] font-bold">
+                  {platformLabel[0]}
+                </span>
+                {platformLabel}
+              </span>
+            )}
           </div>
-        )}
+
+          <p className="text-xs text-gray-500">
+            {platformLabel
+              ? `Synced from your connected ${platformLabel} site.`
+              : 'Loaded from your session.'}
+          </p>
+        </div>
       </FormSection>
 
       {/* 2 — Billing contact */}
