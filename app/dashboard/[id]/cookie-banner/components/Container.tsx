@@ -148,7 +148,6 @@ export default function page({ siteId }: { siteId: string }) {
 
   const { loading, authenticated,activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
-    console.log(effectivePlanId,"activeOrganizationId from container")
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const currentScriptUrl = useMemo(() => {
     if (!site?.id) return "";
@@ -764,7 +763,6 @@ export default function page({ siteId }: { siteId: string }) {
     window.sessionStorage.setItem(iabSessionKey, iabEnabled ? "1" : "0");
   }, [iabEnabled, iabSessionKey, iabHydrated]);
   const isToggleEnabled =site?.planId==="growth" || site?.planId==="essential";
-console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectivePlanId);
   // Free plan should not have access to Content/Layout/Type sections.
   useEffect(() => {
     if (!isFreePlan) return;
@@ -911,8 +909,6 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
             return !prev
           });
 
-          console.log("Updating site with IAB support enabled:", !iabEnabled);
-         
         }}
       >
         <div

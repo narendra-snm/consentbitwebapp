@@ -739,7 +739,6 @@ function FullBanner({ s, onCustomise, onReject, onAccept }) {
     border: "none",
   };
   const btnJustifyVal = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start";
-console.log("btnJustifyVal:", btnJustifyVal);
   return (
     <div
       style={{
@@ -797,8 +796,6 @@ export function CookieConsentBanner({ config = {},device="desktop",alignment="bo
   const [visible, setVisible] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  
-console.log(modalOpen)
   const handleAccept = () => { setVisible(true);setModalOpen(false)  };
   const handleReject = () => { setVisible(true); setModalOpen(false)  };
   const handleCustomise = () => {
@@ -806,7 +803,6 @@ console.log(modalOpen)
     setModalOpen(true); 
 
   };
-console.log(device)
   const br = `${s.borderRadius}px`;
   const floatGutterPx = s.floatingButtonEnabled && device !== "mobile" ? 60 : 0; // icon (40px) + margin
 const positionStyles =

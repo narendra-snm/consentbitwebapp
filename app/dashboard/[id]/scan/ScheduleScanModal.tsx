@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import DatePicker from 'react-datepicker';
-import { createScheduledScan } from '@/lib/client-api';
+import { createScheduledScan, ScanLimitError } from '@/lib/client-api';
 import LoadingPopup from './component/LoadingPopup';
 
 type Props = {
@@ -24,17 +24,20 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
   const [frequency, setFrequency] = useState<'once' | 'daily' | 'weekly' | 'monthly'>('once');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanLimitReached, setScanLimitReached] = useState<number | null>(null);
 
   const resetForm = () => {
     setDate(defaultScheduleDate());
     setFrequency('once');
     setError(null);
+    setScanLimitReached(null);
   };
 
   if (!isOpen) return null;
 
   const handleDone = async () => {
     setError(null);
+    setScanLimitReached(null);
     setLoading(true);
     try {
       const scheduledAt = date.toISOString();
@@ -43,7 +46,11 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
       onClose();
       resetForm();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to schedule scan');
+      if (err instanceof ScanLimitError) {
+        setScanLimitReached(err.scansLimit);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to schedule scan');
+      }
     } finally {
       setLoading(false);
     }
@@ -150,7 +157,12 @@ export function ScheduleScanModal({ isOpen, onClose, siteId, onScheduled }: Prop
           </select>
         </div>
 
-        {error ? (
+        {scanLimitReached !== null ? (
+          <p className="mt-3 font-['DM_Sans'] text-sm text-red-600" style={dm}>
+            Scan limit reached ({scanLimitReached.toLocaleString()} scans/month for this site).{' '}
+            Upgrade your plan to schedule more scans.
+          </p>
+        ) : error ? (
           <p className="mt-3 font-['DM_Sans'] text-sm text-red-600" style={dm}>
             {error}
           </p>

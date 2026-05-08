@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
@@ -295,7 +295,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           return;
         }
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
         const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
         const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
         const cancelUrl = `${origin}${returnTo}`;

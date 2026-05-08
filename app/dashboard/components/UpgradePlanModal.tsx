@@ -111,7 +111,7 @@ export function UpgradePlanModal({
           {usageText ? ` (${usageText})` : ''}.{' '}
           {nextPlan
             ? `Upgrade to ${PLAN_LABELS[nextPlan]} to continue using the service.`
-            : 'You are on the highest plan. Please contact support.'}
+            : 'Your quota will reset at the start of next month.'}
         </p>
 
         {nextPlan && PLAN_FEATURES[nextPlan] && (
@@ -144,7 +144,7 @@ export function UpgradePlanModal({
           >
             Cancel
           </button>
-          {nextPlan ? (
+          {nextPlan && (
             <button
               type="button"
               onClick={handleUpgrade}
@@ -153,13 +153,6 @@ export function UpgradePlanModal({
             >
               {loading ? 'Redirecting…' : `Upgrade to ${PLAN_LABELS[nextPlan]}`}
             </button>
-          ) : (
-            <a
-              href="mailto:support@consentbit.com"
-              className="flex-1 rounded-lg bg-[#007aff] px-4 py-2.5 text-center font-['DM_Sans'] text-sm font-medium text-white hover:bg-[#0066d6]"
-            >
-              Contact Support
-            </a>
           )}
         </div>
       </div>

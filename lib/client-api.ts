@@ -844,6 +844,15 @@ export async function getScheduledScans(siteId: string): Promise<{
   return data;
 }
 
+export class ScanLimitError extends Error {
+  code = 'SCAN_LIMIT_REACHED' as const;
+  scansLimit: number;
+  constructor(message: string, scansLimit: number) {
+    super(message);
+    this.scansLimit = scansLimit;
+  }
+}
+
 export async function createScheduledScan(
   siteId: string,
   scheduledAt: string,
@@ -856,7 +865,12 @@ export async function createScheduledScan(
     body: JSON.stringify({ siteId, scheduledAt, frequency }),
   });
   const data = await parseApiResponse(res);
-  if (!res.ok || !data.success) throw new Error(data.error || `Schedule failed: ${res.status}`);
+  if (!res.ok || !data.success) {
+    if (data.code === 'SCAN_LIMIT_REACHED') {
+      throw new ScanLimitError(data.error || 'Scan limit reached', Number(data.scansLimit ?? 0));
+    }
+    throw new Error(data.error || `Schedule failed: ${res.status}`);
+  }
   return data;
 }
 

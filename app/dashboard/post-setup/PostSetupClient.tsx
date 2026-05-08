@@ -94,7 +94,6 @@ export function PostSetupClient() {
       date_of_purchase: params.get("date")             ?? "",
     };
     setDetails(parsed);
-    console.log("[PostSetup] Payment details:", parsed);
     // ─────────────────────────────────────────────────────────────────────
 
     // ── 4. Pre-write storage so the opener tab can pick it up ─────────────
