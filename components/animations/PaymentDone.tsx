@@ -37,9 +37,6 @@ export default function PaymentDone({ details, OnClick }: { details: any; OnClic
     return () => clearTimeout(timer);
   }, []);
 
-  console.log('Current Screen:', currentScreen);
-  console.log('Payment Details:', details);
-
   return (
     <>
       <style>{`

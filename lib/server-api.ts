@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Backend (Cloudflare Worker) origin for Next.js API routes.
  * Match the old dashboard: override via env so the same deploy can point at the Worker
  * that has your real DB + Stripe secrets (avoids "invalid API key" when a default Worker is stale).
  */
 const PRODUCTION_API_BASE =
-  process.env.PRODUCTION_API_BASE || "https://consent-webapp-manager.web-8fb.workers.dev";
+  process.env.PRODUCTION_API_BASE || "https://manager.consentbit.com";
 
 export function getProductionApiBase() {
   return PRODUCTION_API_BASE.replace(/\/+$/, "");

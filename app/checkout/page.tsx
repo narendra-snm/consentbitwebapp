@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -453,7 +453,7 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
-      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+      const res = await fetch('https://manager.consentbit.com/api/custom-checkout', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -476,7 +476,6 @@ function CheckoutForm({
         clientSecret?: string;
         subscriptionId?: string;
       };
-console.log(data);
       if (!data.success) {
         setError(data.error || 'Something went wrong. Please try again.');
         setIsSubmitting(false);

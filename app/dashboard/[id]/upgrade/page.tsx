@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 
@@ -110,19 +110,15 @@ export default function PricingTable() {
       date_of_purchase: params.get("date")           ?? "",
     };
     setPaymentDetails(details);
-    console.log("[Payment Success] Transaction details:", details);
-    console.log("[UpgradePoll] start — targetPlan:", targetPlan, "siteId:", siteId);
     setPaymentProcessing(true);
     let attempts = 0;
     let t: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       const planNow = String(await refresh({ showLoading: false }) ?? "").toLowerCase();
       attempts += 1;
-      console.log(`[UpgradePoll] attempt ${attempts} — planNow: "${planNow}" | targetPlan: "${targetPlan}" | match: ${planNow === targetPlan}`);
       if (planNow !== targetPlan && attempts < 20) {
         t = setTimeout(poll, 1500);
       } else {
-        console.log(`[UpgradePoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max attempts"} | navigating to dashboard`);
         // Use router.push so DashboardSessionProvider stays mounted and the updated
         // plan in React state is immediately visible in the header — no cache needed.
         // router.push(`/dashboard/${siteId}`);
@@ -258,7 +254,7 @@ export default function PricingTable() {
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const finalUrl = `${origin}/dashboard/${siteId}/upgrade?upgraded=1`;
-      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
       const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";

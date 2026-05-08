@@ -235,12 +235,12 @@ function detectMethod(log: ConsentLog): string {
   if (method.includes('iab') || method.includes('tcf')) return 'IAB/GDPR';
   if (method.includes('ccpa') || method.includes('usp')) return 'CCPA';
   if (method.includes('gdpr')) return 'GDPR';
-  // Prefer explicit bannerType/regulation from the record over categories structure
-  const bt = (log.bannerType ?? log.regulation ?? '').toUpperCase();
-  if (bt.includes('GDPR')) return 'GDPR';
-  if (bt.includes('CCPA') || bt.includes('USP') || bt.includes('VCDPA') || bt.includes('CPA')) return 'CCPA';
+  // Check categories first — more reliable than stored bannerType which can be wrong
   const c = normalizeCategories(log.categories);
   if (c && c.ccpa) return 'CCPA';
+  const bt = (log.bannerType ?? log.regulation ?? '').toUpperCase();
+  if (bt.includes('CCPA') || bt.includes('USP') || bt.includes('VCDPA') || bt.includes('CPA')) return 'CCPA';
+  if (bt.includes('GDPR')) return 'GDPR';
   return 'GDPR';
 }
 
@@ -392,11 +392,13 @@ export function ConsentLogsDashboard({
   siteDomain,
   legacyDomain,
   isLegacy = false,
+  platformSiteId,
 }: {
   siteId: string;
   siteDomain: string;
   legacyDomain?: string;
   isLegacy?: boolean;
+  platformSiteId?: string | null;
 }) {
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
@@ -410,6 +412,7 @@ export function ConsentLogsDashboard({
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [csvDownloading, setCsvDownloading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -422,9 +425,16 @@ export function ConsentLogsDashboard({
     setLoading(true);
     setLoadError(null);
 
+    // Before June 2026, legacy users' data lives in KV/R2; from June 2026 onwards it's in D1.
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useLegacySource = hasHistoricalR2Data && (
+      parseInt(selectedYear, 10) < 2026 ||
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
+    );
+
     const doFetch = async () => {
       try {
-        const res = isLegacy
+        const res = useLegacySource
           ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
           : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
@@ -441,16 +451,22 @@ export function ConsentLogsDashboard({
     void doFetch();
 
     return () => { active = false; };
-  }, [siteId, isLegacy, selectedYear, selectedMonth]);
+  }, [siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
 
   const handleRefresh = useCallback(() => {
     setData(null);
     setLoading(true);
     setLoadError(null);
 
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useLegacySource = hasHistoricalR2Data && (
+      parseInt(selectedYear, 10) < 2026 ||
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
+    );
+
     const doFetch = async () => {
       try {
-        const res = isLegacy
+        const res = useLegacySource
           ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
           : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         setData(res);
@@ -463,7 +479,7 @@ export function ConsentLogsDashboard({
     };
 
     void doFetch();
-  }, [siteId, isLegacy, selectedYear, selectedMonth]);
+  }, [siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -702,7 +718,11 @@ export function ConsentLogsDashboard({
 
   const handleDownloadRowPdf = useCallback(
     (row: ConsentLog) => {
-      const apiPath = isLegacy
+      const useLegacySource = isLegacy && (
+        parseInt(selectedYear, 10) < 2026 ||
+        (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
+      );
+      const apiPath = useLegacySource
         ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
         : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
       const a = document.createElement('a');
@@ -710,19 +730,38 @@ export function ConsentLogsDashboard({
       a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
       a.click();
     },
-    [isLegacy, siteId],
+    [isLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
   );
 
-  const downloadCsv = useCallback(() => {
+  const downloadCsv = useCallback(async () => {
+    if (csvDownloading) return;
     const params = new URLSearchParams({ siteId, year: selectedYear, month: selectedMonth });
-    const apiPath = isLegacy
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useLegacySource = hasHistoricalR2Data && (
+      parseInt(selectedYear, 10) < 2026 ||
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
+    );
+    const apiPath = useLegacySource
       ? `/api/legacy-consent-csv?${params.toString()}`
       : `/api/consent-csv?${params.toString()}`;
-    const a = document.createElement('a');
-    a.href = apiPath;
-    a.download = '';
-    a.click();
-  }, [siteId, isLegacy, selectedYear, selectedMonth]);
+    setCsvDownloading(true);
+    try {
+      const res = await fetch(apiPath, { credentials: 'include' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cd = res.headers.get('content-disposition');
+      const match = cd?.match(/filename="?([^"]+)"?/);
+      a.download = match?.[1] ?? `consent-logs-${selectedYear}-${selectedMonth}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[ConsentLogs] CSV download failed', e);
+    } finally {
+      setCsvDownloading(false);
+    }
+  }, [csvDownloading, siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
 
   return (
     <>
@@ -908,7 +947,7 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
                           style={dm}
                         >
-                          <div className="min-w-[420px] whitespace-normal break-words">
+                          <div className="min-w-[200px] max-w-[420px] whitespace-normal break-all">
                             {categoriesSummary(row.categories)}
                           </div>
                         </td>
@@ -928,11 +967,11 @@ export function ConsentLogsDashboard({
               <div className="flex justify-end px-2 mt-3">
                 <button
                   type="button"
-                  onClick={downloadCsv}
-                  className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors"
+                  onClick={() => void downloadCsv()}
+                  disabled={csvDownloading}
+                  className="h-9 px-4 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <ImportIcon />
-                  <span>Export CSV</span>
+                  {csvDownloading ? 'Downloading…' : 'Export CSV'}
                 </button>
               </div>
             )}
@@ -1027,7 +1066,7 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-4.5 font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
                           style={dm}
                         >
-                          <div className="min-w-[420px] whitespace-normal break-words">
+                          <div className="min-w-[200px] max-w-[420px] whitespace-normal break-all">
                             {cookie.description?.trim() || 'Not available'}
                           </div>
                         </td>

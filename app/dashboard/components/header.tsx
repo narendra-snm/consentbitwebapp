@@ -355,8 +355,11 @@ const handleSelectSite = (site: any) => {
                         activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex flex-col min-w-0">
                         <span className="truncate">{domain}</span>
+                        {s.stagingDomain && (
+                          <span className="text-[10px] text-gray-400 truncate">{s.stagingDomain}</span>
+                        )}
                       </div>
                       {siteUrl && (
                         <a
