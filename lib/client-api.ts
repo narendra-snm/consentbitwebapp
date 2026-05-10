@@ -179,7 +179,7 @@ export async function getDashboardInit() {
 }
 //me endpoint ends here
 //profile update starts here
-export async function updateProfile(payload: { name?: string }) {
+export async function updateProfile(payload: { name?: string; billingEmail?: string }) {
   const res = await fetch('/api/auth/profile', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

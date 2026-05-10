@@ -29,33 +29,31 @@ import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 
-function makeDefaultContentSettings() {
+function makeDefaultContentSettings(langCode = 'en') {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
   return {
-    title: "We value your privacy",
-    acceptAll: "Accept",
-    preferencesLabel: "Preference",
-    preferenceTitle: "Cookie Preferences",
-    preferenceMessage:
-      "By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.",
+    title: T.title,
+    acceptAll: T.acceptAll,
+    preferencesLabel: T.customise,
+    preferenceTitle: T.cookiePreferences,
+    preferenceMessage: T.managePreferences,
     closeButton: true,
     rejectButton: true,
     customizeButton: true,
     cookiePolicyLink: true,
-    cookiePolicyLabel: "Privacy Policy",
+    cookiePolicyLabel: T.privacyPolicy,
     privacyPolicyUrl: "",
     gdpr: {
-      message:
-        "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-      rejectAll: "Reject",
-      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+      message: T.description,
+      rejectAll: T.rejectAll,
+      saveMyPreferencesLabel: T.saveMyPreferences,
     },
     ccpa: {
-      message:
-        "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-      doNotSellLabel: "Do Not Share My Personal Information",
-      optOutTitle: TRANSLATIONS.en.optOutPreference,
-      optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
-      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+      message: T.ccpaDescription || T.description,
+      doNotSellLabel: T.doNotSell,
+      optOutTitle: T.optOutPreference,
+      optOutMessage: T.ccpaOptOutPreferenceIntro,
+      saveMyPreferencesLabel: T.saveMyPreferences,
     },
   };
 }
@@ -101,6 +99,12 @@ export default function page({ siteId }: { siteId: string }) {
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  useEffect(() => {
+    if (!publishError) return;
+    const t = setTimeout(() => setPublishError(null), 3000);
+    return () => clearTimeout(t);
+  }, [publishError]);
+
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
   const [openAccordionKey, setOpenAccordionKey] = useState<
@@ -108,6 +112,7 @@ export default function page({ siteId }: { siteId: string }) {
   >("cookieNotice");
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
+  const [selectedLangCode, setSelectedLangCode] = useState<string>('en');
   const [customizationBase, setCustomizationBase] = useState<any>(null);
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
@@ -146,7 +151,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { loading, authenticated,activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+  const { loading, authenticated, activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const currentScriptUrl = useMemo(() => {
@@ -157,10 +162,16 @@ export default function page({ siteId }: { siteId: string }) {
   const siteRef = useRef(site);
   siteRef.current = site;
 
+  const isLegacySite = !!(site as any)?.isLegacy;
+  const legacySource: string = (site as any)?.legacySource ?? "";
+  const sitePlatform: string = (site as any)?.platform ?? "";
+  // Hide install code for any Webflow site (Webflow app or legacy Webflow)
+  const isWebflowSite = sitePlatform === "webflow" || (isLegacySite && legacySource === "webflow");
+
   const isFreePlan = useMemo(() => {
     const v = String(effectivePlanId ?? "").toLowerCase();
-    return v === "free";
-  }, [effectivePlanId]);
+    return v === "free" && !isLegacySite;
+  }, [effectivePlanId, isLegacySite]);
 
   const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
     const bannerType = site?.banner_type || 'gdpr';
@@ -324,30 +335,19 @@ export default function page({ siteId }: { siteId: string }) {
         if (cancelled) return;
         setCustomizationBase(customization);
         const en = customization?.translations?.en || {};
+        const langCode = (en.languageSelected as string) || 'en';
+        setSelectedLangCode(langCode);
+        const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
         const nextSettings = {
           title: en.title || "We value your privacy",
           acceptAll: en.acceptAll || "Accept",
           preferencesLabel: en.customise || "Preference",
-          preferenceTitle: en.cookiePreferences || "Cookie Preferences",
-          preferenceMessage:
-            en.managePreferences ||
-            "By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.",
-          closeButton:
-            typeof en.closeButtonEnabled === "boolean"
-              ? en.closeButtonEnabled
-              : String(en.closeButtonEnabled ?? "1") !== "0",
-          rejectButton:
-            typeof en.rejectButtonEnabled === "boolean"
-              ? en.rejectButtonEnabled
-              : String(en.rejectButtonEnabled ?? "1") !== "0",
-          customizeButton:
-            typeof en.customizeButtonEnabled === "boolean"
-              ? en.customizeButtonEnabled
-              : String(en.customizeButtonEnabled ?? "1") !== "0",
-          cookiePolicyLink:
-            typeof en.cookiePolicyLinkEnabled === "boolean"
-              ? en.cookiePolicyLinkEnabled
-              : String(en.cookiePolicyLinkEnabled ?? "1") !== "0",
+          preferenceTitle: en.cookiePreferences || T.cookiePreferences,
+          preferenceMessage: en.managePreferences || T.managePreferences,
+          closeButton: typeof en.closeButtonEnabled === "boolean" ? en.closeButtonEnabled : String(en.closeButtonEnabled ?? "1") !== "0",
+          rejectButton: typeof en.rejectButtonEnabled === "boolean" ? en.rejectButtonEnabled : String(en.rejectButtonEnabled ?? "1") !== "0",
+          customizeButton: typeof en.customizeButtonEnabled === "boolean" ? en.customizeButtonEnabled : String(en.customizeButtonEnabled ?? "1") !== "0",
+          cookiePolicyLink: typeof en.cookiePolicyLinkEnabled === "boolean" ? en.cookiePolicyLinkEnabled : String(en.cookiePolicyLinkEnabled ?? "0") !== "0",
           cookiePolicyLabel: en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
@@ -355,7 +355,7 @@ export default function page({ siteId }: { siteId: string }) {
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: en.rejectAll || "Reject",
-            saveMyPreferencesLabel: en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
+            saveMyPreferencesLabel: en.saveMyPreferences || T.saveMyPreferences,
           },
           ccpa: {
             message:
@@ -365,24 +365,20 @@ export default function page({ siteId }: { siteId: string }) {
             doNotSellLabel:
               en.doNotSell || "Do Not Share My Personal Information",
             optOutTitle:
-              en.optOutPreference || TRANSLATIONS.en.optOutPreference,
+              en.optOutPreference || T.optOutPreference,
             optOutMessage:
               en.ccpaOptOutPreferenceIntro ||
-              TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
+              T.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel:
-              en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
+              en.saveMyPreferences || T.saveMyPreferences,
           },
         };
         setContentSettings(nextSettings);
         setLastSavedContentSettings(nextSettings);
         setLastPublishedBothFocus(bothContentFocusRef.current);
 
-        const fbEnabled =
-          typeof en.floatingButtonEnabled === "boolean"
-            ? en.floatingButtonEnabled
-            : String(en.floatingButtonEnabled ?? "1") !== "0";
-        const fbPos =
-          en.floatingButtonPosition === "right" ? "right" : "left";
+        const fbEnabled = typeof en.floatingButtonEnabled === "boolean" ? en.floatingButtonEnabled : String(en.floatingButtonEnabled ?? "1") !== "0";
+        const fbPos = en.floatingButtonPosition === "right" ? "right" : "left";
         const fbState: FloatingButtonState = {
           enabled: fbEnabled,
           position: fbPos,
@@ -639,6 +635,7 @@ export default function page({ siteId }: { siteId: string }) {
             optOutPreference: contentSettings.ccpa.optOutTitle,
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
             saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+            privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
             customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -779,6 +776,7 @@ export default function page({ siteId }: { siteId: string }) {
         setActive={setActive}
         iabEnabled={iabEnabled}
         effectivePlanId={resolvedPlanId}
+        isLegacy={isLegacySite}
       />
       {/* Panel toggle — only visible at lg (1024-1279px) */}
       <button
@@ -951,7 +949,7 @@ export default function page({ siteId }: { siteId: string }) {
             <div className="flex justify-end mb-3">
               <button
                 type="button"
-                onClick={() => setContentSettings(makeDefaultContentSettings())}
+                onClick={() => setContentSettings(makeDefaultContentSettings(selectedLangCode))}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
                 <ResetIcon />
@@ -1122,6 +1120,7 @@ export default function page({ siteId }: { siteId: string }) {
       <ConsentPreview
       iabEnabled={iabEnabled}
         key={previewRevision}
+        langCode={selectedLangCode}
         previewBannerType={previewBannerType}
         siteDomain={site?.domain ?? null}
         consentType={consentType}
@@ -1140,7 +1139,7 @@ export default function page({ siteId }: { siteId: string }) {
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
-        onNext={() => setShowInstallModal(true)}
+        onNext={isWebflowSite ? undefined : () => setShowInstallModal(true)}
         bothModeBannerType={
           consentType === "both" ? bothContentFocus : undefined
         }

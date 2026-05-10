@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, renameSite, checkSiteDomainForRename, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, renameSite, checkSiteDomainForRename, updateProfile, type BillingUsage } from "@/lib/client-api";
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -129,9 +129,32 @@ export default function SettingsPage() {
     [user?.email],
   );
   const accountOwnerName = useMemo(
-    () => String(user?.name || "").trim() || "—",
-    [user?.name],
+    () => String(user?.profile?.name || user?.name || "").trim() || "—",
+    [user?.profile?.name, user?.name],
   );
+  const initialBillingEmail = useMemo(
+    () => String(user?.billingEmail || user?.billing_email || user?.profile?.billingEmail || "").trim(),
+    [user],
+  );
+  const [billingEmailSaving, setBillingEmailSaving] = useState(false);
+  const [billingEmailError, setBillingEmailError] = useState<string | null>(null);
+  const [billingEmailSuccess, setBillingEmailSuccess] = useState(false);
+
+  const handleSaveBillingEmail = useCallback(async (email: string) => {
+    setBillingEmailSaving(true);
+    setBillingEmailError(null);
+    setBillingEmailSuccess(false);
+    try {
+      await updateProfile({ billingEmail: email.trim() || undefined });
+      setBillingEmailSuccess(true);
+      setTimeout(() => setBillingEmailSuccess(false), 3000);
+    } catch (err: any) {
+      setBillingEmailError(err?.message || "Failed to save billing email");
+    } finally {
+      setBillingEmailSaving(false);
+    }
+  }, []);
+
   const accountId = useMemo(() => {
     const firstOrg = Array.isArray(orgsFromSession) ? orgsFromSession[0] : null;
     const raw = user?.id ?? firstOrg?.id ?? firstOrg?.organizationId ?? firstOrg?.organization_id;
@@ -534,7 +557,15 @@ export default function SettingsPage() {
 
           {activeTab === "general" && (
             <div className="text-center">
-              <ProfileForm name={accountOwnerName} email={accountOwnerEmail} />
+              <ProfileForm
+                name={accountOwnerName}
+                email={accountOwnerEmail}
+                billingEmail={initialBillingEmail}
+                onSaveBillingEmail={handleSaveBillingEmail}
+                billingEmailSaving={billingEmailSaving}
+                billingEmailError={billingEmailError}
+                billingEmailSuccess={billingEmailSuccess}
+              />
             </div>
           )}
 
