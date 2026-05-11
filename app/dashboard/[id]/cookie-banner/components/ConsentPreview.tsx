@@ -64,6 +64,7 @@ export default function ConsentPreview({
   siteDomain,
   consentType,
   content,
+  langCode,
   floatingButton = { enabled: true, position: 'left' as const },
   onSaveChanges,
   saveDisabled = true,
@@ -83,6 +84,7 @@ export default function ConsentPreview({
   initialLayout,
 }: {
   iabEnabled: boolean;
+  langCode?: string;
   previewBannerType?: "gdpr" | "ccpa" |'iab';
   siteDomain?: string | null;
   consentType?: 'gdpr' | 'ccpa' | 'both';
@@ -159,8 +161,8 @@ export default function ConsentPreview({
   }, [previewBannerType, consentType, bothModeBannerType, activeBothType]);
 
   const lang = useMemo(
-    () => getBannerLanguage({ autoDetectLanguage: true }),
-    [],
+    () => langCode || getBannerLanguage({ autoDetectLanguage: true }),
+    [langCode],
   );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
 
@@ -182,7 +184,6 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
-      borderColor: colors.preferencesButtonText,
     }),
     [colors.preferencesButtonBg, colors.preferencesButtonText],
   );
@@ -258,7 +259,7 @@ export default function ConsentPreview({
   }, [saveSuccess]);
   useEffect(() => {
     if (!showSaveToast) return;
-    const t = window.setTimeout(() => setShowSaveToast(false), 5000);
+    const t = window.setTimeout(() => setShowSaveToast(false), 3000);
     return () => window.clearTimeout(t);
   }, [showSaveToast]);
 
@@ -342,9 +343,11 @@ export default function ConsentPreview({
       if (e.key === 'Escape') onDismissPublishSuccess?.();
     };
     window.addEventListener('keydown', onKeyDown);
+    const t = window.setTimeout(() => onDismissPublishSuccess?.(), 3000);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(t);
     };
   }, [publishSuccess, onDismissPublishSuccess]);
 
@@ -525,13 +528,15 @@ export default function ConsentPreview({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={onNext}
-            className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
-          >
-            Next
-          </button>
+          {onNext && (
+            <button
+              type="button"
+              onClick={onNext}
+              className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
+            >
+              Next
+            </button>
+          )}
         </div>
       </div>
 
@@ -606,11 +611,11 @@ export default function ConsentPreview({
                 {content?.closeButton ? (
                   <button type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
                 ) : null}
-                <div className="cb-banner-body-preview min-w-0 shrink-0 overflow-y-auto overflow-x-hidden mb-3">
-                  <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
+                <div className="cb-banner-body-preview min-w-0 w-full overflow-y-auto overflow-x-hidden mb-3">
+                  <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', maxWidth: '100%', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
                     {safeContent.title || t('title')}
                   </p>
-                  <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] tracking-tight mb-0">
+                  <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', maxWidth: '100%' }} className="text-[11px] tracking-tight mb-0">
                     {(safeContent.message != null && safeContent.message !== '' ? safeContent.message : null) ??
                       (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
                     {safeContent.cookiePolicyLink && safeContent.privacyPolicyUrl ? (
@@ -708,7 +713,7 @@ export default function ConsentPreview({
                 (safeContent.rejectAll?.length ?? 0),
                 (safeContent.preferencesLabel?.length ?? 0),
               );
-              const isLongContent = (safeContent.message?.length ?? 0) > 200 || maxBtnLen > 12;
+              const isLongContent = (safeContent.title?.length ?? 0) > 40 || (safeContent.message?.length ?? 0) > 200 || maxBtnLen > 12;
               const base = (isBoldHeavy && isLongContent) ? 580 : isLongContent ? 500 : 380;
               return `min(${base}px, calc(100% - 64px))`;
             })();

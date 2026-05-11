@@ -352,6 +352,7 @@ interface CheckoutFormProps {
   domain: string;
   platform: string;
   wfSiteId?: string;
+  initBillingEmail?: string;
   planId: PlanId;
   interval: Interval;
   onPlanChange: (p: PlanId) => void;
@@ -363,6 +364,7 @@ function CheckoutForm({
   domain: initDomain,
   platform,
   wfSiteId,
+  initBillingEmail = '',
   planId,
   interval,
   onPlanChange,
@@ -372,13 +374,14 @@ function CheckoutForm({
   const elements = useElements();
   const router = useRouter();
 
+  const hasSeparateBilling = !!initBillingEmail && initBillingEmail !== initEmail;
   const [email, setEmail] = useState(initEmail);
   /** Account email starts read-only; toggled to an editable input via the Edit button. */
   const [editEmail, setEditEmail] = useState(false);
   // Domain is locked — derived from URL params, never editable from the UI.
   const domain = initDomain;
-  const [billingEmail, setBillingEmail] = useState(initEmail);
-  const [separateBilling, setSeparateBilling] = useState(false);
+  const [billingEmail, setBillingEmail] = useState(hasSeparateBilling ? initBillingEmail : initEmail);
+  const [separateBilling, setSeparateBilling] = useState(hasSeparateBilling);
   const [nameOnCard, setNameOnCard] = useState('');
   const [country, setCountry] = useState('United States');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<string, string>>>({});
@@ -915,10 +918,17 @@ function CheckoutPageInner() {
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
 
-  const email = (params.get('email') ?? '').trim().toLowerCase();
-  const domain = cleanDomain(params.get('domain') ?? '');
-  const platform = params.get('platform') ?? '';
-  const wfSiteId = params.get('platformId') ?? params.get('wfSiteId') ?? '';
+  const rawD = params.get('d') ?? '';
+  let decoded: Record<string, string> = {};
+  if (rawD) {
+    try { decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rawD))))); } catch { try { decoded = JSON.parse(atob(decodeURIComponent(rawD))); } catch { /* use raw params */ } }
+  }
+
+  const email = (decoded.email ?? params.get('email') ?? '').trim().toLowerCase();
+  const domain = cleanDomain(decoded.domain ?? params.get('domain') ?? '');
+  const platform = decoded.platform ?? params.get('platform') ?? '';
+  const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+  const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
@@ -940,6 +950,7 @@ function CheckoutPageInner() {
                   domain={domain}
                   platform={platform}
                   wfSiteId={wfSiteId}
+                  initBillingEmail={initBillingEmail}
                   planId={planId}
                   interval={interval}
                   onPlanChange={setPlanId}

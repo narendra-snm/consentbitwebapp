@@ -14,21 +14,22 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 interface SidebarProps {
-  
+
   active: string;
   setActive: (active: string) => void;
   iabEnabled: boolean;
   effectivePlanId?: string;
+  isLegacy?: boolean;
 }
 
-export function Sidebar({ active, setActive, iabEnabled, effectivePlanId }: SidebarProps) {
+export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLegacy }: SidebarProps) {
   // Defer plan check until after mount to avoid server/client hydration mismatch.
   // Server doesn't have session data, so effectivePlanId is always empty there.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const planKey = mounted ? String(effectivePlanId ?? "").toLowerCase() : "";
-  const isFree = planKey === "free";
+  const isFree = planKey === "free" && !isLegacy;
   const menuItems = [
     { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },
     { name: "Content", icon: "content", tip: "Edit banner title, description, button labels and cookie policy link." },

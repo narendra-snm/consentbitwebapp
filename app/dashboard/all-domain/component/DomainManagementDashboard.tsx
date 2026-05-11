@@ -169,6 +169,12 @@ export function DomainManagementDashboard() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
   const [showCancelLoading, setShowCancelLoading] = useState(false);
+
+  useEffect(() => {
+    if (!cancelSuccess) return;
+    const t = setTimeout(() => setCancelSuccess(false), 3000);
+    return () => clearTimeout(t);
+  }, [cancelSuccess]);
   const [confirmDomain, setConfirmDomain] = useState<Domain | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortAsc, setSortAsc] = useState(false);
