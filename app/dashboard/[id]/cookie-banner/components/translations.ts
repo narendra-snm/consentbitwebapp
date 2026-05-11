@@ -246,13 +246,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     preferences: 'Preferências',
   },
   nl: {
-    title: 'We waarderen uw privacy',
+    title: 'Cookie-instellingen',
     description:
-      'We gebruiken cookies om uw browse-ervaring te verbeteren, gepersonaliseerde advertenties of inhoud te tonen en ons verkeer te analyseren. Door op Alles Accepteren te klikken, stemt u in met ons gebruik van cookies.',
+      'We gebruiken cookies om u de best mogelijke ervaring te bieden. Ze stellen ons ook in staat om gebruikersgedrag te analyseren om de website voortdurend voor u te verbeteren. ',
     privacyPolicy: 'Privacybeleid',
-    acceptAll: 'Alles Accepteren',
-    rejectAll: 'Alles Weigeren',
-    customise: 'Aanpassen',
+    acceptAll: 'Accepteren',
+    rejectAll: 'Weigeren',
+    customise: 'Voorkeuren',
     save: 'Opslaan',
     back: 'Terug',
     doNotSell: 'Mijn Persoonlijke Informatie Niet Delen',

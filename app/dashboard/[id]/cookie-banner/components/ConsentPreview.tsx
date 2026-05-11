@@ -184,7 +184,6 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
-      borderColor: colors.preferencesButtonText,
     }),
     [colors.preferencesButtonBg, colors.preferencesButtonText],
   );
