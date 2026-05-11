@@ -29,8 +29,9 @@ export default function ConsentLogsPage() {
     const label = pickSiteLabel(resolved as { name?: string; domain?: string });
     return label || '—';
   }, [loading, resolved]);
-
+console.log('resolved', resolved)
   const isLegacy = !!(resolved as any)?.isLegacy;
+  const platform = (resolved as any)?.platform ?? null;
   const platformSiteId = (resolved as any)?.platformSiteId ?? (resolved as any)?.platformsiteid ?? null;
   // Migrated webapp users (isLegacy + platformSiteId) write new consents to the Consent table
   // using their webapp siteId — read from the new API, not the legacy store.
@@ -40,6 +41,7 @@ export default function ConsentLogsPage() {
   if (!siteId) return null;
 
   // Pass raw isLegacy — ConsentLogsDashboard uses the selected date to decide KV vs D1:
-  // legacy + date ≤ June 2026 → KV/R2 (historical), legacy + date > June 2026 → D1.
-  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} />;
+  // legacy + date ≤ June 2026 → legacy store (Framer KV for framer platform, KV/R2 otherwise),
+  // legacy + date > June 2026 → D1.
+  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />;
 }
