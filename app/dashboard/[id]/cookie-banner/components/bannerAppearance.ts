@@ -7,6 +7,8 @@ export type BannerLayoutValue = {
   alignment: 'bottom-left' | 'bottom-right';
   /** Border radius in px (stored as rem in DB). */
   borderRadius: string;
+  /** Button corner radius in px (stored as rem in DB under `buttonBorderRadius`). */
+  buttonRadius: string;
   /** Saved under translations.en.bannerEntranceAnimation for future use. */
   animation: string;
 };
@@ -43,6 +45,7 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     position: 'box',
     alignment: 'bottom-left',
     borderRadius: '12',
+    buttonRadius: '4',
     animation: 'fade-in',
   },
   colors: {
@@ -157,6 +160,9 @@ export function appearanceFromCustomization(
     borderRadius: bannerRadiusToPxString(
       (customization as { bannerBorderRadius?: string }).bannerBorderRadius,
     ),
+    buttonRadius: (customization as { buttonBorderRadius?: string }).buttonBorderRadius != null
+      ? bannerRadiusToPxString((customization as { buttonBorderRadius?: string }).buttonBorderRadius)
+      : DEFAULT_APPEARANCE.layout.buttonRadius,
     animation:
       typeof en.bannerEntranceAnimation === 'string' && en.bannerEntranceAnimation.length > 0
         ? en.bannerEntranceAnimation

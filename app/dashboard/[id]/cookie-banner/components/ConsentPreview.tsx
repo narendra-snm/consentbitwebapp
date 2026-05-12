@@ -112,7 +112,7 @@ export default function ConsentPreview({
   onDismissPublishSuccess?: () => void;
   /** Optional action for top-right Next button. */
   onNext?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'animation'>;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonRadius' | 'animation'>;
   content?: {
     title?: string;
     message?: string;
@@ -166,6 +166,13 @@ export default function ConsentPreview({
   );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
 
+  /** Button corner radius (px). Falls back to 4 when no data was fetched. */
+  const buttonRadiusPx = useMemo(() => {
+    const raw = initialLayout?.buttonRadius;
+    const n = raw == null || raw === '' ? NaN : Number(raw);
+    return Number.isFinite(n) ? n : 4;
+  }, [initialLayout?.buttonRadius]);
+
   /**
    * Accept + Reject (primary actions) — same colors.
    * Defaults come from `DEFAULT_APPEARANCE` / saved customization (e.g. primary `#0284c7`), not fixed Tailwind blues.
@@ -175,8 +182,9 @@ export default function ConsentPreview({
       backgroundColor: colors.buttonColor,
       color: colors.buttonTextColor,
       borderColor: colors.buttonTextColor,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    [colors.buttonColor, colors.buttonTextColor],
+    [colors.buttonColor, colors.buttonTextColor, buttonRadiusPx],
   );
 
   /** Preference + Save in panel — same colors (defaults in `bannerAppearance` / DB customise fields). */
@@ -184,8 +192,9 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    [colors.preferencesButtonBg, colors.preferencesButtonText],
+    [colors.preferencesButtonBg, colors.preferencesButtonText, buttonRadiusPx],
   );
 
   /** Banner / prefs titles + category row labels — matches Colors "Heading color". */
@@ -1037,6 +1046,7 @@ export default function ConsentPreview({
   floatingButtonEnabled: floatingButton?.enabled,
   floatingButtonPosition: floatingButton?.position,
   borderRadius: initialLayout?.borderRadius || "12",
+  buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
         </div>

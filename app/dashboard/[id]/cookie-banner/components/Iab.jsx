@@ -13,6 +13,7 @@ const defaultStyleConfig = {
   textAlign: "left",
   fontWeight: "400",
   borderRadius: "12",
+  buttonBorderRadius: "4",
   bannerType: "banner", // "box" | "banner" | "popup"
   bannerEntranceAnimation: "fade-in", // 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in'
   // Preview-only: allow the outer editor to pass its floating-button state so we can avoid overlap.
@@ -459,7 +460,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
   ];
 
   const outlineBtn = {
-    borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
+    borderRadius: `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`,
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 18px",
@@ -638,7 +639,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
 // ─── Banner Content (shared across box & popup) ───────────────────────────────
 function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical" }) {
   const br = `${s.borderRadius}px`;
-  const btnSmallBr = `${Math.min(Number(s.borderRadius), 8)}px`;
+  const btnSmallBr = `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`;
   const maybeBorder = (bg, borderColor) =>
     String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
 
@@ -722,7 +723,7 @@ function FullBanner({ s, onCustomise, onReject, onAccept }) {
   const maybeBorder = (bg, borderColor) =>
     String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
   const outlineBtn = {
-    borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
+    borderRadius: `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`,
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 16px",
