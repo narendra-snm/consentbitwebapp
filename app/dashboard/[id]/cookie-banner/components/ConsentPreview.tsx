@@ -112,7 +112,7 @@ export default function ConsentPreview({
   onDismissPublishSuccess?: () => void;
   /** Optional action for top-right Next button. */
   onNext?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'animation'>;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonBorderRadius' | 'animation'>;
   content?: {
     title?: string;
     message?: string;
@@ -166,6 +166,10 @@ export default function ConsentPreview({
   );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
 
+  const btnBrPx = initialLayout?.buttonBorderRadius
+    ?? (bannerLayout as BannerLayoutValue | null)?.buttonBorderRadius
+    ?? '8';
+
   /**
    * Accept + Reject (primary actions) — same colors.
    * Defaults come from `DEFAULT_APPEARANCE` / saved customization (e.g. primary `#0284c7`), not fixed Tailwind blues.
@@ -175,8 +179,10 @@ export default function ConsentPreview({
       backgroundColor: colors.buttonColor,
       color: colors.buttonTextColor,
       borderColor: colors.buttonTextColor,
+      borderRadius: `${btnBrPx}px`,
     }),
-    [colors.buttonColor, colors.buttonTextColor],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colors.buttonColor, colors.buttonTextColor, btnBrPx],
   );
 
   /** Preference + Save in panel — same colors (defaults in `bannerAppearance` / DB customise fields). */
@@ -184,8 +190,10 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
+      borderRadius: `${btnBrPx}px`,
     }),
-    [colors.preferencesButtonBg, colors.preferencesButtonText],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colors.preferencesButtonBg, colors.preferencesButtonText, btnBrPx],
   );
 
   /** Banner / prefs titles + category row labels — matches Colors "Heading color". */
@@ -1037,6 +1045,7 @@ export default function ConsentPreview({
   floatingButtonEnabled: floatingButton?.enabled,
   floatingButtonPosition: floatingButton?.position,
   borderRadius: initialLayout?.borderRadius || "12",
+  buttonBorderRadius: btnBrPx,
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
         </div>

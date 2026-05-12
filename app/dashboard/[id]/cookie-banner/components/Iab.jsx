@@ -459,7 +459,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
   ];
 
   const outlineBtn = {
-    borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
+    borderRadius: `${s.buttonBorderRadius ?? Math.min(Number(s.borderRadius), 8)}px`,
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 18px",
@@ -591,7 +591,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
                   display: "flex", alignItems: "center", gap: "8px",
                   padding: "9px 12px",
                   border: "1px solid #E5E7EB",
-                  borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
+                  borderRadius: `${s.buttonBorderRadius ?? Math.min(Number(s.borderRadius), 8)}px`,
                   marginBottom: "14px",
                   backgroundColor: "#FAFAFA",
                 }}
@@ -638,7 +638,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
 // ─── Banner Content (shared across box & popup) ───────────────────────────────
 function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical" }) {
   const br = `${s.borderRadius}px`;
-  const btnSmallBr = `${Math.min(Number(s.borderRadius), 8)}px`;
+  const btnSmallBr = `${s.buttonBorderRadius ?? Math.min(Number(s.borderRadius), 8)}px`;
   const maybeBorder = (bg, borderColor) =>
     String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
 
@@ -722,7 +722,7 @@ function FullBanner({ s, onCustomise, onReject, onAccept }) {
   const maybeBorder = (bg, borderColor) =>
     String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
   const outlineBtn = {
-    borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
+    borderRadius: `${s.buttonBorderRadius ?? Math.min(Number(s.borderRadius), 8)}px`,
     fontWeight: s.fontWeight,
     fontSize: "13px",
     padding: "9px 16px",

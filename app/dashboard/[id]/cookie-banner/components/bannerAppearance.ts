@@ -3,10 +3,12 @@
 export type BannerLayoutValue = {
   /** Visual style in the editor (not all are used by the live embed yet). */
   position: 'box' | 'banner' | 'bottom-center';
-  /** Maps to DB `position` (bottom-left | bottom-right). */
-  alignment: 'bottom-left' | 'bottom-right';
+  /** Maps to DB `position` (bottom-left | bottom-right | bottom-center). */
+  alignment: 'bottom-left' | 'bottom-right' | 'bottom-center';
   /** Border radius in px (stored as rem in DB). */
   borderRadius: string;
+  /** Button border radius in px (stored as rem in DB). */
+  buttonBorderRadius: string;
   /** Saved under translations.en.bannerEntranceAnimation for future use. */
   animation: string;
 };
@@ -43,6 +45,7 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     position: 'box',
     alignment: 'bottom-left',
     borderRadius: '12',
+    buttonBorderRadius: '8',
     animation: 'fade-in',
   },
   colors: {
@@ -82,9 +85,10 @@ export function bannerRadiusToPxString(r: string | undefined | null): string {
 
 export function normalizeBannerPosition(
   raw: string | undefined | null,
-): 'bottom-left' | 'bottom-right' {
+): 'bottom-left' | 'bottom-right' | 'bottom-center' {
   const v = String(raw || '').toLowerCase();
   if (v === 'bottom-right' || v === 'right') return 'bottom-right';
+  if (v === 'bottom-center' || v === 'center') return 'bottom-center';
   return 'bottom-left';
 }
 
@@ -149,13 +153,17 @@ export function appearanceFromCustomization(
     ? (visualNorm as AppearanceState['layout']['position'])
     : 'box';
 
+  const rawAlignment = normalizeBannerPosition(
+    (customization as { position?: string }).position,
+  );
   const layout: BannerLayoutValue = {
     position,
-    alignment: normalizeBannerPosition(
-      (customization as { position?: string }).position,
-    ),
+    alignment: position === 'box' && rawAlignment === 'bottom-center' ? 'bottom-left' : rawAlignment,
     borderRadius: bannerRadiusToPxString(
       (customization as { bannerBorderRadius?: string }).bannerBorderRadius,
+    ),
+    buttonBorderRadius: bannerRadiusToPxString(
+      (customization as { buttonBorderRadius?: string }).buttonBorderRadius ?? '8',
     ),
     animation:
       typeof en.bannerEntranceAnimation === 'string' && en.bannerEntranceAnimation.length > 0

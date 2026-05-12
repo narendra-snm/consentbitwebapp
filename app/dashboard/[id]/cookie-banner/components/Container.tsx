@@ -138,6 +138,7 @@ export default function page({ siteId }: { siteId: string }) {
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
       borderRadius: appearance.layout.borderRadius,
+      buttonBorderRadius: appearance.layout.buttonBorderRadius,
     });
   }, [
     appearance,
@@ -555,9 +556,14 @@ export default function page({ siteId }: { siteId: string }) {
       saveButtonText: appearance.colors.savePreferencesButtonText,
       contentEditedFromWebapp: true,
       bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
       privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
       translations: {
         ...((prev && prev.translations) || {}),
+        config: {
+          ...((prev && prev.translations && prev.translations.config) || {}),
+          bannerLayoutVisual: appearance.layout.position,
+        },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
           title: contentSettings.title,
@@ -600,8 +606,13 @@ export default function page({ siteId }: { siteId: string }) {
 
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
+    const snap = currentRegulationSnapshot;
+    const isIab = snap?.bannerType === 'iab' || site?.banner_type === 'iab';
+    const rm = snap?.regionMode ?? 'gdpr';
+    const compliance = isIab || rm === 'both' ? ['gdpr', 'us'] : rm === 'ccpa' ? ['us'] : ['gdpr'];
     await saveBannerCustomization({
       siteId: String(site.id),
+      compliance,
       customization: {
         ...(customizationBase || {}),
         position: appearance.layout.alignment,
@@ -618,9 +629,14 @@ export default function page({ siteId }: { siteId: string }) {
         saveButtonText: appearance.colors.savePreferencesButtonText,
         contentEditedFromWebapp: true,
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
           ...((customizationBase && customizationBase.translations) || {}),
+          config: {
+            ...((customizationBase && customizationBase.translations && customizationBase.translations.config) || {}),
+            bannerLayoutVisual: appearance.layout.position,
+          },
           en: {
             ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
             title: contentSettings.title,
