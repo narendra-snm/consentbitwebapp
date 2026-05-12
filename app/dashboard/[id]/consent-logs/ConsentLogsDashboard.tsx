@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import {
   getConsentHistory,
   getLegacyConsentMonthly,
+  getLegacyConsentMonthlyFramer,
   type ConsentLog,
   type ConsentLogCookie,
   type ConsentHistoryResponse,
@@ -393,13 +394,16 @@ export function ConsentLogsDashboard({
   legacyDomain,
   isLegacy = false,
   platformSiteId,
+  platform,
 }: {
   siteId: string;
   siteDomain: string;
   legacyDomain?: string;
   isLegacy?: boolean;
   platformSiteId?: string | null;
+  platform?: string | null;
 }) {
+  const isFramerLegacy = isLegacy && (platform || '').toLowerCase() === 'framer';
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -425,7 +429,8 @@ export function ConsentLogsDashboard({
     setLoading(true);
     setLoadError(null);
 
-    // Before June 2026, legacy users' data lives in KV/R2; from June 2026 onwards it's in D1.
+    // Before June 2026, legacy users' data lives in KV/R2 (Framer KV for framer platform);
+    // from June 2026 onwards it's in D1.
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useLegacySource = hasHistoricalR2Data && (
       parseInt(selectedYear, 10) < 2026 ||
@@ -435,7 +440,9 @@ export function ConsentLogsDashboard({
     const doFetch = async () => {
       try {
         const res = useLegacySource
-          ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+          ? isFramerLegacy
+            ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+            : await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
           : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
         setData(res);
@@ -451,7 +458,7 @@ export function ConsentLogsDashboard({
     void doFetch();
 
     return () => { active = false; };
-  }, [siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
+  }, [siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
 
   const handleRefresh = useCallback(() => {
     setData(null);
@@ -467,7 +474,9 @@ export function ConsentLogsDashboard({
     const doFetch = async () => {
       try {
         const res = useLegacySource
-          ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+          ? isFramerLegacy
+            ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+            : await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
           : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         setData(res);
         writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
@@ -479,7 +488,7 @@ export function ConsentLogsDashboard({
     };
 
     void doFetch();
-  }, [siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
+  }, [siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -723,14 +732,16 @@ export function ConsentLogsDashboard({
         (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
       );
       const apiPath = useLegacySource
-        ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+        ? isFramerLegacy
+          ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+          : `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
         : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
       const a = document.createElement('a');
       a.href = apiPath;
       a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
       a.click();
     },
-    [isLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
+    [isLegacy, isFramerLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
   );
 
   const downloadCsv = useCallback(async () => {
@@ -742,7 +753,9 @@ export function ConsentLogsDashboard({
       (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
     );
     const apiPath = useLegacySource
-      ? `/api/legacy-consent-csv?${params.toString()}`
+      ? isFramerLegacy
+        ? `/api/legacy-consent-csv-framer?${params.toString()}`
+        : `/api/legacy-consent-csv?${params.toString()}`
       : `/api/consent-csv?${params.toString()}`;
     setCsvDownloading(true);
     try {
@@ -761,7 +774,7 @@ export function ConsentLogsDashboard({
     } finally {
       setCsvDownloading(false);
     }
-  }, [csvDownloading, siteId, isLegacy, platformSiteId, selectedYear, selectedMonth]);
+  }, [csvDownloading, siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth]);
 
   return (
     <>
@@ -942,6 +955,7 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-[9px] whitespace-nowrap border-b border-black/10"
                         >
                           <MethodBadge method={detectMethod(row)} />
+                         
                         </td>
                         <td
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"

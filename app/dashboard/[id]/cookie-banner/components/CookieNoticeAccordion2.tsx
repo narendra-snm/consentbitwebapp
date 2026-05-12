@@ -16,7 +16,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 const LIMITS = {
-  title: 30,
+  title: 50,
   message: 320,
   button: 20,
   policyLabel: 30,
@@ -59,6 +59,7 @@ export function CookieNoticeAccordion2({
   isOpen?: boolean;
   onToggle?: (nextOpen: boolean) => void;
 }) {
+  console.log("value", value);
   const settings: CookieNoticeSettings = {
     title: 'We value your privacy',
     message: 'We use cookies to enhance your browsing experience, serve personalised ads or content, and analyse our traffic. By clicking "Accept All", you consent to our use of cookies.',

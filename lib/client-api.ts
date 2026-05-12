@@ -970,6 +970,21 @@ export async function getLegacyConsentMonthly(
   return data;
 }
 
+export async function getLegacyConsentMonthlyFramer(
+  siteId: string,
+  year: string,
+  month: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, limit: '500', offset: '0' });
+  const res = await fetch(`/api/legacy-consent-monthly-framer?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  console.log('[getLegacyConsentMonthlyFramer] decoded response', {
+    siteId, year, month, status: res.status, data,
+  });
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
 export async function getConsentHistory(
   siteId: string,
   limit: number = 100,
