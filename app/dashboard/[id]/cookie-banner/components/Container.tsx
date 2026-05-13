@@ -67,7 +67,7 @@ const ResetIcon = () => (
 
 /** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
 type RegulationSnapshot = {
-  bannerType: "gdpr" | "ccpa";
+  bannerType: "gdpr" | "ccpa" | "iab";
   regionMode: "gdpr" | "ccpa" | "both";
 };
 
@@ -228,7 +228,7 @@ export default function page({ siteId }: { siteId: string }) {
       };
     }
     return {
-      bannerType: site.banner_type === "ccpa" ? "ccpa" : "gdpr",
+      bannerType: site.banner_type === "iab" ? "iab" : site.banner_type === "ccpa" ? "ccpa" : "gdpr",
       regionMode: (site.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
     };
   }, [site, isFreePlan, freePreviewBannerType]);
@@ -395,7 +395,7 @@ export default function page({ siteId }: { siteId: string }) {
         const s = siteRef.current;
         if (s) {
           setLastPublishedRegulation({
-            bannerType: s.banner_type === "ccpa" ? "ccpa" : "gdpr",
+            bannerType: s.banner_type === "iab" ? "iab" : s.banner_type === "ccpa" ? "ccpa" : "gdpr",
             regionMode: (s.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
           });
         }
@@ -442,7 +442,7 @@ export default function page({ siteId }: { siteId: string }) {
         const s = siteRef.current;
         if (s) {
           setLastPublishedRegulation({
-            bannerType: s.banner_type === "ccpa" ? "ccpa" : "gdpr",
+            bannerType: s.banner_type === "iab" ? "iab" : s.banner_type === "ccpa" ? "ccpa" : "gdpr",
             regionMode: (s.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
           });
         }
