@@ -429,21 +429,22 @@ export function ConsentLogsDashboard({
     setLoading(true);
     setLoadError(null);
 
-    // Before June 2026, legacy users' data lives in KV/R2 (Framer KV for framer platform);
-    // from June 2026 onwards it's in D1.
-    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useLegacySource = hasHistoricalR2Data && (
+    // Both legacy stores (Framer KV, Webflow KV/R2) are gated to ≤ June 2026.
+    // After that, everyone reads from D1.
+    const isBeforeJulyCutoff =
       parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
-    );
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
+    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
 
     const doFetch = async () => {
       try {
-        const res = useLegacySource
-          ? isFramerLegacy
-            ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
-            : await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
-          : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
+        const res = useFramerLegacySource
+          ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+          : useWebflowLegacySource
+            ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+            : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
         setData(res);
         writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
@@ -465,19 +466,20 @@ export function ConsentLogsDashboard({
     setLoading(true);
     setLoadError(null);
 
-    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useLegacySource = hasHistoricalR2Data && (
+    const isBeforeJulyCutoff =
       parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
-    );
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
+    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
 
     const doFetch = async () => {
       try {
-        const res = useLegacySource
-          ? isFramerLegacy
-            ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
-            : await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
-          : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
+        const res = useFramerLegacySource
+          ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+          : useWebflowLegacySource
+            ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+            : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         setData(res);
         writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
       } catch (err: unknown) {
@@ -727,15 +729,16 @@ export function ConsentLogsDashboard({
 
   const handleDownloadRowPdf = useCallback(
     (row: ConsentLog) => {
-      const useLegacySource = isLegacy && (
+      const isBeforeJulyCutoff =
         parseInt(selectedYear, 10) < 2026 ||
-        (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
-      );
-      const apiPath = useLegacySource
-        ? isFramerLegacy
-          ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
-          : `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
-        : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
+        (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
+      const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+      const useWebflowLegacySource = !isFramerLegacy && isLegacy && isBeforeJulyCutoff;
+      const apiPath = useFramerLegacySource
+        ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+        : useWebflowLegacySource
+          ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+          : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
       const a = document.createElement('a');
       a.href = apiPath;
       a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -747,16 +750,17 @@ export function ConsentLogsDashboard({
   const downloadCsv = useCallback(async () => {
     if (csvDownloading) return;
     const params = new URLSearchParams({ siteId, year: selectedYear, month: selectedMonth });
-    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useLegacySource = hasHistoricalR2Data && (
+    const isBeforeJulyCutoff =
       parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6)
-    );
-    const apiPath = useLegacySource
-      ? isFramerLegacy
-        ? `/api/legacy-consent-csv-framer?${params.toString()}`
-        : `/api/legacy-consent-csv?${params.toString()}`
-      : `/api/consent-csv?${params.toString()}`;
+      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
+    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
+    const apiPath = useFramerLegacySource
+      ? `/api/legacy-consent-csv-framer?${params.toString()}`
+      : useWebflowLegacySource
+        ? `/api/legacy-consent-csv?${params.toString()}`
+        : `/api/consent-csv?${params.toString()}`;
     setCsvDownloading(true);
     try {
       const res = await fetch(apiPath, { credentials: 'include' });

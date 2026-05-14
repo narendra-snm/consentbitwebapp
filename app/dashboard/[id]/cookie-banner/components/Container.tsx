@@ -98,6 +98,9 @@ export default function page({ siteId }: { siteId: string }) {
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  /** Hoisted above `applyPersistSuccessState` so it can be a dep without a TDZ error. */
+  const [iabEnabled, setIabEnabled] = useState(false);
+  const [iabHydrated, setIabHydrated] = useState(false);
 
   useEffect(() => {
     if (!publishError) return;
@@ -139,7 +142,7 @@ export default function page({ siteId }: { siteId: string }) {
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
       borderRadius: appearance.layout.borderRadius,
-      buttonBorderRadius: appearance.layout.buttonBorderRadius,
+      buttonRadius: appearance.layout.buttonRadius,
     });
   }, [
     appearance,
@@ -334,10 +337,25 @@ export default function page({ siteId }: { siteId: string }) {
       try {
         const res = await getBannerCustomization(String(site.id));
         const customization = res?.customization || null;
+        const enForLog = customization?.translations?.en || {};
+        console.log('[cookie-banner] decoded fetched customization', {
+          siteId: site.id,
+          rawResponse: res,
+          customization,
+          bannerBorderRadius: customization?.bannerBorderRadius,
+          buttonBorderRadius: customization?.buttonBorderRadius,
+          compliance: enForLog.compliance,
+          isIab: enForLog.isIab,
+        });
         if (cancelled) return;
         setCustomizationBase(customization);
         setCustomizationLoading(false);
         const en = customization?.translations?.en || {};
+        // Repopulate IAB toggle from saved translation value (round-trip).
+        if (typeof en.isIab === 'boolean') {
+          setIabEnabled(en.isIab);
+          setIabHydrated(true);
+        }
         const cfgTr = customization?.translations?.config || {};
         const langCode = (en.languageSelected as string) || 'en';
         setSelectedLangCode(langCode);
@@ -591,7 +609,7 @@ export default function page({ siteId }: { siteId: string }) {
       saveButtonText: appearance.colors.savePreferencesButtonText,
       contentEditedFromWebapp: true,
       bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
-      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
+      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
       privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
       translations: {
         ...((prev && prev.translations) || {}),
@@ -625,6 +643,8 @@ export default function page({ siteId }: { siteId: string }) {
           bannerTextAlign: appearance.type.alignment,
           bannerLayoutVisual: appearance.layout.position,
           bannerEntranceAnimation: appearance.layout.animation,
+          compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
+          isIab: iabEnabled,
         },
       },
     }));
@@ -633,16 +653,18 @@ export default function page({ siteId }: { siteId: string }) {
   }, [
     appearance,
     bothContentFocus,
+    consentType,
     contentSettings,
     currentRegulationSnapshot,
     floatingButton,
+    iabEnabled,
     refresh,
   ]);
 
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
     const snap = currentRegulationSnapshot;
-    const isIab = iabEnabled || snap?.bannerType === 'iab' || site?.banner_type === 'iab';
+    const isIab = iabEnabled;
     const rm = snap?.regionMode ?? 'gdpr';
     const compliance = isIab || rm === 'both' ? ['gdpr', 'us'] : rm === 'ccpa' ? ['us'] : ['gdpr'];
     await saveBannerCustomization({
@@ -664,7 +686,7 @@ export default function page({ siteId }: { siteId: string }) {
         saveButtonText: appearance.colors.savePreferencesButtonText,
         contentEditedFromWebapp: true,
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
-        buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
+          buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
         bannerLogoPosition: floatingButton.position,
         showBannerLogo: floatingButton.enabled ? 1 : 0,
         centerAnimationDirection: appearance.layout.animation,
@@ -711,6 +733,8 @@ export default function page({ siteId }: { siteId: string }) {
             bannerTextAlign: appearance.type.alignment,
             bannerLayoutVisual: appearance.layout.position,
             bannerEntranceAnimation: appearance.layout.animation,
+            compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
+            isIab: iabEnabled,
             ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
           },
         },
@@ -780,9 +804,6 @@ export default function page({ siteId }: { siteId: string }) {
     const sid = String(site?.id || siteId || "").trim();
     return sid ? `cb_iab_enabled:${sid}` : "";
   }, [site?.id, siteId]);
-
-  const [iabEnabled, setIabEnabled] = useState(false);
-  const [iabHydrated, setIabHydrated] = useState(false);
 
   // Clear this site's IAB sessionStorage key when leaving the page so switching
   // back always re-derives the toggle from the backend banner_type, not stale storage.

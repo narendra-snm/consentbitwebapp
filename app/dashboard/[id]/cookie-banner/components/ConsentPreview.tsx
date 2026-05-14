@@ -112,7 +112,7 @@ export default function ConsentPreview({
   onDismissPublishSuccess?: () => void;
   /** Optional action for top-right Next button. */
   onNext?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonBorderRadius' | 'animation'>;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonRadius' | 'animation'>;
   content?: {
     title?: string;
     message?: string;
@@ -166,9 +166,23 @@ export default function ConsentPreview({
   );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
 
-  const btnBrPx = initialLayout?.buttonBorderRadius
-    ?? (bannerLayout as BannerLayoutValue | null)?.buttonBorderRadius
-    ?? '8';
+  /** Button corner radius (px). Falls back to 4 when no data was fetched. */
+  const buttonRadiusPx = useMemo(() => {
+    const raw = initialLayout?.buttonRadius;
+    const n = raw == null || raw === '' ? NaN : Number(raw);
+    return Number.isFinite(n) ? n : 4;
+  }, [initialLayout?.buttonRadius]);
+
+  /** Button corner radius (px). Falls back to 4 when no data was fetched. */
+  // const buttonRadiusPx = useMemo(() => {
+  //   const raw = initialLayout?.buttonRadius;
+  //   const n = raw == null || raw === '' ? NaN : Number(raw);
+  //   return Number.isFinite(n) ? n : 4;
+  // }, [initialLayout?.buttonRadius]);
+
+  // const btnBrPx = initialLayout?.buttonBorderRadius
+  //   ?? (bannerLayout as BannerLayoutValue | null)?.buttonBorderRadius
+  //   ?? '8';
 
   /**
    * Accept + Reject (primary actions) — same colors.
@@ -179,10 +193,9 @@ export default function ConsentPreview({
       backgroundColor: colors.buttonColor,
       color: colors.buttonTextColor,
       borderColor: colors.buttonTextColor,
-      borderRadius: `${btnBrPx}px`,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colors.buttonColor, colors.buttonTextColor, btnBrPx],
+    [colors.buttonColor, colors.buttonTextColor, buttonRadiusPx],
   );
 
   /** Preference + Save in panel — same colors (defaults in `bannerAppearance` / DB customise fields). */
@@ -190,10 +203,9 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
-      borderRadius: `${btnBrPx}px`,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colors.preferencesButtonBg, colors.preferencesButtonText, btnBrPx],
+    [colors.preferencesButtonBg, colors.preferencesButtonText, buttonRadiusPx],
   );
 
   /** Banner / prefs titles + category row labels — matches Colors "Heading color". */
@@ -345,11 +357,11 @@ export default function ConsentPreview({
   const getDeviceFrameClasses = () => {
     switch (device) {
       case "tablet":
-        return "maxw-[820px] w-full h-[500px]";
+        return "maxw-[820px] w-full h-[588px]";
       case "mobile":
         return "max-w-[410px] w-full h-[680px]";
       default:
-        return 'max-w-[1139px] w-full h-[444px]';
+        return 'max-w-[1139px] w-full h-[604px]';
     }
   };
 
@@ -1057,7 +1069,7 @@ export default function ConsentPreview({
   floatingButtonEnabled: floatingButton?.enabled,
   floatingButtonPosition: floatingButton?.position,
   borderRadius: initialLayout?.borderRadius || "12",
-  buttonBorderRadius: btnBrPx,
+  buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
 }} />}
         </div>

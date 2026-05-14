@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="header">
+      <Font ss:Bold="1"/>
+      <Interior ss:Color="#E6F1FD" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="link">
+      <Font ss:Color="#1D4ED8" ss:Underline="Single"/>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Consent Logs">
+    <Table>
+      <Row><Cell ss:StyleID="header"><Data ss:Type="String">#</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Visitor ID</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Timestamp (UTC)</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Status</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Banner Type</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Country</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Region</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">IP Address</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">User Agent</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Necessary</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Analytics</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Marketing</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Personalization</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Do Not Share</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Do Not Sell</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Download PDF</Data></Cell></Row>
+      <Row>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">a5c32ac9-5144-40e3-b2a7-f9ac3db438b4</Data></Cell>
+      <Cell><Data ss:Type="String">2026-05-11T21:57:05.159Z</Data></Cell>
+      <Cell><Data ss:Type="String">Accepted</Data></Cell>
+      <Cell><Data ss:Type="String">gdpr</Data></Cell>
+      <Cell><Data ss:Type="String">IN</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">2401:4900:1c44:848f:31d8:37e0:3755:a4a5</Data></Cell>
+      <Cell><Data ss:Type="String">Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:HRef="https://manager.consentbit.com/api/legacy-consent-pdf-framer?siteId=ca78aea8-90aa-41b2-aba5-6d15568fbf8e&amp;visitorId=a5c32ac9-5144-40e3-b2a7-f9ac3db438b4&amp;token=MTc3OTE0MTQ0Mg.J8qhka5zbpCm_Y04A19_5Czbya3THs4PEM7XiO-Hf8Q"><Data ss:Type="String">Download PDF</Data></Cell>
+    </Row>
+<Row>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">bf258b76-4e11-4f64-bc64-6873438495ee</Data></Cell>
+      <Cell><Data ss:Type="String">2026-05-11T21:18:23.320Z</Data></Cell>
+      <Cell><Data ss:Type="String">Accepted</Data></Cell>
+      <Cell><Data ss:Type="String">gdpr</Data></Cell>
+      <Cell><Data ss:Type="String">IN</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">2401:4900:1c44:848f:31d8:37e0:3755:a4a5</Data></Cell>
+      <Cell><Data ss:Type="String">Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:HRef="https://manager.consentbit.com/api/legacy-consent-pdf-framer?siteId=ca78aea8-90aa-41b2-aba5-6d15568fbf8e&amp;visitorId=bf258b76-4e11-4f64-bc64-6873438495ee&amp;token=MTc3OTE0MTQ0Mg.l_mZR8TrrULSz2Knie0I1VL95-ksdy4hZX5GVgAKlUg"><Data ss:Type="String">Download PDF</Data></Cell>
+    </Row>
+    </Table>
+  </Worksheet>
+</Workbook>
