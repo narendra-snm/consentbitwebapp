@@ -67,7 +67,8 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
 };
 
 export function pxBorderRadiusToRem(px: string): string {
-  const n = Math.max(0, Number.parseFloat(px) || 12);
+  const parsed = Number.parseFloat(px);
+  const n = Math.max(0, isNaN(parsed) ? 12 : parsed);
   return `${(n / 16).toFixed(3)}rem`;
 }
 
