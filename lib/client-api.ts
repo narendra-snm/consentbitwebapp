@@ -378,7 +378,7 @@ export async function getBannerCustomization(siteId: string) {
   return data as { success: true; customization: any | null };
 }
 
-export async function saveBannerCustomization(payload: { siteId: string; customization: any }) {
+export async function saveBannerCustomization(payload: { siteId: string; customization: any; compliance?: string[] }) {
   const res = await fetch('/api/banner-customization', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

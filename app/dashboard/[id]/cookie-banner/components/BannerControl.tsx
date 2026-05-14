@@ -45,7 +45,11 @@ export default function BannerControl({ value, onChange }: Props) {
             <button
               key={pos.id}
               type="button"
-              onClick={() => patch({ position: pos.id })}
+              onClick={() => {
+                const next: Partial<BannerLayoutValue> = { position: pos.id };
+                if (pos.id === 'box' && alignment === 'bottom-center') next.alignment = 'bottom-left';
+                patch(next);
+              }}
               className="relative group flex flex-col items-start gap-2 focus:outline-none cursor-pointer"
               aria-label={`Select ${pos.label} position`}
             >

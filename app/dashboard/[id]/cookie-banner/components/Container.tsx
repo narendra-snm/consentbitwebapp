@@ -141,6 +141,7 @@ export default function page({ siteId }: { siteId: string }) {
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
       borderRadius: appearance.layout.borderRadius,
+      buttonRadius: appearance.layout.buttonRadius,
     });
   }, [
     appearance,
@@ -577,6 +578,10 @@ export default function page({ siteId }: { siteId: string }) {
       privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
       translations: {
         ...((prev && prev.translations) || {}),
+        config: {
+          ...((prev && prev.translations && prev.translations.config) || {}),
+          bannerLayoutVisual: appearance.layout.position,
+        },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
           title: contentSettings.title,
@@ -623,8 +628,13 @@ export default function page({ siteId }: { siteId: string }) {
 
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
+    const snap = currentRegulationSnapshot;
+    const isIab = iabEnabled;
+    const rm = snap?.regionMode ?? 'gdpr';
+    const compliance = isIab || rm === 'both' ? ['gdpr', 'us'] : rm === 'ccpa' ? ['us'] : ['gdpr'];
     await saveBannerCustomization({
       siteId: String(site.id),
+      compliance,
       customization: {
         ...(customizationBase || {}),
         position: appearance.layout.alignment,
@@ -645,6 +655,10 @@ export default function page({ siteId }: { siteId: string }) {
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
           ...((customizationBase && customizationBase.translations) || {}),
+          config: {
+            ...((customizationBase && customizationBase.translations && customizationBase.translations.config) || {}),
+            bannerLayoutVisual: appearance.layout.position,
+          },
           en: {
             ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
             title: contentSettings.title,

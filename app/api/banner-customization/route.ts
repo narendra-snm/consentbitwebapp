@@ -25,6 +25,6 @@ export async function POST(request: Request) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cookies: cookie,
-    body: JSON.stringify({ ...body, skipScriptSwap: true }),
+    body: JSON.stringify(body),
   });
 }

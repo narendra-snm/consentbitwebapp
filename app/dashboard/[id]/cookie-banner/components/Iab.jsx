@@ -213,52 +213,72 @@ const purposesData = [
   },
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function alignClass(textAlign) {
-  if (textAlign === "center") return "text-center";
-  if (textAlign === "right") return "text-right";
-  return "text-left";
+// ─── Radii Helper ────────────────────────────────────────────────────────────
+function getRadii(s) {
+  const brNum = Number.parseFloat(s.borderRadius) || 0;
+  const brBtnRaw =
+    s.buttonBorderRadius != null && String(s.buttonBorderRadius).trim() !== ""
+      ? Number.parseFloat(s.buttonBorderRadius)
+      : null;
+  return {
+    br: `${brNum}px`,
+    brSm: `${Math.min(brNum, 8)}px`,
+    brPill: `999px`,
+    brBtn: brBtnRaw != null && Number.isFinite(brBtnRaw) ? `${brBtnRaw}px` : `${Math.min(brNum, 8)}px`,
+  };
 }
 
-function btnJustify(textAlign) {
-  if (textAlign === "center") return "justify-center";
-  if (textAlign === "right") return "justify-end";
-  return "justify-start";
+function alignToJustify(textAlign) {
+  if (textAlign === "center") return "center";
+  if (textAlign === "right") return "flex-end";
+  return "flex-start";
 }
 
-// ─── Toggle Switch ───────────────────────────────────────────────────────────
-function Toggle({ checked, onChange, disabled, accentColor }) {
+function footerJustify(textAlign) {
+  if (textAlign === "center") return "center";
+  if (textAlign === "right") return "flex-start";
+  return "flex-end";
+}
+
+// ─── Toggle Switch (cb-switch) ───────────────────────────────────────────────
+function Switch({ checked, onChange, disabled = false, accent = "#007AFF", size = "md" }) {
+  const w = size === "sm" ? 36 : 44;
+  const h = size === "sm" ? 20 : 24;
+  const knob = size === "sm" ? 14 : 18;
+  const inset = 3;
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
       style={{
-        backgroundColor: checked ? accentColor : "#D1D5DB",
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
-        width: "38px",
-        height: "22px",
+        width: `${w}px`,
+        height: `${h}px`,
         borderRadius: "999px",
         border: "none",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.7 : 1,
-        transition: "background-color 0.2s",
-        flexShrink: 0,
         padding: 0,
+        background: checked ? accent : "#d0d5d2",
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "background-color 0.2s",
+        opacity: disabled ? 0.7 : 1,
+        flexShrink: 0,
       }}
     >
       <span
         style={{
-          display: "inline-block",
-          width: "16px",
-          height: "16px",
-          backgroundColor: "#fff",
-          borderRadius: "999px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-          transform: checked ? "translateX(19px)" : "translateX(3px)",
+          position: "absolute",
+          top: `${inset}px`,
+          left: `${inset}px`,
+          width: `${knob}px`,
+          height: `${knob}px`,
+          borderRadius: "50%",
+          background: "#fff",
+          transform: checked ? `translateX(${w - knob - inset * 2}px)` : "translateX(0)",
           transition: "transform 0.2s",
         }}
       />
@@ -266,181 +286,340 @@ function Toggle({ checked, onChange, disabled, accentColor }) {
   );
 }
 
-// ─── Chevron Icon ─────────────────────────────────────────────────────────────
-function Chevron({ open }) {
+// ─── Chevron Right (CSS triangle that rotates) ──────────────────────────────
+function ChevronRight({ open, size = 6 }) {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
+    <span
       style={{
+        display: "inline-block",
+        width: 0,
+        height: 0,
+        borderTop: `${size - 2}px solid transparent`,
+        borderBottom: `${size - 2}px solid transparent`,
+        borderLeft: `${size}px solid #999`,
         transform: open ? "rotate(90deg)" : "rotate(0deg)",
         transition: "transform 0.2s",
-        flexShrink: 0,
-        color: "#9CA3AF",
       }}
-    >
-      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    />
   );
 }
 
-// ─── Cookie Accordion Item ────────────────────────────────────────────────────
-function CookieAccordion({ category, s }) {
+// ─── Cookie Accordion (cb-accordion) ────────────────────────────────────────
+function CookieAccordion({ category, s, radii }) {
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(category.alwaysActive);
-  const smallBr = `${Math.min(Number(s.borderRadius), 10)}px`;
-  const br = `${s.borderRadius}px`;
-
   return (
     <div
       style={{
-        border: "1px solid #E5E7EB",
-        borderRadius: br,
-        backgroundColor: s.bannerBg,
+        border: "1px solid #ebebeb",
+        borderRadius: radii.brSm,
         overflow: "hidden",
+        background: s.bannerBg,
       }}
     >
-      {/* Header row */}
       <div
-        style={{ padding: "14px 16px", cursor: "pointer", userSelect: "none" }}
         onClick={() => setOpen(!open)}
+        style={{
+          display: "flex",
+          gap: "12px",
+          padding: "14px 16px",
+          cursor: "pointer",
+          transition: "background-color 0.2s",
+        }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-          <div style={{ marginTop: "3px" }}>
-            <Chevron open={open} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-              <span style={{ flex: 1, minWidth: 0, color: s.headingColor, fontWeight: s.fontWeight, fontSize: "13px", textAlign: s.textAlign }}>
-                {category.name}
-              </span>
-              <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {category.alwaysActive ? (
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      padding: "2px 10px",
-                      borderRadius: "999px",
-                      backgroundColor: "#DCFCE7",
-                      color: "#166534",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Always Active
-                  </span>
-                ) : (
-                  <Toggle checked={enabled} onChange={setEnabled} disabled={false} accentColor={s.SecButtonColor} />
-                )}
-              </div>
-            </div>
-            <p
+        <div
+          style={{
+            width: "20px",
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <ChevronRight open={open} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
               style={{
-                color: s.textColor,
-                fontSize: "12px",
-                lineHeight: "1.6",
-                marginTop: "4px",
+                fontSize: "14px",
+                fontWeight: 600,
+                color: s.headingColor,
                 textAlign: s.textAlign,
-                fontWeight: s.fontWeight,
               }}
             >
-              {/* {category.description} */}
-            </p>
+              {category.name}
+            </span>
+            <div onClick={(e) => e.stopPropagation()}>
+              {category.alwaysActive ? (
+                <span
+                  style={{
+                    padding: "3px 10px",
+                    background: "#DCFCE7",
+                    color: "#166534",
+                    borderRadius: radii.brPill,
+                    fontSize: "11px",
+                    fontWeight: 500,
+                  }}
+                >
+                  Always Active
+                </span>
+              ) : (
+                <Switch checked={enabled} onChange={setEnabled} accent={s.SecButtonColor} />
+              )}
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Expanded body */}
       <div
         style={{
-          maxHeight: open ? "500px" : "0px",
+          maxHeight: open ? "2000px" : "0px",
           overflow: "hidden",
           transition: "max-height 0.3s ease",
         }}
       >
         <div
           style={{
+            background: "#f4f4f4",
+            border: "1px solid #ebebeb",
+            borderRadius: radii.brSm,
+            padding: "14px",
             margin: "0 14px 14px",
-            padding: "12px",
-            backgroundColor: "#F9FAFB",
-            borderRadius: smallBr,
-              fontWeight: s.fontWeight,
-              fontSize: "12px",
+            color: s.textColor,
+            fontSize: "12px",
+            lineHeight: 1.6,
+            fontWeight: s.fontWeight,
           }}
         >
-         {category.description}
+          {category.description}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Purpose Item ─────────────────────────────────────────────────────────────
-function PurposeItem({ item, s }) {
+// ─── Purpose Child Item (cb-child-accordion) ────────────────────────────────
+function PurposeChildItem({ item, s, radii, isMobile = false }) {
   const [open, setOpen] = useState(false);
   const [consent, setConsent] = useState(false);
   const [legitimate, setLegitimate] = useState(!!item.hasLegitimate);
-
   return (
-    <div style={{ borderBottom: "1px solid #F3F4F6" }}>
+    <div style={{ borderTop: "1px solid #ebebeb" }}>
       <div
-        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px", cursor: "pointer" }}
         onClick={() => setOpen(!open)}
+        style={{
+          display: "flex",
+          gap: "12px",
+          padding: "12px 16px",
+          cursor: "pointer",
+          transition: "background-color 0.2s",
+        }}
       >
-        <Chevron open={open} />
-        <span style={{ flex: 1, fontSize: "13px", color: s.headingColor, fontWeight: s.fontWeight, textAlign: s.textAlign }}>{item.title}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }} onClick={(e) => e.stopPropagation()}>
-          {item.hasLegitimate && (
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "11px", color: s.textColor, opacity: 0.55 }}>Legitimate</span>
-              <Toggle checked={legitimate} onChange={setLegitimate} accentColor={s.SecButtonColor} />
-            </div>
-          )}
-          {item.hasConsent && (
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "11px", color: s.textColor, opacity: 0.55 }}>Consent</span>
-              <Toggle checked={consent} onChange={setConsent} accentColor={s.SecButtonColor} />
-            </div>
-          )}
+        <div
+          style={{
+            width: "16px",
+            height: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <ChevronRight open={open} size={5} />
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "16px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "13px",
+              fontWeight: 500,
+              color: s.headingColor,
+              textAlign: "left",
+              flex: 1,
+            }}
+          >
+            {item.title}
+          </span>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "flex-start" : "center",
+              gap: isMobile ? "6px" : "12px",
+              flexShrink: 0,
+            }}
+          >
+            {item.hasLegitimate && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  paddingRight: isMobile ? 0 : "12px",
+                  paddingBottom: isMobile ? "6px" : 0,
+                  borderRight: isMobile ? "none" : "1px solid #ddd",
+                  borderBottom: isMobile ? "1px solid #ddd" : "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: s.textColor,
+                    opacity: 0.6,
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Legitimate
+                </span>
+                <Switch checked={legitimate} onChange={setLegitimate} accent={s.SecButtonColor} size="sm" />
+              </div>
+            )}
+            {item.hasConsent && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: s.textColor,
+                    opacity: 0.6,
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Consent
+                </span>
+                <Switch checked={consent} onChange={setConsent} accent={s.SecButtonColor} size="sm" />
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      <div style={{ maxHeight: open ? "300px" : "0", overflow: "hidden", transition: "max-height 0.3s ease" }}>
-        <div style={{ margin: "0 16px 12px 30px", padding: "10px 12px", backgroundColor: "#F9FAFB", borderRadius: "6px" }}>
-          <p style={{ color: s.textColor, fontSize: "12px", lineHeight: "1.6", margin: 0 }}>{item.description}</p>
-          <p style={{ color: s.textColor, fontSize: "11px", marginTop: "8px", opacity: 0.55, margin: "8px 0 0" }}>
-            Vendors seeking consent: <strong>{item.vendorCount}</strong>
+      <div
+        style={{
+          maxHeight: open ? "1000px" : "0px",
+          overflow: "hidden",
+          transition: "max-height 0.3s ease",
+        }}
+      >
+        <div
+          style={{
+            padding: "14px",
+            background: "#f9f9f9",
+            margin: "0 14px 14px",
+            borderRadius: radii.brSm,
+          }}
+        >
+          <p
+            style={{
+              color: s.textColor,
+              fontSize: "12px",
+              lineHeight: 1.6,
+              fontWeight: s.fontWeight,
+              textAlign: s.textAlign,
+              margin: "0 0 8px 0",
+            }}
+          >
+            {item.description}
           </p>
+          <div
+            style={{
+              marginTop: "12px",
+              fontSize: "12px",
+              color: s.textColor,
+              opacity: 0.6,
+              fontWeight: 500,
+            }}
+          >
+            Vendors: <strong style={{ color: s.headingColor, fontWeight: 600 }}>{item.vendorCount}</strong>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Purpose Accordion ────────────────────────────────────────────────────────
-function PurposeAccordion({ section, s }) {
+// ─── Purpose Section (parent accordion) ─────────────────────────────────────
+function PurposeSection({ section, s, radii, isMobile = false }) {
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(false);
-  const br = `${s.borderRadius}px`;
-
   return (
-    <div style={{ border: "1px solid #E5E7EB", borderRadius: br, backgroundColor: s.bannerBg, overflow: "hidden" }}>
+    <div
+      style={{
+        border: "1px solid #ebebeb",
+        borderRadius: radii.brSm,
+        overflow: "hidden",
+        background: s.bannerBg,
+      }}
+    >
       <div
-        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px", cursor: "pointer" }}
         onClick={() => setOpen(!open)}
+        style={{ display: "flex", gap: "12px", padding: "14px 16px", cursor: "pointer" }}
       >
-        <Chevron open={open} />
-        <span style={{ flex: 1, fontSize: "13px", fontWeight: s.fontWeight, color: s.headingColor, textAlign: s.textAlign }}>{section.title}</span>
-        {section.hasToggle && (
-          <div onClick={(e) => e.stopPropagation()}>
-            <Toggle checked={enabled} onChange={setEnabled} accentColor={s.SecButtonColor} />
-          </div>
-        )}
+        <div
+          style={{
+            width: "20px",
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <ChevronRight open={open} />
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "14px",
+              fontWeight: 600,
+              color: s.headingColor,
+              textAlign: s.textAlign,
+            }}
+          >
+            {section.title}
+          </span>
+          {section.hasToggle && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch checked={enabled} onChange={setEnabled} accent={s.SecButtonColor} />
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ maxHeight: open ? "1000px" : "0", overflow: "hidden", transition: "max-height 0.35s ease" }}>
-        <div style={{ borderTop: "1px solid #F3F4F6" }}>
+      <div
+        style={{
+          maxHeight: open ? "3000px" : "0px",
+          overflow: "hidden",
+          transition: "max-height 0.35s ease",
+        }}
+      >
+        <div>
           {section.items.map((item) => (
-            <PurposeItem key={item.id} item={item} s={s} />
+            <PurposeChildItem key={item.id} item={item} s={s} radii={radii} isMobile={isMobile} />
           ))}
         </div>
       </div>
@@ -448,166 +627,316 @@ function PurposeAccordion({ section, s }) {
   );
 }
 
-// ─── Preference Modal ─────────────────────────────────────────────────────────
-function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
+// ─── Preference Modal ───────────────────────────────────────────────────────
+function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device = "desktop" }) {
+  const isMobile = device === "mobile";
   const [activeTab, setActiveTab] = useState("cookie");
-  const br = `${s.borderRadius}px`;
-
   const tabs = [
     { id: "cookie", label: "Cookie Categories" },
     { id: "purpose", label: "Purposes & Features" },
     { id: "vendor", label: "Vendors" },
   ];
-
-  const outlineBtn = {
-    borderRadius: `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`,
-    fontWeight: s.fontWeight,
-    fontSize: "13px",
-    padding: "9px 18px",
-    border: "none",
-    cursor: "pointer",
-    backgroundColor: s.buttonColor,
-    color: s.buttonTextColor,
-    whiteSpace: "nowrap",
-  };
-  const solidBtn = {
-    ...outlineBtn,
-    backgroundColor: s.SecButtonColor,
-    color: s.SecButtonTextColor,
-    border: "none",
-  };
-
-  const footerJustify = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-start" : "flex-end";
-
   if (!open) return null;
-
   return (
     <div
       style={{
-        position: "absolute", inset: 0, zIndex: 9,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "16px", backgroundColor: "rgba(0,0,0,0.5)",
+        position: "absolute",
+        inset: 0,
+        zIndex: 1000000,
+        background: "rgba(0,0,0,0.5)",
+        padding: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         style={{
-          backgroundColor: s.bannerBg,
-          borderRadius: br,
+          background: s.bannerBg,
+          border: "1px solid #f4f4f4",
+          borderRadius: radii.br,
           width: "100%",
-          maxWidth: "680px",
+          maxWidth: "720px",
           maxHeight: "90%",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.2)",
-          border: "1px solid #F4F4F4",
-          animation: "popIn 0.25s cubic-bezier(0.34,1.2,0.64,1)",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+          animation: "cbIabPopIn 0.25s cubic-bezier(0.34,1.2,0.64,1)",
         }}
       >
         {/* Header */}
-        <div style={{ padding: "18px 22px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, gap: "12px" }}>
-          <span style={{ flex: 1, minWidth: 0, color: s.headingColor, fontWeight: s.fontWeight, fontSize: "15px", textAlign: s.textAlign }}>
+        <div
+          style={{
+            padding: "20px 24px",
+            borderBottom: "1px solid #f4f4f4",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: "18px", fontWeight: 600, color: s.headingColor }}>
             Customise Consent Preferences
           </span>
           <button
+            type="button"
             onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", borderRadius: "50%", display: "flex", color: s.textColor, opacity: 0.5 }}
+            aria-label="Close"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "4px",
+              opacity: 0.5,
+              display: "flex",
+              color: s.textColor,
+            }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
-        {/* Description */}
-        <div style={{ padding: "14px 22px 0", flexShrink: 0 }}>
-          <p style={{ color: s.textColor, fontSize: "12px", lineHeight: "1.7", textAlign: s.textAlign, fontWeight: s.fontWeight, margin: 0 }}>
-            Customise your consent preferences for Cookie Categories and advertising tracking preferences for Purposes & Features and Vendors below. You can give granular consent for each Third Party Vendor.
-          </p>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ padding: "0 22px", borderBottom: "1px solid #F0F0F0", flexShrink: 0, marginTop: "12px" }}>
-          <div style={{ display: "flex" }}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: "10px 16px",
-                  fontSize: "12px",
-                  fontWeight: s.fontWeight,
-                  borderBottom: `2px solid ${activeTab === tab.id ? s.SecButtonColor : "transparent"}`,
-                  color: activeTab === tab.id ? s.textColor : s.textColor,
-                  background: "none",
-                  border: "none",
-                  borderBottom: `2px solid ${activeTab === tab.id ? s.SecButtonColor : "transparent"}`,
-                  cursor: "pointer",
-                  opacity: activeTab === tab.id ? 1 : 0.6,
-                  transition: "all 0.15s",
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px" }}>
+          {/* Intro description */}
+          <div
+            style={{
+              color: s.textColor,
+              fontSize: "13px",
+              lineHeight: 1.6,
+              fontWeight: s.fontWeight,
+              textAlign: s.textAlign,
+              paddingTop: "16px",
+            }}
+          >
+            <p style={{ margin: "0 0 12px 0" }}>
+              Customise your consent preferences for Cookie Categories and advertising tracking
+              preferences for Purposes &amp; Features and Vendors below. You can give granular consent
+              for each Third Party Vendor. Most vendors require explicit consent for personal data
+              processing, while some rely on legitimate interest. However, you have the right to
+              object to their use of legitimate interest.
+            </p>
+            <details
+              style={{
+                fontSize: "12px",
+                color: s.textColor,
+                background: "#f7f7f7",
+                border: "1px solid #ebebeb",
+                borderRadius: radii.brSm,
+                padding: "10px 12px",
+                marginTop: "12px",
+              }}
+            >
+              <summary
+                style={{ cursor: "pointer", fontWeight: 600, color: s.headingColor }}
+              >
+                How this Consent Management Platform stores your choices
+              </summary>
+              <p style={{ marginTop: "6px", marginBottom: 0 }}>
+                To remember the choices you make here, this CMP (cmpId 200) stores a TCF v2.2
+                consent string in the{" "}
+                <code
+                  style={{
+                    background: "#fff",
+                    padding: "1px 5px",
+                    borderRadius: "3px",
+                    fontSize: "11px",
+                    border: "1px solid #e0e0e0",
+                  }}
+                >
+                  euconsent-v2
+                </code>{" "}
+                cookie and in your browser's{" "}
+                <code
+                  style={{
+                    background: "#fff",
+                    padding: "1px 5px",
+                    borderRadius: "3px",
+                    fontSize: "11px",
+                    border: "1px solid #e0e0e0",
+                  }}
+                >
+                  localStorage
+                </code>{" "}
+                for up to 365 days.
+              </p>
+            </details>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ marginTop: "24px", marginBottom: "24px", borderBottom: "2px solid #f4f4f4" }}>
+            <ul
+              style={{
+                display: "flex",
+                flexDirection: isMobile ? "column" : "row",
+                listStyle: "none",
+                gap: 0,
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <li key={tab.id} style={{ flex: 1 }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      style={{
+                        width: "100%",
+                        padding: "12px 16px",
+                        background: "none",
+                        border: "none",
+                        borderBottom: `3px solid ${isActive ? s.buttonColor : "transparent"}`,
+                        cursor: "pointer",
+                        fontSize: "13px",
+                        fontWeight: isActive ? 700 : s.fontWeight,
+                        color: s.textColor,
+                        opacity: isActive ? 1 : 0.6,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* Tab content */}
           {activeTab === "cookie" && (
             <div>
-              <p style={{ color: s.headingColor, fontWeight: "600", fontSize: "14px", textAlign: s.textAlign, marginBottom: "6px" }}>
+              <p
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  color: s.headingColor,
+                  marginBottom: "14px",
+                  textAlign: s.textAlign,
+                }}
+              >
                 Cookie Categories
-              </p>
-              <p style={{ color: s.textColor, fontSize: "12px", lineHeight: "1.6", textAlign: s.textAlign, fontWeight: s.fontWeight, marginBottom: "16px" }}>
-                We use cookies to help you navigate efficiently. Cookies categorised as "Necessary" are stored on your browser as they are essential for basic functionalities of the site.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {cookieCategories.map((cat) => (
-                  <CookieAccordion key={cat.id} category={cat} s={s} />
-                ))}
-              </div>
-            </div>
-          )}
-          {activeTab === "purpose" && (
-            <div>
-              <p style={{ color: s.headingColor, fontWeight: "600", fontSize: "14px", textAlign: s.textAlign, marginBottom: "16px" }}>
-                Purposes & Features
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {purposesData.map((section) => (
-                  <PurposeAccordion key={section.id} section={section} s={s} />
-                ))}
-              </div>
-            </div>
-          )}
-          {activeTab === "vendor" && (
-            <div>
-              <p style={{ color: s.headingColor, fontWeight: "600", fontSize: "14px", textAlign: s.textAlign, marginBottom: "14px" }}>
-                Vendors
               </p>
               <div
                 style={{
-                  display: "flex", alignItems: "center", gap: "8px",
-                  padding: "9px 12px",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: `${Math.min(Number(s.borderRadius), 8)}px`,
-                  marginBottom: "14px",
-                  backgroundColor: "#FAFAFA",
+                  color: s.textColor,
+                  fontSize: "13px",
+                  lineHeight: 1.6,
+                  fontWeight: s.fontWeight,
+                  textAlign: s.textAlign,
                 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={s.textColor} strokeWidth="2" opacity="0.4">
-                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                </svg>
+                <p style={{ margin: "0 0 12px 0" }}>
+                  We use cookies to help you navigate efficiently and perform certain functions. You
+                  will find detailed information about all cookies under each consent category below.
+                </p>
+                <p style={{ margin: 0 }}>
+                  The cookies that are categorised as "Necessary" are stored on your browser as they
+                  are essential for enabling the basic functionalities of the site.
+                </p>
+              </div>
+              <div style={{ height: "1px", background: "#ebebeb", margin: "20px 0" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {cookieCategories.map((cat) => (
+                  <CookieAccordion key={cat.id} category={cat} s={s} radii={radii} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "purpose" && (
+            <div>
+              <p
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  color: s.headingColor,
+                  marginBottom: "14px",
+                  textAlign: s.textAlign,
+                }}
+              >
+                Purposes &amp; Features
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {purposesData.map((section) => (
+                  <PurposeSection key={section.id} section={section} s={s} radii={radii} isMobile={isMobile} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "vendor" && (
+            <div>
+              <p
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  color: s.headingColor,
+                  marginBottom: "14px",
+                  textAlign: s.textAlign,
+                }}
+              >
+                Vendors
+              </p>
+              {/* Preview only — vendor list intentionally left empty */}
+              <div style={{ position: "relative", marginBottom: "20px" }}>
                 <input
                   type="text"
                   placeholder="Search vendors by name or ID..."
-                  style={{ flex: 1, fontSize: "12px", outline: "none", background: "transparent", border: "none", color: s.textColor, fontWeight: s.fontWeight }}
+                  readOnly
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px 12px 44px",
+                    border: "2px solid #e0e0e0",
+                    borderRadius: radii.brSm,
+                    fontSize: "14px",
+                    background: "#fff",
+                    boxSizing: "border-box",
+                    outline: "none",
+                    color: s.textColor,
+                  }}
                 />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "16px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    fontSize: "16px",
+                    color: s.textColor,
+                    pointerEvents: "none",
+                  }}
+                >
+                  🔍
+                </div>
               </div>
-              <p style={{ color: s.textColor, fontSize: "12px", textAlign: "center", opacity: 0.4, fontStyle: "italic" }}>
-                Vendor list loads when connected to the GVL endpoint.
+              <p
+                style={{
+                  textAlign: "center",
+                  color: s.textColor,
+                  padding: "40px",
+                  fontStyle: "italic",
+                  fontSize: "13px",
+                  opacity: 0.5,
+                }}
+              >
+                Vendor list loads at runtime.
               </p>
             </div>
           )}
@@ -616,286 +945,409 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s }) {
         {/* Footer */}
         <div
           style={{
-            padding: "14px 3px",
-            borderTop: "1px solid #F0F0F0",
-            backgroundColor: s.bannerBg,
+            borderTop: "1px solid #f4f4f4",
+            background: s.bannerBg,
             flexShrink: 0,
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-            justifyContent: footerJustify,
+            borderRadius: `0 0 ${radii.br} ${radii.br}`,
           }}
         >
-          <button style={outlineBtn} onClick={onReject}>Reject All</button>
-          <button style={outlineBtn} onClick={onClose}>Save My Preferences</button>
-          <button style={solidBtn} onClick={onAccept}>Accept All</button>
+          <div
+            style={{
+              padding: "14px 22px",
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: "10px",
+              justifyContent: isMobile ? "stretch" : footerJustify(s.textAlign),
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onReject}
+              style={{
+                padding: "9px 20px",
+                borderRadius: radii.brBtn,
+                fontSize: "13px",
+                fontWeight: s.fontWeight,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                border: `2px solid ${s.buttonColor}`,
+                background: s.buttonColor,
+                color: s.buttonTextColor,
+                width: isMobile ? "100%" : undefined,
+              }}
+            >
+              Reject All
+            </button>
+            <button
+              type="button"
+              onClick={onAccept}
+              style={{
+                padding: "9px 20px",
+                borderRadius: radii.brBtn,
+                fontSize: "13px",
+                fontWeight: s.fontWeight,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                border: `2px solid ${s.buttonColor}`,
+                background: s.buttonColor,
+                color: s.buttonTextColor,
+                width: isMobile ? "100%" : undefined,
+              }}
+            >
+              Accept All
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "9px 20px",
+                borderRadius: radii.brBtn,
+                fontSize: "13px",
+                fontWeight: s.fontWeight,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                border: `2px solid ${s.SecButtonColor}`,
+                background: s.SecButtonColor,
+                color: s.SecButtonTextColor,
+                width: isMobile ? "100%" : undefined,
+              }}
+            >
+              Save My Preferences
+            </button>
+          </div>
         </div>
       </div>
-      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+      <style>{`@keyframes cbIabPopIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
     </div>
   );
 }
 
-// ─── Banner Content (shared across box & popup) ───────────────────────────────
-function BannerContent({ s, onCustomise, onReject, onAccept, layout = "vertical" }) {
-  const br = `${s.borderRadius}px`;
-  const btnSmallBr = `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`;
-  const maybeBorder = (bg, borderColor) =>
-    String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
-
-  const outlineBtn = {
-    borderRadius: btnSmallBr,
-    fontWeight: s.fontWeight,
-    fontSize: "11px",
-    padding: "10px 18px",
-    border: maybeBorder(s.SecButtonColor, s.SecButtonTextColor),
-    cursor: "pointer",
-    backgroundColor: s.SecButtonColor,
-    color: s.SecButtonTextColor,
-    whiteSpace: "nowrap",
-    transition: "opacity 0.15s",
-  };
-  const solidBtn = {
-    ...outlineBtn,
-    backgroundColor: s.buttonColor,
-    color: s.buttonTextColor,
-    border: "none",
-  };
-
-  return (
-    <div style={{ backgroundColor: s.bannerBg, borderRadius: br, border: "1px solid #F0F0F0", padding: "20px" }}>
-      <p
-        style={{
-          color: s.headingColor,
-          fontWeight: "700",
-          fontSize: "11px",
-          textAlign: s.textAlign,
-          marginBottom: "10px",
-        }}
-      >
-       Your privacy matters to us
-      </p>
-      <button onClick={onReject} type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
-      <p
-        style={{
-          color: s.textColor,
-          fontSize: "11px",
-          lineHeight: "1.7",
-          textAlign: s.textAlign,
-          fontWeight: s.fontWeight,
-          marginBottom: "16px",
-        }}
-      >
-       We and our trusted partners use cookies and similar technologies to collect and store information from your device. This may include details such as your IP address, browsing behavior, and device information.
-This data is used to ensure the website functions properly, enhance your experience, deliver personalized content and advertisements, and analyze performance and user engagement. In certain situations, we may also process location data and use device-based identification methods.
-You have the option to manage your preferences and control how your information is used.  </p>
-
-      {/* Buttons */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-       
-          gap: "8px",
-          justifyContent: s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start",
-        }}
-      >
-        {/* Customise spans full width only in vertical box/popup layout */}
-        <button
-          style={{
-            ...outlineBtn,
-            ...(layout === "vertical" ? {  justifyContent: "center" } : {}),
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-          onClick={onCustomise}
-        >
-          Customise
-        </button>
-        <button style={solidBtn} onClick={onReject}>Reject All</button>
-        <button style={solidBtn} onClick={onAccept}>Accept All</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Full-Width Banner Layout ─────────────────────────────────────────────────
-function FullBanner({ s, onCustomise, onReject, onAccept }) {
-  const maybeBorder = (bg, borderColor) =>
-    String(bg || "").toLowerCase() === "#ffffff" ? `2px solid ${borderColor}` : "none";
-  const outlineBtn = {
-    borderRadius: `${s.buttonBorderRadius != null && s.buttonBorderRadius !== "" ? Number(s.buttonBorderRadius) : Math.min(Number(s.borderRadius), 8)}px`,
-    fontWeight: s.fontWeight,
-    fontSize: "13px",
-    padding: "9px 16px",
-    border: maybeBorder(s.buttonColor, s.buttonTextColor),
-    cursor: "pointer",
-    backgroundColor: s.buttonColor,
-    color: s.buttonTextColor,
-    whiteSpace: "nowrap",
-  };
-  const solidBtn = {
-    ...outlineBtn,
-    backgroundColor: s.SecButtonColor,
-    color: s.SecButtonTextColor,
-    border: "none",
-  };
-  const btnJustifyVal = s.textAlign === "center" ? "center" : s.textAlign === "right" ? "flex-end" : "flex-start";
+// ─── Banner Notice Description (shared by all banner layouts) ───────────────
+function NoticeDescription({ s, onCustomiseAriaId }) {
+  void onCustomiseAriaId;
   return (
     <div
       style={{
-        position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 999999,
-        backgroundColor: s.bannerBg,
-        borderTop: "1px solid #F0F0F0",
-        boxShadow: "0 -4px 30px rgba(0,0,0,0.08)",
-        animation: entranceAnimStyle(s.bannerEntranceAnimation),
+        flex: 1,
+        color: s.textColor,
+        lineHeight: 1.6,
+        fontSize: "14px",
+        fontWeight: s.fontWeight,
+        textAlign: s.textAlign,
+      }}
+    >
+      <p style={{ margin: "0 0 12px 0" }}>
+        With your permission, we and{" "}
+        <a
+          href="#"
+          onClick={(e) => e.preventDefault()}
+          style={{
+            color: "#007AFF",
+            textDecoration: "underline",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          third-party vendors
+        </a>{" "}
+        store and/or access information on your device (such as cookies and device identifiers) and
+        process your personal data (including unique identifiers, IP address, browsing activity and
+        approximate location) for the purposes below. Some processing relies on legitimate interest,
+        which you can object to. Choices apply to this website only and can be updated any time via
+        the cookie icon at the bottom-left.
+      </p>
+      <p
+        style={{
+          margin: "8px 0 0 0",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          opacity: 0.85,
+        }}
+      >
+        <strong style={{ color: s.headingColor, fontWeight: 600 }}>
+          Our partners collect your information for the following purposes:
+        </strong>{" "}
+        Store and/or access information on a device, Use limited data to select advertising, Create
+        profiles for personalised advertising, Use profiles to select personalised advertising,
+        Create profiles to personalise content, Use profiles to select personalised content, Measure
+        advertising performance, Measure content performance, Understand audiences through statistics
+        or combinations of data from different sources, Develop and improve services, Use limited data
+        to select content.
+        <br />
+        <strong style={{ color: s.headingColor, fontWeight: 600 }}>
+          They also use the following special features:
+        </strong>{" "}
+        Use precise geolocation data, Actively scan device characteristics for identification.
+      </p>
+    </div>
+  );
+}
+
+// ─── Banner Bar (cb-consent-bar) ────────────────────────────────────────────
+function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device = "desktop" }) {
+  const isFullBanner = layout === "banner";
+  const isMobile = device === "mobile";
+  // On mobile, full-banner stacks like the box layout.
+  const horizontalLayout = isFullBanner && !isMobile;
+  const btnJustify = isMobile
+    ? "stretch"
+    : horizontalLayout
+      ? "flex-end"
+      : alignToJustify(s.textAlign);
+  const buttonBase = {
+    padding: "11px 20px",
+    borderRadius: radii.brBtn,
+    fontSize: "14px",
+    fontWeight: s.fontWeight,
+    cursor: "pointer",
+    minHeight: "44px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    whiteSpace: "nowrap",
+    transition: "opacity 0.2s ease",
+    boxSizing: "border-box",
+    width: isMobile ? "100%" : undefined,
+  };
+  return (
+    <div
+      style={{
+        background: s.bannerBg,
+        border: "1px solid #f4f4f4",
+        borderRadius: isFullBanner ? "0px" : radii.br,
+        padding: isMobile ? "18px" : isFullBanner ? "16px 24px" : "24px",
       }}
     >
       <div
         style={{
-          maxWidth: "1280px",
-          margin: "0 auto",
-          padding: "16px 24px",
           display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
+          flexDirection: "column",
           gap: "16px",
         }}
       >
-        <div style={{ flex: 1, minWidth: "220px" }}>
-          <p style={{ color: s.headingColor, fontWeight: "700", fontSize: "14px", textAlign: s.textAlign, marginBottom: "4px" }}>
-            Your privacy matters to us
-          </p>
-          <p style={{ color: s.textColor, fontSize: "12px", lineHeight: "1.6", textAlign: s.textAlign, fontWeight: s.fontWeight, margin: 0 }}>
-           We and our trusted partners use cookies and similar technologies to collect and store information from your device. This may include details such as your IP address, browsing behavior, and device information.
-This data is used to ensure the website functions properly, enhance your experience, deliver personalized content and advertisements, and analyze performance and user engagement. In certain situations, we may also process location data and use device-based identification methods.
-You have the option to manage your preferences and control how your information is used.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: btnJustifyVal, flexShrink: 0 }}>
-          <button style={solidBtn} onClick={onCustomise}>Customise</button>
-          <button style={outlineBtn} onClick={onReject}>Reject All</button>
-          <button style={outlineBtn} onClick={onAccept}>Accept All</button>
+        <p
+          style={{
+            fontSize: isMobile ? "16px" : "20px",
+            fontWeight: 700,
+            lineHeight: 1.3,
+            margin: "0 0 12px 0",
+            color: s.headingColor,
+            textAlign: s.textAlign,
+          }}
+        >
+          Your privacy matters to us
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: horizontalLayout ? "row" : "column",
+            alignItems: horizontalLayout ? "center" : "stretch",
+            gap: "20px",
+            flex: 1,
+          }}
+        >
+          <NoticeDescription s={s} />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: "8px",
+              flexWrap: "wrap",
+              paddingTop: horizontalLayout ? 0 : "16px",
+              borderTop: horizontalLayout ? "none" : "1px solid #f0f0f0",
+              justifyContent: btnJustify,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={onCustomise}
+              style={{
+                ...buttonBase,
+                border: `2px solid ${s.SecButtonColor}`,
+                background: s.SecButtonColor,
+                color: s.SecButtonTextColor,
+              }}
+            >
+              Customise
+            </button>
+            <button
+              type="button"
+              onClick={onReject}
+              style={{
+                ...buttonBase,
+                border: `2px solid ${s.buttonColor}`,
+                background: s.buttonColor,
+                color: s.buttonTextColor,
+              }}
+            >
+              Reject All
+            </button>
+            <button
+              type="button"
+              onClick={onAccept}
+              style={{
+                ...buttonBase,
+                border: `2px solid ${s.buttonColor}`,
+                background: s.buttonColor,
+                color: s.buttonTextColor,
+              }}
+            >
+              Accept All
+            </button>
+          </div>
         </div>
       </div>
-      <style>{`
-        @keyframes cbIabFadeIn{from{opacity:0}to{opacity:1}}
-        @keyframes cbIabSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
-        @keyframes cbIabSlideDown{from{transform:translateY(-24px);opacity:0}to{transform:translateY(0);opacity:1}}
-        @keyframes cbIabZoomIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}
-        /* Centered layouts must preserve translateX(-50%) during transform animations */
-        @keyframes cbIabCenterSlideUp{from{transform:translateX(-50%) translateY(24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
-        @keyframes cbIabCenterSlideDown{from{transform:translateX(-50%) translateY(-24px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
-        @keyframes cbIabCenterZoomIn{from{transform:translateX(-50%) scale(0.92);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
-      `}</style>
     </div>
   );
 }
 
 // ─── Main Cookie Consent Component ───────────────────────────────────────────
-export function CookieConsentBanner({ config = {},device="desktop",alignment="bottom-left",}) {
+export function CookieConsentBanner({ config = {}, device = "desktop", alignment = "bottom-left" }) {
   const s = { ...defaultStyleConfig, ...config };
+  const radii = getRadii(s);
   const [visible, setVisible] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleAccept = () => { setVisible(true);setModalOpen(false)  };
-  const handleReject = () => { setVisible(true); setModalOpen(false)  };
+  const handleAccept = () => {
+    setVisible(true);
+    setModalOpen(false);
+  };
+  const handleReject = () => {
+    setVisible(true);
+    setModalOpen(false);
+  };
   const handleCustomise = () => {
     setVisible(false);
-    setModalOpen(true); 
-
+    setModalOpen(true);
   };
-  const br = `${s.borderRadius}px`;
-  const floatGutterPx = s.floatingButtonEnabled && device !== "mobile" ? 60 : 0; // icon (40px) + margin
-const positionStyles =
-  s.bannerType === "box"
-    ? alignment === "bottom-left"
-      ? {
-          left: device === "desktop"
-            ? `${20 + (s.floatingButtonPosition === "left" ? floatGutterPx : 0)}px`
-            : `${0 + (s.floatingButtonPosition === "left" ? floatGutterPx : 0)}px`,
-          right: "auto",
-        }
-      : alignment === "bottom-right"
-      ? {
-          right: device === "desktop"
-            ? `${20 + (s.floatingButtonPosition === "right" ? floatGutterPx : 0)}px`
-            : `${0 + (s.floatingButtonPosition === "right" ? floatGutterPx : 0)}px`,
-          left: "auto",
-        }
-      : {}
-    : {};
+
+  const br = radii.br;
+  const isMobile = device === "mobile";
+  const floatGutterPx = s.floatingButtonEnabled && device !== "mobile" ? 60 : 0;
+  const boxEdge = isMobile ? 10 : device === "desktop" ? 20 : 0;
+  const positionStyles =
+    s.bannerType === "box"
+      ? alignment === "bottom-left"
+        ? {
+            left: `${boxEdge + (s.floatingButtonPosition === "left" ? floatGutterPx : 0)}px`,
+            right: isMobile ? `${boxEdge}px` : "auto",
+          }
+        : alignment === "bottom-right"
+        ? {
+            right: `${boxEdge + (s.floatingButtonPosition === "right" ? floatGutterPx : 0)}px`,
+            left: isMobile ? `${boxEdge}px` : "auto",
+          }
+        : {}
+      : {};
+
   return (
     <>
-   {visible &&   <>
-      {/* BOX — bottom-left card */}
-      {s.bannerType === "box" && (
-        <div
-          style={{
-            position: "absolute", bottom: "20px", left: `${device === "mobile"  ? "0px" : "20px"}`, zIndex: 9,
-            width: "100%", maxWidth: "420px",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-            borderRadius: br,
-            animation: entranceAnimStyle(s.bannerEntranceAnimation),
-             ...positionStyles,
-          }}
-        >
-          
-          <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
-        </div>
-      )}
- {s.bannerType === "bottom-center" && (
-        <div
-          style={{
-            position: "absolute", bottom: "20px", left: `50%`, transform: "translateX(-50%)", zIndex: 999999,
-            width: "100%", maxWidth: "420px",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-            borderRadius: br,
-            animation: entranceAnimStyle(s.bannerEntranceAnimation, { isCenter: true }),
-          }}
-        >
-          <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
-        </div>
-      )}
-      {/* BANNER — full width bottom */}
-      {s.bannerType === "banner" && (
-        <FullBanner s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} />
+      {visible && (
+        <>
+          {/* BOX — corner card */}
+          {s.bannerType === "box" && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: isMobile ? "10px" : "20px",
+                left: isMobile ? "10px" : "20px",
+                zIndex: 9,
+                width: isMobile ? undefined : "100%",
+                maxWidth: isMobile ? "calc(100% - 20px)" : "600px",
+                maxHeight: isMobile ? "calc(100% - 20px)" : "calc(100% - 40px)",
+                overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+                borderRadius: br,
+                animation: entranceAnimStyle(s.bannerEntranceAnimation),
+                ...positionStyles,
+              }}
+            >
+              <BannerBar
+                s={s}
+                radii={radii}
+                layout="box"
+                device={device}
+                onCustomise={handleCustomise}
+                onReject={handleReject}
+                onAccept={handleAccept}
+              />
+            </div>
+          )}
+
+          {/* BOTTOM CENTER — centered card */}
+          {s.bannerType === "bottom-center" && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: isMobile ? "10px" : "20px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 999999,
+                width: isMobile ? "calc(100% - 20px)" : "calc(100% - 40px)",
+                maxWidth: "600px",
+                maxHeight: isMobile ? "calc(100% - 20px)" : "calc(100% - 40px)",
+                overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+                borderRadius: br,
+                animation: entranceAnimStyle(s.bannerEntranceAnimation, { isCenter: true }),
+              }}
+            >
+              <BannerBar
+                s={s}
+                radii={radii}
+                layout="popup"
+                device={device}
+                onCustomise={handleCustomise}
+                onReject={handleReject}
+                onAccept={handleAccept}
+              />
+            </div>
+          )}
+
+          {/* FULL BANNER — bottom edge */}
+          {s.bannerType === "banner" && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 999999,
+                maxHeight: "100%",
+                overflowY: "auto",
+                animation: entranceAnimStyle(s.bannerEntranceAnimation),
+              }}
+            >
+              <BannerBar
+                s={s}
+                radii={radii}
+                layout="banner"
+                device={device}
+                onCustomise={handleCustomise}
+                onReject={handleReject}
+                onAccept={handleAccept}
+              />
+            </div>
+          )}
+        </>
       )}
 
-      {/* POPUP — centered overlay */}
-      {s.bannerType === "Bottom Center" && (
-        <div
-          style={{
-            position: "absolute", inset: 0, zIndex: 999999,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "16px", backgroundColor: "rgba(0,0,0,0.45)",
-          }}
-        >
-          <div
-            style={{
-              width: "100%", maxWidth: "480px",
-              boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
-              borderRadius: br,
-              animation: "popIn 0.3s cubic-bezier(0.34,1.2,0.64,1)",
-            }}
-          >
-            <BannerContent s={s} onCustomise={handleCustomise} onReject={handleReject} onAccept={handleAccept} layout="vertical" />
-          </div>
-        </div>
-      )}
-</>}
       <PreferenceModal
         open={modalOpen}
-        onClose={() =>{ setModalOpen(false); setVisible(true);}}
+        onClose={() => {
+          setModalOpen(false);
+          setVisible(true);
+        }}
         onAccept={handleAccept}
         onReject={handleReject}
         s={s}
+        radii={radii}
+        device={device}
       />
 
       <style>{`
-        @keyframes popIn {
-          from { transform: scale(0.88); opacity: 0; }
-          to   { transform: scale(1);    opacity: 1; }
-        }
         @keyframes cbIabFadeIn{from{opacity:0}to{opacity:1}}
         @keyframes cbIabSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes cbIabSlideDown{from{transform:translateY(-24px);opacity:0}to{transform:translateY(0);opacity:1}}
