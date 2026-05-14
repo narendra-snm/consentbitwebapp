@@ -86,9 +86,8 @@ export default function PricingTable() {
     // Clean URL so refresh doesn't re-trigger; also clear the stripe-redirect flag.
     window.history.replaceState({}, "", window.location.pathname);
     sessionStorage.removeItem(`cb_stripe_redirect_${siteId}`);
-    // Read and clear the target plan we stored before redirecting to Stripe.
+    // Read the target plan (keep in sessionStorage so DashboardSessionProvider polling can use it after redirect).
     const targetPlan = (sessionStorage.getItem(`cb_target_plan_${siteId}`) || "").trim().toLowerCase();
-    sessionStorage.removeItem(`cb_target_plan_${siteId}`);
     // Clear session cache so polls fetch fresh plan data from the server.
     try {
       sessionStorage.removeItem("cbSessionCache");
@@ -376,7 +375,7 @@ export default function PricingTable() {
     );
   };
 function redirectToDashboard() {
-  router.push(`/dashboard/${siteId}`);
+  router.push(`/dashboard/${siteId}?upgraded=1`);
 }
   if (returnedFromStripe) {
     return (

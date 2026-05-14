@@ -59,9 +59,9 @@ function makeDefaultContentSettings(langCode = 'en') {
 }
 
 const ResetIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6.5A4.5 4.5 0 1 1 6.5 11" stroke="#374151" strokeWidth="1.4" strokeLinecap="round"/>
-    <path d="M2 9.5V6.5H5" stroke="#374151" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="#374151" strokeWidth="2" strokeLinecap="round"/>
+    <polyline points="3 3 3 8 8 8" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -114,6 +114,7 @@ export default function page({ siteId }: { siteId: string }) {
   const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
   const [selectedLangCode, setSelectedLangCode] = useState<string>('en');
   const [customizationBase, setCustomizationBase] = useState<any>(null);
+  const [customizationLoading, setCustomizationLoading] = useState(true);
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
     useState<FloatingButtonState | null>(null);
@@ -336,21 +337,25 @@ export default function page({ siteId }: { siteId: string }) {
         console.log("Fetched banner customization:", customization);
         if (cancelled) return;
         setCustomizationBase(customization);
+        setCustomizationLoading(false);
         const en = customization?.translations?.en || {};
+        const cfgTr = customization?.translations?.config || {};
         const langCode = (en.languageSelected as string) || 'en';
         setSelectedLangCode(langCode);
         const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+        // For toggle flags: prefer translations.config (written by both webapp and Webflow app), fall back to translations.en.
+        const _flagVal = (key: string, def: string) => { const v = cfgTr[key] ?? en[key]; return typeof v === "boolean" ? v : String(v ?? def) !== "0"; };
         const nextSettings = {
           title: en.title || "We value your privacy",
           acceptAll: en.acceptAll || "Accept",
           preferencesLabel: en.customise || "Preference",
           preferenceTitle: en.cookiePreferences || T.cookiePreferences,
           preferenceMessage: en.managePreferences || T.managePreferences,
-          closeButton: typeof en.closeButtonEnabled === "boolean" ? en.closeButtonEnabled : String(en.closeButtonEnabled ?? "1") !== "0",
-          rejectButton: typeof en.rejectButtonEnabled === "boolean" ? en.rejectButtonEnabled : String(en.rejectButtonEnabled ?? "1") !== "0",
-          customizeButton: typeof en.customizeButtonEnabled === "boolean" ? en.customizeButtonEnabled : String(en.customizeButtonEnabled ?? "1") !== "0",
-          cookiePolicyLink: typeof en.cookiePolicyLinkEnabled === "boolean" ? en.cookiePolicyLinkEnabled : String(en.cookiePolicyLinkEnabled ?? "0") !== "0",
-          cookiePolicyLabel: en.privacyPolicy || "Privacy Policy",
+          closeButton: _flagVal("closeButtonEnabled", "1"),
+          rejectButton: _flagVal("rejectButtonEnabled", "1"),
+          customizeButton: _flagVal("customizeButtonEnabled", "1"),
+          cookiePolicyLink: (() => { const v = cfgTr.cookiePolicyLinkEnabled ?? en.cookiePolicyLinkEnabled; if (v != null) return typeof v === "boolean" ? v : String(v) !== "0"; return Boolean(customization?.privacyPolicyUrl); })(),
+          cookiePolicyLabel: T.moreInfo || en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
             message:
@@ -364,13 +369,9 @@ export default function page({ siteId }: { siteId: string }) {
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel:
-              en.doNotSell || "Do Not Share My Personal Information",
-            optOutTitle:
-              en.optOutPreference || T.optOutPreference,
-            optOutMessage:
-              en.ccpaOptOutPreferenceIntro ||
-              T.ccpaOptOutPreferenceIntro,
+            doNotSellLabel: T.doNotSell,
+            optOutTitle: T.optOutPreference,
+            optOutMessage: T.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel:
               en.saveMyPreferences || T.saveMyPreferences,
           },
@@ -379,8 +380,9 @@ export default function page({ siteId }: { siteId: string }) {
         setLastSavedContentSettings(nextSettings);
         setLastPublishedBothFocus(bothContentFocusRef.current);
 
-        const fbEnabled = typeof en.floatingButtonEnabled === "boolean" ? en.floatingButtonEnabled : String(en.floatingButtonEnabled ?? "1") !== "0";
-        const fbPos = en.floatingButtonPosition === "right" ? "right" : "left";
+        const fbEnabled = _flagVal("floatingButtonEnabled", "1");
+        const fbPosRaw = cfgTr.floatingButtonPosition ?? en.floatingButtonPosition;
+        const fbPos = fbPosRaw === "right" ? "right" : "left";
         const fbState: FloatingButtonState = {
           enabled: fbEnabled,
           position: fbPos,
@@ -392,6 +394,38 @@ export default function page({ siteId }: { siteId: string }) {
         setAppearance(app);
         setLastSavedAppearance(app);
 
+        // Reconcile IAB toggle with fresh DB state (res.iabActivated is read live from DB,
+        // not from the session-cached site object which may lag behind Webflow app changes).
+        const freshIabActivated = res?.iabActivated === true;
+        setIabEnabled(freshIabActivated);
+        try {
+          if (typeof window !== "undefined" && iabSessionKey) {
+            window.sessionStorage.setItem(iabSessionKey, freshIabActivated ? "1" : "0");
+          }
+        } catch { /* ignore */ }
+
+        // Reconcile region_mode / banner_type from fresh compliance (res.compliance is read live
+        // from DB). The session-cached site.region_mode lags behind when the Webflow app changes it.
+        if (!freshIabActivated && Array.isArray(res?.compliance) && res.compliance.length) {
+          const fc: string[] = res.compliance;
+          const hasGdpr = fc.includes('gdpr');
+          const hasUs = fc.includes('us') || fc.includes('ccpa');
+          const freshRegionMode = hasGdpr && hasUs ? 'both' : hasUs ? 'ccpa' : 'gdpr';
+          const freshBannerType = hasUs && !hasGdpr ? 'ccpa' : 'gdpr';
+          const s = siteRef.current;
+          if (s && s.banner_type !== 'iab') {
+            const curRegion = (s.region_mode || 'gdpr') as string;
+            const curBanner = (s.banner_type || 'gdpr') as string;
+            if (freshRegionMode !== curRegion || freshBannerType !== curBanner) {
+              updateSiteInState({
+                id: String(s.id),
+                banner_type: freshBannerType,
+                region_mode: freshRegionMode,
+              });
+            }
+          }
+        }
+
         const s = siteRef.current;
         if (s) {
           setLastPublishedRegulation({
@@ -400,6 +434,7 @@ export default function page({ siteId }: { siteId: string }) {
           });
         }
       } catch (e) {
+        if (!cancelled) setCustomizationLoading(false);
         // Keep defaults if customization does not exist yet.
         const app = appearanceFromCustomization(null);
         setAppearance(app);
@@ -549,8 +584,8 @@ export default function page({ siteId }: { siteId: string }) {
       headingColor: appearance.colors.headingColor,
       acceptButtonBg: appearance.colors.buttonColor,
       acceptButtonText: appearance.colors.buttonTextColor,
-      rejectButtonBg: appearance.colors.buttonColor,
-      rejectButtonText: appearance.colors.buttonTextColor,
+      rejectButtonBg: (prev as any)?.rejectButtonBg || appearance.colors.buttonColor,
+      rejectButtonText: (prev as any)?.rejectButtonText || appearance.colors.buttonTextColor,
       customiseButtonBg: appearance.colors.preferencesButtonBg,
       customiseButtonText: appearance.colors.preferencesButtonText,
       saveButtonBg: appearance.colors.savePreferencesButtonBg,
@@ -608,7 +643,7 @@ export default function page({ siteId }: { siteId: string }) {
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
     const snap = currentRegulationSnapshot;
-    const isIab = snap?.bannerType === 'iab' || site?.banner_type === 'iab';
+    const isIab = iabEnabled || snap?.bannerType === 'iab' || site?.banner_type === 'iab';
     const rm = snap?.regionMode ?? 'gdpr';
     const compliance = isIab || rm === 'both' ? ['gdpr', 'us'] : rm === 'ccpa' ? ['us'] : ['gdpr'];
     await saveBannerCustomization({
@@ -622,21 +657,34 @@ export default function page({ siteId }: { siteId: string }) {
         headingColor: appearance.colors.headingColor,
         acceptButtonBg: appearance.colors.buttonColor,
         acceptButtonText: appearance.colors.buttonTextColor,
-        rejectButtonBg: appearance.colors.buttonColor,
-        rejectButtonText: appearance.colors.buttonTextColor,
+        rejectButtonBg: (customizationBase as any)?.rejectButtonBg || appearance.colors.buttonColor,
+        rejectButtonText: (customizationBase as any)?.rejectButtonText || appearance.colors.buttonTextColor,
         customiseButtonBg: appearance.colors.preferencesButtonBg,
         customiseButtonText: appearance.colors.preferencesButtonText,
         saveButtonBg: appearance.colors.savePreferencesButtonBg,
         saveButtonText: appearance.colors.savePreferencesButtonText,
         contentEditedFromWebapp: true,
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
-      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
+        buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonBorderRadius),
+        bannerLogoPosition: floatingButton.position,
+        showBannerLogo: floatingButton.enabled ? 1 : 0,
+        centerAnimationDirection: appearance.layout.animation,
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
           ...((customizationBase && customizationBase.translations) || {}),
           config: {
             ...((customizationBase && customizationBase.translations && customizationBase.translations.config) || {}),
             bannerLayoutVisual: appearance.layout.position,
+            bannerFontFamily: appearance.type.font,
+            bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
+            bannerTextAlign: appearance.type.alignment,
+            bannerEntranceAnimation: appearance.layout.animation,
+            closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
+            rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
+            customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
+            cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
+            floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
+            floatingButtonPosition: floatingButton.position,
           },
           en: {
             ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
@@ -664,6 +712,7 @@ export default function page({ siteId }: { siteId: string }) {
             bannerTextAlign: appearance.type.alignment,
             bannerLayoutVisual: appearance.layout.position,
             bannerEntranceAnimation: appearance.layout.animation,
+            ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
           },
         },
       },
@@ -755,6 +804,16 @@ export default function page({ siteId }: { siteId: string }) {
     if (!iabSessionKey) return;
 
     const stored = window.sessionStorage.getItem(iabSessionKey);
+    const fromSite = String((site as any)?.banner_type || (site as any)?.bannerType || "").toLowerCase();
+
+    // DB is source of truth when it disagrees with sessionStorage.
+    // If the Webflow app reset IAB (banner_type → 'gdpr'/'ccpa'), clear the stale "1" in session.
+    if (fromSite !== 'iab' && stored === "1") {
+      setIabEnabled(false);
+      setIabHydrated(true);
+      return;
+    }
+
     if (stored === "1" || stored === "0") {
       setIabEnabled(stored === "1");
       setIabHydrated(true);
@@ -762,7 +821,6 @@ export default function page({ siteId }: { siteId: string }) {
     }
 
     // Fallback to backend site state when there is no session override yet.
-    const fromSite = String((site as any)?.banner_type || (site as any)?.bannerType || "").toLowerCase();
     if (fromSite === "iab") {
       setIabEnabled(true);
     }
@@ -1133,8 +1191,23 @@ export default function page({ siteId }: { siteId: string }) {
           />
         )}
       </div>
+      {/* Skeleton shown while customization loads from the API */}
+      {customizationLoading && (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-xl bg-slate-100 p-5 flex flex-col gap-3 animate-pulse">
+            <div className="h-4 w-2/5 rounded bg-slate-200" />
+            <div className="h-3 w-full rounded bg-slate-200" />
+            <div className="h-3 w-4/5 rounded bg-slate-200" />
+            <div className="flex gap-2 pt-2 justify-end">
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
-      <ConsentPreview
+      {!customizationLoading && <ConsentPreview
       iabEnabled={iabEnabled}
         key={previewRevision}
         langCode={selectedLangCode}
@@ -1170,7 +1243,7 @@ export default function page({ siteId }: { siteId: string }) {
             ? "main"
             : undefined
         }
-      />
+      />}
       <InstallConsentModal
         key={String(siteId)}
         open={showInstallModal}

@@ -52,7 +52,7 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     bannerBg: '#ffffff',
     textColor: '#334155',
     headingColor: '#0f172a',
-    buttonColor: '#0284c7',
+    buttonColor: '#007aff',
     buttonTextColor: '#ffffff',
     preferencesButtonBg: '#ffffff',
     preferencesButtonText: '#0284c7',
@@ -71,7 +71,7 @@ export function pxBorderRadiusToRem(px: string): string {
   return `${(n / 16).toFixed(3)}rem`;
 }
 
-const MAX_BORDER_RADIUS = 30;
+const MAX_BORDER_RADIUS = 25;
 
 export function bannerRadiusToPxString(r: string | undefined | null): string {
   if (r == null || r === '') return DEFAULT_APPEARANCE.layout.borderRadius;
@@ -144,9 +144,14 @@ export function appearanceFromCustomization(
     };
   }
 
-  const en = (customization as { translations?: { en?: Record<string, string> } }).translations?.en || {};
+  const translations = (customization as { translations?: { en?: Record<string, string>; config?: Record<string, string> } }).translations || {};
+  const en = translations.en || {};
+  const cfg = translations.config || {};
 
-  const visualRaw = String(en.bannerLayoutVisual || 'box').toLowerCase();
+  // Prefer config (written by both webapp and Webflow app) then fall back to en.
+  const _cfgOrEn = (c: string | undefined, e: string | undefined) => (c != null && c !== '' ? c : e);
+
+  const visualRaw = String(_cfgOrEn(cfg.bannerLayoutVisual, en.bannerLayoutVisual) || 'box').toLowerCase();
   // Coerce legacy 'popup' saved value to the new 'bottom-center' option.
   const visualNorm = visualRaw === 'popup' ? 'bottom-center' : visualRaw;
   const position = LAYOUT_VISUAL.includes(visualNorm as (typeof LAYOUT_VISUAL)[number])
@@ -156,6 +161,7 @@ export function appearanceFromCustomization(
   const rawAlignment = normalizeBannerPosition(
     (customization as { position?: string }).position,
   );
+  const animationRaw = _cfgOrEn(cfg.bannerEntranceAnimation, en.bannerEntranceAnimation);
   const layout: BannerLayoutValue = {
     position,
     alignment: position === 'box' && rawAlignment === 'bottom-center' ? 'bottom-left' : rawAlignment,
@@ -166,8 +172,8 @@ export function appearanceFromCustomization(
       (customization as { buttonBorderRadius?: string }).buttonBorderRadius ?? '8',
     ),
     animation:
-      typeof en.bannerEntranceAnimation === 'string' && en.bannerEntranceAnimation.length > 0
-        ? en.bannerEntranceAnimation
+      typeof animationRaw === 'string' && animationRaw.length > 0
+        ? animationRaw
         : DEFAULT_APPEARANCE.layout.animation,
   };
 
@@ -199,9 +205,9 @@ export function appearanceFromCustomization(
   colors.savePreferencesButtonText = colors.preferencesButtonText;
 
   const type: TypeSettings = {
-    font: en.bannerFontFamily || DEFAULT_APPEARANCE.type.font,
-    weight: numericWeightToLabel(en.bannerFontWeight),
-    alignment: normalizeTextAlign(en.bannerTextAlign),
+    font: _cfgOrEn(cfg.bannerFontFamily, en.bannerFontFamily) || DEFAULT_APPEARANCE.type.font,
+    weight: numericWeightToLabel(_cfgOrEn(cfg.bannerFontWeight, en.bannerFontWeight)),
+    alignment: normalizeTextAlign(_cfgOrEn(cfg.bannerTextAlign, en.bannerTextAlign)),
   };
 
   return { layout, colors, type };

@@ -16,7 +16,7 @@ function stripTrailingMoreInfo(text: string): string {
 
 // Keep parity with editor + CDN/embed so preview never "breaks" with long strings.
 const LIMITS = {
-  title: 30,
+  title: 60,
   // CCPA opt-out intro copy can be much longer than the cookie notice.
   // Keep this generous so defaults + user edits aren't truncated in preview.
   message: 600,
@@ -213,6 +213,16 @@ export default function ConsentPreview({
     }),
     [colors.textColor, alignment],
   );
+
+  /** Close button color — white on dark backgrounds, dark on light backgrounds. */
+  const closeButtonColor = useMemo(() => {
+    const hex = (colors.bannerBg || '#ffffff').replace('#', '');
+    const full = hex.length === 3 ? hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2] : hex;
+    const r = parseInt(full.slice(0,2),16)||0;
+    const g = parseInt(full.slice(2,4),16)||0;
+    const b = parseInt(full.slice(4,6),16)||0;
+    return (0.299*r + 0.587*g + 0.114*b) > 128 ? '#0f172a' : '#ffffff';
+  }, [colors.bannerBg]);
 
   /** Type tab: font + weight (same as `bannerFontFamily` / `bannerFontWeight` on publish). */
   const bannerTypographyStyle = useMemo(() => {
@@ -617,7 +627,7 @@ export default function ConsentPreview({
                 }}
               >
                 {content?.closeButton ? (
-                  <button type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
+                  <button type="button" className="absolute top-2 right-2 opacity-70 hover:opacity-100" style={{ color: closeButtonColor }} aria-label="Close banner preview">×</button>
                 ) : null}
                 <div className="cb-banner-body-preview min-w-0 w-full overflow-y-auto overflow-x-hidden mb-3">
                   <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', maxWidth: '100%', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
@@ -641,10 +651,10 @@ export default function ConsentPreview({
                   ) : null}
                 </div>
                 {selectedBannerType === 'gdpr' ? (
-                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-row flex-wrap w-full' : 'flex-nowrap justify-end'}`}>
+                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-col w-full' : 'flex-nowrap justify-end'}`}>
                     {safeContent.customizeButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
                         onClick={openPreferences}
                         type="button"
                         style={preferenceStyle}
@@ -654,7 +664,7 @@ export default function ConsentPreview({
                     ) : null}
                     {safeContent.rejectButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
                         type="button"
                         style={acceptRejectStyle}
                       >
@@ -662,7 +672,7 @@ export default function ConsentPreview({
                       </button>
                     ) : null}
                     <button
-                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
                       type="button"
                       style={acceptRejectStyle}
                     >
@@ -748,7 +758,8 @@ export default function ConsentPreview({
               <div className="relative px-5 pt-5 pb-3 shrink-0">
                 {content?.closeButton ? (
                   <button
-                    className="absolute top-4 right-5 shrink-0 text-black opacity-70 leading-none"
+                    className="absolute top-4 right-5 shrink-0 opacity-70 leading-none"
+                    style={{ color: closeButtonColor }}
                     type="button"
                     onClick={() => setModalView("main")}
                     aria-label="Close preferences"
@@ -959,7 +970,8 @@ export default function ConsentPreview({
             >
               {content?.closeButton ? (
                 <button
-                  className="absolute top-3 right-3 text-black opacity-70 cursor-pointer leading-none"
+                  className="absolute top-3 right-3 opacity-70 cursor-pointer leading-none"
+                  style={{ color: closeButtonColor }}
                   type="button"
                   onClick={() => setModalView("main")}
                   aria-label="Close opt-out"
