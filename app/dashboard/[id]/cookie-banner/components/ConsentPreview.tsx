@@ -653,9 +653,9 @@ export default function ConsentPreview({
                     ) : null}
                   </p>
                   {selectedBannerType === 'ccpa' ? (
-                    <div className="mt-2">
+                    <div className="mt-2" style={{ textAlign: alignment as 'left' | 'center' | 'right' }}>
                       {safeContent.rejectButton !== false ? (
-                        <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left" onClick={() => setModalView('ccpa-optout')}>
+                        <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer" onClick={() => setModalView('ccpa-optout')}>
                           {safeContent.doNotSellLabel || t('doNotSell')}
                         </button>
                       ) : null}
