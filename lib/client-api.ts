@@ -375,7 +375,7 @@ export async function getBannerCustomization(siteId: string) {
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Get customization failed: ${res.status}`);
-  return data as { success: true; customization: any | null };
+  return data as { success: true; customization: any | null; iabActivated?: boolean; compliance?: string[] };
 }
 
 export async function saveBannerCustomization(payload: { siteId: string; customization: any; compliance?: string[] }) {
