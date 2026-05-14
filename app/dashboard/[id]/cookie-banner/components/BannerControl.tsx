@@ -143,10 +143,10 @@ export default function BannerControl({ value, onChange }: Props) {
         <input
           type="number"
           min={0}
-          max={30}
+          max={25}
           value={borderRadius}
           onChange={(e) => {
-            const v = Math.min(30, Math.max(0, Number(e.target.value) || 0));
+            const v = Math.min(25, Math.max(0, Number(e.target.value) || 0));
             patch({ borderRadius: String(v) });
           }}
           className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
@@ -159,11 +159,11 @@ export default function BannerControl({ value, onChange }: Props) {
         <input
           type="number"
           min={0}
-          max={30}
-          value={buttonRadius}
+          max={25}
+          value={borderRadius}
           onChange={(e) => {
-            const v = Math.min(30, Math.max(0, Number(e.target.value) || 0));
-            patch({ buttonRadius: String(v) });
+            const v = Math.min(25, Math.max(0, Number(e.target.value) || 0));
+            patch({ borderRadius: String(v) });
           }}
           className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
           placeholder="8"

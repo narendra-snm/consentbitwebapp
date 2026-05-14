@@ -596,6 +596,7 @@ export function DomainManagementDashboard() {
                 <div className="flex items-center justify-end">
                   <button
                     type="button"
+                    className="cursor-pointer p-2"
                     onClick={e => { e.stopPropagation(); setOpenMenuId(prev => prev === domain.id ? null : domain.id); }}
                   >
                     <ThreeDotMenu />
