@@ -388,7 +388,7 @@ export function DomainManagementDashboard() {
     setConflictConfirmed(false);
     try {
       const res = await fetch(`/api/licenses/check-domain-script?domain=${encodeURIComponent(d)}`);
-      const data = await res.json();
+      const data = await res.json() as { reachable: boolean; hasExistingScript: boolean; wfSiteId: string | null };
       setDomainCheck(data);
       if (data.wfSiteId) setAssignWfSiteId(data.wfSiteId);
     } catch { /* ignore */ }
