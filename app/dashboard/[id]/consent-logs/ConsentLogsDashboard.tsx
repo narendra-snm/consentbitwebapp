@@ -774,7 +774,6 @@ export function ConsentLogsDashboard({
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('[ConsentLogs] CSV download failed', e);
     } finally {
       setCsvDownloading(false);
     }

@@ -443,7 +443,6 @@ function StepThree({
         setVerified(true);
       } else {
         if (typeof window !== 'undefined' && res && typeof res === 'object' && 'debug' in res && res.debug) {
-          console.warn('[ConsentBit] Verify script — not found. Debug from worker:', res.debug);
         }
         setVerifyError('Script not found on your site yet. Please publish the changes and try again.');
       }

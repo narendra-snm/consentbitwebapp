@@ -775,7 +775,7 @@ function blockNonEssentialScripts() {
       s.setAttribute('type', 'javascript/blocked');
       blocked++;
       // console.log('[ConsentBit][Block] 🚫 BLOCKED:', src, '| categories:', resolveScriptCategories(src, s));
-    } catch(e) { console.warn('[ConsentBit][Block] Failed to block:', src, e); }
+    } catch(e) { }
   });
   // console.log('[ConsentBit][Block] ✅ Done — blocked:', blocked, '| allowed/skipped:', skipped);
 }
@@ -822,7 +822,6 @@ function releaseBlockedScripts() {
       released++;
       // console.log('[ConsentBit][Release] Released:', src);
     } catch(e) {
-      console.warn('[ConsentBit][Release] Failed:', src, e);
     } finally {
       __cbInternalCreate = false;
     }
@@ -1768,7 +1767,6 @@ async function loadVendors() {
 
         initVendorSearch(vendorsList, searchInput);
     } catch (error) {
-        console.error('Error loading vendors:', error);
         if (loading) loading.textContent = 'Failed to load vendors. Please try again.';
     }
 }
@@ -1823,7 +1821,6 @@ function updateNoResultsMessage(vendorsList, searchTerm, allVendors) {
 // Load existing preferences into UI
 function loadExistingPreferences() {
     if (!window.tcfManager) {
-        console.warn('TCF Manager not initialized yet');
         return;
     }
 

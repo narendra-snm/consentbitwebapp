@@ -284,7 +284,6 @@ export async function GET(request: NextRequest) {
       offset: 0,
     });
   } catch (err) {
-    console.error('[legacy-consent-logs]', err);
     return NextResponse.json({ success: false, error: 'Internal error' }, { status: 500 });
   }
 }

@@ -139,7 +139,6 @@ export default function InstallConsentModal({
         onVerified?.();
       } else {
         if (typeof window !== "undefined" && "debug" in res && res.debug) {
-          console.warn("[ConsentBit] Verify script — not found. Debug from worker:", res.debug);
         }
         setScriptNotDetected(true);
       }

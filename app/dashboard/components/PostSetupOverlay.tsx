@@ -150,7 +150,6 @@ export default function PostSetupOverlay() {
         } else if (siteId) {
           setPendingSiteId(String(siteId));
         } else {
-          console.warn("[PostSetupOverlay] firstSetup returned no siteId or scriptUrl");
         }
         void refreshRef.current({ showLoading: false });
         let ticks = 0;
@@ -162,7 +161,6 @@ export default function PostSetupOverlay() {
         }, 1500);
       })
       .catch((err) => {
-        console.error("[PostSetupOverlay] firstSetup error:", err);
       });
 
     return () => {
@@ -219,7 +217,6 @@ export default function PostSetupOverlay() {
         try { await refreshRef.current({ showLoading: false }); } catch {}
         t = setTimeout(tryResolve, 1500);
       } else {
-        console.warn("[PostSetupOverlay] Gave up resolving siteId:", id);
         setPendingSiteId(null);
       }
     };

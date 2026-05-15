@@ -291,7 +291,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const firstWithCookies = ALL_CATEGORIES.find((c) => (byCat[c]?.length ?? 0) > 0);
       setSelectedCategory(firstWithCookies ?? 'necessary');
     } catch (e: unknown) {
-      console.error('[CookieScanDashboard]', e);
       const msg = e instanceof Error ? e.message : 'Failed to load scan data';
       const list = Array.isArray(sitesRef.current) ? sitesRef.current : [];
       const ok = list.some((s: any) => String(s?.id) === String(siteId));

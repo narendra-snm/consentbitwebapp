@@ -201,7 +201,7 @@ export default function DashboardPage() {
          }
        }, 1500);
      })
-     .catch(console.error);
+     .catch(() => {});
    return () => {
      cancelled = true;
      if (poll) clearInterval(poll);

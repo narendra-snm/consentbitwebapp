@@ -297,7 +297,6 @@ export default function page({ siteId }: { siteId: string }) {
   }) => {
     if (!site) return;
     if (!activeOrganizationId) {
-      console.error("[cookie-banner] activeOrganizationId missing; cannot update site banner settings");
       return;
     }
 
@@ -326,7 +325,6 @@ export default function page({ siteId }: { siteId: string }) {
       bannerType: next.bannerType,
       regionMode: next.regionMode,
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
   };
 
@@ -337,16 +335,6 @@ export default function page({ siteId }: { siteId: string }) {
       try {
         const res = await getBannerCustomization(String(site.id));
         const customization = res?.customization || null;
-        const enForLog = customization?.translations?.en || {};
-        console.log('[cookie-banner] decoded fetched customization', {
-          siteId: site.id,
-          rawResponse: res,
-          customization,
-          bannerBorderRadius: customization?.bannerBorderRadius,
-          buttonBorderRadius: customization?.buttonBorderRadius,
-          compliance: enForLog.compliance,
-          isIab: enForLog.isIab,
-        });
         if (cancelled) return;
         setCustomizationBase(customization);
         setCustomizationLoading(false);
@@ -754,7 +742,6 @@ export default function page({ siteId }: { siteId: string }) {
       await persistBannerCustomization();
       setSaveSuccess(true);
     } catch (e) {
-      console.error("[cookie-banner] failed to save banner customization", e);
       setPublishError("Something went wrong while saving. Please try again.");
     } finally {
       setSavingContent(false);
@@ -773,7 +760,6 @@ export default function page({ siteId }: { siteId: string }) {
       await persistBannerCustomization();
       setPublishSuccess(true);
     } catch (e) {
-      console.error("[cookie-banner] failed to publish banner customization", e);
       setPublishError("Something went wrong while publishing. Please try again.");
     } finally {
       setSavingContent(false);
@@ -984,7 +970,6 @@ export default function page({ siteId }: { siteId: string }) {
       bannerType: "iab",
       regionMode: "gdpr",
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
 
     prev && updateSiteBannerSettings({
@@ -994,7 +979,6 @@ export default function page({ siteId }: { siteId: string }) {
       bannerType: freePreviewBannerType,
       regionMode: freePreviewBannerType,
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
     
             
