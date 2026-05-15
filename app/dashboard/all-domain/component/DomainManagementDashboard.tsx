@@ -187,7 +187,7 @@ export function DomainManagementDashboard() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [checkingDomain, setCheckingDomain] = useState(false);
-  const [domainCheck, setDomainCheck] = useState<{ reachable: boolean; hasExistingScript: boolean; wfSiteId: string | null } | null>(null);
+  const [domainCheck, setDomainCheck] = useState<{ reachable: boolean; hasExistingScript: boolean; wfSiteId: string | null; hasConflict?: boolean } | null>(null);
   const [conflictConfirmed, setConflictConfirmed] = useState(false);
   const [activationResult, setActivationResult] = useState<{ cdnScriptId: string; scriptUrl: string; domain: string; platformSiteId: string | null } | null>(null);
   const [scriptCopied, setScriptCopied] = useState(false);
@@ -388,7 +388,7 @@ export function DomainManagementDashboard() {
     setConflictConfirmed(false);
     try {
       const res = await fetch(`/api/licenses/check-domain-script?domain=${encodeURIComponent(d)}`);
-      const data = await res.json() as { reachable: boolean; hasExistingScript: boolean; wfSiteId: string | null };
+      const data = await res.json() as { reachable: boolean; hasExistingScript: boolean; wfSiteId: string | null; hasConflict?: boolean };
       setDomainCheck(data);
       if (data.wfSiteId) setAssignWfSiteId(data.wfSiteId);
     } catch { /* ignore */ }
@@ -425,7 +425,7 @@ export function DomainManagementDashboard() {
     setVerifyResult(null);
     try {
       const res = await fetch(`/api/licenses/check-domain-script?domain=${encodeURIComponent(activationResult.domain)}&scriptId=${encodeURIComponent(activationResult.cdnScriptId)}`);
-      const data = await res.json();
+      const data = await res.json() as { scriptFound: boolean };
       setVerifyResult(data.scriptFound ? 'found' : 'not-found');
     } catch { setVerifyResult('not-found'); }
     finally { setVerifying(false); }
