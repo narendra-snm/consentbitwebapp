@@ -240,7 +240,7 @@ export default function ConsentPreview({
   const bannerTypographyStyle = useMemo(() => {
     const safe = String(bannerFont || 'Inter').replace(/['"]/g, '');
     return {
-      fontFamily: `'${safe}', ui-sans-serif, system-ui, sans-serif`,
+      fontFamily: `'${safe}', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
       fontWeight: Number(weightLabelToNumeric(weight)),
     } as const;
   }, [bannerFont, weight]);
@@ -653,7 +653,7 @@ export default function ConsentPreview({
                     ) : null}
                   </p>
                   {selectedBannerType === 'ccpa' ? (
-                    <div className="mt-2" style={{ textAlign: alignment as 'left' | 'center' | 'right' }}>
+                    <div className="mt-2 flex w-full" style={{ justifyContent: alignment === 'center' ? 'center' : alignment === 'right' ? 'flex-end' : 'flex-start' }}>
                       {safeContent.rejectButton !== false ? (
                         <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer" onClick={() => setModalView('ccpa-optout')}>
                           {safeContent.doNotSellLabel || t('doNotSell')}
@@ -828,7 +828,7 @@ export default function ConsentPreview({
                       style={{ color: colors.headingColor }}
                       className="flex-1 text-[11px]"
                     >
-                      {t('strictlyNecessary')}
+                      {t('essential')}
                     </span>
                     <span
                       style={{ color: colors.textColor }}

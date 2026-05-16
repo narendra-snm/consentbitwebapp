@@ -82,7 +82,9 @@ const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 
-const stripePromise = loadStripe("pk_test_51NxXT7JwcuG9163MasKBY9MLm1fn33uxmBZ487xb7DX0x4ZomZHzDxTMHWZSF7ym86m0s3bbSbWtTbbdRfvkVHxS00TTY6ocXB")
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null
 
 const STRIPE_STYLE = {
   style: {
