@@ -3,6 +3,9 @@ pages_build_output_dir = ".vercel/output/static"
 compatibility_date = "2026-03-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
+[vars]
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_live_51NxXT7JwcuG9163MqEMaZPr0dMkQ7SbMt3KlLlkq7JUXka8PKiyqvAjfcY6gx1AJzZPX5hJDIRqd1ujblQkAAC2r003eJcOx1r"
+
 [[d1_databases]]
 binding = "CONSENT_WEBAPP"
 database_name = "consent-webapp"
