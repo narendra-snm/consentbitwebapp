@@ -875,7 +875,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     {pagedCookies.map((c, i) => (
                       <tr key={c.id} className= 'text-sm font-medium border-b border-[#9FBCE4]'>
                         <td className={`py-4.5 px-3 pl-5.5 font-semibold text-black`}>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 overflow-auto">
                             {c.name}
                             {String(c.source || '').startsWith('user-rule:') && (
                               <span className="inline-flex h-4 items-center rounded-full bg-[#e6f1fd] px-1.5 text-[10px] font-medium text-[#007aff]">
@@ -1135,8 +1135,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     </div>
                     <span className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{rule.domain}</span>
                     <span className="font-['DM_Sans'] text-sm text-[#0a091f] capitalize" style={dm}>{rule.category}</span>
-                    <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>{rule.duration || '—'}</span>
-                    <span className="font-['DM_Sans'] text-[11px] text-[#6b7280] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
+                    <span className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>{rule.duration || '—'}</span>
+                    <span className="font-['DM_Sans'] text-[11px] text-[#0a091f] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
                     <button
                       type="button"
                       onClick={() => void handleDeleteRule(rule.id)}
