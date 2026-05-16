@@ -77,11 +77,12 @@ const MAX_BORDER_RADIUS = 25;
 export function bannerRadiusToPxString(r: string | undefined | null): string {
   if (r == null || r === '') return DEFAULT_APPEARANCE.layout.borderRadius;
   const s = String(r).trim();
-  if (s.endsWith('px')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(Number.parseFloat(s) || 12))));
-  if (s.endsWith('rem')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round((Number.parseFloat(s) || 0.75) * 16))));
+  const clamp = (v: number) => String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(v))));
+  if (s.endsWith('px')) { const n = Number.parseFloat(s); return clamp(isNaN(n) ? 12 : n); }
+  if (s.endsWith('rem')) { const n = Number.parseFloat(s); return clamp((isNaN(n) ? 0.75 : n) * 16); }
   const n = Number.parseFloat(s);
-  if (!Number.isNaN(n) && n < 4) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n * 16))));
-  return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n || 12))));
+  if (!Number.isNaN(n) && n < 4) return clamp(n * 16);
+  return clamp(isNaN(n) ? 12 : n);
 }
 
 export function normalizeBannerPosition(

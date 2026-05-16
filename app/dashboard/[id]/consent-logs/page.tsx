@@ -29,7 +29,6 @@ export default function ConsentLogsPage() {
     const label = pickSiteLabel(resolved as { name?: string; domain?: string });
     return label || '—';
   }, [loading, resolved]);
-console.log('resolved', resolved)
   const isLegacy = !!(resolved as any)?.isLegacy;
   const platform = (resolved as any)?.platform ?? null;
   const platformSiteId = (resolved as any)?.platformSiteId ?? (resolved as any)?.platformsiteid ?? null;

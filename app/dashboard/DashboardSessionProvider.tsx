@@ -72,7 +72,7 @@ function writeSessionCache(data: any) {
       const activeSiteId = data?.activeSiteId != null ? String(data.activeSiteId).trim() : "";
       if (activeSiteId) sessionStorage.setItem(LAST_ACTIVE_SITE_KEY, activeSiteId);
     }
-  } catch (e) { console.error("[Cache] WRITE FAILED", e); }
+  } catch (e) { }
 }
 
 function pickActiveSiteIdFromPath(pathname: string | null): string | null {
@@ -306,7 +306,6 @@ export function DashboardSessionProvider({
       setStateAndRef(next);
       return resolvedPlanId;
     } catch (e) {
-      console.error("[DashboardSession] refresh failed", e);
       setStateAndRef({ ...(stateRef.current ?? state), loading: false });
       return "";
     }
@@ -426,7 +425,6 @@ export function DashboardSessionProvider({
     router.push("/login");
     // Fire-and-forget the logout API call in the background
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch((e) => {
-      console.error("[DashboardSession] logout failed", e);
     });
   }, [router]);
 

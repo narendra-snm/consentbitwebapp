@@ -78,18 +78,6 @@ export async function requestVerificationCode(payload: {
     }),
   });
   const data = await parseApiResponse(res);
-  try {
-    console.log('[requestVerificationCode] response', {
-      status: res.status,
-      ok: res.ok,
-      keys: data && typeof data === 'object' ? Object.keys(data) : null,
-      success: data?.success,
-      hasRequestId: typeof data?.requestId === 'string',
-      hasExpiresAt: typeof data?.expiresAt === 'string',
-      hasEnvelope: typeof data?.d === 'string',
-      error: data?.error,
-    });
-  } catch {}
   const success =
     Boolean(data?.success) ||
     (res.ok && (typeof data?.requestId === 'string' || typeof data?.expiresAt === 'string' || typeof data?.code === 'string'));
@@ -198,7 +186,6 @@ export async function firstSetup(payload: {
 }) {
   // Ensure we're using a relative path to the Next.js API route
   const apiUrl = '/api/onboarding/first-setup';
-  console.log('firstSetup: Calling', apiUrl, 'with payload:', payload);
   
   const res = await fetch(apiUrl, {
     method: "POST",
@@ -207,11 +194,9 @@ export async function firstSetup(payload: {
     body: JSON.stringify(payload),
   });
 
-  console.log('firstSetup: Response status:', res.status, 'URL:', res.url);
   
   if (!res.ok) {
     const errorText = await res.text();
-    console.error('firstSetup: Error response:', errorText);
     let message = errorText;
     try {
       const parsed = decodeEnvelope(JSON.parse(errorText));
@@ -308,11 +293,9 @@ export async function checkSiteDomainForRename(
       body: JSON.stringify({ websiteUrl, excludeSiteId }),
     });
   } catch (fetchErr) {
-    console.log('[checkSiteDomainForRename] fetch threw:', fetchErr);
     return { success: false, available: false, error: String(fetchErr) };
   }
   const text = await res.text();
-  console.log('[checkSiteDomainForRename] status:', res.status, 'body:', text);
   let data: any;
   try {
     const parsed = JSON.parse(text);
@@ -560,6 +543,25 @@ export async function cancelSubscription(payload: {
   return data as { success: true; message?: string };
 }
 // subscription cancel ends here
+
+export async function activateLicenseWebflow(payload: {
+  licenseKey: string;
+  domain: string;
+  organizationId?: string | null;
+  wfSiteId?: string | null;
+}): Promise<{ success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null }> {
+  const res = await fetch('/api/licenses/activate-license', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `License activation failed: ${res.status}`);
+  }
+  return data as { success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null };
+}
 
 export async function deleteSite(siteId: string): Promise<{ success: boolean }> {
   const res = await fetch(`/api/sites?siteId=${encodeURIComponent(siteId)}`, {
@@ -978,9 +980,6 @@ export async function getLegacyConsentMonthlyFramer(
   const params = new URLSearchParams({ siteId, year, month, limit: '500', offset: '0' });
   const res = await fetch(`/api/legacy-consent-monthly-framer?${params.toString()}`, { credentials: 'include' });
   const data = await parseApiResponse(res);
-  console.log('[getLegacyConsentMonthlyFramer] decoded response', {
-    siteId, year, month, status: res.status, data,
-  });
   if (!data.success) return EMPTY_CONSENT_RESPONSE;
   return data;
 }
