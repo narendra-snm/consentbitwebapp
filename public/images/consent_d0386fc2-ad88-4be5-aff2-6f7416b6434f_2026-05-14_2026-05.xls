@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="header">
+      <Font ss:Bold="1"/>
+      <Interior ss:Color="#E6F1FD" ss:Pattern="Solid"/>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Consent Logs">
+    <Table>
+      <Row><Cell ss:StyleID="header"><Data ss:Type="String">#</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Consent ID</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Timestamp (UTC)</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Status</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Regulation</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Country</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Region</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">IP Address</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">User Agent</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Necessary</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Analytics</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Marketing</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Preferences</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Do Not Sell</Data></Cell><Cell ss:StyleID="header"><Data ss:Type="String">Download PDF</Data></Cell></Row>
+      <Row>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">1f274657-c533-40d8-a80b-551c28cdd379</Data></Cell>
+      <Cell><Data ss:Type="String">Thu, 14 May 2026 22:03:50 GMT</Data></Cell>
+      <Cell><Data ss:Type="String">Accepted</Data></Cell>
+      <Cell><Data ss:Type="String">GDPR</Data></Cell>
+      <Cell><Data ss:Type="String">IN</Data></Cell>
+      <Cell><Data ss:Type="String">MH</Data></Cell>
+      <Cell><Data ss:Type="String">2401:4900:1c42:7b33:ac9e:8c5d:6363:c4aa</Data></Cell>
+      <Cell><Data ss:Type="String">Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:HRef="https://consent-webapp-manager.web-8fb.workers.dev/api/consent-pdf?siteId=d0386fc2-ad88-4be5-aff2-6f7416b6434f&amp;consentId=1f274657-c533-40d8-a80b-551c28cdd379&amp;token=MTc3OTQwMTk4Mw.t253XBczPUdzYLEUZ9d5zbIknBS8b7znD2LSwNZstCo"><Data ss:Type="String">Download PDF</Data></Cell>
+    </Row>
+<Row>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">04959147-4c47-4dcb-8303-4064537a9503</Data></Cell>
+      <Cell><Data ss:Type="String">Thu, 14 May 2026 21:42:52 GMT</Data></Cell>
+      <Cell><Data ss:Type="String">Accepted</Data></Cell>
+      <Cell><Data ss:Type="String">GDPR</Data></Cell>
+      <Cell><Data ss:Type="String">IN</Data></Cell>
+      <Cell><Data ss:Type="String">MH</Data></Cell>
+      <Cell><Data ss:Type="String">2401:4900:1c42:7b33:ac9e:8c5d:6363:c4aa</Data></Cell>
+      <Cell><Data ss:Type="String">Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String">Yes</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:HRef="https://consent-webapp-manager.web-8fb.workers.dev/api/consent-pdf?siteId=d0386fc2-ad88-4be5-aff2-6f7416b6434f&amp;consentId=04959147-4c47-4dcb-8303-4064537a9503&amp;token=MTc3OTQwMTk4Mw.jH5YuUlLPcKvXOSPbqpV03er9q4Dc9boiidYwdynpyI"><Data ss:Type="String">Download PDF</Data></Cell>
+    </Row>
+    </Table>
+  </Worksheet>
+</Workbook>
