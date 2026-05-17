@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { verifyScript } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import ErrorPopup from "./ErrorPopup";
+import { analytics } from "@/lib/analytics";
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -48,6 +49,7 @@ export default function InstallConsentModal({
 }) {
   const [copiedIcon, setCopiedIcon] = useState(false);
   const [copiedBtn, setCopiedBtn] = useState(false);
+  const copyTimestampRef = useRef<number | null>(null);
   const [publicUrl, setPublicUrl] = useState(siteDomain || "");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -102,6 +104,8 @@ export default function InstallConsentModal({
     }
     const ok = await copyToClipboard(installCode);
     if (ok) {
+      copyTimestampRef.current = Date.now();
+      analytics.installCodeCopied(siteDomain || publicUrl, siteId);
       if (which === "icon") {
         setCopiedIcon(true);
         window.setTimeout(() => setCopiedIcon(false), 2000);
@@ -136,6 +140,10 @@ export default function InstallConsentModal({
       });
       if (res.found) {
         setVerified(true);
+        const secondsFromCopy = copyTimestampRef.current
+          ? Math.round((Date.now() - copyTimestampRef.current) / 1000)
+          : undefined;
+        analytics.installationVerified(url, siteId, secondsFromCopy);
         onVerified?.();
       } else {
         if (typeof window !== "undefined" && "debug" in res && res.debug) {

@@ -4,6 +4,7 @@ import "./globals.css";
 import { DM_Sans } from "next/font/google";
 import "react-datepicker/dist/react-datepicker.css";
 import {AppProvider} from "./context/AppProvider"
+import { PostHogProvider } from "@/components/providers/PostHogProvider"
 const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
@@ -40,7 +41,9 @@ export default function RootLayout({
       <body
         className={`${dmSans.className} antialiased`}
       >
-        <AppProvider>{children}</AppProvider>
+        <PostHogProvider>
+          <AppProvider>{children}</AppProvider>
+        </PostHogProvider>
         
        
       </body>
