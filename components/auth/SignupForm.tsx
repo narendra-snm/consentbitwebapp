@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
+import { analytics } from "@/lib/analytics";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -135,6 +136,7 @@ export function SignupForm() {
         await verifyVerificationCode({ email, purpose: 'signup', code });
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         setPendingOtp(false);
+        analytics.accountCreated(email.trim().toLowerCase(), name.trim());
         router.push('/dashboard');
       }
     } catch (err: unknown) {

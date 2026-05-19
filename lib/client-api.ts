@@ -362,11 +362,14 @@ export async function getBannerCustomization(siteId: string) {
 }
 
 export async function saveBannerCustomization(payload: { siteId: string; customization: any; compliance?: string[] }) {
+  const _bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let _binary = '';
+  for (let i = 0; i < _bytes.length; i++) _binary += String.fromCharCode(_bytes[i]);
   const res = await fetch('/api/banner-customization', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ d: btoa(_binary) }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Save customization failed: ${res.status}`);

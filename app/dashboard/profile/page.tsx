@@ -204,11 +204,11 @@ export default function SettingsPage() {
   const [orgPage, setOrgPage] = useState(1);
 
   const accountOwnerEmail = useMemo(
-    () => String(user?.email || "").trim() || "—",
+    () => String(user?.email || "").trim(),
     [user?.email],
   );
   const accountOwnerName = useMemo(
-    () => String(user?.profile?.name || user?.name || "").trim() || "—",
+    () => String(user?.profile?.name || user?.name || "").trim(),
     [user?.profile?.name, user?.name],
   );
   const initialBillingEmail = useMemo(
@@ -233,6 +233,11 @@ export default function SettingsPage() {
       setBillingEmailSaving(false);
     }
   }, []);
+
+  const handleSaveName = useCallback(async (name: string) => {
+    await updateProfile({ name: name.trim() });
+    await refresh({ showLoading: false });
+  }, [refresh]);
 
   const accountId = useMemo(() => {
     const firstOrg = Array.isArray(orgsFromSession) ? orgsFromSession[0] : null;
@@ -640,6 +645,7 @@ export default function SettingsPage() {
                 name={accountOwnerName}
                 email={accountOwnerEmail}
                 billingEmail={initialBillingEmail}
+                onSaveName={handleSaveName}
                 onSaveBillingEmail={handleSaveBillingEmail}
                 billingEmailSaving={billingEmailSaving}
                 billingEmailError={billingEmailError}

@@ -85,10 +85,10 @@ export default function BillingDetailsCard({
   onEditCard,
   onOpenPortal,
 }: BillingDetailsCardProps) {
-  const safeName    = name    || "—";
-  const safeEmail   = email   || "—";
-  const safeCountry = country || "—";
-  const safeAddress = address || "—";
+  const safeName    = name    || "Not available";
+  const safeEmail   = email   || "Not available";
+  const safeCountry = country || "Not available";
+  const safeAddress = address || "Not available";
 
   const brand        = pm?.brand?.toLowerCase() || "";
   const isMastercard = brand === "mastercard";
@@ -244,7 +244,7 @@ export default function BillingDetailsCard({
                   className="font-['DM_Sans:9pt_Regular',sans-serif] font-normal text-[17px] text-black opacity-50 tracking-[-1px]"
                   style={{ fontVariationSettings: "'opsz' 9" }}
                 >
-                  {safeName !== "—" ? safeName : "Cardholder"}
+                  {safeName !== "Not available" ? safeName : "Cardholder"}
                 </p>
 
                 <p

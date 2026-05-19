@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getDashboardInit } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 
 type DashboardSessionState = {
   loading: boolean;
@@ -367,6 +368,13 @@ export function DashboardSessionProvider({
       router.replace("/login");
     }
   }, [state.loading, state.authenticated, router]);
+
+  // Identify the user in PostHog as soon as we have their email.
+  useEffect(() => {
+    if (state.authenticated && state.user?.email) {
+      analytics.identify(state.user.email, state.user.name || state.user.firstName || "");
+    }
+  }, [state.authenticated, state.user?.email]);
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
   useEffect(() => {

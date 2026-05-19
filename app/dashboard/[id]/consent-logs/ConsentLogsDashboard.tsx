@@ -51,41 +51,28 @@ function categoriesSummary(categories: ConsentLog['categories']): string {
   const c = normalizeCategories(categories);
   if (!c) return '—';
 
-  if (c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
-    return c.ccpa.doNotSell ? 'Do Not Sell: Yes' : 'Do Not Sell: No';
+  const hasGdprCategories =
+    c.essential !== undefined ||
+    c.analytics !== undefined ||
+    c.marketing !== undefined ||
+    c.preferences !== undefined;
+
+  if (!hasGdprCategories && c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
+    return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
   }
 
   const parts: string[] = [];
-  parts.push(
-    c.essential === true
-      ? 'Essential: Accepted'
-      : c.essential === false
-        ? 'Essential: Rejected'
-        : 'Essential: —',
-  );
-  parts.push(
-    c.analytics === true
-      ? 'Analytics: Accepted'
-      : c.analytics === false
-        ? 'Analytics: Rejected'
-        : 'Analytics: —',
-  );
-  parts.push(
-    c.marketing === true
-      ? 'Marketing: Accepted'
-      : c.marketing === false
-        ? 'Marketing: Rejected'
-        : 'Marketing: —',
-  );
-  parts.push(
-    c.preferences === true
-      ? 'Preferences: Accepted'
-      : c.preferences === false
-        ? 'Preferences: Rejected'
-        : 'Preferences: —',
-  );
+  if (c.analytics !== undefined) {
+    parts.push(c.analytics === true ? 'Analytics: Accepted' : 'Analytics: Rejected');
+  }
+  if (c.marketing !== undefined) {
+    parts.push(c.marketing === true ? 'Marketing: Accepted' : 'Marketing: Rejected');
+  }
+  if (c.preferences !== undefined) {
+    parts.push(c.preferences === true ? 'Preferences: Accepted' : 'Preferences: Rejected');
+  }
 
-  return parts.join(', ');
+  return parts.length > 0 ? parts.join(', ') : 'Essential: Accepted';
 }
 
 function escapeHtml(s: string): string {
@@ -150,7 +137,13 @@ function getAcceptedCategoriesList(categories: ConsentLog['categories']): string
   const c = normalizeCategories(categories);
   if (!c) return [];
 
-  if (c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
+  const hasGdprCategories =
+    c.essential !== undefined ||
+    c.analytics !== undefined ||
+    c.marketing !== undefined ||
+    c.preferences !== undefined;
+
+  if (!hasGdprCategories && c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
     return c.ccpa.doNotSell ? [] : ['All (CCPA accepted)'];
   }
 
@@ -351,15 +344,17 @@ function ImportIcon() {
 function DownloadPdfButton({
   onClick,
   disabled = false,
+  downloading = false,
 }: {
   onClick: () => void;
   disabled?: boolean;
+  downloading?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || downloading}
       className="bg-[#e6f1fd] flex items-center gap-[5px] h-[33px] justify-center px-[8px] py-[8px] rounded-[8px] min-w-[126px] hover:bg-[#d7eafb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <ImportIcon />
@@ -367,7 +362,7 @@ function DownloadPdfButton({
         className="font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap"
         style={dm}
       >
-        Download PDF
+        {downloading ? 'Downloading…' : 'Download PDF'}
       </p>
     </button>
   );
@@ -417,6 +412,7 @@ export function ConsentLogsDashboard({
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [csvDownloading, setCsvDownloading] = useState(false);
+  const [downloadingPdfIds, setDownloadingPdfIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setMounted(true);
@@ -728,23 +724,43 @@ export function ConsentLogsDashboard({
   }, []);
 
   const handleDownloadRowPdf = useCallback(
-    (row: ConsentLog) => {
+    async (row: ConsentLog) => {
+      if (downloadingPdfIds.has(row.id)) return;
       const isBeforeJulyCutoff =
         parseInt(selectedYear, 10) < 2026 ||
         (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
       const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
-      const useWebflowLegacySource = !isFramerLegacy && isLegacy && isBeforeJulyCutoff;
+      const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+      const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
       const apiPath = useFramerLegacySource
         ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
         : useWebflowLegacySource
           ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
           : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
-      const a = document.createElement('a');
-      a.href = apiPath;
-      a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
-      a.click();
+      setDownloadingPdfIds(prev => new Set(prev).add(row.id));
+      try {
+        const res = await fetch(apiPath, { credentials: 'include' });
+        if (!res.ok) {
+          const msg = await res.text().catch(() => 'Unknown error');
+          alert(`Could not download PDF: ${msg}`);
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        alert('Failed to download PDF. Please try again.');
+      } finally {
+        setDownloadingPdfIds(prev => { const next = new Set(prev); next.delete(row.id); return next; });
+      }
     },
-    [isLegacy, isFramerLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
+    [downloadingPdfIds, isLegacy, isFramerLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
   );
 
   const downloadCsv = useCallback(async () => {
@@ -909,7 +925,7 @@ export function ConsentLogsDashboard({
                       className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-[#9fbce4]"
                       style={dm}
                     >
-                      Method
+                      Banner Type
                     </th>
                     <th
                       className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-[#9fbce4] min-w-[420px]"
@@ -969,7 +985,11 @@ export function ConsentLogsDashboard({
                           </div>
                         </td>
                         <td className="px-[16px] py-[9px] border-b border-black/10">
-                          <DownloadPdfButton onClick={() => handleDownloadRowPdf(row)} />
+                          <DownloadPdfButton
+                            onClick={() => handleDownloadRowPdf(row)}
+                            downloading={downloadingPdfIds.has(row.id)}
+                            disabled={downloadingPdfIds.has(row.id)}
+                          />
                         </td>
                       </tr>
                     ))

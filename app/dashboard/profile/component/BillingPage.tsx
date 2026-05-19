@@ -271,13 +271,13 @@ export default function BillingPage({
         const created = inv.created ? new Date(inv.created) : null;
         const date = created && !Number.isNaN(created.getTime())
           ? created.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-          : "-";
+          : "Not available";
         const amount = ((inv.amountPaid ?? inv.amountDue ?? 0) / 100).toFixed(2) + " USD";
         const status = String(inv.status || "open").toLowerCase() === "paid" ? "Completed" : String(inv.status || "Open");
         const siteMatch = inv.siteId
           ? domainSites.find((s) => String(s.id) === String(inv.siteId))
           : null;
-        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "—";
+        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "Not available";
         return {
           date,
           invoiceNumber: inv.number || inv.id,
@@ -629,8 +629,9 @@ export default function BillingPage({
                 {invoice.invoicePdf ? (
                   <a href={invoice.invoicePdf} target="_blank" rel="noreferrer"
                     className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center shrink-0" title="Download PDF">
-                    <svg className="w-[6px] h-[5px]" fill="none" viewBox="0 0 5.83333 4.66667">
-                      <path d={svgPaths.pc41fd00} fill="#007AFF" /><path d={svgPaths.pbc14700} fill="#007AFF" />
+                    <svg className="w-[7px] h-[8px]" fill="none" viewBox="0 0 6 5">
+                      <path d={svgPaths.pc41fd00} fill="#007AFF" />
+                      <path d={svgPaths.pbc14700} fill="#007AFF" />
                     </svg>
                   </a>
                 ) : null}
@@ -668,6 +669,7 @@ export default function BillingPage({
                 </div>
                 <p className="font-medium leading-[normal] text-[#118a41] text-[10px] tracking-[-0.5px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.status}</p>
               </div>
+
             </div>
           ))}
           {invoiceLoading && <p className="text-sm text-[#6b7280]">Loading invoices...</p>}
@@ -792,8 +794,8 @@ export default function BillingPage({
 <BillingDetailsCard
   name={userName}
   email={userEmail}
-  country={summary?.billingCountry || "—"}
-  address={summary?.billingAddress || "—"}
+  country={summary?.billingCountry || "Not available"}
+  address={summary?.billingAddress || "Not available"}
   pm={pm}
   onVisitStripePortal={handleVisitPortal}
   onEditCard={handleEditCard}

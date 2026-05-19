@@ -84,7 +84,7 @@ const statusOrder: Record<DomainStatus, number> = { Active: 0, Cancelling: 1, Ca
 const billingOrder: Record<string, number> = { Monthly: 0, Yearly: 1 };
 
 const TABLE_GRID =
-  'grid grid-cols-[minmax(160px,1.8fr)_minmax(95px,0.8fr)_minmax(105px,0.8fr)_minmax(105px,0.8fr)_minmax(170px,1.2fr)_minmax(90px,0.7fr)_auto] gap-x-[16px] [&>*:nth-child(6)]:pl-[32px]';
+  'grid grid-cols-[minmax(160px,1.8fr)_minmax(95px,0.8fr)_minmax(105px,0.8fr)_minmax(105px,0.8fr)_minmax(170px,1.2fr)_minmax(90px,0.7fr)_20px] gap-x-[16px] [&>*:nth-child(6)]:pl-[32px]';
 
 type FilterStatus = 'all' | DomainStatus;
 type FilterBilling = 'all' | 'Monthly' | 'Yearly';
@@ -219,7 +219,7 @@ export function DomainManagementDashboard() {
       const createdTs = createdDate ? new Date(createdDate).getTime() : 0;
       const created = createdDate
         ? new Date(createdDate).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" })
-        : "-";
+        : "Not available";
 
       const verified = site?.verified === 1 || site?.verified === true;
       const cancelAtPeriodEnd = Number(
@@ -255,13 +255,13 @@ export function DomainManagementDashboard() {
 
       const expirationDate = subscriptionEnd
         ? new Date(subscriptionEnd).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" })
-        : "N/A";
+        : "Not available";
 
       const licenseKey = site?.licenseKey ?? site?.license_key ?? null;
 
       return {
         id: String(site?.id || ''),
-        url: site?._isUnassigned ? '—' : String(site?.domain || site?.name || '—'),
+        url: site?._isUnassigned ? 'Not assigned' : String(site?.domain || site?.name || 'Not available'),
         status,
         billingPeriod,
         expirationDate,
@@ -289,7 +289,7 @@ export function DomainManagementDashboard() {
         if (filterBilling === 'Yearly' && row.billingPeriod !== 'Yearly') return false;
       }
       if (filterExpiration === 'has' && row.expirationSort <= 0) return false;
-      if (filterExpiration === 'na' && row.expirationDate !== 'N/A') return false;
+      if (filterExpiration === 'na' && row.expirationDate !== 'Not available') return false;
       if (filterLicenseKey === 'assigned' && row.isUnassigned) return false;
       if (filterLicenseKey === 'unassigned' && !row.isUnassigned) return false;
       return true;
@@ -692,7 +692,7 @@ export function DomainManagementDashboard() {
             type="search"
             value={filterDomain}
             onChange={e => { setFilterDomain(e.target.value); setCurrentPage(1); }}
-            placeholder="Active"
+            placeholder="Search"
             className={`flex items-center gap-1.5 pl-3 pr-3 py-1.5 rounded-full border text-xs font-medium transition-colors w-[100px] outline-none ${
               filterDomain.trim()
                 ? 'border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8] placeholder:text-[#1d4ed8]'
@@ -775,7 +775,7 @@ export function DomainManagementDashboard() {
       <div className="w-full rounded-[10px] overflow-visible">
         {/* Header */}
         <div className={`${TABLE_GRID} px-[20px] py-[18px] items-center rounded-t-[10px]`} style={{ backgroundColor: '#F3F4F6' }}>
-          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Active</span>
+          <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Domain</span>
           <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Status</span>
           <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Billing Period</span>
           <span className="text-xs tracking-[-0.5px] text-[#6b7280] font-medium" style={{ fontFamily: 'DM Sans, sans-serif' }}>Expiration Date</span>
@@ -811,7 +811,7 @@ export function DomainManagementDashboard() {
                   className={`text-sm tracking-[-0.5px] ${domain.billingPeriod ? 'text-[#5c7cfa]' : 'text-[#9ca3af]'}`}
                   style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}
                 >
-                  {domain.billingPeriod ?? 'N/A'}
+                  {domain.billingPeriod ?? 'Not available'}
                 </span>
               </div>
 
@@ -855,7 +855,7 @@ export function DomainManagementDashboard() {
                     </button> */}
                   </>
                 ) : (
-                  <span className="text-[#9ca3af] text-[11px]">N/A</span>
+                  <span className="text-[#9ca3af] text-[11px]">Not assigned</span>
                 )}
               </div>
 
