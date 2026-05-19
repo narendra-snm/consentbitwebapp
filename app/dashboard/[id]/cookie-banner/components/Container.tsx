@@ -1175,7 +1175,14 @@ export default function page({ siteId }: { siteId: string }) {
             <div className="flex justify-end mb-3">
               <button
                 type="button"
-                onClick={() => setAppearance((a) => ({ ...a, colors: DEFAULT_APPEARANCE.colors }))}
+                onClick={() => {
+                  setAppearance((a) => ({ ...a, colors: DEFAULT_APPEARANCE.colors }));
+                  setCustomizationBase((prev: any) => {
+                    if (!prev) return prev;
+                    const { rejectButtonBg, rejectButtonText, ...rest } = prev;
+                    return rest;
+                  });
+                }}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
                 <ResetIcon />

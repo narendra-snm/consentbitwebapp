@@ -26,23 +26,7 @@ const svgPaths = {
   p112ba780: "M6.3 0H2.8C2.41395 0 2.1 0.31395 2.1 0.7V2.1H0.7C0.31395 2.1 0 2.41395 0 2.8V6.3C0 6.68605 0.31395 7 0.7 7H4.2C4.58605 7 4.9 6.68605 4.9 6.3V4.9H6.3C6.68605 4.9 7 4.58605 7 4.2V0.7C7 0.31395 6.68605 0 6.3 0ZM0.7 6.3V2.8H4.2L4.2007 6.3H0.7ZM6.3 4.2H4.9V2.8C4.9 2.41395 4.58605 2.1 4.2 2.1H2.8V0.7H6.3V4.2Z",
   pc41fd00: "M2.91667 3.5L4.08333 2.04167H3.20833V0H2.625V2.04167H1.75L2.91667 3.5Z",
   pbc14700: "M5.25 4.08333H0.583333V2.04167H0V4.08333C0 4.40504 0.261625 4.66667 0.583333 4.66667H5.25C5.57171 4.66667 5.83333 4.40504 5.83333 4.08333V2.04167H5.25V4.08333Z",
-  pImportArrow: "M9.32 11.68L11.88 14.24L14.44 11.68",
-  pImportArc: "M20 12.18C20 16.6 17 20.18 12 20.18C7 20.18 4 16.6 4 12.18",
 };
-
-function ImportIcon() {
-  return (
-    <div className="size-[24px] shrink-0">
-      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-        <g>
-          <path d={svgPaths.pImportArrow} stroke="#007AFF" strokeLinecap="round" strokeLinejoin="round" strokeMiterlimit="10" strokeWidth="1.5" />
-          <path d="M11.88 4V14.17" stroke="#007AFF" strokeLinecap="round" strokeLinejoin="round" strokeMiterlimit="10" strokeWidth="1.5" />
-          <path d={svgPaths.pImportArc} stroke="#007AFF" strokeLinecap="round" strokeLinejoin="round" strokeMiterlimit="10" strokeWidth="1.5" />
-        </g>
-      </svg>
-    </div>
-  );
-}
 
 interface Invoice {
   date: string;
@@ -194,7 +178,6 @@ export default function BillingPage({
   // Pagination
   const INVOICES_PER_PAGE = 5;
   const [invoicePage, setInvoicePage] = useState(1);
-  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
   // Load invoices
   useEffect(() => {
@@ -288,13 +271,13 @@ export default function BillingPage({
         const created = inv.created ? new Date(inv.created) : null;
         const date = created && !Number.isNaN(created.getTime())
           ? created.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-          : "-";
+          : "Not available";
         const amount = ((inv.amountPaid ?? inv.amountDue ?? 0) / 100).toFixed(2) + " USD";
         const status = String(inv.status || "open").toLowerCase() === "paid" ? "Completed" : String(inv.status || "Open");
         const siteMatch = inv.siteId
           ? domainSites.find((s) => String(s.id) === String(inv.siteId))
           : null;
-        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "—";
+        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "Not available";
         return {
           date,
           invoiceNumber: inv.number || inv.id,
@@ -477,27 +460,6 @@ export default function BillingPage({
   const isMastercard = cardBrand === "mastercard";
   const isVisa = cardBrand === "visa";
 
-  const handleDownloadInvoicePdf = async (url: string, invoiceNumber: string) => {
-    if (downloadingInvoiceId) return;
-    setDownloadingInvoiceId(invoiceNumber);
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `invoice-${invoiceNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(url, '_blank');
-    } finally {
-      setDownloadingInvoiceId(null);
-    }
-  };
-
   return (
     <>
     {/* Cancel Subscription Confirmation Modal */}
@@ -629,7 +591,7 @@ export default function BillingPage({
         </div>
 
             {/* Table Header */}
-            <div className="grid grid-cols-[100px_150px_90px_130px_120px_90px_140px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
+            <div className="grid grid-cols-[100px_150px_90px_130px_120px_90px] text-left gap-[8px] mb-[16px] border-b border-[#000000]/10 pb-2.5">
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Issue Date
               </p>
@@ -648,15 +610,12 @@ export default function BillingPage({
               <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Status
               </p>
-              <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>
-                Download
-              </p>
             </div>
 
         {/* Table Rows */}
         <div className="space-y-[20px] pb-6">
           {invoices.map((invoice, index) => (
-            <div key={index} className={`grid grid-cols-[100px_150px_90px_130px_120px_90px_140px] gap-[8px] items-center ${index === invoices.length - 1 ? "" : "border-b border-[#000000]/10"} py-4.5`}>
+            <div key={index} className={`grid grid-cols-[100px_150px_90px_130px_120px_90px] gap-[8px] items-center ${index === invoices.length - 1 ? "" : "border-b border-[#000000]/10"} py-4.5`}>
               <p className="font-normal leading-[20px] text-[14px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.date}</p>
 
               <div className="flex items-center gap-[6px]">
@@ -665,6 +624,15 @@ export default function BillingPage({
                   <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer"
                     className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center shrink-0" title="Open invoice">
                     <svg className="w-[7px] h-[7px]" fill="none" viewBox="0 0 7 7"><path d={svgPaths.p112ba780} fill="#007AFF" /></svg>
+                  </a>
+                ) : null}
+                {invoice.invoicePdf ? (
+                  <a href={invoice.invoicePdf} target="_blank" rel="noreferrer"
+                    className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center shrink-0" title="Download PDF">
+                    <svg className="w-[7px] h-[8px]" fill="none" viewBox="0 0 6 5">
+                      <path d={svgPaths.pc41fd00} fill="#007AFF" />
+                      <path d={svgPaths.pbc14700} fill="#007AFF" />
+                    </svg>
                   </a>
                 ) : null}
               </div>
@@ -702,22 +670,6 @@ export default function BillingPage({
                 <p className="font-medium leading-[normal] text-[#118a41] text-[10px] tracking-[-0.5px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.status}</p>
               </div>
 
-              {/* Download PDF — 7th column, same design as consent logs */}
-              {invoice.invoicePdf ? (
-                <button
-                  type="button"
-                  onClick={() => handleDownloadInvoicePdf(invoice.invoicePdf!, invoice.invoiceNumber)}
-                  disabled={!!downloadingInvoiceId}
-                  className="bg-[#e6f1fd] flex items-center gap-[5px] h-[33px] justify-center px-[8px] rounded-[8px] min-w-[126px] hover:bg-[#d7eafb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ImportIcon />
-                  <span className="font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap">
-                    {downloadingInvoiceId === invoice.invoiceNumber ? 'Downloading…' : 'Download PDF'}
-                  </span>
-                </button>
-              ) : (
-                <div />
-              )}
             </div>
           ))}
           {invoiceLoading && <p className="text-sm text-[#6b7280]">Loading invoices...</p>}
@@ -842,8 +794,8 @@ export default function BillingPage({
 <BillingDetailsCard
   name={userName}
   email={userEmail}
-  country={summary?.billingCountry || "—"}
-  address={summary?.billingAddress || "—"}
+  country={summary?.billingCountry || "Not available"}
+  address={summary?.billingAddress || "Not available"}
   pm={pm}
   onVisitStripePortal={handleVisitPortal}
   onEditCard={handleEditCard}
