@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, renameSite, checkSiteDomainForRename, updateProfile, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, updateProfile, type BillingUsage } from "@/lib/client-api";
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -73,6 +73,85 @@ function toPlanLabel(raw: unknown): PlanTier {
 
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
+
+// Calls POST /api/sites/rename-domain — returns a normalized result.
+// Goes through the Next.js proxy route so the sid cookie is forwarded server-side
+// (same pattern as /api/sites/check-domain).
+async function renameSiteDomain({
+  websiteUrl,
+  excludeSiteId,
+}: {
+  websiteUrl: string;
+  excludeSiteId?: string;
+}) {
+  const res = await fetch(`/api/sites/rename-domain`, {
+    method: 'POST',
+    credentials: 'include',                   // send the sid cookie to our own origin
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',   // ← CSRF guard requires this
+    },
+    body: JSON.stringify({ websiteUrl, excludeSiteId }),
+  });
+
+  console.log('[renameSiteDomain] request', { websiteUrl, excludeSiteId });
+
+  const rawText = await res.text();
+  let parsed: any = null;
+  try { parsed = rawText ? JSON.parse(rawText) : null; } catch { /* non-JSON */ }
+
+  // Worker wraps payloads in { d: "<base64 UTF-8 JSON>" } — decode like lib/client-api.ts does.
+  let data: any = parsed;
+  if (parsed && typeof parsed.d === 'string') {
+    try {
+      const binary = atob(parsed.d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      data = JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through to raw parsed value */ }
+  }
+
+  console.log('[renameSiteDomain] response', {
+    status: res.status,
+    ok: res.ok,
+    rawText,
+    envelope: parsed,
+    data,
+  });
+
+  if (!res.ok) {
+    const err: any = new Error(data?.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.code = data?.code || null;
+    console.log('[renameSiteDomain] error', { status: err.status, code: err.code, message: err.message });
+    throw err;
+  }
+
+  if (!data?.success) {
+    const conflict = {
+      ok: false as const,
+      conflict: true as const,
+      code: data?.code || 'UNKNOWN_CONFLICT',
+      message: data?.message || 'This domain cannot be used.',
+      domain: data?.domain || null,
+    };
+    console.log('[renameSiteDomain] conflict', conflict);
+    return conflict;
+  }
+
+  const success = {
+    ok: true as const,
+    conflict: false as const,
+    domain: data.domain,
+    platform: data.platform || '',
+    platformSiteId: data.platformSiteId || '',
+    detected: !!data.detected,
+    code: data.code,
+  };
+  console.log('[renameSiteDomain] success', success);
+  return success;
+}
+
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -735,30 +814,17 @@ export default function SettingsPage() {
                   const derivedName = deriveSiteNameFromDomain(manageDomain.trim());
                   setManageSaving(true);
                   try {
-                    const preflight = await checkSiteDomainForRename(
-                      manageDomain.trim(),
-                      managingOrg.siteId,
-                    );
-                    if (!preflight.success) {
-                      setManageError(preflight.error || "Could not validate this website URL.");
+                    const result = await renameSiteDomain({
+                      websiteUrl: manageDomain.trim(),
+                      excludeSiteId: managingOrg.siteId,
+                    });
+                    if (!result.ok) {
+                      setManageError(result.message || "This domain cannot be used.");
                       return;
                     }
-                    if (preflight.available === false) {
-                      setManageError(
-                        preflight.message ||
-                          "This website URL is not available. Choose a different URL.",
-                      );
-                      return;
-                    }
-                    const result = await renameSite(
-                      managingOrg.siteId,
-                      derivedName,
-                      manageDomain.trim(),
-                    );
-                    const updatedSite = (result.site || {}) as Record<string, unknown>;
                     const rawSite = (Array.isArray(sites) ? sites : []).find((s: any) => String(s.id) === managingOrg.siteId);
-                    // `refresh()` replaces the whole `sites` array — run it first, then merge the PATCH
-                    // response so a slightly stale dashboard-init cannot wipe name/domain in the UI.
+                    // `refresh()` replaces the whole `sites` array — run it first, then merge our local
+                    // update so a slightly stale dashboard-init cannot wipe name/domain in the UI.
                     try {
                       if (typeof sessionStorage !== "undefined") {
                         sessionStorage.removeItem("cbSessionCache");
@@ -768,31 +834,23 @@ export default function SettingsPage() {
                     }
                     await refresh({ showLoading: false });
                     const normDomain = normalizeSiteLabel(manageDomain.trim());
+                    const finalDomain = result.domain || normDomain;
                     updateSiteInState({
                       id: managingOrg.siteId,
-                      ...updatedSite,
-                      name: String(updatedSite.name ?? derivedName),
-                      domain: String(updatedSite.domain ?? normDomain),
+                      name: derivedName,
+                      domain: finalDomain,
                     });
                     const scriptUrl =
-                      (updatedSite.embedScriptUrl as string | undefined) ??
-                      (updatedSite.embed_script_url as string | undefined) ??
                       rawSite?.embedScriptUrl ??
                       rawSite?.embed_script_url ??
                       "";
                     const cdnScriptId =
-                      (updatedSite.cdnScriptId as string | undefined) ??
-                      (updatedSite.cdn_script_id as string | undefined) ??
                       rawSite?.cdnScriptId ??
                       rawSite?.cdn_script_id;
-                    const domainForInstall =
-                      updatedSite.domain != null && String(updatedSite.domain).trim() !== ""
-                        ? String(updatedSite.domain)
-                        : normDomain;
                     setManagingOrg(null);
                     setInstallModal({
                       scriptUrl,
-                      siteDomain: domainForInstall,
+                      siteDomain: finalDomain,
                       siteId: managingOrg.siteId,
                       cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
                     });
