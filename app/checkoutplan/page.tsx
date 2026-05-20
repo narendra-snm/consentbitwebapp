@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import {
@@ -149,6 +149,23 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
       error: text.trimStart().startsWith('<') ? 'Something went wrong. Please try again.' : text,
     };
   }
+}
+
+function friendlyCardError(msg?: string): string {
+  if (!msg) return 'Please check your card information and try again.';
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('declined') ||
+    lower.includes('test card') ||
+    lower.includes('insufficient') ||
+    lower.includes('card number') ||
+    lower.includes('expir') ||
+    lower.includes('cvc') ||
+    lower.includes('invalid')
+  ) {
+    return 'Please check your card information and try again.';
+  }
+  return msg;
 }
 
 function trialEndLabel() {
@@ -451,7 +468,7 @@ function CheckoutForm({
       });
 
       if (pmErr) {
-        setError(pmErr.message || 'Card error. Please check your details.');
+        setError(friendlyCardError(pmErr.message));
         setIsSubmitting(false);
         return;
       }
@@ -483,7 +500,7 @@ function CheckoutForm({
         subscriptionId?: string;
       };
       if (!data.success) {
-        setError(data.error || 'Something went wrong. Please try again.');
+        setError(friendlyCardError(data.error));
         setIsSubmitting(false);
         return;
       }
@@ -492,7 +509,7 @@ function CheckoutForm({
       if (data.requiresAction && data.clientSecret) {
         const { error: confirmErr } = await stripe.confirmCardPayment(data.clientSecret);
         if (confirmErr) {
-          setError(confirmErr.message || '3D Secure verification failed. Please try another card.');
+          setError(friendlyCardError(confirmErr.message));
           setIsSubmitting(false);
           return;
         }
@@ -920,17 +937,30 @@ function CheckoutPageInner() {
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
 
-  const rawD = params.get('d') ?? '';
-  let decoded: Record<string, string> = {};
-  if (rawD) {
-    try { decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rawD))))); } catch { try { decoded = JSON.parse(atob(decodeURIComponent(rawD))); } catch { /* use raw params */ } }
+  const rawT = params.get('t') ?? '';
+  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(rawT ? null : {});
+
+  useEffect(() => {
+    if (!rawT) return;
+    fetch(`/api/checkout-token?t=${encodeURIComponent(rawT)}`)
+      .then(r => r.json())
+      .then((data: unknown) => setTokenPayload(data as Record<string, string>))
+      .catch(() => setTokenPayload({}));
+  }, [rawT]);
+
+  if (tokenPayload === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#262E84] border-t-transparent" />
+      </div>
+    );
   }
 
-  const email = (decoded.email ?? params.get('email') ?? '').trim().toLowerCase();
-  const domain = cleanDomain(decoded.domain ?? params.get('domain') ?? '');
-  const platform = decoded.platform ?? params.get('platform') ?? '';
-  const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
-  const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
+  const email = (tokenPayload.email ?? params.get('email') ?? '').trim().toLowerCase();
+  const domain = cleanDomain(tokenPayload.domain ?? params.get('domain') ?? '');
+  const platform = tokenPayload.platform ?? params.get('platform') ?? '';
+  const wfSiteId = tokenPayload.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+  const initBillingEmail = (tokenPayload.billingEmail ?? '').trim().toLowerCase();
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
