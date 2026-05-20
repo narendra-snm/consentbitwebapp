@@ -147,6 +147,7 @@ async function renameSiteDomain({
     platformSiteId: data.platformSiteId || '',
     detected: !!data.detected,
     code: data.code,
+    isOldScript: data.isOldScript || false,
   };
   console.log('[renameSiteDomain] success', success);
   return success;
@@ -199,6 +200,10 @@ export default function SettingsPage() {
   const [manageSaving, setManageSaving] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [installModal, setInstallModal] = useState<{ scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string } | null>(null);
+  // Pending install payload held back behind a caution screen when the rename
+  // response reports `isOldScript: true` — user must acknowledge before we
+  // show the install modal with the new script.
+  const [oldScriptCaution, setOldScriptCaution] = useState<{ scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string } | null>(null);
 
   const ORGS_PER_PAGE = 5;
   const [orgPage, setOrgPage] = useState(1);
@@ -847,13 +852,20 @@ export default function SettingsPage() {
                     const cdnScriptId =
                       rawSite?.cdnScriptId ??
                       rawSite?.cdn_script_id;
-                    setManagingOrg(null);
-                    setInstallModal({
+                    const installPayload = {
                       scriptUrl,
                       siteDomain: finalDomain,
                       siteId: managingOrg.siteId,
                       cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
-                    });
+                    };
+                    setManagingOrg(null);
+                    // If the rename returned an old-script flag, force the user to
+                    // acknowledge the script swap before we reveal the new snippet.
+                    if (result.isOldScript) {
+                      setOldScriptCaution(installPayload);
+                    } else {
+                      setInstallModal(installPayload);
+                    }
                   } catch (e: any) {
                     const code = e?.code as string | undefined;
                     if (code === "DOMAIN_EXISTS_OTHER_ACCOUNT") {
@@ -882,6 +894,84 @@ export default function SettingsPage() {
                 className="flex-1 h-[42px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {manageSaving ? 'Saving…' : 'Save New URL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Old-script caution — shown before InstallConsentModal when the rename API
+          reports the site is still on an older ConsentBit script. */}
+      {oldScriptCaution && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[14px] shadow-2xl max-w-[460px] w-full p-7 relative">
+            <div className="w-12 h-12 rounded-full bg-[#FEF3C7] flex items-center justify-center mb-4">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M12 9V13M12 17H12.01M10.29 3.86L1.82 18C1.64537 18.3024 1.55296 18.6453 1.55198 18.9945C1.551 19.3437 1.64149 19.6871 1.81442 19.9905C1.98736 20.2939 2.23673 20.5467 2.53761 20.7239C2.83849 20.9012 3.18074 20.9967 3.53 21H20.47C20.8193 20.9967 21.1615 20.9012 21.4624 20.7239C21.7633 20.5467 22.0126 20.2939 22.1856 19.9905C22.3585 19.6871 22.449 19.3437 22.448 18.9945C22.447 18.6453 22.3546 18.3024 22.18 18L13.71 3.86C13.5318 3.56611 13.2807 3.32312 12.9812 3.15448C12.6817 2.98585 12.3438 2.89725 12 2.89725C11.6562 2.89725 11.3183 2.98585 11.0188 3.15448C10.7193 3.32312 10.4682 3.56611 10.29 3.86Z"
+                  stroke="#D97706"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <p className="font-semibold text-[18px] text-black mb-2 tracking-[-0.3px]">
+              Update your ConsentBit script
+            </p>
+            <p className="text-[13px] text-[#4b5563] leading-[1.55] mb-5">
+              Your domain was updated successfully, but this site is still using an{" "}
+              <span className="font-medium text-[#111827]">older ConsentBit script</span>.
+              Before consent tracking will work on the new domain, you need to:
+            </p>
+
+            <ol className="space-y-2 mb-6 pl-1">
+              <li className="flex gap-2.5 text-[13px] text-[#374151] leading-[1.5]">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#FEF3C7] text-[#92400E] text-[11px] font-semibold flex items-center justify-center mt-0.5">
+                  1
+                </span>
+                <span>
+                  <span className="font-medium text-[#111827]">Remove</span> the existing
+                  ConsentBit script tag from your site&apos;s code (in your Webflow, Framer,
+                  WordPress, or HTML head).
+                </span>
+              </li>
+              <li className="flex gap-2.5 text-[13px] text-[#374151] leading-[1.5]">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#FEF3C7] text-[#92400E] text-[11px] font-semibold flex items-center justify-center mt-0.5">
+                  2
+                </span>
+                <span>
+                  <span className="font-medium text-[#111827]">Install</span> the new script
+                  we&apos;ll show you in the next step.
+                </span>
+              </li>
+            </ol>
+
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[8px] px-3 py-2.5 mb-6">
+              <p className="text-[12px] text-[#92400E] leading-[1.5]">
+                Leaving the old script in place will cause duplicate banners and broken
+                consent on the new domain.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setOldScriptCaution(null)}
+                className="flex-1 h-[42px] rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInstallModal(oldScriptCaution);
+                  setOldScriptCaution(null);
+                }}
+                className="flex-1 h-[42px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc]"
+              >
+                OK, show me the new script
               </button>
             </div>
           </div>

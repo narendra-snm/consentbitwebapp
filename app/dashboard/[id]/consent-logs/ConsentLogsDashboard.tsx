@@ -398,7 +398,8 @@ export function ConsentLogsDashboard({
   platformSiteId?: string | null;
   platform?: string | null;
 }) {
-  const isFramerLegacy = isLegacy && (platform || '').toLowerCase() === 'framer';
+  const isFramerPlatform = (platform || '').toLowerCase() === 'framer';
+  const isFramerLegacy = isLegacy && isFramerPlatform;
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -425,14 +426,17 @@ export function ConsentLogsDashboard({
     setLoading(true);
     setLoadError(null);
 
-    // Both legacy stores (Framer KV, Webflow KV/R2) are gated to ≤ June 2026.
-    // After that, everyone reads from D1.
-    const isBeforeJulyCutoff =
-      parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
-    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    // Framer legacy KV is gated to ≤ May 2026; June 2026 onwards falls through to D1.
+    // Webflow KV/R2 is gated to ≤ June 2026 (unchanged). Non-legacy Framer sites always use D1.
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
 
     const doFetch = async () => {
       try {
@@ -455,19 +459,22 @@ export function ConsentLogsDashboard({
     void doFetch();
 
     return () => { active = false; };
-  }, [siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
 
   const handleRefresh = useCallback(() => {
     setData(null);
     setLoading(true);
     setLoadError(null);
 
-    const isBeforeJulyCutoff =
-      parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
-    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
 
     const doFetch = async () => {
       try {
@@ -486,7 +493,7 @@ export function ConsentLogsDashboard({
     };
 
     void doFetch();
-  }, [siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -726,12 +733,15 @@ export function ConsentLogsDashboard({
   const handleDownloadRowPdf = useCallback(
     async (row: ConsentLog) => {
       if (downloadingPdfIds.has(row.id)) return;
-      const isBeforeJulyCutoff =
-        parseInt(selectedYear, 10) < 2026 ||
-        (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
-      const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+      const yearNum = parseInt(selectedYear, 10);
+      const monthNum = parseInt(selectedMonth, 10);
+      const isFramerBeforeCutoff =
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+      const isWebflowBeforeCutoff =
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
       const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-      const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
+      const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
       const apiPath = useFramerLegacySource
         ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
         : useWebflowLegacySource
@@ -760,18 +770,21 @@ export function ConsentLogsDashboard({
         setDownloadingPdfIds(prev => { const next = new Set(prev); next.delete(row.id); return next; });
       }
     },
-    [downloadingPdfIds, isLegacy, isFramerLegacy, platformSiteId, siteId, selectedYear, selectedMonth],
+    [downloadingPdfIds, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, siteId, selectedYear, selectedMonth],
   );
 
   const downloadCsv = useCallback(async () => {
     if (csvDownloading) return;
     const params = new URLSearchParams({ siteId, year: selectedYear, month: selectedMonth });
-    const isBeforeJulyCutoff =
-      parseInt(selectedYear, 10) < 2026 ||
-      (parseInt(selectedYear, 10) === 2026 && parseInt(selectedMonth, 10) <= 6);
-    const useFramerLegacySource = isFramerLegacy && isBeforeJulyCutoff;
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
-    const useWebflowLegacySource = !isFramerLegacy && hasHistoricalR2Data && isBeforeJulyCutoff;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
     const apiPath = useFramerLegacySource
       ? `/api/legacy-consent-csv-framer?${params.toString()}`
       : useWebflowLegacySource
@@ -793,7 +806,7 @@ export function ConsentLogsDashboard({
     } finally {
       setCsvDownloading(false);
     }
-  }, [csvDownloading, siteId, isLegacy, isFramerLegacy, platformSiteId, selectedYear, selectedMonth]);
+  }, [csvDownloading, siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth]);
 
   return (
     <>
