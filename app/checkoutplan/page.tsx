@@ -151,6 +151,23 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
   }
 }
 
+function friendlyCardError(msg?: string): string {
+  if (!msg) return 'Please check your card information and try again.';
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('declined') ||
+    lower.includes('test card') ||
+    lower.includes('insufficient') ||
+    lower.includes('card number') ||
+    lower.includes('expir') ||
+    lower.includes('cvc') ||
+    lower.includes('invalid')
+  ) {
+    return 'Please check your card information and try again.';
+  }
+  return msg;
+}
+
 function trialEndLabel() {
   const d = new Date();
   d.setDate(d.getDate() + 14);
@@ -451,7 +468,7 @@ function CheckoutForm({
       });
 
       if (pmErr) {
-        setError(pmErr.message || 'Card error. Please check your details.');
+        setError(friendlyCardError(pmErr.message));
         setIsSubmitting(false);
         return;
       }
@@ -483,7 +500,7 @@ function CheckoutForm({
         subscriptionId?: string;
       };
       if (!data.success) {
-        setError(data.error || 'Something went wrong. Please try again.');
+        setError(friendlyCardError(data.error));
         setIsSubmitting(false);
         return;
       }
@@ -492,7 +509,7 @@ function CheckoutForm({
       if (data.requiresAction && data.clientSecret) {
         const { error: confirmErr } = await stripe.confirmCardPayment(data.clientSecret);
         if (confirmErr) {
-          setError(confirmErr.message || '3D Secure verification failed. Please try another card.');
+          setError(friendlyCardError(confirmErr.message));
           setIsSubmitting(false);
           return;
         }
