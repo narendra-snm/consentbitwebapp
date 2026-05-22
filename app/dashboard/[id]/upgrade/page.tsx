@@ -253,7 +253,7 @@ export default function PricingTable() {
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const finalUrl = `${origin}/dashboard/${siteId}/upgrade?upgraded=1`;
-      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
+      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
       const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";

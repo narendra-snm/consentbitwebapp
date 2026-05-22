@@ -4,7 +4,7 @@ compatibility_date = "2026-03-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
 [vars]
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_live_51NxXT7JwcuG9163MqEMaZPr0dMkQ7SbMt3KlLlkq7JUXka8PKiyqvAjfcY6gx1AJzZPX5hJDIRqd1ujblQkAAC2r003eJcOx1r"
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_51NxXT7JwcuG9163MasKBY9MLm1fn33uxmBZ487xb7DX0x4ZomZHzDxTMHWZSF7ym86m0s3bbSbWtTbbdRfvkVHxS00TTY6ocXB"
 
 [[d1_databases]]
 binding = "CONSENT_WEBAPP"

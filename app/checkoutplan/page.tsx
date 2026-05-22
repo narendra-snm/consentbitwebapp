@@ -476,7 +476,7 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
-      const res = await fetch('https://manager.consentbit.com/api/custom-checkout', {
+      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
