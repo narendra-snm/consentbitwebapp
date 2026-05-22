@@ -293,21 +293,23 @@ export default function BillingDetailsCard({
             <ArrowTopRightIcon />
           </button>
         </div>
-      ) : (
-        <div className="rounded-[12px] border border-dashed border-[#d1d5db] p-4 text-center bg-white/60">
-          <p className="text-[13px] text-[#6b7280] mb-2">
-            No payment method on file.
-          </p>
+      ) : (<></>)
+      // (
+      //   <div className="rounded-[12px] border border-dashed border-[#d1d5db] p-4 text-center bg-white/60">
+      //     <p className="text-[13px] text-[#6b7280] mb-2">
+      //       No payment method on file.
+      //     </p>
 
-          <button
-            type="button"
-            onClick={onOpenPortal}
-            className="text-[13px] text-[#007AFF] hover:underline"
-          >
-            Add payment method
-          </button>
-        </div>
-      )}
+      //     <button
+      //       type="button"
+      //       onClick={onOpenPortal}
+      //       className="text-[13px] text-[#007AFF] hover:underline"
+      //     >
+      //       Add payment method
+      //     </button>
+      //   </div>
+      // )
+      }
     </div>
   );
 }
