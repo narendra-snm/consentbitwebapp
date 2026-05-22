@@ -582,6 +582,7 @@ export async function deleteSite(siteId: string): Promise<{ success: boolean }> 
 export type BillingSummary = {
   planName: string;
   planId: string | null;
+  interval?: 'monthly' | 'yearly' | string | null;
   stripeSubscriptionId?: string | null;
   subscriptionId?: string | null;       // some backends return this alias
   nextBillingDate?: string | null;
@@ -612,6 +613,48 @@ export async function createBillingPortalSession(organizationId: string, returnU
   const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || "Failed to create portal session");
   return data as { url: string };
+}
+
+export async function createSetupIntent(organizationId: string): Promise<{ success: true; clientSecret: string }> {
+  const res = await fetch("/api/billing/setup-intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to create setup intent");
+  return data as { success: true; clientSecret: string };
+}
+
+export async function updatePaymentMethod(
+  organizationId: string,
+  paymentMethodId: string,
+): Promise<{ success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } }> {
+  const res = await fetch("/api/billing/update-payment-method", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, paymentMethodId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to update payment method");
+  return data as { success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } };
+}
+
+export async function switchBillingInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+): Promise<{ success: true; interval: string; nextBillingDate: string | null }> {
+  const res = await fetch("/api/subscriptions/switch-interval", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to switch billing interval");
+  return data as { success: true; interval: string; nextBillingDate: string | null };
 }
 // billing summary ends here
 

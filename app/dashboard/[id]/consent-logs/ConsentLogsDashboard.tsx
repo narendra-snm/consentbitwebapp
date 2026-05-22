@@ -47,32 +47,48 @@ function normalizeCategories(
   return typeof inner === 'object' && inner !== null ? inner : categories;
 }
 
-function categoriesSummary(categories: ConsentLog['categories']): string {
+function categoriesSummary(categories: ConsentLog['categories'], method: string): string {
   const c = normalizeCategories(categories);
   if (!c) return '—';
 
-  const hasGdprCategories =
+  const hasCcpa = c.ccpa && typeof c.ccpa.doNotSell === 'boolean';
+  const hasGdprKeys =
     c.essential !== undefined ||
     c.analytics !== undefined ||
     c.marketing !== undefined ||
     c.preferences !== undefined;
 
-  if (!hasGdprCategories && c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
-    return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+  if (method === 'CCPA') {
+    if (hasCcpa) {
+      return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    }
+    if (hasGdprKeys) {
+      // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
+      const anyRejected = c.analytics === false || c.marketing === false || c.preferences === false;
+      return anyRejected ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    }
+    return 'Do Not Share: Yes';
   }
 
-  const parts: string[] = [];
-  if (c.analytics !== undefined) {
-    parts.push(c.analytics === true ? 'Analytics: Accepted' : 'Analytics: Rejected');
-  }
-  if (c.marketing !== undefined) {
-    parts.push(c.marketing === true ? 'Marketing: Accepted' : 'Marketing: Rejected');
-  }
-  if (c.preferences !== undefined) {
-    parts.push(c.preferences === true ? 'Preferences: Accepted' : 'Preferences: Rejected');
+  // GDPR / IAB/GDPR
+  if (hasGdprKeys) {
+    const parts: string[] = [];
+    if (c.analytics !== undefined)
+      parts.push(c.analytics === true ? 'Analytics: Accepted' : 'Analytics: Rejected');
+    if (c.marketing !== undefined)
+      parts.push(c.marketing === true ? 'Marketing: Accepted' : 'Marketing: Rejected');
+    if (c.preferences !== undefined)
+      parts.push(c.preferences === true ? 'Preferences: Accepted' : 'Preferences: Rejected');
+    return parts.length > 0 ? parts.join(', ') : 'Essential: Accepted';
   }
 
-  return parts.length > 0 ? parts.join(', ') : 'Essential: Accepted';
+  if (hasCcpa) {
+    // CCPA-shape stored under a GDPR banner — derive from doNotSell
+    const suffix = c.ccpa.doNotSell ? 'Rejected' : 'Accepted';
+    return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;
+  }
+
+  return '—';
 }
 
 function escapeHtml(s: string): string {
@@ -550,10 +566,6 @@ export function ConsentLogsDashboard({
   const buildProofHtml = useCallback(
     (rows: ConsentLog[]) => {
       const domain = displayDomain;
-      const logoSrc =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/images/ConsentBit-logo-Dark.png`
-          : '/images/ConsentBit-logo-Dark.png';
 
       const pages = rows.map((log, index) => {
         const acceptedList = getAcceptedCategoriesList(log.categories);
@@ -591,7 +603,11 @@ export function ConsentLogsDashboard({
             <header class="proof-header">
               <h1 class="proof-title">Proof of consent</h1>
               <div class="proof-brand">
-                <img class="proof-logo" src="${escapeHtml(logoSrc)}" alt="Consentbit" width="170" height="22" />
+                <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="9" cy="9" r="9" fill="#007aff"/>
+                  <path d="M4.5 9.5L7.5 12.5L13.5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="proof-brand-name">Consentbit</span>
               </div>
             </header>
 
@@ -604,21 +620,22 @@ export function ConsentLogsDashboard({
               <tr><td class="proof-label">Consent status</td><td class="proof-value">${escapeHtml(displayStatus(log.status))}</td></tr>
             </table>
 
-            <div class="proof-categories-wrap">
-              <p class="proof-categories-title">Accepted Categories</p>
-              <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
+            <div class="proof-section-box">
+              <div class="proof-categories-header">
+                <p class="proof-categories-title">Accepted Categories</p>
+                <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
+              </div>
+              <table class="proof-cookie-table">
+                <thead>
+                  <tr>
+                    <th class="proof-th">Cookie Name</th>
+                    <th class="proof-th">Duration</th>
+                    <th class="proof-th">Description</th>
+                  </tr>
+                </thead>
+                <tbody>${cookieRows}</tbody>
+              </table>
             </div>
-
-            <table class="proof-cookie-table">
-              <thead>
-                <tr>
-                  <th class="proof-th">Cookie Name</th>
-                  <th class="proof-th">Duration</th>
-                  <th class="proof-th">Description</th>
-                </tr>
-              </thead>
-              <tbody>${cookieRows}</tbody>
-            </table>
 
             <p class="proof-footer">Page ${index + 1} of ${rows.length}</p>
           </div>
@@ -656,8 +673,9 @@ export function ConsentLogsDashboard({
             letter-spacing: -0.02em;
             color: #007aff;
           }
-          .proof-brand { flex-shrink: 0; padding-top: 2px; }
-          .proof-logo { display: block; height: 22px; width: auto; max-width: 170px; }
+          .proof-brand { flex-shrink: 0; display: flex; align-items: center; gap: 5px; padding-top: 4px; }
+          .proof-brand svg { width: 18px; height: 18px; }
+          .proof-brand-name { font-size: 18px; font-weight: 700; color: #111827; }
 
           .proof-meta {
             width: 100%;
@@ -678,15 +696,19 @@ export function ConsentLogsDashboard({
             word-break: break-word;
           }
 
-          .proof-categories-wrap {
+          .proof-section-box {
             border: 1px solid #93c5fd;
             border-radius: 8px;
-            background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 48%);
-            padding: 12px 14px 14px;
+            overflow: hidden;
             margin: 0 0 14px;
           }
+          .proof-categories-header {
+            background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%);
+            padding: 12px 14px 14px;
+            border-bottom: 1px solid #93c5fd;
+          }
           .proof-categories-title {
-            margin: 0 0 6px;
+            margin: 0 0 4px;
             font-size: 14px;
             font-weight: 700;
             color: #007aff;
@@ -700,9 +722,6 @@ export function ConsentLogsDashboard({
           .proof-cookie-table {
             border-collapse: collapse;
             width: 100%;
-            border: 1px solid #93c5fd;
-            border-radius: 8px;
-            overflow: hidden;
           }
           .proof-th, .proof-td {
             border: 1px solid #bfdbfe;
@@ -729,9 +748,7 @@ export function ConsentLogsDashboard({
         ${
           pages.length
             ? pages.join('')
-            : `<div class="proof-page"><header class="proof-header"><h1 class="proof-title">Proof of consent</h1><div class="proof-brand"><img class="proof-logo" src="${escapeHtml(
-                logoSrc,
-              )}" alt="Consentbit" width="170" height="22" /></div></header><p>No consent records for this site.</p></div>`
+            : `<div class="proof-page"><header class="proof-header"><h1 class="proof-title">Proof of consent</h1><div class="proof-brand"><svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="9" fill="#007aff"/><path d="M4.5 9.5L7.5 12.5L13.5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="proof-brand-name">Consentbit</span></div></header><p>No consent records for this site.</p></div>`
         }
       `;
     },
@@ -1046,7 +1063,7 @@ export function ConsentLogsDashboard({
                           style={dm}
                         >
                           <div className="min-w-[200px] max-w-[420px] whitespace-normal break-all">
-                            {categoriesSummary(row.categories)}
+                            {categoriesSummary(row.categories, detectMethod(row))}
                           </div>
                         </td>
                         <td className="px-[16px] py-[9px] border-b border-black/10">
