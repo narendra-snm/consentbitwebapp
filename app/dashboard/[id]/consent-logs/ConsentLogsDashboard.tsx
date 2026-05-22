@@ -59,8 +59,8 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
     c.preferences !== undefined;
 
   if (method === 'CCPA') {
-    if (hasCcpa && c.ccpa) {
-      return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    if (hasCcpa) {
+      return c.ccpa?.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
     }
     if (hasGdprKeys) {
       // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
@@ -84,7 +84,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
 
   if (hasCcpa && c.ccpa) {
     // CCPA-shape stored under a GDPR banner — derive from doNotSell
-    const suffix = c.ccpa.doNotSell ? 'Rejected' : 'Accepted';
+    const suffix = c.ccpa?.doNotSell ? 'Rejected' : 'Accepted';
     return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;
   }
 
@@ -518,14 +518,42 @@ export function ConsentLogsDashboard({
     );
   }, [data]);
 
-  const consentTotalPages = Math.max(1, Math.ceil(consentRows.length / CONSENT_PAGE_SIZE));
-  const pagedConsentRows = consentRows.slice((consentPage - 1) * CONSENT_PAGE_SIZE, consentPage * CONSENT_PAGE_SIZE);
+  // Unique non-empty domain values present in the fetched consents.
+  // Rare case: only > 1 when the site's domain URL was changed after some consents
+  // had already been recorded under the old URL.
+  const consentDomains = useMemo(() => {
+    const all = consentRows
+      .map((r) => (r as { domain?: string }).domain)
+      .filter((d): d is string => typeof d === 'string' && d.trim().length > 0);
+    return Array.from(new Set(all));
+  }, [consentRows]);
+  const isMultiDomain = consentDomains.length > 1;
+  console.log('ismultiledomain', isMultiDomain, { domains: consentDomains });
+
+  // Domain dropdown selection (null = "All domains"). Reset whenever new data arrives.
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedDomain(null);
+  }, [data]);
+
+  const filteredConsentRows = useMemo(() => {
+    if (!selectedDomain) return consentRows;
+    return consentRows.filter(
+      (r) => (r as { domain?: string }).domain === selectedDomain,
+    );
+  }, [consentRows, selectedDomain]);
+
+  const consentTotalPages = Math.max(1, Math.ceil(filteredConsentRows.length / CONSENT_PAGE_SIZE));
+  const pagedConsentRows = filteredConsentRows.slice((consentPage - 1) * CONSENT_PAGE_SIZE, consentPage * CONSENT_PAGE_SIZE);
 
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
   const cookieTotalPages = Math.max(1, Math.ceil(cookies.length / COOKIE_PAGE_SIZE));
   const pagedCookies = cookies.slice((cookiePage - 1) * COOKIE_PAGE_SIZE, cookiePage * COOKIE_PAGE_SIZE);
   const customCookieRules: ConsentLogCookieRule[] = data?.customCookieRules ?? [];
-  const totalEvents = data?.total ?? data?.consents?.length ?? 0;
+  // When a domain is selected, show the filtered row count; otherwise fall back to the backend total.
+  const totalEvents = selectedDomain
+    ? filteredConsentRows.length
+    : data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';
 
@@ -846,9 +874,33 @@ export function ConsentLogsDashboard({
               <div className="flex flex-wrap items-center gap-[60px]">
                 <div>
                   <div className="flex items-center gap-2 mb-[11px]">
-                    <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
-                      Site: {displayDomain}
-                    </h1>
+                    {isMultiDomain ? (
+                      <>
+                        <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black whitespace-nowrap" style={dm}>
+                          Site:
+                        </h1>
+                        <select
+                          value={selectedDomain ?? ''}
+                          onChange={(e) => {
+                            setSelectedDomain(e.target.value || null);
+                            setConsentPage(1);
+                          }}
+                          className="h-8 px-2 rounded-md border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] max-w-[320px]"
+                          title="Filter by site domain"
+                        >
+                          <option value="">All domains ({consentDomains.length})</option>
+                          {consentDomains.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
+                        Site: {consentDomains[0] || displayDomain}
+                      </h1>
+                    )}
                   </div>
                 </div>
 
