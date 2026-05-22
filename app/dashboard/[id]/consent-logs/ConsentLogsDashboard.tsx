@@ -60,7 +60,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
 
   if (method === 'CCPA') {
     if (hasCcpa) {
-      return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+      return c.ccpa?.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
     }
     if (hasGdprKeys) {
       // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
@@ -84,7 +84,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
 
   if (hasCcpa) {
     // CCPA-shape stored under a GDPR banner — derive from doNotSell
-    const suffix = c.ccpa.doNotSell ? 'Rejected' : 'Accepted';
+    const suffix = c.ccpa?.doNotSell ? 'Rejected' : 'Accepted';
     return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;
   }
 
