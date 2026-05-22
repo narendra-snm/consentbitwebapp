@@ -2,16 +2,137 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import {
   getBillingInvoices,
   getBillingSummary,
   createBillingPortalSession,
   cancelSubscription,
+  createSetupIntent,
+  updatePaymentMethod,
+  switchBillingInterval,
   renameSite,
   checkSiteDomainForRename,
   type BillingInvoice,
   type BillingSummary,
 } from "@/lib/client-api";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
+
+// ─── Change Card components ───────────────────────────────────────────────────
+
+function ChangeCardInner({
+  organizationId,
+  onSuccess,
+  onError,
+  onClose,
+}: {
+  organizationId: string;
+  onSuccess: (pm: { brand: string; last4: string; exp_month: number; exp_year: number }) => void;
+  onError: (msg: string) => void;
+  onClose: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    try {
+      const result = await stripe.confirmSetup({
+        elements,
+        confirmParams: { return_url: window.location.href },
+        redirect: "if_required",
+      });
+      if (result.error) {
+        onError(result.error.message || "Card setup failed");
+        return;
+      }
+      const pmId = result.setupIntent?.payment_method;
+      if (typeof pmId !== "string") {
+        onError("Could not get payment method ID");
+        return;
+      }
+      const data = await updatePaymentMethod(organizationId, pmId);
+      onSuccess(data.paymentMethod);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Failed to save card");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement />
+      <div className="flex gap-3 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!stripe || submitting}
+          className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save Card"
+          )}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ChangeCardModal({
+  clientSecret,
+  organizationId,
+  onSuccess,
+  onClose,
+}: {
+  clientSecret: string;
+  organizationId: string;
+  onSuccess: (pm: { brand: string; last4: string; exp_month: number; exp_year: number }) => void;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-[460px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+        <h3 className="text-[18px] font-bold text-black text-center mb-1">Update Payment Method</h3>
+        <p className="text-[13px] text-[#6b7280] text-center mb-5">Your new card will be used for all future charges.</p>
+        {error && (
+          <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
+            {error}
+          </div>
+        )}
+        <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+          <ChangeCardInner
+            organizationId={organizationId}
+            onSuccess={onSuccess}
+            onError={setError}
+            onClose={onClose}
+          />
+        </Elements>
+      </div>
+    </div>
+  );
+}
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -391,9 +512,37 @@ export default function BillingPage({
   };
 
   const handleEditCard = async () => {
-    if (!organizationId) return;
-    try { await openPortal(); } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not open billing portal");
+    if (!organizationId || changeCardLoadingSetup) return;
+    setChangeCardLoadingSetup(true);
+    setChangeCardSuccess(false);
+    try {
+      const { clientSecret } = await createSetupIntent(organizationId);
+      setChangeCardClientSecret(clientSecret);
+      setShowChangeCardModal(true);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not start card setup. Please try again.");
+    } finally {
+      setChangeCardLoadingSetup(false);
+    }
+  };
+
+  const handleSwitchInterval = async () => {
+    if (!organizationId || !switchTarget) return;
+    setSwitchLoading(true);
+    setSwitchError(null);
+    try {
+      const result = await switchBillingInterval(organizationId, switchTarget);
+      setSummary((prev) =>
+        prev
+          ? { ...prev, interval: result.interval, nextBillingDate: result.nextBillingDate ?? prev.nextBillingDate }
+          : prev,
+      );
+      summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+      setShowSwitchModal(false);
+    } catch (e) {
+      setSwitchError(e instanceof Error ? e.message : "Failed to switch billing period. Please try again.");
+    } finally {
+      setSwitchLoading(false);
     }
   };
 
@@ -403,6 +552,18 @@ export default function BillingPage({
       alert(e instanceof Error ? e.message : "Could not open billing portal");
     }
   };
+
+  // Change card modal state
+  const [showChangeCardModal, setShowChangeCardModal] = useState(false);
+  const [changeCardClientSecret, setChangeCardClientSecret] = useState<string | null>(null);
+  const [changeCardLoadingSetup, setChangeCardLoadingSetup] = useState(false);
+  const [changeCardSuccess, setChangeCardSuccess] = useState(false);
+
+  // Interval switch modal state
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
+  const [switchLoading, setSwitchLoading] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const refreshSummary = async () => {
     if (!organizationId) return;
@@ -462,6 +623,78 @@ export default function BillingPage({
 
   return (
     <>
+    {/* Change Card Modal */}
+    {showChangeCardModal && changeCardClientSecret && organizationId && (
+      <ChangeCardModal
+        clientSecret={changeCardClientSecret}
+        organizationId={organizationId}
+        onClose={() => { setShowChangeCardModal(false); setChangeCardClientSecret(null); }}
+        onSuccess={(pm) => {
+          setSummary((prev) => prev ? { ...prev, paymentMethod: pm } : prev);
+          summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+          setShowChangeCardModal(false);
+          setChangeCardClientSecret(null);
+          setChangeCardSuccess(true);
+          setTimeout(() => setChangeCardSuccess(false), 4000);
+        }}
+      />
+    )}
+
+    {/* Switch Billing Interval Confirmation Modal */}
+    {showSwitchModal && switchTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !switchLoading && setShowSwitchModal(false)} />
+        <div className="relative w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+          <div className="flex justify-center mb-4">
+            <div className="w-14 h-14 rounded-full bg-[#eff6ff] flex items-center justify-center">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2v10M12 17h.01" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round"/>
+                <circle cx="12" cy="12" r="10" stroke="#007AFF" strokeWidth="2"/>
+              </svg>
+            </div>
+          </div>
+          <h3 className="text-[18px] font-bold text-black text-center mb-2">
+            Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing?
+          </h3>
+          <p className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5">
+            {switchTarget === "yearly"
+              ? "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
+              : "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."}
+          </p>
+          {switchError && (
+            <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
+              {switchError}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { if (!switchLoading) { setShowSwitchModal(false); setSwitchError(null); } }}
+              disabled={switchLoading}
+              className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+            >
+              Keep Current
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchInterval}
+              disabled={switchLoading}
+              className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+            >
+              {switchLoading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Switching…
+                </>
+              ) : (
+                `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Cancel Subscription Confirmation Modal */}
     {showCancelModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -757,6 +990,42 @@ export default function BillingPage({
               <div />
             </div>
           </div>
+
+          {/* Billing interval toggle — only for active paid subs with a known interval */}
+          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && (
+            <div className="pt-3 pb-3 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <p className="text-[14px] font-normal text-[#6b7280]">Billing Period</p>
+                <div className="flex items-center bg-[#f3f4f6] rounded-[8px] p-[3px] gap-[2px]">
+                  {(["monthly", "yearly"] as const).map((iv) => {
+                    const current = ((summary?.interval as string) || "monthly").toLowerCase();
+                    const isActive = current === iv;
+                    return (
+                      <button
+                        key={iv}
+                        type="button"
+                        disabled={isActive || switchLoading}
+                        onClick={() => { setSwitchTarget(iv); setSwitchError(null); setShowSwitchModal(true); }}
+                        className={`px-[12px] py-[5px] rounded-[6px] text-[13px] font-medium transition-colors disabled:cursor-default flex items-center gap-1 ${
+                          isActive
+                            ? "bg-white text-black shadow-sm"
+                            : "text-[#6b7280] hover:text-black disabled:opacity-60"
+                        }`}
+                      >
+                        {iv === "yearly" ? "Yearly" : "Monthly"}
+                        {iv === "yearly" && !isActive && (
+                          <span className="text-[10px] text-[#059669] font-semibold">20% off</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {changeCardSuccess && (
+                <p className="mt-2 text-[12px] text-[#059669]">Payment method updated successfully.</p>
+              )}
+            </div>
+          )}
 
           <div className="pt-5 flex gap-3">
             <button
