@@ -283,7 +283,7 @@ export default function PricingTable() {
       };
       let data: CouponResponse | null = null;
       try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
-      console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
+      // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
       if (!data || !data.valid || !data.promotionCodeId) {
         setAppliedCoupon(null);
         setPromoError(true);
