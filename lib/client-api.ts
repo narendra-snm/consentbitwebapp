@@ -386,6 +386,7 @@ export type CreateCheckoutPayload = {
   siteName?: string | null;
   siteDomain?: string | null;
   stripeCouponId?: string | null;
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
 };
@@ -511,6 +512,7 @@ export async function upgradeSubscription(payload: {
   organizationId: string;
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
 }): Promise<{ success: true; url: string; sessionId?: string }> {

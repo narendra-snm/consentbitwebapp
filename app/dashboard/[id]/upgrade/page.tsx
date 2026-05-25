@@ -14,6 +14,30 @@ import PaymentDone from "@/components/animations//PaymentDone";
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
+type AppliedCoupon = {
+  promotionCodeId: string;
+  code: string;
+  name: string;
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string;
+  duration: 'once' | 'repeating' | 'forever';
+  durationInMonths: number | null;
+};
+
+/** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
+function decodeEnvelope(parsed: unknown): unknown {
+  if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
+    try {
+      const binary = atob((parsed as { d: string }).d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through */ }
+  }
+  return parsed;
+}
+
 
 /** Mail success animation shown after payment */
 function MailSuccessAnimation() {
@@ -143,8 +167,9 @@ export default function PricingTable() {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
-  const [promoOn, setPromoOn] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [promoError, setPromoError] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -218,19 +243,68 @@ export default function PricingTable() {
     const mp = prices[selected];
     let total = billing === "yearly" ? mp * 12 * 0.8 : mp;
 
-    if (promoOn) total *= 0.8;
+    if (appliedCoupon) {
+      if (appliedCoupon.percentOff != null) {
+        total = total * (1 - appliedCoupon.percentOff / 100);
+      } else if (appliedCoupon.amountOff != null) {
+        total = Math.max(0, total - appliedCoupon.amountOff / 100);
+      }
+    }
 
     return Math.round(total);
   };
 
-  const applyPromo = () => {
-    if (promoInput.trim() === "TESTWEB") {
-      setPromoOn(true);
-      setPromoError(false);
-    } else {
-      setPromoOn(false);
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) {
+      setAppliedCoupon(null);
+      setPromoError(true);
+      return;
+    }
+    setPromoError(false);
+    setPromoLoading(true);
+    try {
+      const res = await fetch(
+        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const text = await res.text();
+      type CouponResponse = {
+        valid?: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        name?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+        duration?: 'once' | 'repeating' | 'forever';
+        durationInMonths?: number | null;
+      };
+      let data: CouponResponse | null = null;
+      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
+      console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
+      if (!data || !data.valid || !data.promotionCodeId) {
+        setAppliedCoupon(null);
+        setPromoError(true);
+      } else {
+        setAppliedCoupon({
+          promotionCodeId: data.promotionCodeId,
+          code: data.code || code,
+          name: data.name || code,
+          percentOff: data.percentOff ?? null,
+          amountOff: data.amountOff ?? null,
+          currency: data.currency || 'usd',
+          duration: data.duration || 'once',
+          durationInMonths: data.durationInMonths ?? null,
+        });
+        setPromoError(false);
+      }
+    } catch {
+      setAppliedCoupon(null);
       setPromoError(true);
     }
+    setPromoLoading(false);
   };
 
   const total = calculateTotal();
@@ -267,6 +341,7 @@ export default function PricingTable() {
           organizationId: activeOrganizationId,
           planId: plan,
           interval: intervalVal,
+          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
           successUrl,
           cancelUrl,
         }));
@@ -277,6 +352,7 @@ export default function PricingTable() {
           planId: plan,
           interval: intervalVal,
           siteId,
+          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
           successUrl,
           cancelUrl,
         }));
@@ -593,8 +669,8 @@ function redirectToDashboard() {
 
               <input
                 value={promoInput}
-                onChange={(e) => { setPromoInput(e.target.value); setPromoOn(false); setPromoError(false); }}
-                disabled={!selected}
+                onChange={(e) => { setPromoInput(e.target.value); setAppliedCoupon(null); setPromoError(false); }}
+                disabled={!selected || promoLoading}
                 className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg"
                 placeholder="Enter promo code"
               />
@@ -602,7 +678,7 @@ function redirectToDashboard() {
               {promoInput && (
                 <button
                   type="button"
-                  onClick={() => { setPromoOn(false); setPromoInput(''); setPromoError(false); }}
+                  onClick={() => { setAppliedCoupon(null); setPromoInput(''); setPromoError(false); }}
                   className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
                 >
                   ×
@@ -612,18 +688,18 @@ function redirectToDashboard() {
               <button
                 type="button"
                 onClick={applyPromo}
-                disabled={!selected || !promoInput.trim()}
+                disabled={!selected || !promoInput.trim() || promoLoading}
                 className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                Apply
+                {promoLoading ? 'Checking…' : 'Apply'}
               </button>
 
             </div>
 
-            {promoOn && (
+            {appliedCoupon && (
               <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
                 Promo applied. You pay ${total}
               </div>

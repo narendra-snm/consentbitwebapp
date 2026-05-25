@@ -17,6 +17,17 @@ import {
 type PlanId = 'basic' | 'essential' | 'growth';
 type Interval = 'monthly' | 'yearly';
 
+interface AppliedCoupon {
+  promotionCodeId: string;
+  code: string;
+  name: string;
+  percentOff: number | null;
+  amountOff: number | null; // cents
+  currency: string;
+  duration: 'once' | 'repeating' | 'forever';
+  durationInMonths: number | null;
+}
+
 interface PlanConfig {
   name: string;
   monthly: number;
@@ -219,17 +230,46 @@ function FormSection({
 
 // ─── Order summary ────────────────────────────────────────────────────────────
 
-function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval }) {
+function OrderSummary({
+  planId,
+  interval,
+  appliedCoupon,
+}: {
+  planId: PlanId;
+  interval: Interval;
+  appliedCoupon: AppliedCoupon | null;
+}) {
   const plan = PLANS[planId];
   const price = interval === 'yearly' ? plan.yearly : plan.monthly;
   const firstCharge = trialEndLabel();
 
-  const rows = [
+  const firstChargeBase = plan.monthly;
+  let discount = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.percentOff != null) {
+      discount = (firstChargeBase * appliedCoupon.percentOff) / 100;
+    } else if (appliedCoupon.amountOff != null) {
+      discount = appliedCoupon.amountOff / 100;
+    }
+  }
+  const firstChargeFinal = Math.max(0, firstChargeBase - discount);
+  const fmt = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
+
+  const rows: Array<{ label: string; value: string; pill?: boolean; bold?: boolean; discount?: boolean }> = [
     { label: plan.name, value: `$${price}/mo` },
     { label: 'Billing', value: interval === 'yearly' ? 'Yearly' : 'Monthly' },
     { label: 'Trial period', value: '14 days', pill: true },
+    ...(appliedCoupon
+      ? [{
+          label: `Coupon ${appliedCoupon.code}`,
+          value: appliedCoupon.percentOff != null
+            ? `−${appliedCoupon.percentOff}%`
+            : `−${fmt((appliedCoupon.amountOff ?? 0) / 100)}`,
+          discount: true,
+        }]
+      : []),
     { label: 'Due today', value: '$0.00', bold: true },
-    { label: 'First charge', value: `$${plan.monthly} on ${firstCharge}` },
+    { label: 'First charge', value: `${fmt(firstChargeFinal)} on ${firstCharge}` },
   ];
 
   return (
@@ -255,6 +295,8 @@ function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval
                 <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-700">
                   {row.value}
                 </span>
+              ) : row.discount ? (
+                <span className="font-semibold text-green-600">{row.value}</span>
               ) : (
                 <span className={row.bold ? 'font-bold text-gray-900' : 'text-gray-700'}>
                   {row.value}
@@ -287,7 +329,7 @@ function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval
         </div>
 
         <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4">
-          {[
+          {/* {[
             ['🛡️', '30-day money-back'],
             ['🔒', 'Your data is safe'],
             ['⚡', 'Load in under 3 seconds'],
@@ -296,11 +338,11 @@ function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval
               <span>{icon}</span>
               <span>{text}</span>
             </div>
-          ))}
+          ))} */}
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+      {/* <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
         <p className="text-xs text-gray-500">Trusted by 4,200+ websites</p>
         <div className="mt-1 flex items-center gap-0.5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -310,7 +352,7 @@ function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval
           ))}
           <span className="ml-1 text-xs text-gray-500">340 reviews</span>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -359,6 +401,8 @@ interface CheckoutFormProps {
   interval: Interval;
   onPlanChange: (p: PlanId) => void;
   onIntervalChange: (i: Interval) => void;
+  appliedCoupon: AppliedCoupon | null;
+  onCouponChange: (c: AppliedCoupon | null) => void;
 }
 
 function CheckoutForm({
@@ -371,6 +415,8 @@ function CheckoutForm({
   interval,
   onPlanChange,
   onIntervalChange,
+  appliedCoupon,
+  onCouponChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -390,9 +436,66 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
+  }
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) {
+      setCouponError('Enter a coupon code.');
+      return;
+    }
+    setCouponError('');
+    setCouponLoading(true);
+    try {
+      const res = await fetch(
+        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const data = (await parseApiResponse(res)) as {
+        valid: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        name?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+        duration?: 'once' | 'repeating' | 'forever';
+        durationInMonths?: number | null;
+      };
+      console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
+      if (!data.valid || !data.promotionCodeId) {
+        setCouponError(data.error || 'Invalid or expired code.');
+        onCouponChange(null);
+        setCouponLoading(false);
+        return;
+      }
+      onCouponChange({
+        promotionCodeId: data.promotionCodeId,
+        code: data.code || code,
+        name: data.name || code,
+        percentOff: data.percentOff ?? null,
+        amountOff: data.amountOff ?? null,
+        currency: data.currency || 'usd',
+        duration: data.duration || 'once',
+        durationInMonths: data.durationInMonths ?? null,
+      });
+    } catch {
+      setCouponError('Could not validate code. Please try again.');
+    }
+    setCouponLoading(false);
+  }
+
+  function removeCoupon() {
+    onCouponChange(null);
+    setCouponInput('');
+    setCouponError('');
   }
 
   function handleEmailChange(v: string) {
@@ -471,6 +574,7 @@ function CheckoutForm({
           siteName: cleanedDomain,
           planId,
           interval,
+          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
           ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
         }),
       });
@@ -509,6 +613,7 @@ function CheckoutForm({
             siteName: cleanedDomain,
             planId,
             interval,
+            ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
             ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
           }),
         });
@@ -861,6 +966,63 @@ function CheckoutForm({
         </div>
       </FormSection>
 
+      {/* 5 — Coupon (optional) */}
+      <FormSection n={5} title="Have a coupon?">
+        {appliedCoupon ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-green-800 truncate">
+                {appliedCoupon.code} applied
+              </p>
+              <p className="text-xs text-green-700">
+                {appliedCoupon.percentOff != null
+                  ? `${appliedCoupon.percentOff}% off your first charge`
+                  : appliedCoupon.amountOff != null
+                    ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} off your first charge`
+                    : 'Discount applied'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={removeCoupon}
+              className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <Field label="Coupon code" error={couponError}>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={e => {
+                  setCouponInput(e.target.value);
+                  if (couponError) setCouponError('');
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyCoupon();
+                  }
+                }}
+                placeholder="Enter coupon code"
+                disabled={couponLoading}
+                className={inputCls(!!couponError, couponLoading)}
+              />
+              <button
+                type="button"
+                onClick={applyCoupon}
+                disabled={couponLoading || !couponInput.trim()}
+                className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {couponLoading ? 'Checking…' : 'Apply'}
+              </button>
+            </div>
+          </Field>
+        )}
+      </FormSection>
+
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
@@ -919,6 +1081,7 @@ function CheckoutPageInner() {
   const [interval, setInterval] = useState<Interval>(
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
   const rawD = params.get('d') ?? '';
   let decoded: Record<string, string> = {};
@@ -957,6 +1120,8 @@ function CheckoutPageInner() {
                   interval={interval}
                   onPlanChange={setPlanId}
                   onIntervalChange={setInterval}
+                  appliedCoupon={appliedCoupon}
+                  onCouponChange={setAppliedCoupon}
                 />
               </Elements>
             ) : (
@@ -974,7 +1139,7 @@ function CheckoutPageInner() {
 
           {/* Summary — shows above form on mobile */}
           <div className="order-first lg:order-last">
-            <OrderSummary planId={planId} interval={interval} />
+            <OrderSummary planId={planId} interval={interval} appliedCoupon={appliedCoupon} />
           </div>
         </div>
       </div>
