@@ -92,7 +92,7 @@ const PLANS: Record<PlanId, PlanConfig> = {
 const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
-
+//check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
 const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 // console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
 const stripePromise = _pk ? loadStripe(_pk) : null
