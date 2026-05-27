@@ -235,7 +235,7 @@ function formatTimeUtc(iso: string | null) {
 function displayStatus(status: string | null) {
   if (!status) return '—';
   const s = status.toLowerCase();
-  if (s === 'given') return 'Accepted';
+  if (s === 'given' || s === 'accepted') return 'Accepted';
   if (s === 'rejected') return 'Rejected';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
@@ -449,7 +449,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -487,7 +487,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -783,7 +783,7 @@ export function ConsentLogsDashboard({
       const isFramerBeforeCutoff =
         yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
       const isWebflowBeforeCutoff =
-        yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
       const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
       const hasHistoricalR2Data = isLegacy || !!platformSiteId;
       const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -826,7 +826,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
