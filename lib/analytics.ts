@@ -11,6 +11,14 @@ export const analytics = {
     posthog.reset();
   },
 
+  userLoggedIn(email: string) {
+    posthog.capture("user_logged_in", {
+      email,
+      platform: "webapp",
+      source: typeof window !== "undefined" ? (sessionStorage.getItem("entry_source") || "direct") : "direct",
+    });
+  },
+
   accountCreated(email: string, name: string) {
     posthog.capture("account_created", {
       email,

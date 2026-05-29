@@ -28,6 +28,7 @@ export function SignupForm() {
   const PENDING_KEY = "cb_signup_pending_otp";
   const [hydrated, setHydrated] = useState(false);
   const [pendingOtp, setPendingOtp] = useState(false);
+  const [forceStep1, setForceStep1] = useState(false);
 
   useEffect(() => setHydrated(true), []);
 
@@ -56,7 +57,7 @@ export function SignupForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
-  const effectiveStep: 1 | 2 = (urlWantsVerify || pendingOtp) ? 2 : step;
+  const effectiveStep: 1 | 2 = forceStep1 ? 1 : ((urlWantsVerify || pendingOtp) ? 2 : step);
 
   // Allow deep-link / refresh into OTP step: /signup?step=verify&email=...
   useEffect(() => {
@@ -122,6 +123,7 @@ export function SignupForm() {
         try {
         } catch {}
         if (debugEnabled) setDebugLine(`request-code ok; navigating to step=verify`);
+        setForceStep1(false);
         setStep(2);
         try {
           sessionStorage.setItem(
@@ -136,6 +138,7 @@ export function SignupForm() {
         await verifyVerificationCode({ email, purpose: 'signup', code });
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         setPendingOtp(false);
+        analytics.identify(email.trim().toLowerCase(), name.trim());
         analytics.accountCreated(email.trim().toLowerCase(), name.trim());
         router.push('/dashboard');
       }
@@ -154,6 +157,15 @@ export function SignupForm() {
         // router.push(`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`);
        setError('An account with this email already exists. Please log in instead.');
         return;
+      }
+
+      if (effectiveStep === 2) {
+        setForceStep1(true);
+        setStep(1);
+        setPendingOtp(false);
+        setCode('');
+        try { sessionStorage.removeItem(PENDING_KEY); } catch {}
+        router.replace('/signup');
       }
 
       if (debugEnabled) setDebugLine(`request failed: ${msg}`);
