@@ -3,8 +3,16 @@
 import posthog from "posthog-js";
 
 export const analytics = {
-  identify(email: string, name: string) {
+  identify(email: string, name: string, orgId?: string | null) {
     posthog.identify(email, { email, name, platform: "webapp" });
+    if (orgId) posthog.alias(orgId);
+  },
+
+  setSubscriptionStatus(status: string, planTier?: string | null) {
+    posthog.setPersonProperties({
+      subscription_status: status,
+      ...(planTier ? { plan_tier: planTier } : {}),
+    });
   },
 
   reset() {

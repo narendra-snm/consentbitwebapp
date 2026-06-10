@@ -369,12 +369,16 @@ export function DashboardSessionProvider({
     }
   }, [state.loading, state.authenticated, router]);
 
-  // Identify the user in PostHog as soon as we have their email.
+  // Identify the user in PostHog and alias orgId ↔ email so server-side events merge.
   useEffect(() => {
     if (state.authenticated && state.user?.email) {
-      analytics.identify(state.user.email, state.user.name || state.user.firstName || "");
+      analytics.identify(
+        state.user.email,
+        state.user.name || state.user.firstName || "",
+        state.activeOrganizationId ?? null,
+      );
     }
-  }, [state.authenticated, state.user?.email]);
+  }, [state.authenticated, state.user?.email, state.activeOrganizationId]);
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
   useEffect(() => {
