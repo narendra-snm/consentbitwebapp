@@ -6,7 +6,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, upgradeSubscription } from "@/lib/client-api";
+import { createCheckoutSession, upgradeSubscription, getBillingSummary, switchBillingInterval, previewSwitchInterval, type SwitchIntervalPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations/LoadingScreen";
@@ -97,6 +97,42 @@ export default function PricingTable() {
     });
     return (raw || "free") as "free" | "basic" | "essential" | "growth";
   }, [activeSite, sites, effectivePlanId]);
+
+  // Current billing interval of the active subscription (monthly/yearly). Needed so the grid
+  // can tell "Basic monthly" apart from "Basic yearly" — otherwise both show as "Current Plan".
+  const [currentInterval, setCurrentInterval] = useState<"monthly" | "yearly" | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const billingInitialized = useRef(false);
+
+  // Switch-interval confirm dialog (shows the prorated balance before charging the card on file)
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
+  const [preview, setPreview] = useState<SwitchIntervalPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeOrganizationId || currentTier === "free") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const summary = await getBillingSummary(activeOrganizationId, siteId || null);
+        const iv = String(summary?.interval || "").toLowerCase();
+        if (!cancelled && (iv === "monthly" || iv === "yearly")) {
+          setCurrentInterval(iv);
+          // Open the toggle on the site's actual interval (once) so a yearly site
+          // doesn't land on the Monthly tab. Later manual toggles are preserved.
+          if (!billingInitialized.current) {
+            setBilling(iv);
+            billingInitialized.current = true;
+          }
+        }
+      } catch {
+        /* ignore — falls back to tier-only behavior */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeOrganizationId, siteId, currentTier]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   
@@ -450,6 +486,54 @@ export default function PricingTable() {
       </button>
     );
   };
+
+  // Same tier, different interval → open a confirm dialog showing the prorated balance first.
+  async function openSwitchConfirm(target: "monthly" | "yearly") {
+    if (!activeOrganizationId) return;
+    setSwitchTarget(target);
+    setPreview(null);
+    setSwitchError(null);
+    setShowSwitchConfirm(true);
+    setPreviewLoading(true);
+    try {
+      const p = await previewSwitchInterval(activeOrganizationId, target);
+      setPreview(p);
+    } catch (e) {
+      setSwitchError(e instanceof Error ? e.message : "Could not load the charge details.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // Confirmed → charge the card on file in-place (no checkout redirect).
+  async function confirmSwitch() {
+    if (!activeOrganizationId || !switchTarget || switching) return;
+    setSwitching(true);
+    setSwitchError(null);
+    try {
+      await switchBillingInterval(activeOrganizationId, switchTarget);
+      setCurrentInterval(switchTarget);
+      await refresh({ showLoading: false });
+      setShowSwitchConfirm(false);
+      router.push(`/dashboard/${siteId}?upgraded=1`);
+    } catch (e) {
+      setSwitchError(e instanceof Error ? e.message : "Could not switch billing periods. Please try again.");
+      setSwitching(false);
+    }
+  }
+
+  // Shown when the user is already on this tier but the grid is toggled to the other interval.
+  const SwitchIntervalButton = ({ target }: { target: "monthly" | "yearly" }) => (
+    <button
+      type="button"
+      disabled={switching || previewLoading}
+      onClick={() => openSwitchConfirm(target)}
+      className="bg-[#007aff] text-white text-[15px] font-medium px-6 py-2 rounded-lg transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed max-w-[200px]"
+    >
+      {target === "yearly" ? "Upgrade to Yearly" : "Switch to Monthly"}
+    </button>
+  );
+
 function redirectToDashboard() {
   router.push(`/dashboard/${siteId}?upgraded=1`);
 }
@@ -532,6 +616,77 @@ function redirectToDashboard() {
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
+      {/* Switch-interval confirm dialog */}
+      {showSwitchConfirm && switchTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => { if (!switching) setShowSwitchConfirm(false); }}
+          />
+          <div className="relative z-10 w-full max-w-[560px] bg-white rounded-2xl shadow-xl p-9">
+            <h3 className="text-[20px] font-bold text-[#111827] mb-2">
+              Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing
+            </h3>
+
+            {previewLoading ? (
+              <p className="text-[15px] text-[#6b7280] py-6">Calculating your balance...</p>
+            ) : switchError ? (
+              <p className="text-[15px] text-red-600 py-5">{switchError}</p>
+            ) : preview ? (
+              (() => {
+                const fmt = (cents: number) =>
+                  new Intl.NumberFormat(undefined, { style: "currency", currency: (preview.currency || "usd").toUpperCase() })
+                    .format(cents / 100);
+                const amount = preview.amountDueCents ?? 0;
+                const per = switchTarget === "yearly" ? "year" : "month";
+                if (preview.isTrialing) {
+                  const when = preview.trialEnd ? new Date(preview.trialEnd).toLocaleDateString() : "your trial ends";
+                  return (
+                    <p className="text-[15px] text-[#374151] py-5 leading-relaxed">
+                      You&apos;re on a free trial, so <span className="font-semibold">nothing will be charged now</span>. When your
+                      trial ends ({when}), you&apos;ll be billed <span className="font-semibold">{fmt(amount)}/{per}</span>.
+                    </p>
+                  );
+                }
+                if (amount <= 0) {
+                  return (
+                    <p className="text-[15px] text-[#374151] py-5 leading-relaxed">
+                      No payment is due now. Any unused balance will be credited toward future invoices. Your plan
+                      will renew {per === "year" ? "yearly" : "monthly"}.
+                    </p>
+                  );
+                }
+                return (
+                  <p className="text-sm text-[#374151] py-3 leading-relaxed">
+                    You&apos;ll be charged <span className="font-semibold">{fmt(amount)}</span> now, the prorated balance
+                    for switching to the card on file. Your plan will then renew {per === "year" ? "yearly" : "monthly"}.
+                  </p>
+                );
+              })()
+            ) : null}
+
+            <div className="flex justify-end gap-3 mt-7">
+              <button
+                type="button"
+                disabled={switching}
+                onClick={() => setShowSwitchConfirm(false)}
+                className="px-6 py-2.5 rounded-lg text-[15px] font-medium text-[#374151] hover:bg-gray-100 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={switching || previewLoading || (!preview && !switchError)}
+                onClick={confirmSwitch}
+                className="px-6 py-2.5 rounded-lg text-[15px] font-medium text-white bg-[#007aff] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {switching ? "Switching..." : "Confirm & Switch"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
         {/* HEADER */}
@@ -629,7 +784,11 @@ function redirectToDashboard() {
 
           <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "basic" ? (
-              <CurrentPlanButton />
+              currentInterval && currentInterval !== billing ? (
+                <SwitchIntervalButton target={billing} />
+              ) : (
+                <CurrentPlanButton />
+              )
             ) : (
               <PlanButton plan="basic" />
             )}
@@ -637,7 +796,11 @@ function redirectToDashboard() {
 
           <div className="p-4 px-8 pb-8 bg-[#f0fff1] border-x border-[rgba(164,191,166,0.3)] border-b rounded-b-[20px] border-t border-t-[#000000]/10">
             {currentTier === "essential" ? (
-              <CurrentPlanButton />
+              currentInterval && currentInterval !== billing ? (
+                <SwitchIntervalButton target={billing} />
+              ) : (
+                <CurrentPlanButton />
+              )
             ) : (
               <PlanButton plan="essential" recommended />
             )}
@@ -645,7 +808,11 @@ function redirectToDashboard() {
 
           <div className="p-4 pl-[50px] border-t border-[#000000]/10">
             {currentTier === "growth" ? (
-              <CurrentPlanButton />
+              currentInterval && currentInterval !== billing ? (
+                <SwitchIntervalButton target={billing} />
+              ) : (
+                <CurrentPlanButton />
+              )
             ) : (
               <PlanButton plan="growth" />
             )}
