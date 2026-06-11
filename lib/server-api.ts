@@ -38,8 +38,9 @@ export async function serverFetch(
   const fetchOptions: RequestInit = {
     method,
     headers: requestHeaders,
+    signal: AbortSignal.timeout(8000), // 8 s — fail fast instead of hanging 19 s
   };
-  
+
   if (body) {
     if (typeof body === 'string') {
       fetchOptions.body = body;
@@ -50,7 +51,7 @@ export async function serverFetch(
       }
     }
   }
-  
+
   return fetch(url, fetchOptions);
 }
 

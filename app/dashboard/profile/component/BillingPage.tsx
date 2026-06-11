@@ -2,137 +2,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import {
   getBillingInvoices,
   getBillingSummary,
   createBillingPortalSession,
   cancelSubscription,
-  createSetupIntent,
-  updatePaymentMethod,
   switchBillingInterval,
+  previewSwitchInterval,
   renameSite,
   checkSiteDomainForRename,
   type BillingInvoice,
   type BillingSummary,
+  type SwitchIntervalPreview,
 } from "@/lib/client-api";
 
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
 
-// ─── Change Card components ───────────────────────────────────────────────────
-
-function ChangeCardInner({
-  organizationId,
-  onSuccess,
-  onError,
-  onClose,
-}: {
-  organizationId: string;
-  onSuccess: (pm: { brand: string; last4: string; exp_month: number; exp_year: number }) => void;
-  onError: (msg: string) => void;
-  onClose: () => void;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setSubmitting(true);
-    try {
-      const result = await stripe.confirmSetup({
-        elements,
-        confirmParams: { return_url: window.location.href },
-        redirect: "if_required",
-      });
-      if (result.error) {
-        onError(result.error.message || "Card setup failed");
-        return;
-      }
-      const pmId = result.setupIntent?.payment_method;
-      if (typeof pmId !== "string") {
-        onError("Could not get payment method ID");
-        return;
-      }
-      const data = await updatePaymentMethod(organizationId, pmId);
-      onSuccess(data.paymentMethod);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Failed to save card");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={submitting}
-          className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!stripe || submitting}
-          className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
-        >
-          {submitting ? (
-            <>
-              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save Card"
-          )}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ChangeCardModal({
-  clientSecret,
-  organizationId,
-  onSuccess,
-  onClose,
-}: {
-  clientSecret: string;
-  organizationId: string;
-  onSuccess: (pm: { brand: string; last4: string; exp_month: number; exp_year: number }) => void;
-  onClose: () => void;
-}) {
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-[460px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
-        <h3 className="text-[18px] font-bold text-black text-center mb-1">Update Payment Method</h3>
-        <p className="text-[13px] text-[#6b7280] text-center mb-5">Your new card will be used for all future charges.</p>
-        {error && (
-          <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
-            {error}
-          </div>
-        )}
-        <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
-          <ChangeCardInner
-            organizationId={organizationId}
-            onSuccess={onSuccess}
-            onError={setError}
-            onClose={onClose}
-          />
-        </Elements>
-      </div>
-    </div>
-  );
-}
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -141,7 +25,9 @@ import {
 } from "@/lib/site-manage-helpers";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import dynamic from "next/dynamic";
 import BillingDetailsCard from "./BillingDetailsCard";
+const PaymentMethodCard = dynamic(() => import("./PaymentMethodCard"), { ssr: false });
 
 const svgPaths = {
   p112ba780: "M6.3 0H2.8C2.41395 0 2.1 0.31395 2.1 0.7V2.1H0.7C0.31395 2.1 0 2.41395 0 2.8V6.3C0 6.68605 0.31395 7 0.7 7H4.2C4.58605 7 4.9 6.68605 4.9 6.3V4.9H6.3C6.68605 4.9 7 4.58605 7 4.2V0.7C7 0.31395 6.68605 0 6.3 0ZM0.7 6.3V2.8H4.2L4.2007 6.3H0.7ZM6.3 4.2H4.9V2.8C4.9 2.41395 4.58605 2.1 4.2 2.1H2.8V0.7H6.3V4.2Z",
@@ -511,18 +397,21 @@ export default function BillingPage({
     }
   };
 
-  const handleEditCard = async () => {
-    if (!organizationId || changeCardLoadingSetup) return;
-    setChangeCardLoadingSetup(true);
-    setChangeCardSuccess(false);
+  // Open the confirm modal and fetch the live prorated preview (real amount / trial / credit).
+  const openSwitchModal = async (target: "monthly" | "yearly") => {
+    if (!organizationId) return;
+    setSwitchTarget(target);
+    setSwitchError(null);
+    setSwitchPreview(null);
+    setShowSwitchModal(true);
+    setSwitchPreviewLoading(true);
     try {
-      const { clientSecret } = await createSetupIntent(organizationId);
-      setChangeCardClientSecret(clientSecret);
-      setShowChangeCardModal(true);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not start card setup. Please try again.");
+      const p = await previewSwitchInterval(organizationId, target);
+      setSwitchPreview(p);
+    } catch {
+      /* fall back to static text */
     } finally {
-      setChangeCardLoadingSetup(false);
+      setSwitchPreviewLoading(false);
     }
   };
 
@@ -553,17 +442,13 @@ export default function BillingPage({
     }
   };
 
-  // Change card modal state
-  const [showChangeCardModal, setShowChangeCardModal] = useState(false);
-  const [changeCardClientSecret, setChangeCardClientSecret] = useState<string | null>(null);
-  const [changeCardLoadingSetup, setChangeCardLoadingSetup] = useState(false);
-  const [changeCardSuccess, setChangeCardSuccess] = useState(false);
-
   // Interval switch modal state
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
   const [switchLoading, setSwitchLoading] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switchPreview, setSwitchPreview] = useState<SwitchIntervalPreview | null>(null);
+  const [switchPreviewLoading, setSwitchPreviewLoading] = useState(false);
 
   const refreshSummary = async () => {
     if (!organizationId) return;
@@ -617,29 +502,9 @@ export default function BillingPage({
   };
 
   const pm = summary?.paymentMethod ?? null;
-  const cardBrand = pm?.brand?.toLowerCase() ?? "";
-  const isMastercard = cardBrand === "mastercard";
-  const isVisa = cardBrand === "visa";
 
   return (
     <>
-    {/* Change Card Modal */}
-    {showChangeCardModal && changeCardClientSecret && organizationId && (
-      <ChangeCardModal
-        clientSecret={changeCardClientSecret}
-        organizationId={organizationId}
-        onClose={() => { setShowChangeCardModal(false); setChangeCardClientSecret(null); }}
-        onSuccess={(pm) => {
-          setSummary((prev) => prev ? { ...prev, paymentMethod: pm } : prev);
-          summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
-          setShowChangeCardModal(false);
-          setChangeCardClientSecret(null);
-          setChangeCardSuccess(true);
-          setTimeout(() => setChangeCardSuccess(false), 4000);
-        }}
-      />
-    )}
-
     {/* Switch Billing Interval Confirmation Modal */}
     {showSwitchModal && switchTarget && (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -656,11 +521,31 @@ export default function BillingPage({
           <h3 className="text-[18px] font-bold text-black text-center mb-2">
             Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing?
           </h3>
-          <p className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5">
-            {switchTarget === "yearly"
-              ? "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
-              : "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."}
-          </p>
+          <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5 min-h-[40px]">
+            {switchPreviewLoading ? (
+              "Calculating your balance..."
+            ) : switchPreview ? (
+              (() => {
+                const fmt = (cents: number) =>
+                  new Intl.NumberFormat(undefined, { style: "currency", currency: (switchPreview.currency || "usd").toUpperCase() })
+                    .format(cents / 100);
+                const amount = switchPreview.amountDueCents ?? 0;
+                const per = switchTarget === "yearly" ? "year" : "month";
+                if (switchPreview.isTrialing) {
+                  const when = switchPreview.trialEnd ? new Date(switchPreview.trialEnd).toLocaleDateString() : "your trial ends";
+                  return `You're on a free trial, so nothing will be charged now. When your trial ends (${when}), you'll be billed ${fmt(amount)}/${per}.`;
+                }
+                if (amount <= 0) {
+                  return `No payment is due now. Any unused balance will be credited toward future invoices. Your plan will renew ${per === "year" ? "yearly" : "monthly"}.`;
+                }
+                return `You'll be charged ${fmt(amount)} now, the prorated balance for switching to the card on file. Your plan will then renew ${per === "year" ? "yearly" : "monthly"}.`;
+              })()
+            ) : switchTarget === "yearly" ? (
+              "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
+            ) : (
+              "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."
+            )}
+          </div>
           {switchError && (
             <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
               {switchError}
@@ -684,7 +569,7 @@ export default function BillingPage({
               {switchLoading ? (
                 <>
                   <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Switching…
+                  Switching...
                 </>
               ) : (
                 `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
@@ -1005,7 +890,7 @@ export default function BillingPage({
                         key={iv}
                         type="button"
                         disabled={isActive || switchLoading}
-                        onClick={() => { setSwitchTarget(iv); setSwitchError(null); setShowSwitchModal(true); }}
+                        onClick={() => openSwitchModal(iv)}
                         className={`px-[12px] py-[5px] rounded-[6px] text-[13px] font-medium transition-colors disabled:cursor-default flex items-center gap-1 ${
                           isActive
                             ? "bg-white text-black shadow-sm"
@@ -1021,9 +906,6 @@ export default function BillingPage({
                   })}
                 </div>
               </div>
-              {changeCardSuccess && (
-                <p className="mt-2 text-[12px] text-[#059669]">Payment method updated successfully.</p>
-              )}
             </div>
           )}
 
@@ -1065,10 +947,18 @@ export default function BillingPage({
   email={userEmail}
   country={summary?.billingCountry || "Not available"}
   address={summary?.billingAddress || "Not available"}
-  pm={pm}
   onVisitStripePortal={handleVisitPortal}
-  onEditCard={handleEditCard}
   onOpenPortal={handleOpenPortalFooter}
+/>
+
+<PaymentMethodCard
+  pm={pm}
+  organizationId={organizationId}
+  billingCountry={summary?.billingCountry || ""}
+  onUpdateSuccess={(newPm) => {
+    setSummary((prev) => prev ? { ...prev, paymentMethod: newPm } : prev);
+    summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+  }}
 />
       </div>
     </div>

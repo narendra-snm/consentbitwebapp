@@ -59,7 +59,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
     c.preferences !== undefined;
 
   if (method === 'CCPA') {
-    if (hasCcpa) {
+    if (hasCcpa && c.ccpa) {
       return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
     }
     if (hasGdprKeys) {
@@ -82,7 +82,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
     return parts.length > 0 ? parts.join(', ') : 'Essential: Accepted';
   }
 
-  if (hasCcpa) {
+  if (hasCcpa && c.ccpa) {
     // CCPA-shape stored under a GDPR banner — derive from doNotSell
     const suffix = c.ccpa.doNotSell ? 'Rejected' : 'Accepted';
     return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;

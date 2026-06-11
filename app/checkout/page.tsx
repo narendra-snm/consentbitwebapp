@@ -17,6 +17,21 @@ import {
 type PlanId = 'basic' | 'essential' | 'growth';
 type Interval = 'monthly' | 'yearly';
 
+interface CouponDiscount {
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string | null;
+  name: string | null;
+  duration: string | null;
+  durationInMonths: number | null;
+}
+
+interface CouponData {
+  promotionCodeId: string | null;
+  couponId: string;
+  discount: CouponDiscount;
+}
+
 interface PlanConfig {
   name: string;
   monthly: number;
@@ -219,18 +234,42 @@ function FormSection({
 
 // ─── Order summary ────────────────────────────────────────────────────────────
 
-function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval }) {
+function OrderSummary({
+  planId,
+  interval,
+  couponData,
+}: {
+  planId: PlanId;
+  interval: Interval;
+  couponData?: CouponData | null;
+}) {
   const plan = PLANS[planId];
-  const price = interval === 'yearly' ? plan.yearly : plan.monthly;
+  const basePrice = interval === 'yearly' ? plan.yearly : plan.monthly;
   const firstCharge = trialEndLabel();
 
+  // Compute discounted price for display
+  let discountedPrice = basePrice;
+  let discountLabel = '';
+  if (couponData) {
+    if (couponData.discount.percentOff != null) {
+      discountedPrice = Math.round(basePrice * (1 - couponData.discount.percentOff / 100) * 100) / 100;
+      discountLabel = `${couponData.discount.percentOff}% off`;
+    } else if (couponData.discount.amountOff != null) {
+      discountedPrice = Math.max(0, Math.round((basePrice - couponData.discount.amountOff) * 100) / 100);
+      discountLabel = `$${couponData.discount.amountOff} off`;
+    }
+  }
+
+  const price = discountedPrice;
+
   const rows = [
-    { label: plan.name, value: `$${price}/mo` },
+    { label: plan.name, value: `$${basePrice}/mo`, strikethrough: !!couponData },
+    ...(couponData ? [{ label: `Coupon (${discountLabel})`, value: `$${price}/mo`, green: true }] : []),
     { label: 'Billing', value: interval === 'yearly' ? 'Yearly' : 'Monthly' },
     { label: 'Trial period', value: '14 days', pill: true },
     { label: 'Due today', value: '$0.00', bold: true },
-    { label: 'First charge', value: `$${plan.monthly} on ${firstCharge}` },
-  ];
+    { label: 'First charge', value: `$${price} on ${firstCharge}` },
+  ] as Array<{ label: string; value: string; pill?: boolean; bold?: boolean; strikethrough?: boolean; green?: boolean }>;
 
   return (
     <div className="sticky top-6 space-y-4">
@@ -250,11 +289,17 @@ function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval
         <div className="mt-4 divide-y divide-gray-100">
           {rows.map(row => (
             <div key={row.label} className="flex items-center justify-between py-1.5 text-xs">
-              <span className="text-gray-500">{row.label}</span>
+              <span className={row.green ? 'font-medium text-green-700' : 'text-gray-500'}>
+                {row.label}
+              </span>
               {row.pill ? (
                 <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-700">
                   {row.value}
                 </span>
+              ) : row.green ? (
+                <span className="font-semibold text-green-700">{row.value}</span>
+              ) : row.strikethrough ? (
+                <span className="text-gray-400 line-through">{row.value}</span>
               ) : (
                 <span className={row.bold ? 'font-bold text-gray-900' : 'text-gray-700'}>
                   {row.value}
@@ -359,6 +404,7 @@ interface CheckoutFormProps {
   interval: Interval;
   onPlanChange: (p: PlanId) => void;
   onIntervalChange: (i: Interval) => void;
+  onCouponChange: (data: CouponData | null) => void;
 }
 
 function CheckoutForm({
@@ -371,6 +417,7 @@ function CheckoutForm({
   interval,
   onPlanChange,
   onIntervalChange,
+  onCouponChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -390,6 +437,66 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // ── Coupon state ────────────────────────────────────────────────────────────
+  const [showCoupon, setShowCoupon] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponValidating, setCouponValidating] = useState(false);
+  const [couponStatus, setCouponStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [couponError, setCouponError] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
+
+  async function handleApplyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponValidating(true);
+    setCouponStatus('idle');
+    setCouponError('');
+    try {
+      const res = await fetch('/api/validate-coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couponCode: code }),
+      });
+      const data = await res.json() as {
+        valid: boolean;
+        error?: string;
+        promotionCodeId?: string | null;
+        couponId?: string;
+        discount?: CouponDiscount;
+      };
+      if (data.valid && data.couponId && data.discount) {
+        const coupon: CouponData = {
+          promotionCodeId: data.promotionCodeId ?? null,
+          couponId: data.couponId,
+          discount: data.discount,
+        };
+        setAppliedCoupon(coupon);
+        setCouponStatus('valid');
+        onCouponChange(coupon);
+      } else {
+        setCouponStatus('invalid');
+        setCouponError(data.error || 'Invalid or expired coupon code.');
+        setAppliedCoupon(null);
+        onCouponChange(null);
+      }
+    } catch {
+      setCouponStatus('invalid');
+      setCouponError('Could not validate coupon. Please try again.');
+      setAppliedCoupon(null);
+      onCouponChange(null);
+    } finally {
+      setCouponValidating(false);
+    }
+  }
+
+  function handleRemoveCoupon() {
+    setCouponInput('');
+    setCouponStatus('idle');
+    setCouponError('');
+    setAppliedCoupon(null);
+    onCouponChange(null);
+  }
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -471,6 +578,12 @@ function CheckoutForm({
           siteName: cleanedDomain,
           planId,
           interval,
+          ...(appliedCoupon
+            ? {
+                promotionCodeId: appliedCoupon.promotionCodeId,
+                couponId: appliedCoupon.couponId,
+              }
+            : {}),
           ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
         }),
       });
@@ -794,6 +907,130 @@ function CheckoutForm({
         </div>
       </FormSection>
 
+      {/* Coupon code ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <button
+          type="button"
+          onClick={() => setShowCoupon(s => !s)}
+          className="flex w-full items-center justify-between text-sm font-medium text-[#262E84] hover:text-[#1e246c]"
+        >
+          <span className="flex items-center gap-2">
+            {/* ticket icon */}
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+            </svg>
+            Have a coupon code?
+            {appliedCoupon && (
+              <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Applied
+              </span>
+            )}
+          </span>
+          {/* chevron */}
+          <svg
+            className={`h-4 w-4 transition-transform ${showCoupon ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showCoupon && (
+          <div className="mt-3 space-y-2">
+            {appliedCoupon ? (
+              /* Applied state */
+              <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">
+                      {appliedCoupon.discount.percentOff != null
+                        ? `${appliedCoupon.discount.percentOff}% discount applied`
+                        : appliedCoupon.discount.amountOff != null
+                        ? `$${appliedCoupon.discount.amountOff} discount applied`
+                        : 'Discount applied'}
+                    </p>
+                    {appliedCoupon.discount.duration === 'once' && (
+                      <p className="text-xs text-green-600">Applied to first billing cycle</p>
+                    )}
+                    {appliedCoupon.discount.duration === 'repeating' && appliedCoupon.discount.durationInMonths && (
+                      <p className="text-xs text-green-600">
+                        Applied for {appliedCoupon.discount.durationInMonths} month
+                        {appliedCoupon.discount.durationInMonths > 1 ? 's' : ''}
+                      </p>
+                    )}
+                    {appliedCoupon.discount.duration === 'forever' && (
+                      <p className="text-xs text-green-600">Applied forever</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              /* Input state */
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={e => {
+                      setCouponInput(e.target.value.toUpperCase());
+                      if (couponStatus !== 'idle') { setCouponStatus('idle'); setCouponError(''); }
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyCoupon(); } }}
+                    placeholder="Enter coupon code"
+                    className={[
+                      'flex-1 min-w-0 rounded-lg border px-3 py-2.5 text-sm font-mono tracking-wider outline-none transition uppercase',
+                      'focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20',
+                      couponStatus === 'invalid' ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white',
+                    ].join(' ')}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={couponValidating || !couponInput.trim()}
+                    className="shrink-0 rounded-lg bg-[#262E84] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {couponValidating ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      'Apply'
+                    )}
+                  </button>
+                </div>
+
+                {couponStatus === 'invalid' && couponError && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-500">
+                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <circle cx="12" cy="12" r="9" />
+                      <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+                    </svg>
+                    {couponError}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 4 — Payment details */}
       <FormSection n={4} title="Payment details">
         <div className="space-y-3">
@@ -932,6 +1169,9 @@ function CheckoutPageInner() {
   const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
   const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
 
+  // Coupon state — lifted to page so OrderSummary can reflect the discount live
+  const [couponData, setCouponData] = useState<CouponData | null>(null);
+
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
       <div className="mx-auto max-w-5xl">
@@ -957,6 +1197,7 @@ function CheckoutPageInner() {
                   interval={interval}
                   onPlanChange={setPlanId}
                   onIntervalChange={setInterval}
+                  onCouponChange={setCouponData}
                 />
               </Elements>
             ) : (
@@ -974,7 +1215,7 @@ function CheckoutPageInner() {
 
           {/* Summary — shows above form on mobile */}
           <div className="order-first lg:order-last">
-            <OrderSummary planId={planId} interval={interval} />
+            <OrderSummary planId={planId} interval={interval} couponData={couponData} />
           </div>
         </div>
       </div>
