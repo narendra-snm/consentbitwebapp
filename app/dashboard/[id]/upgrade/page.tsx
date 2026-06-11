@@ -623,64 +623,74 @@ function redirectToDashboard() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => { if (!switching) setShowSwitchConfirm(false); }}
           />
-          <div className="relative z-10 w-full max-w-[560px] bg-white rounded-2xl shadow-xl p-9">
-            <h3 className="text-[20px] font-bold text-[#111827] mb-2">
-              Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing
+          <div className="relative z-10 w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+            <div className="flex justify-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-[#eff6ff] flex items-center justify-center">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2v10M12 17h.01" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round"/>
+                  <circle cx="12" cy="12" r="10" stroke="#007AFF" strokeWidth="2"/>
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-[18px] font-bold text-black text-center mb-2">
+              Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing?
             </h3>
 
-            {previewLoading ? (
-              <p className="text-[15px] text-[#6b7280] py-6">Calculating your balance...</p>
-            ) : switchError ? (
-              <p className="text-[15px] text-red-600 py-5">{switchError}</p>
-            ) : preview ? (
-              (() => {
-                const fmt = (cents: number) =>
-                  new Intl.NumberFormat(undefined, { style: "currency", currency: (preview.currency || "usd").toUpperCase() })
-                    .format(cents / 100);
-                const amount = preview.amountDueCents ?? 0;
-                const per = switchTarget === "yearly" ? "year" : "month";
-                if (preview.isTrialing) {
-                  const when = preview.trialEnd ? new Date(preview.trialEnd).toLocaleDateString() : "your trial ends";
-                  return (
-                    <p className="text-[15px] text-[#374151] py-5 leading-relaxed">
-                      You&apos;re on a free trial, so <span className="font-semibold">nothing will be charged now</span>. When your
-                      trial ends ({when}), you&apos;ll be billed <span className="font-semibold">{fmt(amount)}/{per}</span>.
-                    </p>
-                  );
-                }
-                if (amount <= 0) {
-                  return (
-                    <p className="text-[15px] text-[#374151] py-5 leading-relaxed">
-                      No payment is due now. Any unused balance will be credited toward future invoices. Your plan
-                      will renew {per === "year" ? "yearly" : "monthly"}.
-                    </p>
-                  );
-                }
-                return (
-                  <p className="text-sm text-[#374151] py-3 leading-relaxed">
-                    You&apos;ll be charged <span className="font-semibold">{fmt(amount)}</span> now, the prorated balance
-                    for switching to the card on file. Your plan will then renew {per === "year" ? "yearly" : "monthly"}.
-                  </p>
-                );
-              })()
-            ) : null}
+            <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5 min-h-[40px]">
+              {previewLoading ? (
+                "Calculating your balance..."
+              ) : preview ? (
+                (() => {
+                  const fmt = (cents: number) =>
+                    new Intl.NumberFormat(undefined, { style: "currency", currency: (preview.currency || "usd").toUpperCase() })
+                      .format(cents / 100);
+                  const amount = preview.amountDueCents ?? 0;
+                  const per = switchTarget === "yearly" ? "year" : "month";
+                  if (preview.isTrialing) {
+                    const when = preview.trialEnd ? new Date(preview.trialEnd).toLocaleDateString() : "your trial ends";
+                    return `You're on a free trial, so nothing will be charged now. When your trial ends (${when}), you'll be billed ${fmt(amount)}/${per}.`;
+                  }
+                  if (amount <= 0) {
+                    return `No payment is due now. Any unused balance will be credited toward future invoices. Your plan will renew ${per === "year" ? "yearly" : "monthly"}.`;
+                  }
+                  return `You'll be charged ${fmt(amount)} now, the prorated balance for switching to the card on file. Your plan will then renew ${per === "year" ? "yearly" : "monthly"}.`;
+                })()
+              ) : switchTarget === "yearly" ? (
+                "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
+              ) : (
+                "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."
+              )}
+            </div>
 
-            <div className="flex justify-end gap-3 mt-7">
+            {switchError && (
+              <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                {switchError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
               <button
                 type="button"
+                onClick={() => { if (!switching) { setShowSwitchConfirm(false); setSwitchError(null); } }}
                 disabled={switching}
-                onClick={() => setShowSwitchConfirm(false)}
-                className="px-6 py-2.5 rounded-lg text-[15px] font-medium text-[#374151] hover:bg-gray-100 disabled:opacity-60"
+                className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
               >
-                Cancel
+                Keep Current
               </button>
               <button
                 type="button"
-                disabled={switching || previewLoading || (!preview && !switchError)}
                 onClick={confirmSwitch}
-                className="px-6 py-2.5 rounded-lg text-[15px] font-medium text-white bg-[#007aff] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={switching || previewLoading}
+                className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
               >
-                {switching ? "Switching..." : "Confirm & Switch"}
+                {switching ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Switching...
+                  </>
+                ) : (
+                  `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
+                )}
               </button>
             </div>
           </div>
