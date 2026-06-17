@@ -184,6 +184,8 @@ export default function BillingPage({
   // Pagination
   const INVOICES_PER_PAGE = 5;
   const [invoicePage, setInvoicePage] = useState(1);
+  // Bump to force the invoice list to re-fetch (e.g. after an interval switch generates a new invoice).
+  const [invoiceReloadToken, setInvoiceReloadToken] = useState(0);
 
   // Load invoices
   useEffect(() => {
@@ -220,7 +222,7 @@ export default function BillingPage({
       .catch((e) => { if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices"); })
       .finally(() => { if (!cancelled) setInvoiceLoading(false); });
     return () => { cancelled = true; };
-  }, [organizationId]);
+  }, [organizationId, invoiceReloadToken]);
 
   // Load billing summary (for payment method + billing details).
   // Re-fetch when activeSiteId changes — each site may have different billing address/country.
@@ -420,12 +422,28 @@ export default function BillingPage({
     setSwitchError(null);
     try {
       const result = await switchBillingInterval(organizationId, switchTarget);
+      // 1. Optimistically update the local billing summary
       setSummary((prev) =>
         prev
           ? { ...prev, interval: result.interval, nextBillingDate: result.nextBillingDate ?? prev.nextBillingDate }
           : prev,
       );
+      // 2. Optimistically patch the site in global session state so all tables (e.g. All Domains) update immediately
+      if (activeSiteId) {
+        updateSiteInState({
+          id: activeSiteId,
+          interval: result.interval,
+          billing_interval: result.interval,
+          subscriptionInterval: result.interval,
+          subscription_interval: result.interval,
+        });
+      }
+      // 3. Bust caches + re-fetch so every table and the invoice list reflect the new interval / new invoice
       summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+      invoiceCache.delete(organizationId);
+      try { window.sessionStorage.removeItem(`${INVOICE_STORAGE_KEY}:${organizationId}`); } catch { /* ignore */ }
+      setInvoiceReloadToken((t) => t + 1);
+      await refresh({ showLoading: false });
       setShowSwitchModal(false);
     } catch (e) {
       setSwitchError(e instanceof Error ? e.message : "Failed to switch billing period. Please try again.");
