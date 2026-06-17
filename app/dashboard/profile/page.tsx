@@ -15,6 +15,7 @@ import {
   deriveSiteNameFromDomain,
 } from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
+import { analytics } from "@/lib/analytics";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
 // Keep usage cache short so metered pageviews/scans feel "live" without manual refresh.
@@ -562,9 +563,10 @@ export default function SettingsPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() =>
-                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
-                            }
+                            onClick={() => {
+                              analytics.upgradeCtaClicked("profile_start_trial", org.siteId ? String(org.siteId) : undefined, org.isPaid ? "paid" : "free");
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard");
+                            }}
                             className="bg-[#007aff] h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center"
                           >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Start Trial</p>
@@ -577,9 +579,10 @@ export default function SettingsPage() {
                         {org.isPaid && (
                           <button
                             type="button"
-                            onClick={() =>
-                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
-                            }
+                            onClick={() => {
+                              analytics.upgradeCtaClicked("profile_change_plan", org.siteId ? String(org.siteId) : undefined, org.isPaid ? "paid" : "free");
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard");
+                            }}
                             className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
                           >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Change Plan</p>

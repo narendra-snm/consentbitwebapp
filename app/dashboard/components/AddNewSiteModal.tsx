@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations//LoadingScreen";
 
 
@@ -274,7 +273,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       if (planId === "free") {
         const result = await firstSetup({ websiteUrl: domain });
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
-        analytics.domainAdded(domain, newSiteId || null, "free");
+        // domain_added is now fired centrally inside firstSetup() so all onboarding
+        // paths are covered; no need to fire it again here (would double-count).
         await refresh({ showLoading: false });
         onClose?.();
         // Land on the new site's dashboard path so the header dropdown + plan match the new site.

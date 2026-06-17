@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
+import { analytics } from "@/lib/analytics";
 
 function makeDefaultContentSettings(langCode = 'en') {
   const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
@@ -759,6 +760,13 @@ export default function page({ siteId }: { siteId: string }) {
       setSaveSuccess(false);
       await persistBannerCustomization();
       setPublishSuccess(true);
+      // PostHog: banner went live from the webapp (lifecycle: install_verified → published).
+      // Mirrors the Webflow backend handler, which fires both events on save.
+      try {
+        const phBannerType = iabEnabled ? "iab" : consentType;
+        analytics.bannerCustomized(String(site.id), site.domain ?? undefined, phBannerType);
+        analytics.bannerPublished(String(site.id), site.domain ?? undefined, phBannerType);
+      } catch { /* analytics must never block publish */ }
     } catch (e) {
       setPublishError("Something went wrong while publishing. Please try again.");
     } finally {
@@ -1009,7 +1017,7 @@ export default function page({ siteId }: { siteId: string }) {
         To enable this feature, please switch to the Essential or Growth plan.
       </p>
       <button
-        onClick={() => { setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
+        onClick={() => { analytics.upgradeCtaClicked("cookie_banner_iab", String(siteId), resolvedPlanId); setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
         className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
       >
         Get Pro Plan
