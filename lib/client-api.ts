@@ -670,6 +670,30 @@ export async function switchBillingInterval(
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to switch billing interval");
   return data as { success: true; interval: string; nextBillingDate: string | null };
 }
+
+export type SwitchIntervalPreview = {
+  success: true;
+  currentInterval: string;
+  targetInterval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;   // active: charged now; trial: billed at trial end
+  currency: string;
+  trialEnd: string | null;
+};
+export async function previewSwitchInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+): Promise<SwitchIntervalPreview> {
+  const res = await fetch("/api/subscriptions/switch-interval/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as SwitchIntervalPreview;
+}
 // billing summary ends here
 
 // —— Cookie scan (site scanner) ——

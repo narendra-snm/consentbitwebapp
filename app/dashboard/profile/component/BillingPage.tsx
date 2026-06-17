@@ -8,10 +8,12 @@ import {
   createBillingPortalSession,
   cancelSubscription,
   switchBillingInterval,
+  previewSwitchInterval,
   renameSite,
   checkSiteDomainForRename,
   type BillingInvoice,
   type BillingSummary,
+  type SwitchIntervalPreview,
 } from "@/lib/client-api";
 import dynamic from "next/dynamic";
 
@@ -182,6 +184,8 @@ export default function BillingPage({
   // Pagination
   const INVOICES_PER_PAGE = 5;
   const [invoicePage, setInvoicePage] = useState(1);
+  // Bump to force the invoice list to re-fetch (e.g. after an interval switch generates a new invoice).
+  const [invoiceReloadToken, setInvoiceReloadToken] = useState(0);
 
   // Load invoices
   useEffect(() => {
@@ -218,7 +222,7 @@ export default function BillingPage({
       .catch((e) => { if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices"); })
       .finally(() => { if (!cancelled) setInvoiceLoading(false); });
     return () => { cancelled = true; };
-  }, [organizationId]);
+  }, [organizationId, invoiceReloadToken]);
 
   // Load billing summary (for payment method + billing details).
   // Re-fetch when activeSiteId changes — each site may have different billing address/country.
@@ -394,18 +398,52 @@ export default function BillingPage({
     }
   };
 
+  // Open the confirm modal and fetch the live prorated preview (real amount / trial / credit).
+  const openSwitchModal = async (target: "monthly" | "yearly") => {
+    if (!organizationId) return;
+    setSwitchTarget(target);
+    setSwitchError(null);
+    setSwitchPreview(null);
+    setShowSwitchModal(true);
+    setSwitchPreviewLoading(true);
+    try {
+      const p = await previewSwitchInterval(organizationId, target);
+      setSwitchPreview(p);
+    } catch {
+      /* fall back to static text */
+    } finally {
+      setSwitchPreviewLoading(false);
+    }
+  };
+
   const handleSwitchInterval = async () => {
     if (!organizationId || !switchTarget) return;
     setSwitchLoading(true);
     setSwitchError(null);
     try {
       const result = await switchBillingInterval(organizationId, switchTarget);
+      // 1. Optimistically update the local billing summary
       setSummary((prev) =>
         prev
           ? { ...prev, interval: result.interval, nextBillingDate: result.nextBillingDate ?? prev.nextBillingDate }
           : prev,
       );
+      // 2. Optimistically patch the site in global session state so all tables (e.g. All Domains) update immediately
+      if (activeSiteId) {
+        updateSiteInState({
+          id: activeSiteId,
+          interval: result.interval,
+          billing_interval: result.interval,
+          subscriptionInterval: result.interval,
+          subscription_interval: result.interval,
+        });
+      }
+      // 3. Bust caches + re-fetch so every table and the invoice list reflect the new interval / new invoice
       summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+      invoiceCache.delete(organizationId);
+      try { window.sessionStorage.removeItem(`${INVOICE_STORAGE_KEY}:${organizationId}`); } catch { /* ignore */ }
+      setInvoiceReloadToken((t) => t + 1);
+      await refresh({ showLoading: false });
       setShowSwitchModal(false);
     } catch (e) {
       setSwitchError(e instanceof Error ? e.message : "Failed to switch billing period. Please try again.");
@@ -426,6 +464,8 @@ export default function BillingPage({
   const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
   const [switchLoading, setSwitchLoading] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switchPreview, setSwitchPreview] = useState<SwitchIntervalPreview | null>(null);
+  const [switchPreviewLoading, setSwitchPreviewLoading] = useState(false);
 
   const refreshSummary = async () => {
     if (!organizationId) return;
@@ -498,11 +538,31 @@ export default function BillingPage({
           <h3 className="text-[18px] font-bold text-black text-center mb-2">
             Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing?
           </h3>
-          <p className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5">
-            {switchTarget === "yearly"
-              ? "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
-              : "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."}
-          </p>
+          <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5 min-h-[40px]">
+            {switchPreviewLoading ? (
+              "Calculating your balance..."
+            ) : switchPreview ? (
+              (() => {
+                const fmt = (cents: number) =>
+                  new Intl.NumberFormat(undefined, { style: "currency", currency: (switchPreview.currency || "usd").toUpperCase() })
+                    .format(cents / 100);
+                const amount = switchPreview.amountDueCents ?? 0;
+                const per = switchTarget === "yearly" ? "year" : "month";
+                if (switchPreview.isTrialing) {
+                  const when = switchPreview.trialEnd ? new Date(switchPreview.trialEnd).toLocaleDateString() : "your trial ends";
+                  return `You're on a free trial, so nothing will be charged now. When your trial ends (${when}), you'll be billed ${fmt(amount)}/${per}.`;
+                }
+                if (amount <= 0) {
+                  return `No payment is due now. Any unused balance will be credited toward future invoices. Your plan will renew ${per === "year" ? "yearly" : "monthly"}.`;
+                }
+                return `You'll be charged ${fmt(amount)} now, the prorated balance for switching to the card on file. Your plan will then renew ${per === "year" ? "yearly" : "monthly"}.`;
+              })()
+            ) : switchTarget === "yearly" ? (
+              "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
+            ) : (
+              "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."
+            )}
+          </div>
           {switchError && (
             <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
               {switchError}
@@ -526,7 +586,7 @@ export default function BillingPage({
               {switchLoading ? (
                 <>
                   <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Switching…
+                  Switching...
                 </>
               ) : (
                 `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
@@ -847,7 +907,7 @@ export default function BillingPage({
                         key={iv}
                         type="button"
                         disabled={isActive || switchLoading}
-                        onClick={() => { setSwitchTarget(iv); setSwitchError(null); setShowSwitchModal(true); }}
+                        onClick={() => openSwitchModal(iv)}
                         className={`px-[12px] py-[5px] rounded-[6px] text-[13px] font-medium transition-colors disabled:cursor-default flex items-center gap-1 ${
                           isActive
                             ? "bg-white text-black shadow-sm"
