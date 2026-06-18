@@ -7,6 +7,7 @@ import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
+import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
 import { useAppContext } from "@/app/context/AppProvider";
 
 // import CookieListAccordion from "./CookieListAccordion";
@@ -15,6 +16,7 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
+import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -54,7 +56,20 @@ function makeDefaultContentSettings(langCode = 'en') {
       optOutTitle: T.optOutPreference,
       optOutMessage: T.ccpaOptOutPreferenceIntro,
       saveMyPreferencesLabel: T.saveMyPreferences,
+      cancelLabel: T.cancel,
     },
+    categories: makeDefaultCategories(langCode),
+  };
+}
+
+function makeDefaultCategories(langCode = 'en'): CookieCategoryContent {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+  return {
+    necessary: { name: T.essential, description: T.essentialDescription },
+    analytics: { name: T.analytics, description: T.analyticsDescription },
+    marketing: { name: T.marketing, description: T.marketingDescription },
+    preferences: { name: T.preferences, description: T.preferencesDescription },
+    alwaysActiveLabel: T.alwaysActive,
   };
 }
 
@@ -111,8 +126,10 @@ export default function page({ siteId }: { siteId: string }) {
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
   const [openAccordionKey, setOpenAccordionKey] = useState<
-    "cookieNotice" | "preferenceBanner" | null
+    "cookieNotice" | "preferenceBanner" | "cookieCategories" | null
   >("cookieNotice");
+  /** Content sub-tab: "Cookie Notice" vs "Preference Banner" (categories live under Preference). */
+  const [contentTab, setContentTab] = useState<"notice" | "preference">("notice");
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
   const [selectedLangCode, setSelectedLangCode] = useState<string>('en');
@@ -254,6 +271,7 @@ export default function page({ siteId }: { siteId: string }) {
         preferenceMessage: contentSettings.preferenceMessage,
         ccpaOptOutTitle: contentSettings.ccpa.optOutTitle,
         ccpaOptOutMessage: contentSettings.ccpa.optOutMessage,
+        ccpaCancelLabel: contentSettings.ccpa.cancelLabel,
         saveMyPreferencesLabel: contentSettings.ccpa.saveMyPreferencesLabel,
         closeButton: contentSettings.closeButton,
         rejectButton: contentSettings.rejectButton,
@@ -279,6 +297,7 @@ export default function page({ siteId }: { siteId: string }) {
       cookiePolicyLink: contentSettings.cookiePolicyLink,
       cookiePolicyLabel: contentSettings.cookiePolicyLabel,
       privacyPolicyUrl: contentSettings.privacyPolicyUrl,
+      categories: contentSettings.categories,
     };
   }, [activeContentBannerType, contentSettings]);
 
@@ -379,6 +398,26 @@ export default function page({ siteId }: { siteId: string }) {
             optOutMessage: T.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel:
               en.saveMyPreferences || T.saveMyPreferences,
+            cancelLabel: en.cancel || T.cancel,
+          },
+          categories: {
+            necessary: {
+              name: en.essential || T.essential,
+              description: en.essentialDescription || T.essentialDescription,
+            },
+            analytics: {
+              name: en.analytics || T.analytics,
+              description: en.analyticsDescription || T.analyticsDescription,
+            },
+            marketing: {
+              name: en.marketing || T.marketing,
+              description: en.marketingDescription || T.marketingDescription,
+            },
+            preferences: {
+              name: en.preferences || T.preferences,
+              description: en.preferencesDescription || T.preferencesDescription,
+            },
+            alwaysActiveLabel: en.alwaysActive || T.alwaysActive,
           },
         };
         setContentSettings(nextSettings);
@@ -470,7 +509,9 @@ export default function page({ siteId }: { siteId: string }) {
             optOutTitle: TRANSLATIONS.en.optOutPreference,
             optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+            cancelLabel: TRANSLATIONS.en.cancel,
           },
+          categories: makeDefaultCategories('en'),
         });
         const fbDefault: FloatingButtonState = {
           enabled: true,
@@ -618,6 +659,7 @@ export default function page({ siteId }: { siteId: string }) {
           managePreferences: contentSettings.preferenceMessage,
           optOutPreference: contentSettings.ccpa.optOutTitle,
           ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
+          cancel: contentSettings.ccpa.cancelLabel,
           saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
           privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
           closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
@@ -633,6 +675,15 @@ export default function page({ siteId }: { siteId: string }) {
           bannerEntranceAnimation: appearance.layout.animation,
           compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
           isIab: iabEnabled,
+          essential: contentSettings.categories.necessary.name,
+          essentialDescription: contentSettings.categories.necessary.description,
+          analytics: contentSettings.categories.analytics.name,
+          analyticsDescription: contentSettings.categories.analytics.description,
+          marketing: contentSettings.categories.marketing.name,
+          marketingDescription: contentSettings.categories.marketing.description,
+          preferences: contentSettings.categories.preferences.name,
+          preferencesDescription: contentSettings.categories.preferences.description,
+          alwaysActive: contentSettings.categories.alwaysActiveLabel,
         },
       },
     }));
@@ -708,6 +759,7 @@ export default function page({ siteId }: { siteId: string }) {
             managePreferences: contentSettings.preferenceMessage,
             optOutPreference: contentSettings.ccpa.optOutTitle,
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
+            cancel: contentSettings.ccpa.cancelLabel,
             saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
             privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
@@ -724,6 +776,15 @@ export default function page({ siteId }: { siteId: string }) {
             compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
             isIab: iabEnabled,
             ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
+            essential: contentSettings.categories.necessary.name,
+            essentialDescription: contentSettings.categories.necessary.description,
+            analytics: contentSettings.categories.analytics.name,
+            analyticsDescription: contentSettings.categories.analytics.description,
+            marketing: contentSettings.categories.marketing.name,
+            marketingDescription: contentSettings.categories.marketing.description,
+            preferences: contentSettings.categories.preferences.name,
+            preferencesDescription: contentSettings.categories.preferences.description,
+            alwaysActive: contentSettings.categories.alwaysActiveLabel,
           },
         },
       },
@@ -1035,9 +1096,35 @@ export default function page({ siteId }: { siteId: string }) {
                 Reset updates
               </button>
             </div>
+
+            {/* Cookie Notice / Preference Banner tabs */}
+            <div className="w-full max-w-[409px] mx-auto">
+              <div className="flex gap-1 p-1 bg-[#f1f1f3] rounded-lg">
+                {([
+                  { key: "notice", label: "Cookie Notice" },
+                  { key: "preference", label: "Preference Banner" },
+                ] as const).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setContentTab(t.key)}
+                    className={`flex-1 py-2 text-sm rounded-md transition ${
+                      contentTab === t.key
+                        ? "bg-white text-[#111827] shadow-sm font-medium"
+                        : "text-[#6B7280] hover:text-[#111827]"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {contentTab === "notice" && (
             <CookieNoticeAccordion2
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
+              plain
               isOpen={openAccordionKey === "cookieNotice"}
               onToggle={(nextOpen) => setOpenAccordionKey(nextOpen ? "cookieNotice" : null)}
               value={{
@@ -1104,8 +1191,14 @@ export default function page({ siteId }: { siteId: string }) {
                 })
               }
             />
+            )}
+
+            {contentTab === "preference" && (
+            <div className="w-full max-w-[409px] mx-auto bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg overflow-hidden">
+            <div className="px-[18px] pt-5 pb-6 space-y-6">
             <PreferenceBannerAccordion
               variant={activeContentBannerType}
+              bare
               isOpen={openAccordionKey === "preferenceBanner"}
               onToggle={(nextOpen) =>
                 setOpenAccordionKey(nextOpen ? "preferenceBanner" : null)
@@ -1122,6 +1215,7 @@ export default function page({ siteId }: { siteId: string }) {
                       message: contentSettings.ccpa.optOutMessage,
                       saveButtonLabel:
                         contentSettings.ccpa.saveMyPreferencesLabel,
+                      cancelLabel: contentSettings.ccpa.cancelLabel,
                     }
               }
               onChange={(next) =>
@@ -1146,11 +1240,27 @@ export default function page({ siteId }: { siteId: string }) {
                           saveMyPreferencesLabel:
                             next.saveButtonLabel ??
                             prev.ccpa.saveMyPreferencesLabel,
+                          cancelLabel:
+                            next.cancelLabel ?? prev.ccpa.cancelLabel,
                         },
                       }
                 )
               }
             />
+            {activeContentBannerType === "gdpr" && (
+              <div className="pt-5 border-t border-[#ededed]">
+                               <CookieCategoriesAccordion
+                  bare
+                  value={contentSettings.categories}
+                  onChange={(categories) =>
+                    setContentSettings((prev) => ({ ...prev, categories }))
+                  }
+                />
+              </div>
+            )}
+            </div>
+            </div>
+            )}
             {/* Cookie List section hidden
             <CookieListAccordion
               isOpen={openAccordionKey === "cookieList"}
@@ -1164,6 +1274,7 @@ export default function page({ siteId }: { siteId: string }) {
               onChange={setFloatingButton}
             />
 
+            <BannerLinkSection />
 
 </>
         )}
@@ -1250,7 +1361,9 @@ export default function page({ siteId }: { siteId: string }) {
         forceModalView={
           openAccordionKey === "preferenceBanner"
             ? (activeContentBannerType === "ccpa" ? "ccpa-optout" : "gdpr-preferences")
-            : openAccordionKey === "cookieNotice" || openAccordionKey === "cookieList" || openAccordionKey === null
+            : openAccordionKey === "cookieCategories"
+            ? "gdpr-preferences"
+            : openAccordionKey === "cookieNotice" || openAccordionKey === null
             ? "main"
             : undefined
         }

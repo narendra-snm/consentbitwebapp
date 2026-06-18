@@ -23,7 +23,7 @@ export default function GettingStarted({ activeSiteId, isLegacy = false }: { act
 
         <div className="flex items-center gap-3 pt-5.75 mt-auto relative bottom-[-6px]">
           <a
-            href="https://docs.consentbit.com"
+            href="https://www.consentbit.com/help-document"
             target="_blank"
             rel="noreferrer"
             className="bg-[#007AFF] text-white text-sm px-4 py-1.5 rounded-md whitespace-nowrap"

@@ -8,6 +8,10 @@ type AccordionProps = {
   defaultOpen?: boolean;
   isOpen?: boolean;
   onToggle?: (nextOpen: boolean) => void;
+  /** Render as a plain always-open panel (no header/chevron) — used when shown inside a tab. */
+  plain?: boolean;
+  /** Render content only — no card, no header — so it can be embedded inside another panel. */
+  bare?: boolean;
   children: React.ReactNode;
 };
 const ChevronDown = ({ size = 16, className = "" }) => (
@@ -48,10 +52,26 @@ export default function Accordion({
   defaultOpen = true,
   isOpen,
   onToggle,
+  plain = false,
+  bare = false,
   children,
 }: AccordionProps) {
   const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(defaultOpen);
   const open = isOpen ?? uncontrolledIsOpen;
+
+  // Bare mode: content only — caller supplies the surrounding panel.
+  if (bare) {
+    return <>{children}</>;
+  }
+
+  // Plain mode: no header/chevron, content always visible (rendered inside a tab).
+  if (plain) {
+    return (
+      <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg overflow-hidden">
+        <div className="px-[18px] pt-5 pb-6">{children}</div>
+      </div>
+    );
+  }
 
   const setOpen = (next: boolean) => {
     if (isOpen === undefined) setUncontrolledIsOpen(next);

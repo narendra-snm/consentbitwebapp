@@ -11,7 +11,7 @@
  *
  * Set `NEXT_PUBLIC_CONSENTBIT_CDN_ORIGIN` or `NEXT_PUBLIC_PRODUCTION_API_BASE` when falling back.
  */
-const DEFAULT_CDN_ORIGIN = 'https://consent-webapp-manager.web-8fb.workers.dev';
+const DEFAULT_CDN_ORIGIN = 'https://consent-webapp-manager-test.web-8fb.workers.dev';
 
 export function getConsentbitCdnOrigin(): string {
   const fromEnv =
