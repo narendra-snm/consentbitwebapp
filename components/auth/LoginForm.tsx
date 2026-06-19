@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
@@ -11,6 +11,15 @@ import Toast from "./Toast";
 import { analytics } from "@/lib/analytics";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Verification code lifetime — keep in sync with the worker's OTP_TTL_MINUTES (default 10).
+const CODE_TTL_SECONDS = 10 * 60;
+
+function formatTime(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -21,6 +30,40 @@ export function LoginForm() {
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  // Set when a code verification attempt fails — surfaces the resend option even while the countdown runs.
+  const [verifyFailed, setVerifyFailed] = useState(false);
+
+  // Tick the countdown down to zero once a code has been sent.
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setInterval(() => {
+      setSecondsLeft(s => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [secondsLeft]);
+
+  const handleResend = async () => {
+    if (loading || resending || (secondsLeft > 0 && !verifyFailed)) return;
+    setError(null);
+    setNotice(null);
+    setResending(true);
+    try {
+      await requestVerificationCode({ email, purpose: 'login' });
+      setSecondsLeft(CODE_TTL_SECONDS);
+      setVerifyFailed(false);
+      setCode('');
+      setNotice(`A new verification code has been sent to ${email}.`);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to resend code. Please try again.'
+      );
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +90,8 @@ export function LoginForm() {
     try {
       if (step === 1) {
         await requestVerificationCode({ email, purpose: 'login' });
+        setSecondsLeft(CODE_TTL_SECONDS);
+        setVerifyFailed(false);
         setStep(2);
       } else {
         await verifyVerificationCode({ email, purpose: 'login', code });
@@ -55,6 +100,7 @@ export function LoginForm() {
         router.push(nextPath);
       }
     } catch (err: unknown) {
+      if (step === 2) setVerifyFailed(true);
       setError(
         err instanceof Error
           ? err.message
@@ -62,10 +108,6 @@ export function LoginForm() {
           ? 'Failed to send code. Please try again.'
           : 'Invalid or expired code. Please try again.'
       );
-      if (step === 2) {
-        setStep(1);
-        setCode('');
-      }
     } finally {
       setLoading(false);
     }
@@ -101,13 +143,34 @@ export function LoginForm() {
 
           {/* Verification Code */}
           {step === 2 && (
-            <div className="mb-10">
+            <div className="mb-10 flex flex-col items-center">
               <OtpInput
                 value={code}
                 onChange={val => { setCode(val); setError(null); }}
                 length={6}
                 disabled={loading}
               />
+              {notice && (
+                <p className="text-sm text-green-600 text-center mt-4">{notice}</p>
+              )}
+              {secondsLeft > 0 && !verifyFailed ? (
+                <p className="text-sm text-[#262E84] text-center mt-4">
+                  Code expires in {formatTime(secondsLeft)}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={loading || resending}
+                  className="text-sm text-[#262E84] underline mt-4 disabled:opacity-60"
+                >
+                  {resending
+                    ? 'Resending code…'
+                    : verifyFailed
+                    ? 'Verification failed? Resend code'
+                    : 'Code expired? Resend code'}
+                </button>
+              )}
             </div>
           )}
 

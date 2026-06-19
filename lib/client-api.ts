@@ -102,14 +102,17 @@ export async function verifyVerificationCode(payload: {
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
-  // Cache dashboard data so the provider renders instantly after navigation
-  if (data.dashboardInit?.authenticated) {
-    try {
+  try {
+    // Record who just logged in and drop any previous user's cached session so the
+    // dashboard doesn't flash stale data before its own dashboard-init fetch completes.
+    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    sessionStorage.removeItem('cbSessionCache');
+    // Cache dashboard data for instant render only if the worker still returns it
+    // (verify no longer blocks on building it — the dashboard fetches it on mount).
+    if (data.dashboardInit?.authenticated) {
       sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit));
-      // Used by DashboardSessionProvider to avoid showing stale cached data from another user.
-      sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
-    } catch {}
-  }
+    }
+  } catch {}
   return data;
 }
 // Passwordless OTP auth ends here

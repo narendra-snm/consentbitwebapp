@@ -52,12 +52,14 @@ export function CookieNoticeAccordion2({
   bannerType,
   isOpen,
   onToggle,
+  plain,
 }: {
   value?: Partial<CookieNoticeSettings>;
   onChange?: (next: CookieNoticeSettings) => void;
   bannerType: "gdpr" | "ccpa";
   isOpen?: boolean;
   onToggle?: (nextOpen: boolean) => void;
+  plain?: boolean;
 }) {
   const settings: CookieNoticeSettings = {
     title: 'We value your privacy',
@@ -97,7 +99,7 @@ export function CookieNoticeAccordion2({
   return (
     <div className="w-full max-w-[409px] mx-auto">
 
-      <Accordion title="Cookie Notice" isOpen={isOpen} onToggle={onToggle}>
+      <Accordion title="Cookie Notice" isOpen={isOpen} onToggle={onToggle} plain={plain}>
 
        <div className=" pb-6 space-y-6">
             {/* Title Section */}
