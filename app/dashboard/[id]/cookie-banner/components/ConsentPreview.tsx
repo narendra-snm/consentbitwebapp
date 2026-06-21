@@ -134,7 +134,16 @@ export default function ConsentPreview({
     /** CCPA opt-out preference panel (Do Not Share → modal) */
     ccpaOptOutTitle?: string;
     ccpaOptOutMessage?: string;
+    ccpaCancelLabel?: string;
     saveMyPreferencesLabel?: string;
+    /** Editable cookie category names/descriptions shown in the GDPR preferences modal. */
+    categories?: {
+      necessary?: { name?: string; description?: string };
+      analytics?: { name?: string; description?: string };
+      marketing?: { name?: string; description?: string };
+      preferences?: { name?: string; description?: string };
+      alwaysActiveLabel?: string;
+    };
   };
 }) {
   // Site homepage iframe preview intentionally disabled — some sites block embedding (CSP/XFO)
@@ -826,24 +835,24 @@ export default function ConsentPreview({
                       {prefExpanded === 'necessary' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('essential')}
+                      {safeContent.categories?.necessary?.name || t('essential')}
                     </span>
                     <span
-                      style={{ color: colors.textColor }}
-                      className="shrink-0 text-[11px] opacity-90"
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="shrink-0 min-w-0 max-w-[45%] text-right text-[11px] opacity-90"
                     >
-                      {t('alwaysActive')}
+                      {safeContent.categories?.alwaysActiveLabel || t('alwaysActive')}
                     </span>
                   </div>
                   {prefExpanded === 'necessary' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('essentialDescription')}
+                      {safeContent.categories?.necessary?.description || t('essentialDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -862,19 +871,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'marketing' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('marketing')}
+                      {safeContent.categories?.marketing?.name || t('marketing')}
                     </span>
                     {toggleSwitch(prefMarketing, () => setPrefMarketing((v) => !v))}
                   </div>
                   {prefExpanded === 'marketing' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('marketingDescription')}
+                      {safeContent.categories?.marketing?.description || t('marketingDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -893,19 +902,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'analytics' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('analytics')}
+                      {safeContent.categories?.analytics?.name || t('analytics')}
                     </span>
                     {toggleSwitch(prefAnalytics, () => setPrefAnalytics((v) => !v))}
                   </div>
                   {prefExpanded === 'analytics' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('analyticsDescription')}
+                      {safeContent.categories?.analytics?.description || t('analyticsDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -924,19 +933,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'preferences' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('preferences')}
+                      {safeContent.categories?.preferences?.name || t('preferences')}
                     </span>
                     {toggleSwitch(prefUserCategory, () => setPrefUserCategory((v) => !v))}
                   </div>
                   {prefExpanded === 'preferences' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('preferencesDescription')}
+                      {safeContent.categories?.preferences?.description || t('preferencesDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -1036,7 +1045,7 @@ export default function ConsentPreview({
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {t("cancel")}
+                  {content?.ccpaCancelLabel || t("cancel")}
                 </button>
                 <button
                   style={preferenceStyle}

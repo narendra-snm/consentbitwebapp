@@ -38,7 +38,7 @@ export async function serverFetch(
   const fetchOptions: RequestInit = {
     method,
     headers: requestHeaders,
-    signal: AbortSignal.timeout(8000), // 8 s — fail fast instead of hanging
+    signal: AbortSignal.timeout(20000), // 20 s — cold-start worker + D1 auth can exceed 8 s; avoids false "try again" timeouts
   };
   
   if (body) {
