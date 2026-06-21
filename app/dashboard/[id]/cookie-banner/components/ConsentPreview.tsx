@@ -60,6 +60,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 
 export default function ConsentPreview({
   iabEnabled,
+  googleAcEnabled = false,
   previewBannerType,
   siteDomain,
   consentType,
@@ -84,6 +85,8 @@ export default function ConsentPreview({
   initialLayout,
 }: {
   iabEnabled: boolean;
+  /** Google Additional Consent (AC) — adds the Google Partners sub-tab in the IAB Vendors view. */
+  googleAcEnabled?: boolean;
   langCode?: string;
   previewBannerType?: "gdpr" | "ccpa" |'iab';
   siteDomain?: string | null;
@@ -1078,6 +1081,7 @@ export default function ConsentPreview({
   borderRadius: initialLayout?.borderRadius || "12",
   buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
+  isGAC: googleAcEnabled,
 }} />}
         </div>
       {/* Floating logo pinned below the banner in all views — z-10 keeps it under the banner (z-20) */}

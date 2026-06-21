@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
+import { analytics } from "@/lib/analytics";
 
 function makeDefaultContentSettings(langCode = 'en') {
   const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
@@ -116,6 +117,8 @@ export default function page({ siteId }: { siteId: string }) {
   /** Hoisted above `applyPersistSuccessState` so it can be a dep without a TDZ error. */
   const [iabEnabled, setIabEnabled] = useState(false);
   const [iabHydrated, setIabHydrated] = useState(false);
+  /** Google Additional Consent (AC) — only meaningful when IAB is enabled. */
+  const [googleAcEnabled, setGoogleAcEnabled] = useState(false);
 
   useEffect(() => {
     if (!publishError) return;
@@ -173,8 +176,14 @@ export default function page({ siteId }: { siteId: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { loading, authenticated, activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+  const { loading, authenticated, activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh, user } =
     useDashboardSession();
+
+  /** GAC (Google Additional Consent) is gated to the test account until Google certification. */
+  const isGacAllowed = useMemo(
+    () => String(user?.email || "").trim().toLowerCase() === "test@consentbit.com",
+    [user?.email],
+  );
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const currentScriptUrl = useMemo(() => {
     if (!site?.id) return "";
@@ -329,6 +338,8 @@ export default function page({ siteId }: { siteId: string }) {
 
     if (iabEnabled) {
       setIabEnabled(false);
+      // IAB drives Google AC — turning IAB off must turn Google AC off too.
+      setGoogleAcEnabled(false);
       // Clear sessionStorage immediately so it doesn't re-hydrate IAB on the next render.
       try {
         if (typeof window !== "undefined" && iabSessionKey) {
@@ -362,6 +373,10 @@ export default function page({ siteId }: { siteId: string }) {
         if (typeof en.isIab === 'boolean') {
           setIabEnabled(en.isIab);
           setIabHydrated(true);
+        }
+        // Repopulate Google Additional Consent toggle (only valid when IAB on).
+        if (typeof en.isGoogleAc === 'boolean') {
+          setGoogleAcEnabled(en.isGoogleAc && en.isIab === true);
         }
         const cfgTr = customization?.translations?.config || {};
         const langCode = (en.languageSelected as string) || 'en';
@@ -442,6 +457,8 @@ export default function page({ siteId }: { siteId: string }) {
         // not from the session-cached site object which may lag behind Webflow app changes).
         const freshIabActivated = res?.iabActivated === true;
         setIabEnabled(freshIabActivated);
+        // Google AC depends on IAB — force it off whenever IAB is not active.
+        if (!freshIabActivated) setGoogleAcEnabled(false);
         try {
           if (typeof window !== "undefined" && iabSessionKey) {
             window.sessionStorage.setItem(iabSessionKey, freshIabActivated ? "1" : "0");
@@ -675,6 +692,7 @@ export default function page({ siteId }: { siteId: string }) {
           bannerEntranceAnimation: appearance.layout.animation,
           compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
           isIab: iabEnabled,
+          isGoogleAc: isGacAllowed && iabEnabled && googleAcEnabled,
           essential: contentSettings.categories.necessary.name,
           essentialDescription: contentSettings.categories.necessary.description,
           analytics: contentSettings.categories.analytics.name,
@@ -697,6 +715,8 @@ export default function page({ siteId }: { siteId: string }) {
     currentRegulationSnapshot,
     floatingButton,
     iabEnabled,
+    googleAcEnabled,
+    isGacAllowed,
     refresh,
   ]);
 
@@ -776,6 +796,8 @@ export default function page({ siteId }: { siteId: string }) {
             compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
             isIab: iabEnabled,
             ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
+            isGoogleAc: isGacAllowed && iabEnabled && googleAcEnabled,
+            googleAdditionalConsent: isGacAllowed && iabEnabled && googleAcEnabled,
             essential: contentSettings.categories.necessary.name,
             essentialDescription: contentSettings.categories.necessary.description,
             analytics: contentSettings.categories.analytics.name,
@@ -820,6 +842,13 @@ export default function page({ siteId }: { siteId: string }) {
       setSaveSuccess(false);
       await persistBannerCustomization();
       setPublishSuccess(true);
+      // PostHog: banner went live from the webapp (lifecycle: install_verified → published).
+      // Mirrors the Webflow backend handler, which fires both events on save.
+      try {
+        const phBannerType = iabEnabled ? "iab" : consentType;
+        analytics.bannerCustomized(String(site.id), site.domain ?? undefined, phBannerType);
+        analytics.bannerPublished(String(site.id), site.domain ?? undefined, phBannerType);
+      } catch { /* analytics must never block publish */ }
     } catch (e) {
       setPublishError("Something went wrong while publishing. Please try again.");
     } finally {
@@ -1022,6 +1051,9 @@ export default function page({ siteId }: { siteId: string }) {
           }
           setIabHydrated(true);
 
+          // Google AC is only valid while IAB is on — clear it when turning IAB off.
+          if (iabEnabled) setGoogleAcEnabled(false);
+
           setIabEnabled((prev) =>{
 
              !prev && updateSiteBannerSettings({
@@ -1070,7 +1102,7 @@ export default function page({ siteId }: { siteId: string }) {
         To enable this feature, please switch to the Essential or Growth plan.
       </p>
       <button
-        onClick={() => { setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
+        onClick={() => { analytics.upgradeCtaClicked("cookie_banner_iab", String(siteId), resolvedPlanId); setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
         className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
       >
         Get Pro Plan
@@ -1082,9 +1114,50 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   </div>
 </div>
+
+{/* Google Additional Consent Card — gated to the test account until Google certification.
+    Visible always (for that account), toggleable only when IAB is on. */}
+{isGacAllowed && (
+<div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
+  <p className="font-semibold text-base text-black mb-4">
+    Google Additional Consent
+  </p>
+
+  <div className="flex items-center justify-between">
+    <p className="text-xs text-black tracking-tight">
+      {iabEnabled
+        ? "Enable Google Additional Consent (AC) alongside IAB TCF"
+        : "Enable IAB TCF Support first to use Google Additional Consent"}
+    </p>
+
+    {/* Toggle — locked unless IAB is enabled */}
+    <div
+      className={`relative ${
+        iabEnabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+      }`}
+      onClick={() => {
+        if (!iabEnabled) return;
+        setGoogleAcEnabled((prev) => !prev);
+      }}
+    >
+      <div
+        className={`h-[22px] w-[42px] rounded-full transition ${
+          iabEnabled && googleAcEnabled ? "bg-[#007aff]" : "bg-[#d8d8d8]"
+        }`}
+      ></div>
+
+      <div
+        className={`absolute top-[2px] rounded-full w-[18px] h-[18px] bg-white transition ${
+          iabEnabled && googleAcEnabled ? "left-[21px]" : "left-[3px]"
+        }`}
+      ></div>
+    </div>
+  </div>
+</div>
+)}
           </div>
         )}
-        {active === "Content" && (
+         {active === "Content" && (
           <>
             <div className="flex justify-end mb-3">
               <button
@@ -1331,6 +1404,7 @@ export default function page({ siteId }: { siteId: string }) {
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
       {!customizationLoading && <ConsentPreview
       iabEnabled={iabEnabled}
+      googleAcEnabled={isGacAllowed && iabEnabled && googleAcEnabled}
         key={previewRevision}
         langCode={selectedLangCode}
         previewBannerType={previewBannerType}

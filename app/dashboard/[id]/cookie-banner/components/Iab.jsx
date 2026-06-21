@@ -19,6 +19,9 @@ const defaultStyleConfig = {
   // Preview-only: allow the outer editor to pass its floating-button state so we can avoid overlap.
   floatingButtonEnabled: false,
   floatingButtonPosition: "left",
+  // Google Additional Consent (AC) layer — when true, the Vendors tab gains a
+  // "Google Partners" sub-tab listing Google-certified additional ad partners.
+  isGAC: false,
 };
 
 function entranceAnimStyle(anim, opts = {}) {
@@ -211,6 +214,18 @@ const purposesData = [
       },
     ],
   },
+];
+
+// ─── Google Additional Consent (AC) — sample ATP partners ────────────────────
+// Preview-only sample of Google-certified additional advertising partners (ATP).
+// At runtime the live banner fetches the real list from Google's ATP feed; here
+// we show a representative sample so the GAC section renders in the preview.
+const sampleAtpProviders = [
+  { id: 1, name: "Google Advertising Products", policyUrl: "https://policies.google.com/privacy" },
+  { id: 2552, name: "Outbrain UK Ltd", policyUrl: "https://www.outbrain.com/legal/privacy" },
+  { id: 2657, name: "Index Exchange, Inc.", policyUrl: "https://www.indexexchange.com/privacy/" },
+  { id: 3370, name: "Teads", policyUrl: "https://www.teads.com/privacy-policy/" },
+  { id: 3052, name: "Sharethrough, Inc.", policyUrl: "https://www.sharethrough.com/privacy-center/" },
 ];
 
 // ─── Radii Helper ────────────────────────────────────────────────────────────
@@ -627,10 +642,63 @@ function PurposeSection({ section, s, radii, isMobile = false }) {
   );
 }
 
+// ─── Google Partner Item (GAC ATP card) ─────────────────────────────────────
+// Mirrors the runtime ATP card: name, "AC ID", a Consent switch, and an
+// optional Privacy policy link. Only rendered when Google AC is enabled.
+function GooglePartnerItem({ provider, s, radii }) {
+  const [consent, setConsent] = useState(false);
+  return (
+    <div
+      style={{
+        padding: "16px",
+        border: "1px solid #f0f0f0",
+        borderRadius: radii.brSm,
+        background: "#fafafa",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "16px",
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: "15px", color: s.headingColor, marginBottom: "4px" }}>
+            {provider.name}
+          </div>
+          <div style={{ fontSize: "12px", color: s.textColor, fontFamily: "monospace" }}>
+            AC ID: {provider.id}
+          </div>
+        </div>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 500, color: s.textColor }}>Consent</span>
+          <Switch checked={consent} onChange={setConsent} accent={s.SecButtonColor} size="sm" />
+        </div>
+      </div>
+      {provider.policyUrl && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "14px", fontSize: "12.5px", marginTop: "8px" }}>
+          <a
+            href={provider.policyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#007AFF", textDecoration: "none", fontWeight: 500 }}
+          >
+            Privacy policy
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Preference Modal ───────────────────────────────────────────────────────
 function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device = "desktop" }) {
   const isMobile = device === "mobile";
   const [activeTab, setActiveTab] = useState("cookie");
+  // GAC: which vendor sub-tab is shown (IAB vendor list vs Google Partners list).
+  const [vendorSubTab, setVendorSubTab] = useState("iab");
   const tabs = [
     { id: "cookie", label: "Cookie Categories" },
     { id: "purpose", label: "Purposes & Features" },
@@ -894,6 +962,40 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
               >
                 Vendors
               </p>
+
+              {/* GAC: sub-tab switcher — IAB Vendors | Google Partners */}
+              {s.isGAC && (
+                <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+                  {[
+                    { id: "iab", label: "IAB Vendors" },
+                    { id: "google", label: `Google Partners (${sampleAtpProviders.length})` },
+                  ].map((tab) => {
+                    const active = vendorSubTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setVendorSubTab(tab.id)}
+                        style={{
+                          padding: "8px 16px",
+                          border: "none",
+                          background: "transparent",
+                          color: s.textColor,
+                          cursor: "pointer",
+                          fontSize: "13px",
+                          fontWeight: active ? 700 : 500,
+                          textDecoration: active ? "underline" : "none",
+                          textUnderlineOffset: "3px",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Preview only — vendor list intentionally left empty */}
               <div style={{ position: "relative", marginBottom: "20px" }}>
                 <input
@@ -926,18 +1028,43 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                   🔍
                 </div>
               </div>
-              <p
-                style={{
-                  textAlign: "center",
-                  color: s.textColor,
-                  padding: "40px",
-                  fontStyle: "italic",
-                  fontSize: "13px",
-                  opacity: 0.5,
-                }}
-              >
-                Vendor list loads at runtime.
-              </p>
+
+              {/* GAC Google Partners sub-tab — list of additional ad partners (ATP) */}
+              {s.isGAC && vendorSubTab === "google" ? (
+                <div>
+                  <p
+                    style={{
+                      fontSize: "12px",
+                      color: s.textColor,
+                      opacity: 0.85,
+                      lineHeight: 1.6,
+                      margin: "0 0 12px 0",
+                      textAlign: s.textAlign,
+                    }}
+                  >
+                    These Google-certified partners are not on the IAB vendor list. Choose whether they
+                    may use your data.
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                    {sampleAtpProviders.map((p) => (
+                      <GooglePartnerItem key={p.id} provider={p} s={s} radii={radii} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: s.textColor,
+                    padding: "40px",
+                    fontStyle: "italic",
+                    fontSize: "13px",
+                    opacity: 0.5,
+                  }}
+                >
+                  Vendor list loads at runtime.
+                </p>
+              )}
             </div>
           )}
         </div>

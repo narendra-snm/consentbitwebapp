@@ -18,6 +18,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
 
@@ -441,6 +442,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_plan_label", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
@@ -464,6 +466,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_upgrade_button", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
