@@ -60,6 +60,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 
 export default function ConsentPreview({
   iabEnabled,
+  googleAcEnabled = false,
   previewBannerType,
   siteDomain,
   consentType,
@@ -84,6 +85,8 @@ export default function ConsentPreview({
   initialLayout,
 }: {
   iabEnabled: boolean;
+  /** Google Additional Consent (AC) — adds the Google Partners sub-tab in the IAB Vendors view. */
+  googleAcEnabled?: boolean;
   langCode?: string;
   previewBannerType?: "gdpr" | "ccpa" |'iab';
   siteDomain?: string | null;
@@ -616,8 +619,8 @@ export default function ConsentPreview({
             // Banner card — shared across all layouts
             // Offset banner from floating trigger on the same side — mirrors CDN applyInitialBannerFloatingGutter.
             const isMobile = device === 'mobile';
-            // Mobile preview: do not render the floating icon and do not reserve any gutter for it.
-            const floatingEnabledForPreview = floatingButton.enabled && !isMobile;
+            // Mobile preview: show floating icon below the banner (mirroring CDN mobile behavior).
+            const floatingEnabledForPreview = floatingButton.enabled;
             const floatLeft = floatingEnabledForPreview && floatingButton.position === 'left';
             const floatRight = floatingEnabledForPreview && floatingButton.position === 'right';
             const bannerOnLeft = layoutPos !== 'banner' && (layoutPos === 'bottom-center' || layoutAlign === 'bottom-left');
@@ -637,9 +640,8 @@ export default function ConsentPreview({
                 className={`shadow-lg box-border relative rounded-md border border-[#e2e8f0] p-4 ${initialBannerShell}`}
                 style={{
                   backgroundColor: colors.bannerBg,
-                  // On mobile preview keep the same rounding as the banner settings.
-                  // Width/position is controlled by the wrapper below.
-                  borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
+                  // Mobile: no border radius (matches CDN border-radius:0 override).
+                  borderRadius: isMobile ? 0 : `${initialLayout?.borderRadius ?? 12}px`,
                   // Width is controlled by the wrapper div; bannerCard just fills it.
                   width: '100%',
                   minWidth: (isMobile || layoutPos === 'banner') ? undefined : '280px',
@@ -672,10 +674,10 @@ export default function ConsentPreview({
                   ) : null}
                 </div>
                 {selectedBannerType === 'gdpr' ? (
-                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-col w-full' : 'flex-nowrap justify-end'}`}>
+                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-row flex-nowrap w-full' : 'flex-nowrap justify-end'}`}>
                     {safeContent.customizeButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                         onClick={openPreferences}
                         type="button"
                         style={preferenceStyle}
@@ -685,7 +687,7 @@ export default function ConsentPreview({
                     ) : null}
                     {safeContent.rejectButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                         type="button"
                         style={acceptRejectStyle}
                       >
@@ -693,7 +695,7 @@ export default function ConsentPreview({
                       </button>
                     ) : null}
                     <button
-                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'w-full' : 'whitespace-nowrap shrink-0'}`}
+                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                       type="button"
                       style={acceptRejectStyle}
                     >
@@ -704,14 +706,14 @@ export default function ConsentPreview({
               </div>
             );
 
-            // Full-width banner: banner renders at the bottom edge; pad the side the floating logo is on.
+            // Full-width banner: sits at bottom, banner z-20 covers icon z-10.
             if (layoutPos === 'banner') {
               const bannerPad = floatingEnabledForPreview
                 ? floatingButton.position === 'right' ? 'pr-14' : 'pl-14'
                 : '';
               return (
-                <div key={bannerAnimation} className={`absolute bottom-0 left-0 right-0 ${bannerPad}`}>
-                  <div className="relative z-10">
+                <div key={bannerAnimation} className={`absolute bottom-0 left-0 right-0 z-20 ${bannerPad}`}>
+                  <div className="relative">
                     {bannerCard}
                   </div>
                 </div>
@@ -723,8 +725,7 @@ export default function ConsentPreview({
             const floatGutter = 56;
             const bannerPosStyle: React.CSSProperties = (() => {
               if (mobileFullWidth) {
-                // On phone preview keep banner inside the device frame (no overflow).
-                return { position: 'absolute', bottom: 12, left: 0, right: 0 };
+                return { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 };
               }
               if (layoutPos === 'banner') {
                 return { position: 'absolute', bottom: 0, left: 0, right: 0 };
@@ -760,7 +761,7 @@ export default function ConsentPreview({
             return (
               <div
                 key={bannerAnimation}
-                style={{ ...bannerPosStyle, width: bannerWidth }}
+                style={{ ...bannerPosStyle, width: bannerWidth, zIndex: 20 }}
               >
                 {bannerCard}
               </div>
@@ -1080,12 +1081,15 @@ export default function ConsentPreview({
   borderRadius: initialLayout?.borderRadius || "12",
   buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
+  isGAC: googleAcEnabled,
 }} />}
         </div>
-      {/* Floating logo pinned to the preview frame corner — mirrors CDN position:fixed; bottom:16px; left/right:16px */}
-      {floatingButton.enabled && device !== "mobile" ? (
+      {/* Floating logo pinned below the banner in all views — z-10 keeps it under the banner (z-20) */}
+      {floatingButton.enabled ? (
         <div
-          className={`absolute bottom-4 z-20 pointer-events-none ${
+          className={`absolute pointer-events-none z-10 ${
+            device === 'mobile' ? 'bottom-2' : 'bottom-4'
+          } ${
             floatingButton.position === 'right' ? 'right-4' : 'left-4'
           }`}
         >

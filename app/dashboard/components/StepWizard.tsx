@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { PricingTable } from "./PricingTable";
 import { firstSetup, verifyScript, checkDomainAvailability } from "@/lib/client-api";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import { analytics } from "@/lib/analytics";
 
 export default function StepWizard({
   userName,
@@ -403,6 +404,8 @@ function StepThree({
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
+  /** Set when the user copies the install code, so we can report copy→verify duration. */
+  const copyTimestampRef = useRef<number | null>(null);
 
   const scriptUrl = resolveInstallScriptUrl(
     siteData?.scriptUrl,
@@ -441,6 +444,10 @@ function StepThree({
       });
       if (res.found) {
         setVerified(true);
+        const secondsFromCopy = copyTimestampRef.current
+          ? Math.round((Date.now() - copyTimestampRef.current) / 1000)
+          : undefined;
+        analytics.installationVerified(url, siteData?.siteId, secondsFromCopy);
       } else {
         if (typeof window !== 'undefined' && res && typeof res === 'object' && 'debug' in res && res.debug) {
         }
@@ -455,6 +462,8 @@ function StepThree({
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeSnippet);
+    copyTimestampRef.current = Date.now();
+    analytics.installCodeCopied(siteData?.domain || publicUrl, siteData?.siteId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
+import { analytics } from "@/lib/analytics";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -94,6 +95,8 @@ export function LoginForm() {
         setStep(2);
       } else {
         await verifyVerificationCode({ email, purpose: 'login', code });
+        analytics.identify(email, '');
+        analytics.userLoggedIn(email);
         router.push(nextPath);
       }
     } catch (err: unknown) {

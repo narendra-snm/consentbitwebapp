@@ -98,7 +98,7 @@ const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 
 const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
+// console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
 const stripePromise = _pk ? loadStripe(_pk) : null
 
 const STRIPE_STYLE = {

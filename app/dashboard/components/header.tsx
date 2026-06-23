@@ -20,6 +20,7 @@ import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
+import { analytics } from "@/lib/analytics";
 
 /** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
 const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain", "post-setup"]);
@@ -441,6 +442,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_plan_label", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
@@ -464,6 +466,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_upgrade_button", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
