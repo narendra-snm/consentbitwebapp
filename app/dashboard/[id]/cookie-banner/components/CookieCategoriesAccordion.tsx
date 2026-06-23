@@ -3,8 +3,8 @@
 import Accordion from "./ui/Accordion";
 
 // Keep parity with CDN/embed limits so the live banner doesn't truncate unexpectedly.
-const NAME_LIMIT = 40;
-const DESC_LIMIT = 400;
+const NAME_LIMIT = 20;
+const DESC_LIMIT = 300;
 const LABEL_LIMIT = 20;
 
 function clampLen(value: string, max: number): string {
