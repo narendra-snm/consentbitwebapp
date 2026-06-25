@@ -371,6 +371,7 @@ interface CheckoutFormProps {
   domain: string;
   platform: string;
   wfSiteId?: string;
+  version?: string;
   initBillingEmail?: string;
   planId: PlanId;
   interval: Interval;
@@ -383,6 +384,7 @@ function CheckoutForm({
   domain: initDomain,
   platform,
   wfSiteId,
+  version,
   initBillingEmail = '',
   planId,
   interval,
@@ -488,7 +490,7 @@ function CheckoutForm({
           siteName: cleanedDomain,
           planId,
           interval,
-          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
+          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
         }),
       });
 
@@ -526,7 +528,7 @@ function CheckoutForm({
             siteName: cleanedDomain,
             planId,
             interval,
-            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
           }),
         });
 
@@ -960,6 +962,9 @@ function CheckoutPageInner() {
   const domain = cleanDomain(tokenPayload.domain ?? params.get('domain') ?? '');
   const platform = tokenPayload.platform ?? params.get('platform') ?? '';
   const wfSiteId = tokenPayload.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+  // App version (Webflow v2 onboarding passes version=v2). Defaults to v2 for
+  // the Webflow flow when not explicitly provided.
+  const version = tokenPayload.version ?? params.get('version') ?? '';
   const initBillingEmail = (tokenPayload.billingEmail ?? '').trim().toLowerCase();
 
   return (
@@ -982,6 +987,7 @@ function CheckoutPageInner() {
                   domain={domain}
                   platform={platform}
                   wfSiteId={wfSiteId}
+                  version={version}
                   initBillingEmail={initBillingEmail}
                   planId={planId}
                   interval={interval}
