@@ -950,6 +950,16 @@ function CheckoutPageInner() {
       .catch(() => setTokenPayload({}));
   }, [rawT]);
 
+  // Plan + interval can arrive in the token body (sent as a POST body, not URL
+  // params). Apply them once the token resolves; query params remain a fallback.
+  useEffect(() => {
+    if (!tokenPayload) return;
+    const tp = tokenPayload.plan;
+    if (tp && VALID_PLANS.has(tp as PlanId)) setPlanId(tp as PlanId);
+    const ti = tokenPayload.interval;
+    if (ti === 'yearly' || ti === 'monthly') setInterval(ti);
+  }, [tokenPayload]);
+
   if (tokenPayload === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
