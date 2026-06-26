@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
+import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
 import { analytics } from "@/lib/analytics";
@@ -35,6 +36,9 @@ export function LoginForm() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   // Set when a code verification attempt fails — surfaces the resend option even while the countdown runs.
   const [verifyFailed, setVerifyFailed] = useState(false);
+
+  // Move any cookie-scan id handed off from the scanner page into sessionStorage.
+  useEffect(() => { captureScanId(); }, []);
 
   // Tick the countdown down to zero once a code has been sent.
   useEffect(() => {
@@ -94,7 +98,8 @@ export function LoginForm() {
         setVerifyFailed(false);
         setStep(2);
       } else {
-        await verifyVerificationCode({ email, purpose: 'login', code });
+        await verifyVerificationCode({ email, purpose: 'login', code, scanId: getScanId() });
+        clearScanId();
         analytics.identify(email, '');
         analytics.userLoggedIn(email);
         router.push(nextPath);
