@@ -89,6 +89,7 @@ export async function verifyVerificationCode(payload: {
   email: string;
   purpose: 'login' | 'signup';
   code: string;
+  scanId?: string;
 }) {
   const res = await fetch('/api/auth/verify-code', {
     method: 'POST',
@@ -98,6 +99,8 @@ export async function verifyVerificationCode(payload: {
       email: payload.email.trim().toLowerCase(),
       purpose: payload.purpose,
       code: payload.code.trim(),
+      // Optional cookie-scan id handed off from the scanner landing page.
+      ...(payload.scanId ? { scanId: payload.scanId } : {}),
     }),
   });
   const data = await parseApiResponse(res);

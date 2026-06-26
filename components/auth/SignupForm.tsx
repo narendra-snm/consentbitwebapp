@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
+import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
 import { analytics } from "@/lib/analytics";
@@ -44,6 +45,9 @@ export function SignupForm() {
   const [pendingOtp, setPendingOtp] = useState(false);
 
   useEffect(() => setHydrated(true), []);
+
+  // Move any cookie-scan id handed off from the scanner page into sessionStorage.
+  useEffect(() => { captureScanId(); }, []);
 
   // Derive pendingOtp from sessionStorage after hydration (production-safe).
   useEffect(() => {
@@ -188,7 +192,8 @@ export function SignupForm() {
         // Persist step in URL so the OTP screen reliably shows (even after reload)
         router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}${debugEnabled ? "&debug=1" : ""}`);
       } else {
-        await verifyVerificationCode({ email, purpose: 'signup', code });
+        await verifyVerificationCode({ email, purpose: 'signup', code, scanId: getScanId() });
+        clearScanId();
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         setPendingOtp(false);
         analytics.accountCreated(email.trim().toLowerCase(), name.trim());
