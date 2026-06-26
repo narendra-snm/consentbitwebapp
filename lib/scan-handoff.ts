@@ -17,11 +17,34 @@ function readCookie(name: string): string | null {
 }
 
 /**
- * Move the bridging `cb_scan_id` cookie into sessionStorage and delete it.
- * Safe to call on every mount — no-ops if neither source has a value.
+ * Capture a handed-off scan id into sessionStorage. Two carriers are supported:
+ *  1. `?scanId=` / `?reportId=` URL param — works across ANY domain (used when the
+ *     scanner and the webapp are on different origins, e.g. the *.pages.dev test site).
+ *  2. `cb_scan_id` cookie scoped to `.consentbit.com` — used in production where the
+ *     scanner and accounts.consentbit.com share the parent domain.
+ *
+ * Safe to call on every mount — no-ops if no carrier has a value.
  */
 export function captureScanId(): void {
   if (typeof window === 'undefined') return;
+
+  // 1. URL param (cross-domain safe).
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromParam = params.get('scanId') || params.get('reportId');
+    if (fromParam) {
+      sessionStorage.setItem(KEY, fromParam);
+      // Strip it from the URL so a refresh / share doesn't re-trigger it.
+      params.delete('scanId');
+      params.delete('reportId');
+      const qs = params.toString();
+      const clean = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
+      window.history.replaceState({}, '', clean);
+      return;
+    }
+  } catch {}
+
+  // 2. Cross-subdomain cookie (production).
   const fromCookie = readCookie(KEY);
   if (fromCookie) {
     try { sessionStorage.setItem(KEY, fromCookie); } catch {}
