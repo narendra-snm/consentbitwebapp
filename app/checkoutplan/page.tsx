@@ -478,7 +478,7 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
-      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+      const res = await fetch('https://consent-webapp-manager-test.web-8fb.workers.dev/api/custom-checkout', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -516,7 +516,7 @@ function CheckoutForm({
           return;
         }
 
-        const res2 = await fetch('/api/custom-checkout', {
+        const res2 = await fetch('https://consent-webapp-manager-test.web-8fb.workers.dev/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
