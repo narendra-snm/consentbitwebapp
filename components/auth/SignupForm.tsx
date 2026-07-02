@@ -6,10 +6,21 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
+import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
+import { analytics } from "@/lib/analytics";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Verification code lifetime — keep in sync with the worker's OTP_TTL_MINUTES (default 10).
+const CODE_TTL_SECONDS = 10 * 60;
+
+function formatTime(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export function SignupForm() {
   const router = useRouter();
@@ -20,6 +31,11 @@ export function SignupForm() {
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  // Set when a code verification attempt fails — surfaces the resend option even while the countdown runs.
+  const [verifyFailed, setVerifyFailed] = useState(false);
   const otpWrapRef = useRef<HTMLDivElement | null>(null);
   const urlWantsVerify = (searchParams?.get("step") || "").toLowerCase() === "verify";
   const debugEnabled = (searchParams?.get("debug") || "") === "1";
@@ -29,6 +45,9 @@ export function SignupForm() {
   const [pendingOtp, setPendingOtp] = useState(false);
 
   useEffect(() => setHydrated(true), []);
+
+  // Move any cookie-scan id handed off from the scanner page into sessionStorage.
+  useEffect(() => { captureScanId(); }, []);
 
   // Derive pendingOtp from sessionStorage after hydration (production-safe).
   useEffect(() => {
@@ -46,6 +65,9 @@ export function SignupForm() {
         setPendingOtp(false);
         return;
       }
+      // Restore the countdown from when the code was actually sent.
+      const elapsed = Math.floor((Date.now() - ts) / 1000);
+      setSecondsLeft(Math.max(0, CODE_TTL_SECONDS - elapsed));
       setPendingOtp(true);
       if (parsed?.email && !email) setEmail(String(parsed.email));
       if (parsed?.name && !name) setName(String(parsed.name));
@@ -77,6 +99,15 @@ export function SignupForm() {
     if (pendingOtp && !urlWantsVerify) setDebugLine("restored step=2 from sessionStorage");
   }, [debugEnabled, hydrated, pendingOtp, urlWantsVerify]);
 
+  // Tick the countdown down to zero once a code has been sent.
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setInterval(() => {
+      setSecondsLeft(s => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [secondsLeft]);
+
   useEffect(() => {
     if (effectiveStep !== 2) return;
     // Ensure the OTP UI is visible even on small viewports
@@ -85,10 +116,36 @@ export function SignupForm() {
     }, 0);
   }, [effectiveStep]);
 
+  async function handleResend() {
+    if (loading || resending || (secondsLeft > 0 && !verifyFailed)) return;
+    setError(null);
+    setNotice(null);
+    setResending(true);
+    try {
+      await requestVerificationCode({ name, email, purpose: 'signup' });
+      try {
+        sessionStorage.setItem(
+          PENDING_KEY,
+          JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim(), ts: Date.now() }),
+        );
+        setPendingOtp(true);
+      } catch {}
+      setSecondsLeft(CODE_TTL_SECONDS);
+      setVerifyFailed(false);
+      setCode('');
+      setNotice(`A new verification code has been sent to ${email}.`);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to resend code. Please try again.'
+      );
+    } finally {
+      setResending(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      console.log('[SignupForm] submit', { effectiveStep, emailPresent: Boolean(email), namePresent: Boolean(name) });
     } catch {}
     if (debugEnabled) setDebugLine(`submit fired; step=${effectiveStep}; urlStep=${urlWantsVerify ? "verify" : "none"}`);
 
@@ -120,9 +177,10 @@ export function SignupForm() {
       if (effectiveStep === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
         try {
-          console.log('[SignupForm] request-code ok, switching to step=verify');
         } catch {}
         if (debugEnabled) setDebugLine(`request-code ok; navigating to step=verify`);
+        setSecondsLeft(CODE_TTL_SECONDS);
+        setVerifyFailed(false);
         setStep(2);
         try {
           sessionStorage.setItem(
@@ -134,15 +192,22 @@ export function SignupForm() {
         // Persist step in URL so the OTP screen reliably shows (even after reload)
         router.replace(`/signup?step=verify&email=${encodeURIComponent(email.trim().toLowerCase())}&name=${encodeURIComponent(name.trim())}${debugEnabled ? "&debug=1" : ""}`);
       } else {
-        await verifyVerificationCode({ email, purpose: 'signup', code });
+        await verifyVerificationCode({ email, purpose: 'signup', code, scanId: getScanId() });
+        clearScanId();
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         setPendingOtp(false);
+        analytics.accountCreated(email.trim().toLowerCase(), name.trim());
+        // Completing signup also starts a logged-in session, so fire user_logged_in too.
+        // Without this, the account_created → user_logged_in funnel step drops every
+        // first-time user (they'd otherwise only log in explicitly on a later visit).
+        analytics.userLoggedIn(email.trim().toLowerCase());
+        analytics.identify(email.trim().toLowerCase(), name.trim());
         router.push('/dashboard');
       }
     } catch (err: unknown) {
       try {
-        console.log('[SignupForm] submit failed', err);
       } catch {}
+      if (effectiveStep === 2) setVerifyFailed(true);
       const msg =
         err instanceof Error
           ? err.message
@@ -202,13 +267,34 @@ export function SignupForm() {
 
         {/* Verification Code */}
         {effectiveStep === 2 && (
-          <div ref={otpWrapRef} className="mb-10">
+          <div ref={otpWrapRef} className="mb-10 flex flex-col items-center">
             <OtpInput
               value={code}
               onChange={val => { setCode(val); setError(null); }}
               length={6}
               disabled={loading}
             />
+            {notice && (
+              <p className="text-sm text-green-600 text-center mt-4">{notice}</p>
+            )}
+            {secondsLeft > 0 && !verifyFailed ? (
+              <p className="text-sm text-[#262E84] text-center mt-4">
+                Code expires in {formatTime(secondsLeft)}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={loading || resending}
+                className="text-sm text-[#262E84] underline mt-4 disabled:opacity-60"
+              >
+                {resending
+                  ? 'Resending code…'
+                  : verifyFailed
+                  ? 'Verification failed? Resend code'
+                  : 'Code expired? Resend code'}
+              </button>
+            )}
           </div>
         )}
 

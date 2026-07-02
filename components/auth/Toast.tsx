@@ -21,7 +21,7 @@ export default function Toast({
   isVisible,
   onClose,
   type = "error",
-  autoDismiss = false,
+  autoDismiss = true,
   duration = 3000,
 }: ToastProps) {
   const isError = type === "error";

@@ -6,10 +6,10 @@ import { ConsentLogsDashboard}  from './ConsentLogsDashboard';
 
 function pickSiteLabel(site: { name?: string; domain?: string } | null | undefined) {
   if (!site) return '';
-  const name = typeof site.name === 'string' ? site.name.trim() : '';
   const domain = typeof site.domain === 'string' ? site.domain.trim() : '';
-  // Match SiteSummaryCards: friendly name first, then domain
-  return name || domain || '';
+  const name = typeof site.name === 'string' ? site.name.trim() : '';
+  // Prefer the actual domain (e.g. biaw.com) over the Webflow shortName (e.g. biaw-stage)
+  return domain || name || '';
 }
 
 export default function ConsentLogsPage() {
@@ -29,8 +29,18 @@ export default function ConsentLogsPage() {
     const label = pickSiteLabel(resolved as { name?: string; domain?: string });
     return label || '—';
   }, [loading, resolved]);
+  const isLegacy = !!(resolved as any)?.isLegacy;
+  const platform = (resolved as any)?.platform ?? null;
+  const platformSiteId = (resolved as any)?.platformSiteId ?? (resolved as any)?.platformsiteid ?? null;
+  // Migrated webapp users (isLegacy + platformSiteId) write new consents to the Consent table
+  // using their webapp siteId — read from the new API, not the legacy store.
+  const siteDomainRaw = (resolved as any)?.domain ?? (resolved as any)?.Domain ?? '';
+  const effectiveSiteId = String(siteId);
 
   if (!siteId) return null;
 
-  return <ConsentLogsDashboard siteId={String(siteId)} siteDomain={siteDomain} />;
+  // Pass raw isLegacy — ConsentLogsDashboard uses the selected date to decide KV vs D1:
+  // legacy + date ≤ June 2026 → legacy store (Framer KV for framer platform, KV/R2 otherwise),
+  // legacy + date > June 2026 → D1.
+  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />;
 }

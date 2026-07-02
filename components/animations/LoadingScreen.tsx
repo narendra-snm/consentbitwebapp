@@ -49,7 +49,7 @@ export default function LoadingScreen() {
         }
       `}</style>
 
-      <div className="fixed bg-[#E6F1FD] inset-0 z-50 flex h-[100vh] w-[100vw] items-center justify-center overflow-hidden rounded-[24px]">
+      <div className="fixed bg-[#E6F1FD] inset-0 z-50 flex h-[100vh] w-[100vw] items-center justify-center overflow-hidden ">
         <div className="flex flex-col items-center gap-6">
           <div className="relative h-[110px] w-[110px]">
             {/* Outer ring gradient */}

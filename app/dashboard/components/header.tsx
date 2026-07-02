@@ -18,6 +18,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
 
@@ -81,6 +82,7 @@ export default function Header() {
   }, [stripeReturnPending]);
   const [hydrated, setHydrated] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<'pageview' | 'scan'>('pageview');
   const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
   const [pageviewUsage, setPageviewUsage] = useState<{ used: number; limit: number } | null>(null);
   const [scanOverLimit, setScanOverLimit] = useState(false);
@@ -128,7 +130,7 @@ export default function Header() {
       sites,
       effectivePlanId,
     });
-
+console.log("Resolved plan key:", { resolvedPlanKey, activeSite, effectivePlanId });
     // `DashboardSessionProvider` stores empty `effectivePlanId` for free sites (`pickPlanIdFromSite`
     // returns null for free). Treat unknown/empty as free once init finished — same as SideBar / upgrade page.
     const waitingForSiteSync =
@@ -198,13 +200,13 @@ export default function Header() {
       title: 'Pageview limit reached',
       desc: `${pageviewUsage.used.toLocaleString()} / ${pageviewUsage.limit.toLocaleString()} pageviews used. Tracking paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('pageview'); setShowUpgradeModal(true); },
     }] : []),
     ...(scanOverLimit && scanUsage ? [{
       title: 'Scan limit reached',
       desc: `${scanUsage.used.toLocaleString()} / ${scanUsage.limit.toLocaleString()} scans used. Scheduled scans are paused — upgrade to continue.`,
       time: 'Now',
-      action: () => { setNotifOpen(false); setShowUpgradeModal(true); },
+      action: () => { setNotifOpen(false); setUpgradeReason('scan'); setShowUpgradeModal(true); },
     }] : []),
   ];
 
@@ -249,21 +251,21 @@ export default function Header() {
   //   }
   // };
 const handleSelectSite = (site: any) => {
-    
     const nextId = site?.id ? String(site.id) : null;
     const currentId = pathSiteId || activeSiteId || null;
-    if( currentId==nextId) return
+    if (currentId == nextId) return;
 
     setActiveSiteId(nextId);
     setDomainOpen(false);
     if (!nextId) return;
     if ((pathname || "").startsWith("/dashboard/profile")) return;
     if ((pathname || "").startsWith("/dashboard/all-domain")) return;
-    // Preserve current tab/sub-route when switching sites
+
     const currentSubPath = pathParts.slice(2).join('/');
-    const targetPath = currentSubPath ? `/dashboard/${nextId}/${currentSubPath}` : `/dashboard/${nextId}`;
+    const targetSubPath = currentSubPath;
+
+    const targetPath = targetSubPath ? `/dashboard/${nextId}/${targetSubPath}` : `/dashboard/${nextId}`;
     if (targetPath !== (pathname || "")) {
-      console.log("Navigating to:", targetPath);
       router.push(targetPath);
     }
   };
@@ -345,6 +347,7 @@ const handleSelectSite = (site: any) => {
                 {sites.map((s: any) => {
                   const domain = s?.domain || s?.name || s?.id;
                   const siteUrl = s?.domain ? (s.domain.startsWith("http") ? s.domain : `https://${s.domain}`) : null;
+                  const isLegacy = !!(s as any)?.isLegacy;
                   return (
                     <div
                       key={s.id}
@@ -353,7 +356,12 @@ const handleSelectSite = (site: any) => {
                         activeSite?.id === s.id ? "bg-[#E6F1FD] text-[#007AFF]" : ""
                       }`}
                     >
-                      <span className="truncate">{domain}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{domain}</span>
+                        {s.stagingDomain && (
+                          <span className="text-[10px] text-gray-400 truncate">{s.stagingDomain}</span>
+                        )}
+                      </div>
                       {siteUrl && (
                         <a
                           href={siteUrl}
@@ -434,6 +442,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_plan_label", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
@@ -457,6 +466,7 @@ const handleSelectSite = (site: any) => {
               type="button"
               onClick={() => {
                 const id = pathSiteId || activeSiteId || sites[0]?.id;
+                analytics.upgradeCtaClicked("header_upgrade_button", id ? String(id) : undefined, effectivePlanId || "free");
                 if (id) router.push(`/dashboard/${id}/upgrade`);
                 else router.push("/dashboard");
               }}
@@ -538,7 +548,8 @@ const handleSelectSite = (site: any) => {
           currentPlanId={resolvedPlanKey}
           organizationId={activeOrganizationId ?? null}
           siteId={activeSiteId}
-          reason="pageview"
+          reason={upgradeReason}
+          usage={upgradeReason === 'scan' ? scanUsage : pageviewUsage}
           onClose={() => setShowUpgradeModal(false)}
         />
       )}

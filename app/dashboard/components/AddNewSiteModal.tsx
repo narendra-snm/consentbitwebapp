@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
@@ -273,6 +273,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       if (planId === "free") {
         const result = await firstSetup({ websiteUrl: domain });
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
+        // domain_added is now fired centrally inside firstSetup() so all onboarding
+        // paths are covered; no need to fire it again here (would double-count).
         await refresh({ showLoading: false });
         onClose?.();
         // Land on the new site's dashboard path so the header dropdown + plan match the new site.
@@ -282,7 +284,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           url.searchParams.set("postSetup", "1");
           url.searchParams.set("siteId", newSiteId);
           url.searchParams.set("domain", domain);
-          // router.push(url.pathname + url.search + (url.hash || ""));
+          router.push(url.pathname + url.search + (url.hash || ""));
         } else {
           const url = new URL(returnTo.startsWith("/") ? returnTo : "/dashboard", window.location.origin);
           url.searchParams.set("postSetup", "1");
@@ -295,7 +297,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           return;
         }
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
         const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
         const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
         const cancelUrl = `${origin}${returnTo}`;

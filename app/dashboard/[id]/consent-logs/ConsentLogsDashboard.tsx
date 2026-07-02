@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   getConsentHistory,
+  getLegacyConsentMonthly,
+  getLegacyConsentMonthlyFramer,
   type ConsentLog,
   type ConsentLogCookie,
   type ConsentHistoryResponse,
@@ -45,45 +47,48 @@ function normalizeCategories(
   return typeof inner === 'object' && inner !== null ? inner : categories;
 }
 
-function categoriesSummary(categories: ConsentLog['categories']): string {
+function categoriesSummary(categories: ConsentLog['categories'], method: string): string {
   const c = normalizeCategories(categories);
   if (!c) return '—';
 
-  if (c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
-    return c.ccpa.doNotSell ? 'Do Not Sell: Yes' : 'Do Not Sell: No';
+  const hasCcpa = c.ccpa && typeof c.ccpa.doNotSell === 'boolean';
+  const hasGdprKeys =
+    c.essential !== undefined ||
+    c.analytics !== undefined ||
+    c.marketing !== undefined ||
+    c.preferences !== undefined;
+
+  if (method === 'CCPA') {
+    if (hasCcpa) {
+      return c.ccpa?.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    }
+    if (hasGdprKeys) {
+      // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
+      const anyRejected = c.analytics === false || c.marketing === false || c.preferences === false;
+      return anyRejected ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    }
+    return 'Do Not Share: Yes';
   }
 
-  const parts: string[] = [];
-  parts.push(
-    c.essential === true
-      ? 'Essential: Accepted'
-      : c.essential === false
-        ? 'Essential: Rejected'
-        : 'Essential: —',
-  );
-  parts.push(
-    c.analytics === true
-      ? 'Analytics: Accepted'
-      : c.analytics === false
-        ? 'Analytics: Rejected'
-        : 'Analytics: —',
-  );
-  parts.push(
-    c.marketing === true
-      ? 'Marketing: Accepted'
-      : c.marketing === false
-        ? 'Marketing: Rejected'
-        : 'Marketing: —',
-  );
-  parts.push(
-    c.preferences === true
-      ? 'Preferences: Accepted'
-      : c.preferences === false
-        ? 'Preferences: Rejected'
-        : 'Preferences: —',
-  );
+  // GDPR / IAB/GDPR
+  if (hasGdprKeys) {
+    const parts: string[] = [];
+    if (c.analytics !== undefined)
+      parts.push(c.analytics === true ? 'Analytics: Accepted' : 'Analytics: Rejected');
+    if (c.marketing !== undefined)
+      parts.push(c.marketing === true ? 'Marketing: Accepted' : 'Marketing: Rejected');
+    if (c.preferences !== undefined)
+      parts.push(c.preferences === true ? 'Preferences: Accepted' : 'Preferences: Rejected');
+    return parts.length > 0 ? parts.join(', ') : 'Essential: Accepted';
+  }
 
-  return parts.join(', ');
+  if (hasCcpa && c.ccpa) {
+    // CCPA-shape stored under a GDPR banner — derive from doNotSell
+    const suffix = c.ccpa?.doNotSell ? 'Rejected' : 'Accepted';
+    return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;
+  }
+
+  return '—';
 }
 
 function escapeHtml(s: string): string {
@@ -148,7 +153,13 @@ function getAcceptedCategoriesList(categories: ConsentLog['categories']): string
   const c = normalizeCategories(categories);
   if (!c) return [];
 
-  if (c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
+  const hasGdprCategories =
+    c.essential !== undefined ||
+    c.analytics !== undefined ||
+    c.marketing !== undefined ||
+    c.preferences !== undefined;
+
+  if (!hasGdprCategories && c.ccpa && typeof c.ccpa.doNotSell === 'boolean') {
     return c.ccpa.doNotSell ? [] : ['All (CCPA accepted)'];
   }
 
@@ -224,7 +235,7 @@ function formatTimeUtc(iso: string | null) {
 function displayStatus(status: string | null) {
   if (!status) return '—';
   const s = status.toLowerCase();
-  if (s === 'given') return 'Accepted';
+  if (s === 'given' || s === 'accepted') return 'Accepted';
   if (s === 'rejected') return 'Rejected';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
@@ -234,8 +245,12 @@ function detectMethod(log: ConsentLog): string {
   if (method.includes('iab') || method.includes('tcf')) return 'IAB/GDPR';
   if (method.includes('ccpa') || method.includes('usp')) return 'CCPA';
   if (method.includes('gdpr')) return 'GDPR';
+  // Check categories first — more reliable than stored bannerType which can be wrong
   const c = normalizeCategories(log.categories);
   if (c && c.ccpa) return 'CCPA';
+  const bt = (log.bannerType ?? log.regulation ?? '').toUpperCase();
+  if (bt.includes('CCPA') || bt.includes('USP') || bt.includes('VCDPA') || bt.includes('CPA')) return 'CCPA';
+  if (bt.includes('GDPR')) return 'GDPR';
   return 'GDPR';
 }
 
@@ -345,15 +360,17 @@ function ImportIcon() {
 function DownloadPdfButton({
   onClick,
   disabled = false,
+  downloading = false,
 }: {
   onClick: () => void;
   disabled?: boolean;
+  downloading?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || downloading}
       className="bg-[#e6f1fd] flex items-center gap-[5px] h-[33px] justify-center px-[8px] py-[8px] rounded-[8px] min-w-[126px] hover:bg-[#d7eafb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <ImportIcon />
@@ -361,7 +378,7 @@ function DownloadPdfButton({
         className="font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap"
         style={dm}
       >
-        Download PDF
+        {downloading ? 'Downloading…' : 'Download PDF'}
       </p>
     </button>
   );
@@ -385,90 +402,114 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 export function ConsentLogsDashboard({
   siteId,
   siteDomain,
+  legacyDomain,
+  isLegacy = false,
+  platformSiteId,
+  platform,
 }: {
   siteId: string;
   siteDomain: string;
+  legacyDomain?: string;
+  isLegacy?: boolean;
+  platformSiteId?: string | null;
+  platform?: string | null;
 }) {
+  const isFramerPlatform = (platform || '').toLowerCase() === 'framer';
+  const isFramerLegacy = isLegacy && isFramerPlatform;
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<ConsentHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [consentPage, setConsentPage] = useState(1);
   const [cookiePage, setCookiePage] = useState(1);
   const CONSENT_PAGE_SIZE = 10;
   const COOKIE_PAGE_SIZE = 10;
 
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [csvDownloading, setCsvDownloading] = useState(false);
+  const [downloadingPdfIds, setDownloadingPdfIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const fetchData = useCallback(
-    async (showLoader: boolean) => {
-      if (showLoader) setLoading(true);
-      else setRefreshing(true);
-
-      setLoadError(null);
-
-      try {
-        const res = await getConsentHistory(siteId, 200, 0);
-        setData(res);
-        writeConsentCache(siteId, res);
-      } catch (err: unknown) {
-        setLoadError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [siteId],
-  );
-
   useEffect(() => {
     let active = true;
 
-    const run = async () => {
-      const cached = readConsentCache(siteId);
-      if (cached && active) {
-        setData(cached);
-        setLoading(false);
-        try {
-          const res = await getConsentHistory(siteId, 200, 0);
-          if (!active) return;
-          setData(res);
-          writeConsentCache(siteId, res);
-        } catch (err: unknown) {
-          if (!active) return;
-          setLoadError(err instanceof Error ? err.message : 'Failed to load');
-        } finally {
-          if (active) setRefreshing(false);
-        }
-        return;
-      }
+    setData(null);
+    setLoading(true);
+    setLoadError(null);
 
-      if (active) setLoading(true);
+    // Framer legacy KV is gated to ≤ May 2026; June 2026 onwards falls through to D1.
+    // Webflow KV/R2 is gated to ≤ June 2026 (unchanged). Non-legacy Framer sites always use D1.
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
+
+    const doFetch = async () => {
       try {
-        const res = await getConsentHistory(siteId, 200, 0);
+        const res = useFramerLegacySource
+          ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+          : useWebflowLegacySource
+            ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+            : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
         setData(res);
-        writeConsentCache(siteId, res);
+        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
       } catch (err: unknown) {
         if (!active) return;
         setLoadError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
-        if (active) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
-    void run();
+    void doFetch();
 
-    return () => {
-      active = false;
+    return () => { active = false; };
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
+
+  const handleRefresh = useCallback(() => {
+    setData(null);
+    setLoading(true);
+    setLoadError(null);
+
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
+
+    const doFetch = async () => {
+      try {
+        const res = useFramerLegacySource
+          ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
+          : useWebflowLegacySource
+            ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
+            : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
+        setData(res);
+        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
+      } catch (err: unknown) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [siteId]);
+
+    void doFetch();
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
 
   const consentRows = useMemo(() => {
     const list = data?.consents ?? [];
@@ -477,24 +518,54 @@ export function ConsentLogsDashboard({
     );
   }, [data]);
 
-  const consentTotalPages = Math.max(1, Math.ceil(consentRows.length / CONSENT_PAGE_SIZE));
-  const pagedConsentRows = consentRows.slice((consentPage - 1) * CONSENT_PAGE_SIZE, consentPage * CONSENT_PAGE_SIZE);
+  // Unique non-empty domain values present in the fetched consents.
+  // Rare case: only > 1 when the site's domain URL was changed after some consents
+  // had already been recorded under the old URL.
+  const consentDomains = useMemo(() => {
+    const all = consentRows
+      .map((r) => (r as { domain?: string }).domain)
+      .filter((d): d is string => typeof d === 'string' && d.trim().length > 0);
+    return Array.from(new Set(all));
+  }, [consentRows]);
+  const isMultiDomain = consentDomains.length > 1;
+  console.log('ismultiledomain', isMultiDomain, { domains: consentDomains });
+
+  // Domain dropdown selection (null = "All domains"). Reset whenever new data arrives.
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedDomain(null);
+  }, [data]);
+
+  const filteredConsentRows = useMemo(() => {
+    if (!selectedDomain) return consentRows;
+    return consentRows.filter(
+      (r) => (r as { domain?: string }).domain === selectedDomain,
+    );
+  }, [consentRows, selectedDomain]);
+
+  const consentTotalPages = Math.max(1, Math.ceil(filteredConsentRows.length / CONSENT_PAGE_SIZE));
+  const pagedConsentRows = filteredConsentRows.slice((consentPage - 1) * CONSENT_PAGE_SIZE, consentPage * CONSENT_PAGE_SIZE);
 
   const cookies: ConsentLogCookie[] = data?.cookies ?? [];
   const cookieTotalPages = Math.max(1, Math.ceil(cookies.length / COOKIE_PAGE_SIZE));
   const pagedCookies = cookies.slice((cookiePage - 1) * COOKIE_PAGE_SIZE, cookiePage * COOKIE_PAGE_SIZE);
   const customCookieRules: ConsentLogCookieRule[] = data?.customCookieRules ?? [];
-  const totalEvents = data?.total ?? data?.consents?.length ?? 0;
+  // When a domain is selected, show the filtered row count; otherwise fall back to the backend total.
+  const totalEvents = selectedDomain
+    ? filteredConsentRows.length
+    : data?.total ?? data?.consents?.length ?? 0;
   const cookieCount = cookies.length;
   const displayDomain = mounted ? (siteDomain?.trim() || '—') : '—';
+
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const isCurrentPeriod =
+    selectedYear === String(now.getFullYear()) &&
+    selectedMonth === String(now.getMonth() + 1).padStart(2, '0');
+  const selectedMonthName = MONTH_NAMES[parseInt(selectedMonth, 10) - 1];
 
   const buildProofHtml = useCallback(
     (rows: ConsentLog[]) => {
       const domain = displayDomain;
-      const logoSrc =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/images/ConsentBit-logo-Dark.png`
-          : '/images/ConsentBit-logo-Dark.png';
 
       const pages = rows.map((log, index) => {
         const acceptedList = getAcceptedCategoriesList(log.categories);
@@ -532,7 +603,11 @@ export function ConsentLogsDashboard({
             <header class="proof-header">
               <h1 class="proof-title">Proof of consent</h1>
               <div class="proof-brand">
-                <img class="proof-logo" src="${escapeHtml(logoSrc)}" alt="Consentbit" width="170" height="22" />
+                <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="9" cy="9" r="9" fill="#007aff"/>
+                  <path d="M4.5 9.5L7.5 12.5L13.5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="proof-brand-name">Consentbit</span>
               </div>
             </header>
 
@@ -545,21 +620,22 @@ export function ConsentLogsDashboard({
               <tr><td class="proof-label">Consent status</td><td class="proof-value">${escapeHtml(displayStatus(log.status))}</td></tr>
             </table>
 
-            <div class="proof-categories-wrap">
-              <p class="proof-categories-title">Accepted Categories</p>
-              <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
+            <div class="proof-section-box">
+              <div class="proof-categories-header">
+                <p class="proof-categories-title">Accepted Categories</p>
+                <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
+              </div>
+              <table class="proof-cookie-table">
+                <thead>
+                  <tr>
+                    <th class="proof-th">Cookie Name</th>
+                    <th class="proof-th">Duration</th>
+                    <th class="proof-th">Description</th>
+                  </tr>
+                </thead>
+                <tbody>${cookieRows}</tbody>
+              </table>
             </div>
-
-            <table class="proof-cookie-table">
-              <thead>
-                <tr>
-                  <th class="proof-th">Cookie Name</th>
-                  <th class="proof-th">Duration</th>
-                  <th class="proof-th">Description</th>
-                </tr>
-              </thead>
-              <tbody>${cookieRows}</tbody>
-            </table>
 
             <p class="proof-footer">Page ${index + 1} of ${rows.length}</p>
           </div>
@@ -597,8 +673,9 @@ export function ConsentLogsDashboard({
             letter-spacing: -0.02em;
             color: #007aff;
           }
-          .proof-brand { flex-shrink: 0; padding-top: 2px; }
-          .proof-logo { display: block; height: 22px; width: auto; max-width: 170px; }
+          .proof-brand { flex-shrink: 0; display: flex; align-items: center; gap: 5px; padding-top: 4px; }
+          .proof-brand svg { width: 18px; height: 18px; }
+          .proof-brand-name { font-size: 18px; font-weight: 700; color: #111827; }
 
           .proof-meta {
             width: 100%;
@@ -619,15 +696,19 @@ export function ConsentLogsDashboard({
             word-break: break-word;
           }
 
-          .proof-categories-wrap {
+          .proof-section-box {
             border: 1px solid #93c5fd;
             border-radius: 8px;
-            background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 48%);
-            padding: 12px 14px 14px;
+            overflow: hidden;
             margin: 0 0 14px;
           }
+          .proof-categories-header {
+            background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%);
+            padding: 12px 14px 14px;
+            border-bottom: 1px solid #93c5fd;
+          }
           .proof-categories-title {
-            margin: 0 0 6px;
+            margin: 0 0 4px;
             font-size: 14px;
             font-weight: 700;
             color: #007aff;
@@ -641,9 +722,6 @@ export function ConsentLogsDashboard({
           .proof-cookie-table {
             border-collapse: collapse;
             width: 100%;
-            border: 1px solid #93c5fd;
-            border-radius: 8px;
-            overflow: hidden;
           }
           .proof-th, .proof-td {
             border: 1px solid #bfdbfe;
@@ -670,9 +748,7 @@ export function ConsentLogsDashboard({
         ${
           pages.length
             ? pages.join('')
-            : `<div class="proof-page"><header class="proof-header"><h1 class="proof-title">Proof of consent</h1><div class="proof-brand"><img class="proof-logo" src="${escapeHtml(
-                logoSrc,
-              )}" alt="Consentbit" width="170" height="22" /></div></header><p>No consent records for this site.</p></div>`
+            : `<div class="proof-page"><header class="proof-header"><h1 class="proof-title">Proof of consent</h1><div class="proof-brand"><svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="9" fill="#007aff"/><path d="M4.5 9.5L7.5 12.5L13.5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="proof-brand-name">Consentbit</span></div></header><p>No consent records for this site.</p></div>`
         }
       `;
     },
@@ -700,15 +776,82 @@ export function ConsentLogsDashboard({
   }, []);
 
   const handleDownloadRowPdf = useCallback(
-    (row: ConsentLog) => {
-      openPrintWindow(buildProofHtml([row]), `Proof of Consent - ${displayDomain}`);
+    async (row: ConsentLog) => {
+      if (downloadingPdfIds.has(row.id)) return;
+      const yearNum = parseInt(selectedYear, 10);
+      const monthNum = parseInt(selectedMonth, 10);
+      const isFramerBeforeCutoff =
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+      const isWebflowBeforeCutoff =
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+      const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
+      const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+      const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
+      const apiPath = useFramerLegacySource
+        ? `/api/legacy-consent-pdf-framer?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+        : useWebflowLegacySource
+          ? `/api/legacy-consent-pdf?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(row.id)}`
+          : `/api/consent-pdf?siteId=${encodeURIComponent(siteId)}&consentId=${encodeURIComponent(row.id)}`;
+      setDownloadingPdfIds(prev => new Set(prev).add(row.id));
+      try {
+        const res = await fetch(apiPath, { credentials: 'include' });
+        if (!res.ok) {
+          const msg = await res.text().catch(() => 'Unknown error');
+          alert(`Could not download PDF: ${msg}`);
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `consent_${row.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        alert('Failed to download PDF. Please try again.');
+      } finally {
+        setDownloadingPdfIds(prev => { const next = new Set(prev); next.delete(row.id); return next; });
+      }
     },
-    [buildProofHtml, displayDomain, openPrintWindow],
+    [downloadingPdfIds, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, siteId, selectedYear, selectedMonth],
   );
 
-  const handleRefresh = useCallback(() => {
-    void fetchData(false);
-  }, [fetchData]);
+  const downloadCsv = useCallback(async () => {
+    if (csvDownloading) return;
+    const params = new URLSearchParams({ siteId, year: selectedYear, month: selectedMonth });
+    const yearNum = parseInt(selectedYear, 10);
+    const monthNum = parseInt(selectedMonth, 10);
+    const isFramerBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const isWebflowBeforeCutoff =
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
+    const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
+    const hasHistoricalR2Data = isLegacy || !!platformSiteId;
+    const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
+    const apiPath = useFramerLegacySource
+      ? `/api/legacy-consent-csv-framer?${params.toString()}`
+      : useWebflowLegacySource
+        ? `/api/legacy-consent-csv?${params.toString()}`
+        : `/api/consent-csv?${params.toString()}`;
+    setCsvDownloading(true);
+    try {
+      const res = await fetch(apiPath, { credentials: 'include' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cd = res.headers.get('content-disposition');
+      const match = cd?.match(/filename="?([^"]+)"?/);
+      a.download = match?.[1] ?? `consent-logs-${selectedYear}-${selectedMonth}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+    } finally {
+      setCsvDownloading(false);
+    }
+  }, [csvDownloading, siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth]);
 
   return (
     <>
@@ -730,12 +873,35 @@ export function ConsentLogsDashboard({
             <div className="flex items-start justify-between gap-6 flex-wrap mb-[31px] pl-[21px] pr-7.5">
               <div className="flex flex-wrap items-center gap-[60px]">
                 <div>
-                  <h1
-                    className="font-['DM_Sans'] font-semibold text-[14px] text-black mb-[11px]"
-                    style={dm}
-                  >
-                    Site: {displayDomain}
-                  </h1>
+                  <div className="flex items-center gap-2 mb-[11px]">
+                    {isMultiDomain ? (
+                      <>
+                        <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black whitespace-nowrap" style={dm}>
+                          Site:
+                        </h1>
+                        <select
+                          value={selectedDomain ?? ''}
+                          onChange={(e) => {
+                            setSelectedDomain(e.target.value || null);
+                            setConsentPage(1);
+                          }}
+                          className="h-8 px-2 rounded-md border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] max-w-[320px]"
+                          title="Filter by site domain"
+                        >
+                          <option value="">All domains ({consentDomains.length})</option>
+                          {consentDomains.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
+                        Site: {consentDomains[0] || displayDomain}
+                      </h1>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-start gap-[107px]">
@@ -771,20 +937,52 @@ export function ConsentLogsDashboard({
                 </div>
               </div>
 
+              <div className="flex items-center gap-3 mt-[18px] flex-wrap">
+                {/* Month / Year picker */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      setSelectedMonth(e.target.value);
+                      setConsentPage(1);
+                    }}
+                    disabled={loading}
+                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                  >
+                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((name, i) => (
+                      <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => {
+                      setSelectedYear(e.target.value);
+                      setConsentPage(1);
+                    }}
+                    disabled={loading}
+                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                  >
+                    {Array.from({ length: 4 }, (_, i) => String(now.getFullYear() - i)).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
               <button
                 type="button"
                 onClick={handleRefresh}
-                disabled={refreshing || loading}
-                className="flex items-center gap-1 mt-[18px] disabled:opacity-50"
+                disabled={loading}
+                className="flex items-center gap-1 disabled:opacity-50"
               >
                 <p
                   className="font-['DM_Sans'] font-medium text-[#007aff] text-[15px] tracking-[-0.3px]"
                   style={dm}
                 >
-                  {refreshing ? 'Refreshing…' : 'Refresh'}
+                  {loading ? 'Loading…' : 'Refresh'}
                 </p>
-                <RefreshIcon spinning={refreshing} />
+                <RefreshIcon spinning={loading} />
               </button>
+              </div>
             </div>
 
             <div className="w-full h-px bg-black/10 mb-[4px]" />
@@ -809,7 +1007,7 @@ export function ConsentLogsDashboard({
                       className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-[#9fbce4]"
                       style={dm}
                     >
-                      Method
+                      Banner Type
                     </th>
                     <th
                       className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-[#9fbce4] min-w-[420px]"
@@ -834,8 +1032,9 @@ export function ConsentLogsDashboard({
                         className="px-[16px] py-[24px] text-center font-['DM_Sans'] text-[14px] text-[#4b5563]"
                         style={dm}
                       >
-                        No consent logs yet. Consent events will appear here once visitors interact
-                        with your banner.
+                        {isCurrentPeriod
+                          ? 'No consent logs yet. Consent events will appear here once visitors interact with your banner.'
+                          : `No consent data found for ${selectedMonthName} ${selectedYear}.`}
                       </td>
                     </tr>
                   ) : (
@@ -857,17 +1056,22 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-[9px] whitespace-nowrap border-b border-black/10"
                         >
                           <MethodBadge method={detectMethod(row)} />
+                         
                         </td>
                         <td
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
                           style={dm}
                         >
-                          <div className="min-w-[420px] whitespace-normal break-words">
-                            {categoriesSummary(row.categories)}
+                          <div className="min-w-[200px] max-w-[420px] whitespace-normal break-all">
+                            {categoriesSummary(row.categories, detectMethod(row))}
                           </div>
                         </td>
                         <td className="px-[16px] py-[9px] border-b border-black/10">
-                          <DownloadPdfButton onClick={() => handleDownloadRowPdf(row)} />
+                          <DownloadPdfButton
+                            onClick={() => handleDownloadRowPdf(row)}
+                            downloading={downloadingPdfIds.has(row.id)}
+                            disabled={downloadingPdfIds.has(row.id)}
+                          />
                         </td>
                       </tr>
                     ))
@@ -876,6 +1080,20 @@ export function ConsentLogsDashboard({
               </table>
             </div>
             <PaginationBar current={consentPage} total={consentTotalPages} onChange={(p) => setConsentPage(p)} />
+
+            {/* Export CSV — available for both legacy and webapp users */}
+            {consentRows.length > 0 && (
+              <div className="flex justify-end px-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => void downloadCsv()}
+                  disabled={csvDownloading}
+                  className="h-9 px-4 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {csvDownloading ? 'Downloading…' : 'Export CSV'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-[59px]">
@@ -967,7 +1185,7 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-4.5 font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"
                           style={dm}
                         >
-                          <div className="min-w-[420px] whitespace-normal break-words">
+                          <div className="min-w-[200px] max-w-[420px] whitespace-normal break-all">
                             {cookie.description?.trim() || 'Not available'}
                           </div>
                         </td>

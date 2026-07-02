@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect } from "react";
 
 export default function ErrorPopup({
   message,
@@ -9,6 +10,11 @@ export default function ErrorPopup({
   message: string;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 3000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
   return (
     <div
       className="fixed top-5 left-1/2 -translate-x-1/2 z-[99999] flex items-center justify-between gap-4 rounded-xl px-5 py-3.5 shadow-lg w-full max-w-[600px]"

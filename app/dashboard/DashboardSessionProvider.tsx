@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getDashboardInit } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 
 type DashboardSessionState = {
   loading: boolean;
@@ -45,17 +46,9 @@ const SESSION_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 const LAST_USER_KEY = "cbLastUserEmail";
 const LAST_ACTIVE_SITE_KEY = "cbLastActiveSiteId";
 
-/** Avoid misleading logs: SSR has no sessionStorage; terminal would show "null/free" while the browser is correct. */
-function devClientLog(...args: unknown[]) {
-  if (process.env.NODE_ENV !== "development") return;
-  if (typeof window === "undefined") return;
-  console.log(...args);
-}
-
 function readSessionCache(): any | null {
   try {
     const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SESSION_CACHE_KEY) : null;
-    devClientLog("[Cache] READ raw length:", raw?.length ?? "null");
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { data: any; ts: number };
     if (Date.now() - parsed.ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(SESSION_CACHE_KEY); return null; }
@@ -79,11 +72,8 @@ function writeSessionCache(data: any) {
       if (email) sessionStorage.setItem(LAST_USER_KEY, email);
       const activeSiteId = data?.activeSiteId != null ? String(data.activeSiteId).trim() : "";
       if (activeSiteId) sessionStorage.setItem(LAST_ACTIVE_SITE_KEY, activeSiteId);
-      devClientLog("[Cache] WROTE effectivePlanId:", data?.effectivePlanId, "activeSiteId:", data?.activeSiteId, "bytes:", payload.length);
-    } else {
-      devClientLog("[Cache] WRITE SKIPPED — sessionStorage unavailable");
     }
-  } catch (e) { console.error("[Cache] WRITE FAILED", e); }
+  } catch (e) { }
 }
 
 function pickActiveSiteIdFromPath(pathname: string | null): string | null {
@@ -173,14 +163,6 @@ export function DashboardSessionProvider({
         return "";
       }
     })();
-    devClientLog(
-      "SEED:",
-      seed,
-      "| SEED effectivePlanId:",
-      seed?.effectivePlanId,
-      "| sites[0].planId:",
-      seed?.sites?.[0]?.planId,
-    );
     if (seed?.authenticated) {
       skipInitialRefresh.current = true; // data is fresh — skip getDashboardInit on mount
       const orgs = Array.isArray(seed.organizations) ? seed.organizations : [];
@@ -191,14 +173,6 @@ export function DashboardSessionProvider({
       const activeSite = (seedActiveSiteId ? sites.find((s: any) => String(s?.id) === seedActiveSiteId) : null) ?? sites[0] ?? null;
       const activeSitePlanId = pickPlanIdFromSite(activeSite);
       const seedEffectivePlanId = activeSitePlanId || seed.effectivePlanId || "";
-      devClientLog(
-        "[DashboardSession] seed activeSite:",
-        (activeSite as any)?.domain,
-        "activeSitePlanId:",
-        activeSitePlanId,
-        "→ initial effectivePlanId:",
-        seedEffectivePlanId,
-      );
       const seeded: DashboardSessionState = {
         loading: false,
         authenticated: true,
@@ -264,8 +238,6 @@ export function DashboardSessionProvider({
         data?.effectivePlanId != null && String(data.effectivePlanId).trim() !== ""
           ? String(data.effectivePlanId).trim().toLowerCase()
           : "";
-      devClientLog("[DashboardSession] refresh → API effectivePlanId:", effectivePlanId, "| sites[0].planId:", sites[0]?.planId);
-
       if (!activeOrgId && sites.length > 0) {
         activeOrgId = pickOrganizationIdFromSite(sites[0]);
       }
@@ -335,7 +307,6 @@ export function DashboardSessionProvider({
       setStateAndRef(next);
       return resolvedPlanId;
     } catch (e) {
-      console.error("[DashboardSession] refresh failed", e);
       setStateAndRef({ ...(stateRef.current ?? state), loading: false });
       return "";
     }
@@ -371,7 +342,6 @@ export function DashboardSessionProvider({
     const targetPlan = pathSiteId
       ? (() => { try { return (sessionStorage.getItem(`cb_target_plan_${pathSiteId}`) || "").trim().toLowerCase(); } catch { return ""; } })()
       : "";
-    console.log("[SessionPoll] start — targetPlan:", targetPlan, "pathSiteId:", pathSiteId);
 
     const maxTicks = 24; // ~36s @ 1500ms
     let ticks = 0;
@@ -380,9 +350,7 @@ export function DashboardSessionProvider({
       if (stopped) return;
       ticks += 1;
       const planNow = String(await refresh({ showLoading: false }) || "").trim().toLowerCase();
-      console.log(`[SessionPoll] tick ${ticks} — planNow: "${planNow}" | targetPlan: "${targetPlan}" | match: ${planNow === targetPlan}`);
       if (planNow === targetPlan || ticks >= maxTicks) {
-        console.log(`[SessionPoll] done — reason: ${planNow === targetPlan ? "plan matched" : "max ticks"}`);
         stopped = true;
         window.clearInterval(interval);
       }
@@ -400,6 +368,17 @@ export function DashboardSessionProvider({
       router.replace("/login");
     }
   }, [state.loading, state.authenticated, router]);
+
+  // Identify the user in PostHog and alias orgId ↔ email so server-side events merge.
+  useEffect(() => {
+    if (state.authenticated && state.user?.email) {
+      analytics.identify(
+        state.user.email,
+        state.user.name || state.user.firstName || "",
+        state.activeOrganizationId ?? null,
+      );
+    }
+  }, [state.authenticated, state.user?.email, state.activeOrganizationId]);
 
   // Keep active site in sync with the URL when switching tabs under `/dashboard/[id]/...` — no API calls.
   useEffect(() => {
@@ -458,7 +437,6 @@ export function DashboardSessionProvider({
     router.push("/login");
     // Fire-and-forget the logout API call in the background
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch((e) => {
-      console.error("[DashboardSession] logout failed", e);
     });
   }, [router]);
 

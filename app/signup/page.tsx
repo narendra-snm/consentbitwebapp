@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+
 import Footer from "@/components/auth/Footer";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { Suspense } from "react";

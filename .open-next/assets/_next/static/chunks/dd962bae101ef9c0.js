@@ -1,1 +1,0 @@
-(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,65814,e=>{e.v("/_next/static/media/logo.e24dfca3.webp")}]);

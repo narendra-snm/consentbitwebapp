@@ -1,7 +1,9 @@
+export const runtime = 'edge';
+
 import { NextRequest } from 'next/server';
 import { proxyWorkerResponse } from '@/lib/server-api';
 
-export const runtime = 'edge';
+
 
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get('cookie') || '';

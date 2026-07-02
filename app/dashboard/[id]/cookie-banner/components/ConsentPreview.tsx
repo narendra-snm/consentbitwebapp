@@ -16,7 +16,7 @@ function stripTrailingMoreInfo(text: string): string {
 
 // Keep parity with editor + CDN/embed so preview never "breaks" with long strings.
 const LIMITS = {
-  title: 30,
+  title: 60,
   // CCPA opt-out intro copy can be much longer than the cookie notice.
   // Keep this generous so defaults + user edits aren't truncated in preview.
   message: 600,
@@ -60,10 +60,12 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 
 export default function ConsentPreview({
   iabEnabled,
+  googleAcEnabled = false,
   previewBannerType,
   siteDomain,
   consentType,
   content,
+  langCode,
   floatingButton = { enabled: true, position: 'left' as const },
   onSaveChanges,
   saveDisabled = true,
@@ -83,6 +85,9 @@ export default function ConsentPreview({
   initialLayout,
 }: {
   iabEnabled: boolean;
+  /** Google Additional Consent (AC) — adds the Google Partners sub-tab in the IAB Vendors view. */
+  googleAcEnabled?: boolean;
+  langCode?: string;
   previewBannerType?: "gdpr" | "ccpa" |'iab';
   siteDomain?: string | null;
   consentType?: 'gdpr' | 'ccpa' | 'both';
@@ -110,7 +115,7 @@ export default function ConsentPreview({
   onDismissPublishSuccess?: () => void;
   /** Optional action for top-right Next button. */
   onNext?: () => void;
-  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'animation'>;
+  initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonRadius' | 'animation'>;
   content?: {
     title?: string;
     message?: string;
@@ -129,7 +134,16 @@ export default function ConsentPreview({
     /** CCPA opt-out preference panel (Do Not Share → modal) */
     ccpaOptOutTitle?: string;
     ccpaOptOutMessage?: string;
+    ccpaCancelLabel?: string;
     saveMyPreferencesLabel?: string;
+    /** Editable cookie category names/descriptions shown in the GDPR preferences modal. */
+    categories?: {
+      necessary?: { name?: string; description?: string };
+      analytics?: { name?: string; description?: string };
+      marketing?: { name?: string; description?: string };
+      preferences?: { name?: string; description?: string };
+      alwaysActiveLabel?: string;
+    };
   };
 }) {
   // Site homepage iframe preview intentionally disabled — some sites block embedding (CSP/XFO)
@@ -159,10 +173,28 @@ export default function ConsentPreview({
   }, [previewBannerType, consentType, bothModeBannerType, activeBothType]);
 
   const lang = useMemo(
-    () => getBannerLanguage({ autoDetectLanguage: true }),
-    [],
+    () => langCode || getBannerLanguage({ autoDetectLanguage: true }),
+    [langCode],
   );
   const t = useMemo(() => (key: string) => getTranslation(lang, key), [lang]);
+
+  /** Button corner radius (px). Falls back to 4 when no data was fetched. */
+  const buttonRadiusPx = useMemo(() => {
+    const raw = initialLayout?.buttonRadius;
+    const n = raw == null || raw === '' ? NaN : Number(raw);
+    return Number.isFinite(n) ? n : 4;
+  }, [initialLayout?.buttonRadius]);
+
+  /** Button corner radius (px). Falls back to 4 when no data was fetched. */
+  // const buttonRadiusPx = useMemo(() => {
+  //   const raw = initialLayout?.buttonRadius;
+  //   const n = raw == null || raw === '' ? NaN : Number(raw);
+  //   return Number.isFinite(n) ? n : 4;
+  // }, [initialLayout?.buttonRadius]);
+
+  // const btnBrPx = initialLayout?.buttonBorderRadius
+  //   ?? (bannerLayout as BannerLayoutValue | null)?.buttonBorderRadius
+  //   ?? '8';
 
   /**
    * Accept + Reject (primary actions) — same colors.
@@ -173,8 +205,9 @@ export default function ConsentPreview({
       backgroundColor: colors.buttonColor,
       color: colors.buttonTextColor,
       borderColor: colors.buttonTextColor,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    [colors.buttonColor, colors.buttonTextColor],
+    [colors.buttonColor, colors.buttonTextColor, buttonRadiusPx],
   );
 
   /** Preference + Save in panel — same colors (defaults in `bannerAppearance` / DB customise fields). */
@@ -182,9 +215,9 @@ export default function ConsentPreview({
     () => ({
       backgroundColor: colors.preferencesButtonBg,
       color: colors.preferencesButtonText,
-      borderColor: colors.preferencesButtonText,
+      borderRadius: `${buttonRadiusPx}px`,
     }),
-    [colors.preferencesButtonBg, colors.preferencesButtonText],
+    [colors.preferencesButtonBg, colors.preferencesButtonText, buttonRadiusPx],
   );
 
   /** Banner / prefs titles + category row labels — matches Colors "Heading color". */
@@ -205,11 +238,21 @@ export default function ConsentPreview({
     [colors.textColor, alignment],
   );
 
+  /** Close button color — white on dark backgrounds, dark on light backgrounds. */
+  const closeButtonColor = useMemo(() => {
+    const hex = (colors.bannerBg || '#ffffff').replace('#', '');
+    const full = hex.length === 3 ? hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2] : hex;
+    const r = parseInt(full.slice(0,2),16)||0;
+    const g = parseInt(full.slice(2,4),16)||0;
+    const b = parseInt(full.slice(4,6),16)||0;
+    return (0.299*r + 0.587*g + 0.114*b) > 128 ? '#0f172a' : '#ffffff';
+  }, [colors.bannerBg]);
+
   /** Type tab: font + weight (same as `bannerFontFamily` / `bannerFontWeight` on publish). */
   const bannerTypographyStyle = useMemo(() => {
     const safe = String(bannerFont || 'Inter').replace(/['"]/g, '');
     return {
-      fontFamily: `'${safe}', ui-sans-serif, system-ui, sans-serif`,
+      fontFamily: `'${safe}', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
       fontWeight: Number(weightLabelToNumeric(weight)),
     } as const;
   }, [bannerFont, weight]);
@@ -258,7 +301,7 @@ export default function ConsentPreview({
   }, [saveSuccess]);
   useEffect(() => {
     if (!showSaveToast) return;
-    const t = window.setTimeout(() => setShowSaveToast(false), 5000);
+    const t = window.setTimeout(() => setShowSaveToast(false), 3000);
     return () => window.clearTimeout(t);
   }, [showSaveToast]);
 
@@ -326,11 +369,11 @@ export default function ConsentPreview({
   const getDeviceFrameClasses = () => {
     switch (device) {
       case "tablet":
-        return "maxw-[820px] w-full h-[500px]";
+        return "maxw-[820px] w-full h-[588px]";
       case "mobile":
         return "max-w-[410px] w-full h-[680px]";
       default:
-        return 'max-w-[1139px] w-full h-[444px]';
+        return 'max-w-[1139px] w-full h-[604px]';
     }
   };
 
@@ -342,9 +385,11 @@ export default function ConsentPreview({
       if (e.key === 'Escape') onDismissPublishSuccess?.();
     };
     window.addEventListener('keydown', onKeyDown);
+    const t = window.setTimeout(() => onDismissPublishSuccess?.(), 3000);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(t);
     };
   }, [publishSuccess, onDismissPublishSuccess]);
 
@@ -457,12 +502,8 @@ export default function ConsentPreview({
               disabled={saveDisabled || saveBusy}
               onClick={() => void onSaveChanges?.()}
               aria-label={saveBusy ? 'Saving…' : 'Save changes'}
-              title={saveDisabled ? 'No changes to save' : saveBusy ? 'Saving…' : 'Save changes'}
-              className="relative group w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
+              className="relative w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
             >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">
-              {saveBusy ? 'Saving…' : 'Save changes'}
-            </span>
             {saveBusy ? (
               <svg className="h-5 w-5 animate-spin text-[#007aff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -510,9 +551,8 @@ export default function ConsentPreview({
                 onClick={() => {
                   void onPublishChanges?.();
                 }}
-                className="relative group px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                className="px-4 h-9 bg-[#2ec04f] border-2 border-white outline-1 outline-[#2ec04f] text-white text-sm rounded-lg hover:bg-[#26a342] transition-colors disabled:opacity-50 disabled:pointer-events-none"
               >
-                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Push changes live to your website</span>
                 {publishBusy ? 'Publishing…' : 'Publish Changes'}
               </button>
             </div>
@@ -530,14 +570,15 @@ export default function ConsentPreview({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={onNext}
-            className="relative group px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
-          >
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-normal text-[#374151] bg-white border border-[#e5e7eb] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[99999]">Go to next step</span>
-            Next
-          </button>
+          {onNext && (
+            <button
+              type="button"
+              onClick={onNext}
+              className="px-4 h-9 bg-[#007aff] text-white text-sm rounded-lg hover:bg-[#0066d6] transition-colors"
+            >
+              Next
+            </button>
+          )}
         </div>
       </div>
 
@@ -578,8 +619,8 @@ export default function ConsentPreview({
             // Banner card — shared across all layouts
             // Offset banner from floating trigger on the same side — mirrors CDN applyInitialBannerFloatingGutter.
             const isMobile = device === 'mobile';
-            // Mobile preview: do not render the floating icon and do not reserve any gutter for it.
-            const floatingEnabledForPreview = floatingButton.enabled && !isMobile;
+            // Mobile preview: show floating icon below the banner (mirroring CDN mobile behavior).
+            const floatingEnabledForPreview = floatingButton.enabled;
             const floatLeft = floatingEnabledForPreview && floatingButton.position === 'left';
             const floatRight = floatingEnabledForPreview && floatingButton.position === 'right';
             const bannerOnLeft = layoutPos !== 'banner' && (layoutPos === 'bottom-center' || layoutAlign === 'bottom-left');
@@ -599,9 +640,8 @@ export default function ConsentPreview({
                 className={`shadow-lg box-border relative rounded-md border border-[#e2e8f0] p-4 ${initialBannerShell}`}
                 style={{
                   backgroundColor: colors.bannerBg,
-                  // On mobile preview keep the same rounding as the banner settings.
-                  // Width/position is controlled by the wrapper below.
-                  borderRadius: `${initialLayout?.borderRadius ?? 12}px`,
+                  // Mobile: no border radius (matches CDN border-radius:0 override).
+                  borderRadius: isMobile ? 0 : `${initialLayout?.borderRadius ?? 12}px`,
                   // Width is controlled by the wrapper div; bannerCard just fills it.
                   width: '100%',
                   minWidth: (isMobile || layoutPos === 'banner') ? undefined : '280px',
@@ -610,13 +650,13 @@ export default function ConsentPreview({
                 }}
               >
                 {content?.closeButton ? (
-                  <button type="button" className="absolute top-2 right-2 text-black opacity-60 hover:opacity-100" aria-label="Close banner preview">×</button>
+                  <button type="button" className="absolute top-2 right-2 opacity-70 hover:opacity-100" style={{ color: closeButtonColor }} aria-label="Close banner preview">×</button>
                 ) : null}
-                <div className="cb-banner-body-preview min-w-0 shrink-0 overflow-y-auto overflow-x-hidden mb-3">
-                  <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
+                <div className="cb-banner-body-preview min-w-0 w-full overflow-y-auto overflow-x-hidden mb-3">
+                  <p style={{ ...headingStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', maxWidth: '100%', paddingRight: content?.closeButton ? '32px' : undefined }} className="text-[15px] font-bold tracking-tight mb-2">
                     {safeContent.title || t('title')}
                   </p>
-                  <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word' }} className="text-[11px] tracking-tight mb-0">
+                  <p style={{ ...bodyTextStyle, overflowWrap: 'anywhere', wordBreak: 'break-word', maxWidth: '100%' }} className="text-[11px] tracking-tight mb-0">
                     {(safeContent.message != null && safeContent.message !== '' ? safeContent.message : null) ??
                       (selectedBannerType === 'ccpa' ? t('ccpaDescription') : t('description'))}
                     {safeContent.cookiePolicyLink && safeContent.privacyPolicyUrl ? (
@@ -624,9 +664,9 @@ export default function ConsentPreview({
                     ) : null}
                   </p>
                   {selectedBannerType === 'ccpa' ? (
-                    <div className="mt-2">
+                    <div className="mt-2 flex w-full" style={{ justifyContent: alignment === 'center' ? 'center' : alignment === 'right' ? 'flex-end' : 'flex-start' }}>
                       {safeContent.rejectButton !== false ? (
-                        <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer text-left" onClick={() => setModalView('ccpa-optout')}>
+                        <button type="button" className="p-0 border-0 bg-transparent text-[11px] text-[#007aff] underline cursor-pointer" onClick={() => setModalView('ccpa-optout')}>
                           {safeContent.doNotSellLabel || t('doNotSell')}
                         </button>
                       ) : null}
@@ -634,10 +674,10 @@ export default function ConsentPreview({
                   ) : null}
                 </div>
                 {selectedBannerType === 'gdpr' ? (
-                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-row flex-wrap w-full' : 'flex-nowrap justify-end'}`}>
+                  <div className={`flex shrink-0 gap-2 mt-1 ${isMobile ? 'flex-row flex-nowrap w-full' : 'flex-nowrap justify-end'}`}>
                     {safeContent.customizeButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                         onClick={openPreferences}
                         type="button"
                         style={preferenceStyle}
@@ -647,7 +687,7 @@ export default function ConsentPreview({
                     ) : null}
                     {safeContent.rejectButton !== false ? (
                       <button
-                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                        className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                         type="button"
                         style={acceptRejectStyle}
                       >
@@ -655,7 +695,7 @@ export default function ConsentPreview({
                       </button>
                     ) : null}
                     <button
-                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-[110px]' : 'whitespace-nowrap shrink-0'}`}
+                      className={`px-3 py-1 border text-[11px] rounded ${isMobile ? 'flex-1 min-w-0' : 'whitespace-nowrap shrink-0'}`}
                       type="button"
                       style={acceptRejectStyle}
                     >
@@ -666,14 +706,14 @@ export default function ConsentPreview({
               </div>
             );
 
-            // Full-width banner: banner renders at the bottom edge; pad the side the floating logo is on.
+            // Full-width banner: sits at bottom, banner z-20 covers icon z-10.
             if (layoutPos === 'banner') {
               const bannerPad = floatingEnabledForPreview
                 ? floatingButton.position === 'right' ? 'pr-14' : 'pl-14'
                 : '';
               return (
-                <div key={bannerAnimation} className={`absolute bottom-0 left-0 right-0 ${bannerPad}`}>
-                  <div className="relative z-10">
+                <div key={bannerAnimation} className={`absolute bottom-0 left-0 right-0 z-20 ${bannerPad}`}>
+                  <div className="relative">
                     {bannerCard}
                   </div>
                 </div>
@@ -685,8 +725,7 @@ export default function ConsentPreview({
             const floatGutter = 56;
             const bannerPosStyle: React.CSSProperties = (() => {
               if (mobileFullWidth) {
-                // On phone preview keep banner inside the device frame (no overflow).
-                return { position: 'absolute', bottom: 12, left: 0, right: 0 };
+                return { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 };
               }
               if (layoutPos === 'banner') {
                 return { position: 'absolute', bottom: 0, left: 0, right: 0 };
@@ -714,7 +753,7 @@ export default function ConsentPreview({
                 (safeContent.rejectAll?.length ?? 0),
                 (safeContent.preferencesLabel?.length ?? 0),
               );
-              const isLongContent = (safeContent.message?.length ?? 0) > 200 || maxBtnLen > 12;
+              const isLongContent = (safeContent.title?.length ?? 0) > 40 || (safeContent.message?.length ?? 0) > 200 || maxBtnLen > 12;
               const base = (isBoldHeavy && isLongContent) ? 580 : isLongContent ? 500 : 380;
               return `min(${base}px, calc(100% - 64px))`;
             })();
@@ -722,7 +761,7 @@ export default function ConsentPreview({
             return (
               <div
                 key={bannerAnimation}
-                style={{ ...bannerPosStyle, width: bannerWidth }}
+                style={{ ...bannerPosStyle, width: bannerWidth, zIndex: 20 }}
               >
                 {bannerCard}
               </div>
@@ -741,7 +780,8 @@ export default function ConsentPreview({
               <div className="relative px-5 pt-5 pb-3 shrink-0">
                 {content?.closeButton ? (
                   <button
-                    className="absolute top-4 right-5 shrink-0 text-black opacity-70 leading-none"
+                    className="absolute top-4 right-5 shrink-0 opacity-70 leading-none"
+                    style={{ color: closeButtonColor }}
                     type="button"
                     onClick={() => setModalView("main")}
                     aria-label="Close preferences"
@@ -795,24 +835,24 @@ export default function ConsentPreview({
                       {prefExpanded === 'necessary' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('strictlyNecessary')}
+                      {safeContent.categories?.necessary?.name || t('essential')}
                     </span>
                     <span
-                      style={{ color: colors.textColor }}
-                      className="shrink-0 text-[11px] opacity-90"
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="shrink-0 min-w-0 max-w-[45%] text-right text-[11px] opacity-90"
                     >
-                      {t('alwaysActive')}
+                      {safeContent.categories?.alwaysActiveLabel || t('alwaysActive')}
                     </span>
                   </div>
                   {prefExpanded === 'necessary' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('essentialDescription')}
+                      {safeContent.categories?.necessary?.description || t('essentialDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -831,19 +871,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'marketing' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('marketing')}
+                      {safeContent.categories?.marketing?.name || t('marketing')}
                     </span>
                     {toggleSwitch(prefMarketing, () => setPrefMarketing((v) => !v))}
                   </div>
                   {prefExpanded === 'marketing' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('marketingDescription')}
+                      {safeContent.categories?.marketing?.description || t('marketingDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -862,19 +902,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'analytics' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('analytics')}
+                      {safeContent.categories?.analytics?.name || t('analytics')}
                     </span>
                     {toggleSwitch(prefAnalytics, () => setPrefAnalytics((v) => !v))}
                   </div>
                   {prefExpanded === 'analytics' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('analyticsDescription')}
+                      {safeContent.categories?.analytics?.description || t('analyticsDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -893,19 +933,19 @@ export default function ConsentPreview({
                       {prefExpanded === 'preferences' ? '−' : '+'}
                     </button>
                     <span
-                      style={{ color: colors.headingColor }}
-                      className="flex-1 text-[11px]"
+                      style={{ color: colors.headingColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      className="flex-1 min-w-0 text-[11px]"
                     >
-                      {t('preferences')}
+                      {safeContent.categories?.preferences?.name || t('preferences')}
                     </span>
                     {toggleSwitch(prefUserCategory, () => setPrefUserCategory((v) => !v))}
                   </div>
                   {prefExpanded === 'preferences' ? (
                     <p
-                      style={{ color: colors.textColor }}
+                      style={{ color: colors.textColor, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
-                      {t('preferencesDescription')}
+                      {safeContent.categories?.preferences?.description || t('preferencesDescription')}
                     </p>
                   ) : null}
                 </div>
@@ -952,7 +992,8 @@ export default function ConsentPreview({
             >
               {content?.closeButton ? (
                 <button
-                  className="absolute top-3 right-3 text-black opacity-70 cursor-pointer leading-none"
+                  className="absolute top-3 right-3 opacity-70 cursor-pointer leading-none"
+                  style={{ color: closeButtonColor }}
                   type="button"
                   onClick={() => setModalView("main")}
                   aria-label="Close opt-out"
@@ -1004,7 +1045,7 @@ export default function ConsentPreview({
                   type="button"
                   onClick={() => setModalView("main")}
                 >
-                  {t("cancel")}
+                  {content?.ccpaCancelLabel || t("cancel")}
                 </button>
                 <button
                   style={preferenceStyle}
@@ -1038,13 +1079,17 @@ export default function ConsentPreview({
   floatingButtonEnabled: floatingButton?.enabled,
   floatingButtonPosition: floatingButton?.position,
   borderRadius: initialLayout?.borderRadius || "12",
+  buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
+  isGAC: googleAcEnabled,
 }} />}
         </div>
-      {/* Floating logo pinned to the preview frame corner — mirrors CDN position:fixed; bottom:16px; left/right:16px */}
-      {floatingButton.enabled && device !== "mobile" ? (
+      {/* Floating logo pinned below the banner in all views — z-10 keeps it under the banner (z-20) */}
+      {floatingButton.enabled ? (
         <div
-          className={`absolute bottom-4 z-20 pointer-events-none ${
+          className={`absolute pointer-events-none z-10 ${
+            device === 'mobile' ? 'bottom-2' : 'bottom-4'
+          } ${
             floatingButton.position === 'right' ? 'right-4' : 'left-4'
           }`}
         >

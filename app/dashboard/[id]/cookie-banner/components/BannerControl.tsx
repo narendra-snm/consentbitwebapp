@@ -30,7 +30,7 @@ type Props = {
 };
 
 export default function BannerControl({ value, onChange }: Props) {
-  const { position, alignment, borderRadius, animation } = value;
+  const { position, alignment, borderRadius, buttonRadius, animation } = value;
 
   const patch = (partial: Partial<BannerLayoutValue>) => {
     onChange({ ...value, ...partial });
@@ -45,7 +45,11 @@ export default function BannerControl({ value, onChange }: Props) {
             <button
               key={pos.id}
               type="button"
-              onClick={() => patch({ position: pos.id })}
+              onClick={() => {
+                const next: Partial<BannerLayoutValue> = { position: pos.id };
+                if (pos.id === 'box' && alignment === 'bottom-center') next.alignment = 'bottom-left';
+                patch(next);
+              }}
               className="relative group flex flex-col items-start gap-2 focus:outline-none cursor-pointer"
               aria-label={`Select ${pos.label} position`}
             >
@@ -139,14 +143,30 @@ export default function BannerControl({ value, onChange }: Props) {
         <input
           type="number"
           min={0}
-          max={30}
+          max={25}
           value={borderRadius}
           onChange={(e) => {
-            const v = Math.min(30, Math.max(0, Number(e.target.value) || 0));
+            const v = Math.min(25, Math.max(0, Number(e.target.value) || 0));
             patch({ borderRadius: String(v) });
           }}
           className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
           placeholder="12"
+        />
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-[#F9F9FA] p-5 space-y-3">
+        <h3 className="font-semibold"><Tooltip text="Sets the corner roundness of buttons inside the banner (Accept, Reject, Preferences). Use 0 for sharp corners or higher values for a rounder look.">Button Radius</Tooltip></h3>
+        <input
+          type="number"
+          min={0}
+          max={25}
+          value={buttonRadius}
+          onChange={(e) => {
+            const v = Math.min(25, Math.max(0, Number(e.target.value) || 0));
+            patch({ buttonRadius: String(v) });
+          }}
+          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-4 py-3  text-[#111827] outline-none focus:border-blue-500"
+          placeholder="8"
         />
       </div>
 

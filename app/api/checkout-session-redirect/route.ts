@@ -1,9 +1,11 @@
+export const runtime = 'edge';
+
 // GET /api/checkout-session-redirect?session_id=cs_xxx&redirect=<encoded url>
 // Fetches Stripe session details server-side, appends them as URL params, then redirects.
 import { NextRequest, NextResponse } from 'next/server';
 import { serverFetchJson } from '@/lib/server-api';
 
-export const runtime = 'edge';
+
 
 interface SessionData {
   success: boolean;

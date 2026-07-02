@@ -1,17 +1,23 @@
 
 "use client";
-export const runtime = 'edge';
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getBillingInvoices,
   getBillingSummary,
   createBillingPortalSession,
   cancelSubscription,
+  switchBillingInterval,
+  previewSwitchInterval,
   renameSite,
   checkSiteDomainForRename,
   type BillingInvoice,
   type BillingSummary,
+  type SwitchIntervalPreview,
 } from "@/lib/client-api";
+import dynamic from "next/dynamic";
+
+const PaymentMethodCard = dynamic(() => import("./PaymentMethodCard"), { ssr: false });
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -107,6 +113,11 @@ export default function BillingPage({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!cancelError) return;
+    const t = setTimeout(() => setCancelError(null), 5000);
+    return () => clearTimeout(t);
+  }, [cancelError]);
 
   /** Site selected in header (or first site) — editable registered URL on the plan card */
   const [planSiteDomain, setPlanSiteDomain] = useState("");
@@ -173,6 +184,8 @@ export default function BillingPage({
   // Pagination
   const INVOICES_PER_PAGE = 5;
   const [invoicePage, setInvoicePage] = useState(1);
+  // Bump to force the invoice list to re-fetch (e.g. after an interval switch generates a new invoice).
+  const [invoiceReloadToken, setInvoiceReloadToken] = useState(0);
 
   // Load invoices
   useEffect(() => {
@@ -209,7 +222,7 @@ export default function BillingPage({
       .catch((e) => { if (!cancelled) setInvoiceError(e?.message || "Failed to load invoices"); })
       .finally(() => { if (!cancelled) setInvoiceLoading(false); });
     return () => { cancelled = true; };
-  }, [organizationId]);
+  }, [organizationId, invoiceReloadToken]);
 
   // Load billing summary (for payment method + billing details).
   // Re-fetch when activeSiteId changes — each site may have different billing address/country.
@@ -266,13 +279,13 @@ export default function BillingPage({
         const created = inv.created ? new Date(inv.created) : null;
         const date = created && !Number.isNaN(created.getTime())
           ? created.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-          : "-";
+          : "Not available";
         const amount = ((inv.amountPaid ?? inv.amountDue ?? 0) / 100).toFixed(2) + " USD";
         const status = String(inv.status || "open").toLowerCase() === "paid" ? "Completed" : String(inv.status || "Open");
         const siteMatch = inv.siteId
           ? domainSites.find((s) => String(s.id) === String(inv.siteId))
           : null;
-        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "—";
+        const siteName = siteMatch ? (siteMatch.domain || siteMatch.name || "") : "Not available";
         return {
           date,
           invoiceNumber: inv.number || inv.id,
@@ -385,10 +398,57 @@ export default function BillingPage({
     }
   };
 
-  const handleEditCard = async () => {
+  // Open the confirm modal and fetch the live prorated preview (real amount / trial / credit).
+  const openSwitchModal = async (target: "monthly" | "yearly") => {
     if (!organizationId) return;
-    try { await openPortal(); } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not open billing portal");
+    setSwitchTarget(target);
+    setSwitchError(null);
+    setSwitchPreview(null);
+    setShowSwitchModal(true);
+    setSwitchPreviewLoading(true);
+    try {
+      const p = await previewSwitchInterval(organizationId, target);
+      setSwitchPreview(p);
+    } catch {
+      /* fall back to static text */
+    } finally {
+      setSwitchPreviewLoading(false);
+    }
+  };
+
+  const handleSwitchInterval = async () => {
+    if (!organizationId || !switchTarget) return;
+    setSwitchLoading(true);
+    setSwitchError(null);
+    try {
+      const result = await switchBillingInterval(organizationId, switchTarget);
+      // 1. Optimistically update the local billing summary
+      setSummary((prev) =>
+        prev
+          ? { ...prev, interval: result.interval, nextBillingDate: result.nextBillingDate ?? prev.nextBillingDate }
+          : prev,
+      );
+      // 2. Optimistically patch the site in global session state so all tables (e.g. All Domains) update immediately
+      if (activeSiteId) {
+        updateSiteInState({
+          id: activeSiteId,
+          interval: result.interval,
+          billing_interval: result.interval,
+          subscriptionInterval: result.interval,
+          subscription_interval: result.interval,
+        });
+      }
+      // 3. Bust caches + re-fetch so every table and the invoice list reflect the new interval / new invoice
+      summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+      invoiceCache.delete(organizationId);
+      try { window.sessionStorage.removeItem(`${INVOICE_STORAGE_KEY}:${organizationId}`); } catch { /* ignore */ }
+      setInvoiceReloadToken((t) => t + 1);
+      await refresh({ showLoading: false });
+      setShowSwitchModal(false);
+    } catch (e) {
+      setSwitchError(e instanceof Error ? e.message : "Failed to switch billing period. Please try again.");
+    } finally {
+      setSwitchLoading(false);
     }
   };
 
@@ -398,6 +458,14 @@ export default function BillingPage({
       alert(e instanceof Error ? e.message : "Could not open billing portal");
     }
   };
+
+  // Interval switch modal state
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
+  const [switchLoading, setSwitchLoading] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switchPreview, setSwitchPreview] = useState<SwitchIntervalPreview | null>(null);
+  const [switchPreviewLoading, setSwitchPreviewLoading] = useState(false);
 
   const refreshSummary = async () => {
     if (!organizationId) return;
@@ -451,12 +519,84 @@ export default function BillingPage({
   };
 
   const pm = summary?.paymentMethod ?? null;
-  const cardBrand = pm?.brand?.toLowerCase() ?? "";
-  const isMastercard = cardBrand === "mastercard";
-  const isVisa = cardBrand === "visa";
 
   return (
     <>
+    {/* Switch Billing Interval Confirmation Modal */}
+    {showSwitchModal && switchTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !switchLoading && setShowSwitchModal(false)} />
+        <div className="relative w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+          <div className="flex justify-center mb-4">
+            <div className="w-14 h-14 rounded-full bg-[#eff6ff] flex items-center justify-center">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2v10M12 17h.01" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round"/>
+                <circle cx="12" cy="12" r="10" stroke="#007AFF" strokeWidth="2"/>
+              </svg>
+            </div>
+          </div>
+          <h3 className="text-[18px] font-bold text-black text-center mb-2">
+            Switch to {switchTarget === "yearly" ? "Yearly" : "Monthly"} Billing?
+          </h3>
+          <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5 min-h-[40px]">
+            {switchPreviewLoading ? (
+              "Calculating your balance..."
+            ) : switchPreview ? (
+              (() => {
+                const fmt = (cents: number) =>
+                  new Intl.NumberFormat(undefined, { style: "currency", currency: (switchPreview.currency || "usd").toUpperCase() })
+                    .format(cents / 100);
+                const amount = switchPreview.amountDueCents ?? 0;
+                const per = switchTarget === "yearly" ? "year" : "month";
+                if (switchPreview.isTrialing) {
+                  const when = switchPreview.trialEnd ? new Date(switchPreview.trialEnd).toLocaleDateString() : "your trial ends";
+                  return `You're on a free trial, so nothing will be charged now. When your trial ends (${when}), you'll be billed ${fmt(amount)}/${per}.`;
+                }
+                if (amount <= 0) {
+                  return `No payment is due now. Any unused balance will be credited toward future invoices. Your plan will renew ${per === "year" ? "yearly" : "monthly"}.`;
+                }
+                return `You'll be charged ${fmt(amount)} now, the prorated balance for switching to the card on file. Your plan will then renew ${per === "year" ? "yearly" : "monthly"}.`;
+              })()
+            ) : switchTarget === "yearly" ? (
+              "You'll be charged for a full year at a 20% discount. The difference will be prorated from your current billing cycle."
+            ) : (
+              "You'll be switched to monthly billing. Unused yearly credit will be prorated on your next invoice."
+            )}
+          </div>
+          {switchError && (
+            <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
+              {switchError}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { if (!switchLoading) { setShowSwitchModal(false); setSwitchError(null); } }}
+              disabled={switchLoading}
+              className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+            >
+              Keep Current
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchInterval}
+              disabled={switchLoading}
+              className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+            >
+              {switchLoading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Switching...
+                </>
+              ) : (
+                `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Cancel Subscription Confirmation Modal */}
     {showCancelModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -624,8 +764,9 @@ export default function BillingPage({
                 {invoice.invoicePdf ? (
                   <a href={invoice.invoicePdf} target="_blank" rel="noreferrer"
                     className="bg-[#e6f1fd] border border-[#cedef0] rounded-[2px] size-[13px] flex items-center justify-center shrink-0" title="Download PDF">
-                    <svg className="w-[6px] h-[5px]" fill="none" viewBox="0 0 5.83333 4.66667">
-                      <path d={svgPaths.pc41fd00} fill="#007AFF" /><path d={svgPaths.pbc14700} fill="#007AFF" />
+                    <svg className="w-[7px] h-[8px]" fill="none" viewBox="0 0 6 5">
+                      <path d={svgPaths.pc41fd00} fill="#007AFF" />
+                      <path d={svgPaths.pbc14700} fill="#007AFF" />
                     </svg>
                   </a>
                 ) : null}
@@ -663,6 +804,7 @@ export default function BillingPage({
                 </div>
                 <p className="font-medium leading-[normal] text-[#118a41] text-[10px] tracking-[-0.5px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>{invoice.status}</p>
               </div>
+
             </div>
           ))}
           {invoiceLoading && <p className="text-sm text-[#6b7280]">Loading invoices...</p>}
@@ -751,6 +893,39 @@ export default function BillingPage({
             </div>
           </div>
 
+          {/* Billing interval toggle — only for active paid subs with a known interval */}
+          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && (
+            <div className="pt-3 pb-3 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <p className="text-[14px] font-normal text-[#6b7280]">Billing Period</p>
+                <div className="flex items-center bg-[#f3f4f6] rounded-[8px] p-[3px] gap-[2px]">
+                  {(["monthly", "yearly"] as const).map((iv) => {
+                    const current = ((summary?.interval as string) || "monthly").toLowerCase();
+                    const isActive = current === iv;
+                    return (
+                      <button
+                        key={iv}
+                        type="button"
+                        disabled={isActive || switchLoading}
+                        onClick={() => openSwitchModal(iv)}
+                        className={`px-[12px] py-[5px] rounded-[6px] text-[13px] font-medium transition-colors disabled:cursor-default flex items-center gap-1 ${
+                          isActive
+                            ? "bg-white text-black shadow-sm"
+                            : "text-[#6b7280] hover:text-black disabled:opacity-60"
+                        }`}
+                      >
+                        {iv === "yearly" ? "Yearly" : "Monthly"}
+                        {iv === "yearly" && !isActive && (
+                          <span className="text-[10px] text-[#059669] font-semibold">20% off</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="pt-5 flex gap-3">
             <button
               type="button"
@@ -769,31 +944,38 @@ export default function BillingPage({
                     : "at period end"}
                 </span>
               </div>
-            ) : (
+            ) : currentPlan !== "Free" ? (
               <button
                 type="button"
                 onClick={() => { setCancelError(null); setShowCancelModal(true); }}
-                disabled={currentPlan === "Free" || cancelLoading}
+                disabled={cancelLoading}
                 className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 text-[#4B5563] py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancel Subscription
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Billing Details + Payment Method — single card with blue border */}
-       
-<BillingDetailsCard
-  name={userName}
-  email={userEmail}
-  country={summary?.billingCountry || "—"}
-  address={summary?.billingAddress || "—"}
-  pm={pm}
-  onVisitStripePortal={handleVisitPortal}
-  onEditCard={handleEditCard}
-  onOpenPortal={handleOpenPortalFooter}
-/>
+        {/* Billing Details */}
+        <BillingDetailsCard
+          name={userName}
+          email={userEmail}
+          country={summary?.billingCountry || "Not available"}
+          address={summary?.billingAddress || "Not available"}
+          onVisitStripePortal={handleVisitPortal}
+        />
+
+        {/* Payment Method — inline Stripe card form */}
+        <PaymentMethodCard
+          pm={pm}
+          organizationId={organizationId}
+          billingCountry={summary?.billingCountry || ""}
+          onUpdateSuccess={(newPm) => {
+            setSummary((prev) => prev ? { ...prev, paymentMethod: newPm } : prev);
+            summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+          }}
+        />
       </div>
     </div>
     </>

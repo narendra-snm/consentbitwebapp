@@ -220,8 +220,17 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     category: 'necessary',
   });
 
+  const isLegacySite = !!(currentSite as any)?.isLegacy;
+  const legacySource: string = (currentSite as any)?.legacySource ?? '';
+  const cdnScriptId: string = (currentSite as any)?.cdnScriptId ?? (currentSite as any)?.cdnscriptid ?? '';
+  const platformSiteId = (currentSite as any)?.platformSiteId ?? (currentSite as any)?.platformsiteid ?? null;
+  // Migrated webapp users skip the frontend script check — backend scanSite.js handles their verification
+  const isWebappMigrated = isLegacySite && !!platformSiteId;
+
   const hasDraftRules = useMemo(() => customRules.some((r) => r.published === 0), [customRules]);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showWebflowUpdateModal, setShowWebflowUpdateModal] = useState(false);
+  const [legacyScriptCheckLoading, setLegacyScriptCheckLoading] = useState(false);
   /** No sites on account, or URL site id not in session — show dialog instead of a page error strip. */
   const [showNoSiteModal, setShowNoSiteModal] = useState(false);
   const [scanLimitReached, setScanLimitReached] = useState(false);
@@ -282,7 +291,6 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       const firstWithCookies = ALL_CATEGORIES.find((c) => (byCat[c]?.length ?? 0) > 0);
       setSelectedCategory(firstWithCookies ?? 'necessary');
     } catch (e: unknown) {
-      console.error('[CookieScanDashboard]', e);
       const msg = e instanceof Error ? e.message : 'Failed to load scan data';
       const list = Array.isArray(sitesRef.current) ? sitesRef.current : [];
       const ok = list.some((s: any) => String(s?.id) === String(siteId));
@@ -362,6 +370,32 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       void logout();
       return;
     }
+    setShowWebflowUpdateModal(false);
+
+    // For legacy sites, verify the ConsentBit script is present in <head> before scanning.
+    // Webflow: script must be in <head> — show "Update your app" modal and block if not.
+    if (isLegacySite && !isWebappMigrated && (legacySource === 'webflow' || legacySource === 'framer')) {
+      setLegacyScriptCheckLoading(true);
+      try {
+        const res = await fetch('/api/check-legacy-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain: siteDomain, legacySource, cdnScriptId, siteId }),
+        });
+        const data = await res.json().catch(() => ({ found: false, inHead: false })) as { found: boolean; inHead: boolean };
+        if (legacySource === 'webflow' && !data.inHead) {
+          setShowWebflowUpdateModal(true);
+          setLegacyScriptCheckLoading(false);
+          return;
+        }
+        setShowWebflowUpdateModal(false);
+      } catch {
+        // Network error — allow scan to proceed rather than hard-blocking
+      } finally {
+        setLegacyScriptCheckLoading(false);
+      }
+    }
+
     scanningRef.current = true;
     setScanning(true);
     setError(null);
@@ -458,7 +492,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       if (msg.toLowerCase().includes('scan limit') || msg.toLowerCase().includes('limit reached')) {
         setScanLimitReached(true);
       } else if (msg.toLowerCase().includes('not verified') || msg.toLowerCase().includes('site_not_verified')) {
-        setSiteNotVerified(true);
+        if (isWebappMigrated) {
+          setShowWebflowUpdateModal(true);
+        } else {
+          setSiteNotVerified(true);
+        }
       } else {
         setError(msg);
       }
@@ -709,12 +747,12 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
             <button
               id="cookie-scan-primary-cta"
               type="button"
-              onClick={handleScanNow}
-              disabled={scanning || hasScanInProgress || showNoSiteModal}
+              onClick={() => void handleScanNow()}
+              disabled={scanning || hasScanInProgress || showNoSiteModal || legacyScriptCheckLoading}
               className="h-10 rounded-lg bg-[#007aff] px-8 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
               style={dm}
             >
-              {scanning || hasScanInProgress ? 'Scanning…' : 'Scan Now'}
+              {legacyScriptCheckLoading ? 'Checking…' : (scanning || hasScanInProgress ? 'Scanning…' : 'Scan Now')}
             </button>
           )}
         </div>
@@ -837,7 +875,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     {pagedCookies.map((c, i) => (
                       <tr key={c.id} className= 'text-sm font-medium border-b border-[#9FBCE4]'>
                         <td className={`py-4.5 px-3 pl-5.5 font-semibold text-black`}>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 overflow-auto">
                             {c.name}
                             {String(c.source || '').startsWith('user-rule:') && (
                               <span className="inline-flex h-4 items-center rounded-full bg-[#e6f1fd] px-1.5 text-[10px] font-medium text-[#007aff]">
@@ -983,9 +1021,9 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                         >
                           <div className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{formatLocalDateTime(row.createdAt)}</div>
                           <div>{statusBadge(row.scanStatus)}</div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>{row.scanUrl ? '1' : '—'}</div>
                           <div
-                            className="font-['DM_Sans'] text-xs text-[#0a091f] truncate min-w-0"
+                            className="font-['DM_Sans'] text-sm text-[#0a091f] truncate min-w-0"
                             style={dm}
                             title={
                               !isInProgress && row.categories?.length
@@ -997,13 +1035,13 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                               ? row.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(', ')
                               : '—'}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>
                             {isInProgress ? '—' : (row.cookiesFound ?? '—')}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#0a091f]" style={dm}>
+                          <div className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>
                             {isInProgress ? '—' : (row.scriptsFound ?? '—')}
                           </div>
-                          <div className="font-['DM_Sans'] text-xs text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
+                          <div className="font-['DM_Sans'] text-sm text-[#007aff] truncate" style={dm} title={row.scanUrl ?? ''}>{row.scanUrl || '—'}</div>
                           <div className="flex items-center justify-end">
                             {isActiveRow ? <div className="w-5 h-5" aria-hidden /> : null}
                           </div>
@@ -1014,7 +1052,7 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 {/* Pagination */}
                 {scanHistory.length > HISTORY_PAGE_SIZE && (
                   <div className="flex items-center justify-between border-t border-[#e5e7eb] px-4 py-3 bg-white">
-                    <span className="font-['DM_Sans'] text-xs text-[#6b7280]" style={dm}>
+                    <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>
                       Showing {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, scanHistory.length)} of {scanHistory.length}
                     </span>
                     <div className="flex items-center gap-1">
@@ -1097,8 +1135,8 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                     </div>
                     <span className="font-['DM_Sans'] text-sm text-[#0a091f] truncate" style={dm}>{rule.domain}</span>
                     <span className="font-['DM_Sans'] text-sm text-[#0a091f] capitalize" style={dm}>{rule.category}</span>
-                    <span className="font-['DM_Sans'] text-sm text-[#6b7280]" style={dm}>{rule.duration || '—'}</span>
-                    <span className="font-['DM_Sans'] text-[11px] text-[#6b7280] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
+                    <span className="font-['DM_Sans'] text-sm text-[#0a091f]" style={dm}>{rule.duration || '—'}</span>
+                    <span className="font-['DM_Sans'] text-[11px] text-[#0a091f] truncate" style={dm} title={rule.scriptUrlPattern ?? ''}>{rule.scriptUrlPattern || '—'}</span>
                     <button
                       type="button"
                       onClick={() => void handleDeleteRule(rule.id)}
@@ -1240,6 +1278,44 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
                 className="h-10 rounded-md bg-[#007aff] px-6 text-sm text-white disabled:opacity-60"
               >
                 {savingCustomCookie ? 'Saving...' : 'Save draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Webflow legacy: script not in <head> — prompt user to update their app */}
+      {showWebflowUpdateModal ? (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 2L2 17H18L10 2Z" stroke="#F59E0B" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M10 8V11" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="10" cy="14" r="0.75" fill="#F59E0B"/>
+                </svg>
+              </div>
+              <h2 className="font-semibold text-[#111827] text-lg">Update your Webflow app</h2>
+            </div>
+            <p className="text-sm text-[#4B5563] leading-relaxed mb-2">
+              Your ConsentBit script was not detected in the <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">&lt;head&gt;</code> of your site.
+            </p>
+            <p className="text-sm text-[#4B5563] leading-relaxed mb-4">
+              To enable scanning, please open your Webflow site settings and ensure the ConsentBit embed code is placed in the <strong>Custom Code → Head</strong> section, then republish your site.
+            </p>
+            <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 mb-6">
+              <p className="text-sm text-[#1D4ED8]">
+                <strong>In the meantime</strong>, you can still add and categorize cookies manually using the <strong>Add Cookie</strong> button on this page.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowWebflowUpdateModal(false)}
+                className="h-10 rounded-lg bg-[#007aff] px-6 text-sm text-white hover:bg-[#0066d6] transition-colors"
+              >
+                Got it
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 
-export default function GettingStarted({ activeSiteId }: { activeSiteId?: string | null }) {
+export default function GettingStarted({ activeSiteId, isLegacy = false }: { activeSiteId?: string | null; isLegacy?: boolean }) {
   return (
     <div className="bg-gray-100 rounded-xl mt-5.5 px-6 py-6.5 grid grid-cols-[1fr_1.3fr_1.3fr_1fr] divide-x divide-gray-200">
 
@@ -23,7 +23,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
 
         <div className="flex items-center gap-3 pt-5.75 mt-auto relative bottom-[-6px]">
           <a
-            href="https://docs.consentbit.com"
+            href="https://www.consentbit.com/help-document"
             target="_blank"
             rel="noreferrer"
             className="bg-[#007AFF] text-white text-sm px-4 py-1.5 rounded-md whitespace-nowrap"
@@ -62,6 +62,9 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
           </p>
         </div>
 
+        {isLegacy ? (
+          <span className="flex items-center font-medium gap-1.5 text-[#9CA3AF] text-[15px] mt-auto pt-6 cursor-not-allowed opacity-50">Review Settings</span>
+        ) : (
         <Link
           href={activeSiteId ? `/dashboard/${activeSiteId}/cookie-banner` : "/dashboard/one"}
           className="flex items-center font-medium gap-1.5 text-[#007AFF] text-[15px] mt-auto pt-6 cursor-pointer"
@@ -74,9 +77,9 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
 <path d="M5 10.9375H1.25" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
 <path d="M8.75 13.125C9.95812 13.125 10.9375 12.1456 10.9375 10.9375C10.9375 9.72938 9.95812 8.75 8.75 8.75C7.54188 8.75 6.5625 9.72938 6.5625 10.9375C6.5625 12.1456 7.54188 13.125 8.75 13.125Z" stroke="#007AFF" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
-
           Review Settings
         </Link>
+        )}
       </div>
 
       {/* ITEM 3 */}
@@ -95,6 +98,9 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
           </p>
         </div>
 
+        {isLegacy ? (
+          <span className="flex items-center font-medium gap-1.5 text-[#9CA3AF] text-[15px] mt-auto pt-6 cursor-not-allowed opacity-50">Style your banner</span>
+        ) : (
         <Link
           href={activeSiteId ? `/dashboard/${activeSiteId}/cookie-banner` : "/dashboard"}
           className="flex items-center font-medium gap-1.5 text-[#007AFF] text-[15px] mt-auto pt-6 cursor-pointer"
@@ -109,6 +115,7 @@ export default function GettingStarted({ activeSiteId }: { activeSiteId?: string
 
           Style your banner
         </Link>
+        )}
       </div>
 
       {/* ITEM 4 */}

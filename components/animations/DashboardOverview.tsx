@@ -3,7 +3,7 @@
 export default function DashboardOverview() {
   return (
     
-    <div className=" overflow-clip relative rounded-[24px] h-screen flex items-center" data-name="Dashboard Overview">
+    <div className="pt-[100px] overflow-clip relative rounded-[24px] h-screen flex items-center" data-name="Dashboard Overview">
       {/* <Group /> */}
 
           <img src="/images/closed.svg" alt="Dashboard Overview" />

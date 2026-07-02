@@ -1,12 +1,14 @@
 /** Shared draft state for Layout / Colors / Type — published in one `saveBannerCustomization` call. */
-
+//ff
 export type BannerLayoutValue = {
   /** Visual style in the editor (not all are used by the live embed yet). */
   position: 'box' | 'banner' | 'bottom-center';
-  /** Maps to DB `position` (bottom-left | bottom-right). */
-  alignment: 'bottom-left' | 'bottom-right';
+  /** Maps to DB `position` (bottom-left | bottom-right | bottom-center). */
+  alignment: 'bottom-left' | 'bottom-right' | 'bottom-center';
   /** Border radius in px (stored as rem in DB). */
   borderRadius: string;
+  /** Button corner radius in px (stored as rem in DB under `buttonBorderRadius`). */
+  buttonRadius: string;
   /** Saved under translations.en.bannerEntranceAnimation for future use. */
   animation: string;
 };
@@ -43,13 +45,14 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     position: 'box',
     alignment: 'bottom-left',
     borderRadius: '12',
+    buttonRadius: '4',
     animation: 'fade-in',
   },
   colors: {
     bannerBg: '#ffffff',
     textColor: '#334155',
     headingColor: '#0f172a',
-    buttonColor: '#0284c7',
+    buttonColor: '#007aff',
     buttonTextColor: '#ffffff',
     preferencesButtonBg: '#ffffff',
     preferencesButtonText: '#0284c7',
@@ -64,27 +67,30 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
 };
 
 export function pxBorderRadiusToRem(px: string): string {
-  const n = Math.max(0, Number.parseFloat(px) || 12);
+  const parsed = Number.parseFloat(px);
+  const n = Math.max(0, isNaN(parsed) ? 12 : parsed);
   return `${(n / 16).toFixed(3)}rem`;
 }
 
-const MAX_BORDER_RADIUS = 30;
+const MAX_BORDER_RADIUS = 25;
 
 export function bannerRadiusToPxString(r: string | undefined | null): string {
   if (r == null || r === '') return DEFAULT_APPEARANCE.layout.borderRadius;
   const s = String(r).trim();
-  if (s.endsWith('px')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(Number.parseFloat(s) || 12))));
-  if (s.endsWith('rem')) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round((Number.parseFloat(s) || 0.75) * 16))));
+  const clamp = (v: number) => String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(v))));
+  if (s.endsWith('px')) { const n = Number.parseFloat(s); return clamp(isNaN(n) ? 12 : n); }
+  if (s.endsWith('rem')) { const n = Number.parseFloat(s); return clamp((isNaN(n) ? 0.75 : n) * 16); }
   const n = Number.parseFloat(s);
-  if (!Number.isNaN(n) && n < 4) return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n * 16))));
-  return String(Math.min(MAX_BORDER_RADIUS, Math.max(0, Math.round(n || 12))));
+  if (!Number.isNaN(n) && n < 4) return clamp(n * 16);
+  return clamp(isNaN(n) ? 12 : n);
 }
 
 export function normalizeBannerPosition(
   raw: string | undefined | null,
-): 'bottom-left' | 'bottom-right' {
+): 'bottom-left' | 'bottom-right' | 'bottom-center' {
   const v = String(raw || '').toLowerCase();
   if (v === 'bottom-right' || v === 'right') return 'bottom-right';
+  if (v === 'bottom-center' || v === 'center') return 'bottom-center';
   return 'bottom-left';
 }
 
@@ -140,26 +146,36 @@ export function appearanceFromCustomization(
     };
   }
 
-  const en = (customization as { translations?: { en?: Record<string, string> } }).translations?.en || {};
+  const translations = (customization as { translations?: { en?: Record<string, string>; config?: Record<string, string> } }).translations || {};
+  const en = translations.en || {};
+  const cfg = translations.config || {};
 
-  const visualRaw = String(en.bannerLayoutVisual || 'box').toLowerCase();
+  // Prefer config (written by both webapp and Webflow app) then fall back to en.
+  const _cfgOrEn = (c: string | undefined, e: string | undefined) => (c != null && c !== '' ? c : e);
+
+  const visualRaw = String(_cfgOrEn(cfg.bannerLayoutVisual, en.bannerLayoutVisual) || 'box').toLowerCase();
   // Coerce legacy 'popup' saved value to the new 'bottom-center' option.
   const visualNorm = visualRaw === 'popup' ? 'bottom-center' : visualRaw;
   const position = LAYOUT_VISUAL.includes(visualNorm as (typeof LAYOUT_VISUAL)[number])
     ? (visualNorm as AppearanceState['layout']['position'])
     : 'box';
 
+  const rawAlignment = normalizeBannerPosition(
+    (customization as { position?: string }).position,
+  );
+  const animationRaw = _cfgOrEn(cfg.bannerEntranceAnimation, en.bannerEntranceAnimation);
   const layout: BannerLayoutValue = {
     position,
-    alignment: normalizeBannerPosition(
-      (customization as { position?: string }).position,
-    ),
+    alignment: position === 'box' && rawAlignment === 'bottom-center' ? 'bottom-left' : rawAlignment,
     borderRadius: bannerRadiusToPxString(
       (customization as { bannerBorderRadius?: string }).bannerBorderRadius,
     ),
+    buttonRadius: (customization as { buttonBorderRadius?: string }).buttonBorderRadius != null
+      ? bannerRadiusToPxString((customization as { buttonBorderRadius?: string }).buttonBorderRadius)
+      : DEFAULT_APPEARANCE.layout.buttonRadius,
     animation:
-      typeof en.bannerEntranceAnimation === 'string' && en.bannerEntranceAnimation.length > 0
-        ? en.bannerEntranceAnimation
+      typeof animationRaw === 'string' && animationRaw.length > 0
+        ? animationRaw
         : DEFAULT_APPEARANCE.layout.animation,
   };
 
@@ -191,9 +207,9 @@ export function appearanceFromCustomization(
   colors.savePreferencesButtonText = colors.preferencesButtonText;
 
   const type: TypeSettings = {
-    font: en.bannerFontFamily || DEFAULT_APPEARANCE.type.font,
-    weight: numericWeightToLabel(en.bannerFontWeight),
-    alignment: normalizeTextAlign(en.bannerTextAlign),
+    font: _cfgOrEn(cfg.bannerFontFamily, en.bannerFontFamily) || DEFAULT_APPEARANCE.type.font,
+    weight: numericWeightToLabel(_cfgOrEn(cfg.bannerFontWeight, en.bannerFontWeight)),
+    alignment: normalizeTextAlign(_cfgOrEn(cfg.bannerTextAlign, en.bannerTextAlign)),
   };
 
   return { layout, colors, type };

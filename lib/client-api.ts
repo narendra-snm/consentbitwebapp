@@ -2,7 +2,7 @@
 /**
  * Decode a base64 transport envelope produced by the worker's security middleware.
  * Response shape: { d: "<base64 UTF-8 JSON>" }
- * Falls through for plain JSON responses (backward-compat / public endpoints).
+ * Falls through for plain JSON responsesss (backward-compat / public endpoints).
  */
 function decodeEnvelope(parsed: any): any {
   if (parsed && typeof parsed.d === 'string') {
@@ -78,18 +78,6 @@ export async function requestVerificationCode(payload: {
     }),
   });
   const data = await parseApiResponse(res);
-  try {
-    console.log('[requestVerificationCode] response', {
-      status: res.status,
-      ok: res.ok,
-      keys: data && typeof data === 'object' ? Object.keys(data) : null,
-      success: data?.success,
-      hasRequestId: typeof data?.requestId === 'string',
-      hasExpiresAt: typeof data?.expiresAt === 'string',
-      hasEnvelope: typeof data?.d === 'string',
-      error: data?.error,
-    });
-  } catch {}
   const success =
     Boolean(data?.success) ||
     (res.ok && (typeof data?.requestId === 'string' || typeof data?.expiresAt === 'string' || typeof data?.code === 'string'));
@@ -101,6 +89,7 @@ export async function verifyVerificationCode(payload: {
   email: string;
   purpose: 'login' | 'signup';
   code: string;
+  scanId?: string;
 }) {
   const res = await fetch('/api/auth/verify-code', {
     method: 'POST',
@@ -110,18 +99,23 @@ export async function verifyVerificationCode(payload: {
       email: payload.email.trim().toLowerCase(),
       purpose: payload.purpose,
       code: payload.code.trim(),
+      // Optional cookie-scan id handed off from the scanner landing page.
+      ...(payload.scanId ? { scanId: payload.scanId } : {}),
     }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
-  // Cache dashboard data so the provider renders instantly after navigation
-  if (data.dashboardInit?.authenticated) {
-    try {
+  try {
+    // Record who just logged in and drop any previous user's cached session so the
+    // dashboard doesn't flash stale data before its own dashboard-init fetch completes.
+    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    sessionStorage.removeItem('cbSessionCache');
+    // Cache dashboard data for instant render only if the worker still returns it
+    // (verify no longer blocks on building it — the dashboard fetches it on mount).
+    if (data.dashboardInit?.authenticated) {
       sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit));
-      // Used by DashboardSessionProvider to avoid showing stale cached data from another user.
-      sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
-    } catch {}
-  }
+    }
+  } catch {}
   return data;
 }
 // Passwordless OTP auth ends here
@@ -179,7 +173,7 @@ export async function getDashboardInit() {
 }
 //me endpoint ends here
 //profile update starts here
-export async function updateProfile(payload: { name?: string }) {
+export async function updateProfile(payload: { name?: string; billingEmail?: string }) {
   const res = await fetch('/api/auth/profile', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -198,7 +192,6 @@ export async function firstSetup(payload: {
 }) {
   // Ensure we're using a relative path to the Next.js API route
   const apiUrl = '/api/onboarding/first-setup';
-  console.log('firstSetup: Calling', apiUrl, 'with payload:', payload);
   
   const res = await fetch(apiUrl, {
     method: "POST",
@@ -207,11 +200,9 @@ export async function firstSetup(payload: {
     body: JSON.stringify(payload),
   });
 
-  console.log('firstSetup: Response status:', res.status, 'URL:', res.url);
   
   if (!res.ok) {
     const errorText = await res.text();
-    console.error('firstSetup: Error response:', errorText);
     let message = errorText;
     try {
       const parsed = decodeEnvelope(JSON.parse(errorText));
@@ -222,7 +213,19 @@ export async function firstSetup(payload: {
     throw new Error(message || `Setup failed: ${res.status}`);
   }
 
-  return parseApiResponse(res);
+  const result = await parseApiResponse(res);
+
+  // PostHog: fire domain_added here so EVERY caller is covered (onboarding wizard,
+  // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
+  // is always the free-plan creation path (paid plans go through createCheckoutSession).
+  // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
+  try {
+    const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
+    const { analytics } = await import("./analytics");
+    analytics.domainAdded(payload.websiteUrl, siteId, "free");
+  } catch { /* analytics must never block setup */ }
+
+  return result;
 }
 //first setup ends here
 
@@ -279,7 +282,7 @@ export async function updateSiteBannerSettings(payload: {
   });
   const text = await res.text();
   let data: any;
-  try { data = JSON.parse(text); } catch {
+  try { const p = JSON.parse(text); data = p?.d ? JSON.parse(atob(p.d)) : p; } catch {
     data = { success: false, error: text.trimStart().startsWith('<') ? `Something went wrong. Please try again.` : text };
   }
   if (!res.ok || !data.success) throw new Error(data.error || `Update site failed: ${res.status}`);
@@ -299,16 +302,22 @@ export async function checkSiteDomainForRename(
   message?: string;
   error?: string;
 }> {
-  const res = await fetch('/api/sites/check-domain', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ websiteUrl, excludeSiteId }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/sites/check-domain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ websiteUrl, excludeSiteId }),
+    });
+  } catch (fetchErr) {
+    return { success: false, available: false, error: String(fetchErr) };
+  }
   const text = await res.text();
   let data: any;
   try {
-    data = JSON.parse(text);
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
   } catch {
     return {
       success: false,
@@ -344,7 +353,10 @@ export async function renameSite(
   });
   const text = await res.text();
   let data: any;
-  try { data = JSON.parse(text); } catch {
+  try {
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
+  } catch {
     data = { success: false, error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text };
   }
   if (!res.ok || !data.success) {
@@ -364,15 +376,18 @@ export async function getBannerCustomization(siteId: string) {
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Get customization failed: ${res.status}`);
-  return data as { success: true; customization: any | null };
+  return data as { success: true; customization: any | null; iabActivated?: boolean; compliance?: string[] };
 }
 
-export async function saveBannerCustomization(payload: { siteId: string; customization: any }) {
+export async function saveBannerCustomization(payload: { siteId: string; customization: any; compliance?: string[] }) {
+  const _bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let _binary = '';
+  for (let i = 0; i < _bytes.length; i++) _binary += String.fromCharCode(_bytes[i]);
   const res = await fetch('/api/banner-customization', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ d: btoa(_binary) }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Save customization failed: ${res.status}`);
@@ -389,6 +404,7 @@ export type CreateCheckoutPayload = {
   siteName?: string | null;
   siteDomain?: string | null;
   stripeCouponId?: string | null;
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
 };
@@ -514,6 +530,7 @@ export async function upgradeSubscription(payload: {
   organizationId: string;
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
 }): Promise<{ success: true; url: string; sessionId?: string }> {
@@ -550,6 +567,25 @@ export async function cancelSubscription(payload: {
 }
 // subscription cancel ends here
 
+export async function activateLicenseWebflow(payload: {
+  licenseKey: string;
+  domain: string;
+  organizationId?: string | null;
+  wfSiteId?: string | null;
+}): Promise<{ success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null }> {
+  const res = await fetch('/api/licenses/activate-license', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `License activation failed: ${res.status}`);
+  }
+  return data as { success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null };
+}
+
 export async function deleteSite(siteId: string): Promise<{ success: boolean }> {
   const res = await fetch(`/api/sites?siteId=${encodeURIComponent(siteId)}`, {
     method: 'DELETE',
@@ -566,6 +602,7 @@ export async function deleteSite(siteId: string): Promise<{ success: boolean }> 
 export type BillingSummary = {
   planName: string;
   planId: string | null;
+  interval?: 'monthly' | 'yearly' | string | null;
   stripeSubscriptionId?: string | null;
   subscriptionId?: string | null;       // some backends return this alias
   nextBillingDate?: string | null;
@@ -596,6 +633,72 @@ export async function createBillingPortalSession(organizationId: string, returnU
   const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.error || "Failed to create portal session");
   return data as { url: string };
+}
+
+export async function createSetupIntent(organizationId: string): Promise<{ success: true; clientSecret: string }> {
+  const res = await fetch("/api/billing/setup-intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to create setup intent");
+  return data as { success: true; clientSecret: string };
+}
+
+export async function updatePaymentMethod(
+  organizationId: string,
+  paymentMethodId: string,
+): Promise<{ success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } }> {
+  const res = await fetch("/api/billing/update-payment-method", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, paymentMethodId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to update payment method");
+  return data as { success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } };
+}
+
+export async function switchBillingInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+): Promise<{ success: true; interval: string; nextBillingDate: string | null }> {
+  const res = await fetch("/api/subscriptions/switch-interval", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to switch billing interval");
+  return data as { success: true; interval: string; nextBillingDate: string | null };
+}
+
+export type SwitchIntervalPreview = {
+  success: true;
+  currentInterval: string;
+  targetInterval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;   // active: charged now; trial: billed at trial end
+  currency: string;
+  trialEnd: string | null;
+};
+export async function previewSwitchInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+): Promise<SwitchIntervalPreview> {
+  const res = await fetch("/api/subscriptions/switch-interval/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as SwitchIntervalPreview;
 }
 // billing summary ends here
 
@@ -833,6 +936,15 @@ export async function getScheduledScans(siteId: string): Promise<{
   return data;
 }
 
+export class ScanLimitError extends Error {
+  code = 'SCAN_LIMIT_REACHED' as const;
+  scansLimit: number;
+  constructor(message: string, scansLimit: number) {
+    super(message);
+    this.scansLimit = scansLimit;
+  }
+}
+
 export async function createScheduledScan(
   siteId: string,
   scheduledAt: string,
@@ -845,7 +957,12 @@ export async function createScheduledScan(
     body: JSON.stringify({ siteId, scheduledAt, frequency }),
   });
   const data = await parseApiResponse(res);
-  if (!res.ok || !data.success) throw new Error(data.error || `Schedule failed: ${res.status}`);
+  if (!res.ok || !data.success) {
+    if (data.code === 'SCAN_LIMIT_REACHED') {
+      throw new ScanLimitError(data.error || 'Scan limit reached', Number(data.scansLimit ?? 0));
+    }
+    throw new Error(data.error || `Schedule failed: ${res.status}`);
+  }
   return data;
 }
 
@@ -920,15 +1037,58 @@ export type ConsentHistoryResponse = {
   offset: number;
 };
 
+const EMPTY_CONSENT_RESPONSE: ConsentHistoryResponse = {
+  success: true,
+  consents: [],
+  cookies: [],
+  customCookieRules: [],
+  total: 0,
+  limit: 0,
+  offset: 0,
+};
+
+export async function getLegacyConsentMonthly(
+  siteId: string,
+  year: string,
+  month: string,
+  domain?: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, ...(domain ? { domain } : {}) });
+  const res = await fetch(`/api/legacy-consent-monthly?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  // Treat not-found / access errors as empty data — the site may not have legacy
+  // records yet, or may not be fully registered; surfacing a red banner is confusing.
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
+export async function getLegacyConsentMonthlyFramer(
+  siteId: string,
+  year: string,
+  month: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, limit: '500', offset: '0' });
+  const res = await fetch(`/api/legacy-consent-monthly-framer?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
 export async function getConsentHistory(
   siteId: string,
   limit: number = 100,
   offset: number = 0,
+  year?: string,
+  month?: string,
 ): Promise<ConsentHistoryResponse> {
-  const res = await fetch(
-    `/api/consent-history?siteId=${encodeURIComponent(siteId)}&limit=${limit}&offset=${offset}`,
-    { credentials: 'include' },
-  );
+  const params = new URLSearchParams({
+    siteId,
+    limit: String(limit),
+    offset: String(offset),
+    ...(year ? { year } : {}),
+    ...(month ? { month } : {}),
+  });
+  const res = await fetch(`/api/consent-history?${params.toString()}`, { credentials: 'include' });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
   return data;

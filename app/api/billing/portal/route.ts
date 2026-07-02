@@ -1,11 +1,13 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from "next/server";
 import { proxyWorkerResponse } from "@/lib/server-api";
 
-export const runtime = 'edge';
+
 
 export async function POST(request: NextRequest) {
   const cookie = request.headers.get("cookie") || "";
-  const body = await request.json().catch(() => ({}));
+  const body = await (request.json() as Promise<any>).catch(() => ({}));
   const organizationId = (body.organizationId || "").trim();
   const returnUrl = body.returnUrl || body.return_url || "";
 

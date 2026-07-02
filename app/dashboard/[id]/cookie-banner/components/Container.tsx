@@ -7,6 +7,7 @@ import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
+import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
 import { useAppContext } from "@/app/context/AppProvider";
 
 // import CookieListAccordion from "./CookieListAccordion";
@@ -15,6 +16,7 @@ import {
   type FloatingButtonState,
 } from "./FloatingButtonSettings";
 import { RegulationSelector } from "./RegulationSelector";
+import { BannerLinkSection } from "./BannerLinkSection";
 import { getBannerCustomization, saveBannerCustomization, updateSiteBannerSettings } from "@/lib/client-api";
 import {
   DEFAULT_APPEARANCE,
@@ -28,53 +30,82 @@ import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
+import { analytics } from "@/lib/analytics";
 
-function makeDefaultContentSettings() {
+function makeDefaultContentSettings(langCode = 'en') {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
   return {
-    title: "We value your privacy",
-    acceptAll: "Accept",
-    preferencesLabel: "Preference",
-    preferenceTitle: "Cookie Preferences",
-    preferenceMessage:
-      "By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.",
+    title: T.title,
+    acceptAll: T.acceptAll,
+    preferencesLabel: T.customise,
+    preferenceTitle: T.cookiePreferences,
+    preferenceMessage: T.managePreferences,
     closeButton: true,
     rejectButton: true,
     customizeButton: true,
     cookiePolicyLink: true,
-    cookiePolicyLabel: "Privacy Policy",
+    cookiePolicyLabel: T.privacyPolicy,
     privacyPolicyUrl: "",
     gdpr: {
-      message:
-        "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-      rejectAll: "Reject",
-      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+      message: T.description,
+      rejectAll: T.rejectAll,
+      saveMyPreferencesLabel: T.saveMyPreferences,
     },
     ccpa: {
-      message:
-        "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-      doNotSellLabel: "Do Not Share My Personal Information",
-      optOutTitle: TRANSLATIONS.en.optOutPreference,
-      optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
-      saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+      message: T.ccpaDescription || T.description,
+      doNotSellLabel: T.doNotSell,
+      optOutTitle: T.optOutPreference,
+      optOutMessage: T.ccpaOptOutPreferenceIntro,
+      saveMyPreferencesLabel: T.saveMyPreferences,
+      cancelLabel: T.cancel,
     },
+    categories: makeDefaultCategories(langCode),
+  };
+}
+
+function makeDefaultCategories(langCode = 'en'): CookieCategoryContent {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+  return {
+    necessary: { name: T.essential, description: T.essentialDescription },
+    analytics: { name: T.analytics, description: T.analyticsDescription },
+    marketing: { name: T.marketing, description: T.marketingDescription },
+    preferences: { name: T.preferences, description: T.preferencesDescription },
+    alwaysActiveLabel: T.alwaysActive,
   };
 }
 
 const ResetIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6.5A4.5 4.5 0 1 1 6.5 11" stroke="#374151" strokeWidth="1.4" strokeLinecap="round"/>
-    <path d="M2 9.5V6.5H5" stroke="#374151" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="#374151" strokeWidth="2" strokeLinecap="round"/>
+    <polyline points="3 3 3 8 8 8" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
 /** Snapshot of General-tab regulation dropdown (banner_type + region_mode) for Publish dirty state. */
 type RegulationSnapshot = {
-  bannerType: "gdpr" | "ccpa";
+  bannerType: "gdpr" | "ccpa" | "iab";
   regionMode: "gdpr" | "ccpa" | "both";
 };
 
 export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
+  /** Collapsible editor panel — only toggleable at lg (1024-1279px); always open at xl+. */
+  const [editorOpen, setEditorOpen] = useState(true);
+  /** True only when viewport is in [1024, 1280) — drives overlay/slide behavior. */
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const w = window.innerWidth;
+      setIsOverlayMode(w >= 1024 && w < 1280);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  /** When a sidebar item changes `active`, ensure the editor panel is open. */
+  useEffect(() => {
+    setEditorOpen(true);
+  }, [active]);
   const router = useRouter();
   const [savingContent, setSavingContent] = useState(false);
   /** Which action triggered the in-flight persist (for button labels). */
@@ -83,15 +114,30 @@ export default function page({ siteId }: { siteId: string }) {
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  /** Hoisted above `applyPersistSuccessState` so it can be a dep without a TDZ error. */
+  const [iabEnabled, setIabEnabled] = useState(false);
+  const [iabHydrated, setIabHydrated] = useState(false);
+  /** Google Additional Consent (AC) — only meaningful when IAB is enabled. */
+  const [googleAcEnabled, setGoogleAcEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!publishError) return;
+    const t = setTimeout(() => setPublishError(null), 3000);
+    return () => clearTimeout(t);
+  }, [publishError]);
 
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
   const [openAccordionKey, setOpenAccordionKey] = useState<
-    "cookieNotice" | "preferenceBanner" | null
+    "cookieNotice" | "preferenceBanner" | "cookieCategories" | null
   >("cookieNotice");
+  /** Content sub-tab: "Cookie Notice" vs "Preference Banner" (categories live under Preference). */
+  const [contentTab, setContentTab] = useState<"notice" | "preference">("notice");
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
+  const [selectedLangCode, setSelectedLangCode] = useState<string>('en');
   const [customizationBase, setCustomizationBase] = useState<any>(null);
+  const [customizationLoading, setCustomizationLoading] = useState(true);
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
     useState<FloatingButtonState | null>(null);
@@ -116,6 +162,7 @@ export default function page({ siteId }: { siteId: string }) {
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
       borderRadius: appearance.layout.borderRadius,
+      buttonRadius: appearance.layout.buttonRadius,
     });
   }, [
     appearance,
@@ -129,9 +176,8 @@ export default function page({ siteId }: { siteId: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { loading, authenticated,activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
+  const { loading, authenticated, activeSiteId, sites, effectivePlanId, activeOrganizationId, updateSiteInState, refresh } =
     useDashboardSession();
-    console.log(effectivePlanId,"activeOrganizationId from container")
   const site = sites.find((s: any) => String(s?.id) === String(siteId)) || null;
   const currentScriptUrl = useMemo(() => {
     if (!site?.id) return "";
@@ -141,10 +187,16 @@ export default function page({ siteId }: { siteId: string }) {
   const siteRef = useRef(site);
   siteRef.current = site;
 
+  const isLegacySite = !!(site as any)?.isLegacy;
+  const legacySource: string = (site as any)?.legacySource ?? "";
+  const sitePlatform: string = (site as any)?.platform ?? "";
+  // Hide install code for any Webflow site (Webflow app or legacy Webflow)
+  const isWebflowSite = sitePlatform === "webflow" || (isLegacySite && legacySource === "webflow");
+
   const isFreePlan = useMemo(() => {
     const v = String(effectivePlanId ?? "").toLowerCase();
-    return v === "free" || v.startsWith("free");
-  }, [effectivePlanId]);
+    return v === "free" && !isLegacySite;
+  }, [effectivePlanId, isLegacySite]);
 
   const consentType = useMemo<'gdpr' | 'ccpa' | 'both'>(() => {
     const bannerType = site?.banner_type || 'gdpr';
@@ -200,7 +252,7 @@ export default function page({ siteId }: { siteId: string }) {
       };
     }
     return {
-      bannerType: site.banner_type === "ccpa" ? "ccpa" : "gdpr",
+      bannerType: site.banner_type === "iab" ? "iab" : site.banner_type === "ccpa" ? "ccpa" : "gdpr",
       regionMode: (site.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
     };
   }, [site, isFreePlan, freePreviewBannerType]);
@@ -222,6 +274,7 @@ export default function page({ siteId }: { siteId: string }) {
         preferenceMessage: contentSettings.preferenceMessage,
         ccpaOptOutTitle: contentSettings.ccpa.optOutTitle,
         ccpaOptOutMessage: contentSettings.ccpa.optOutMessage,
+        ccpaCancelLabel: contentSettings.ccpa.cancelLabel,
         saveMyPreferencesLabel: contentSettings.ccpa.saveMyPreferencesLabel,
         closeButton: contentSettings.closeButton,
         rejectButton: contentSettings.rejectButton,
@@ -247,6 +300,7 @@ export default function page({ siteId }: { siteId: string }) {
       cookiePolicyLink: contentSettings.cookiePolicyLink,
       cookiePolicyLabel: contentSettings.cookiePolicyLabel,
       privacyPolicyUrl: contentSettings.privacyPolicyUrl,
+      categories: contentSettings.categories,
     };
   }, [activeContentBannerType, contentSettings]);
 
@@ -265,7 +319,6 @@ export default function page({ siteId }: { siteId: string }) {
   }) => {
     if (!site) return;
     if (!activeOrganizationId) {
-      console.error("[cookie-banner] activeOrganizationId missing; cannot update site banner settings");
       return;
     }
 
@@ -279,6 +332,8 @@ export default function page({ siteId }: { siteId: string }) {
 
     if (iabEnabled) {
       setIabEnabled(false);
+      // IAB drives Google AC — turning IAB off must turn Google AC off too.
+      setGoogleAcEnabled(false);
       // Clear sessionStorage immediately so it doesn't re-hydrate IAB on the next render.
       try {
         if (typeof window !== "undefined" && iabSessionKey) {
@@ -294,7 +349,6 @@ export default function page({ siteId }: { siteId: string }) {
       bannerType: next.bannerType,
       regionMode: next.regionMode,
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
   };
 
@@ -307,66 +361,81 @@ export default function page({ siteId }: { siteId: string }) {
         const customization = res?.customization || null;
         if (cancelled) return;
         setCustomizationBase(customization);
+        setCustomizationLoading(false);
         const en = customization?.translations?.en || {};
+        // Repopulate IAB toggle from saved translation value (round-trip).
+        if (typeof en.isIab === 'boolean') {
+          setIabEnabled(en.isIab);
+          setIabHydrated(true);
+        }
+        // Repopulate Google Additional Consent toggle (only valid when IAB on).
+        if (typeof en.isGoogleAc === 'boolean') {
+          setGoogleAcEnabled(en.isGoogleAc && en.isIab === true);
+        }
+        const cfgTr = customization?.translations?.config || {};
+        const langCode = (en.languageSelected as string) || 'en';
+        setSelectedLangCode(langCode);
+        const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+        // For toggle flags: prefer translations.config (written by both webapp and Webflow app), fall back to translations.en.
+        const _flagVal = (key: string, def: string) => { const v = cfgTr[key] ?? en[key]; return typeof v === "boolean" ? v : String(v ?? def) !== "0"; };
         const nextSettings = {
           title: en.title || "We value your privacy",
           acceptAll: en.acceptAll || "Accept",
           preferencesLabel: en.customise || "Preference",
-          preferenceTitle: en.cookiePreferences || "Cookie Preferences",
-          preferenceMessage:
-            en.managePreferences ||
-            "By clicking, you agree to store cookies on your device to enhance navigation, analyze usage, and support marketing.",
-          closeButton:
-            typeof en.closeButtonEnabled === "boolean"
-              ? en.closeButtonEnabled
-              : String(en.closeButtonEnabled ?? "1") !== "0",
-          rejectButton:
-            typeof en.rejectButtonEnabled === "boolean"
-              ? en.rejectButtonEnabled
-              : String(en.rejectButtonEnabled ?? "1") !== "0",
-          customizeButton:
-            typeof en.customizeButtonEnabled === "boolean"
-              ? en.customizeButtonEnabled
-              : String(en.customizeButtonEnabled ?? "1") !== "0",
-          cookiePolicyLink:
-            typeof en.cookiePolicyLinkEnabled === "boolean"
-              ? en.cookiePolicyLinkEnabled
-              : String(en.cookiePolicyLinkEnabled ?? "1") !== "0",
-          cookiePolicyLabel: en.privacyPolicy || "Privacy Policy",
+          preferenceTitle: en.cookiePreferences || T.cookiePreferences,
+          preferenceMessage: en.managePreferences || T.managePreferences,
+          closeButton: _flagVal("closeButtonEnabled", "1"),
+          rejectButton: _flagVal("rejectButtonEnabled", "1"),
+          customizeButton: _flagVal("customizeButtonEnabled", "1"),
+          cookiePolicyLink: (() => { const v = cfgTr.cookiePolicyLinkEnabled ?? en.cookiePolicyLinkEnabled; if (v != null) return typeof v === "boolean" ? v : String(v) !== "0"; return Boolean(customization?.privacyPolicyUrl); })(),
+          cookiePolicyLabel: T.moreInfo || en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
             message:
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
             rejectAll: en.rejectAll || "Reject",
-            saveMyPreferencesLabel: en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
+            saveMyPreferencesLabel: en.saveMyPreferences || T.saveMyPreferences,
           },
           ccpa: {
             message:
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel:
-              en.doNotSell || "Do Not Share My Personal Information",
-            optOutTitle:
-              en.optOutPreference || TRANSLATIONS.en.optOutPreference,
-            optOutMessage:
-              en.ccpaOptOutPreferenceIntro ||
-              TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
+            doNotSellLabel: T.doNotSell,
+            optOutTitle: T.optOutPreference,
+            optOutMessage: T.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel:
-              en.saveMyPreferences || TRANSLATIONS.en.saveMyPreferences,
+              en.saveMyPreferences || T.saveMyPreferences,
+            cancelLabel: en.cancel || T.cancel,
+          },
+          categories: {
+            necessary: {
+              name: en.essential || T.essential,
+              description: en.essentialDescription || T.essentialDescription,
+            },
+            analytics: {
+              name: en.analytics || T.analytics,
+              description: en.analyticsDescription || T.analyticsDescription,
+            },
+            marketing: {
+              name: en.marketing || T.marketing,
+              description: en.marketingDescription || T.marketingDescription,
+            },
+            preferences: {
+              name: en.preferences || T.preferences,
+              description: en.preferencesDescription || T.preferencesDescription,
+            },
+            alwaysActiveLabel: en.alwaysActive || T.alwaysActive,
           },
         };
         setContentSettings(nextSettings);
         setLastSavedContentSettings(nextSettings);
         setLastPublishedBothFocus(bothContentFocusRef.current);
 
-        const fbEnabled =
-          typeof en.floatingButtonEnabled === "boolean"
-            ? en.floatingButtonEnabled
-            : String(en.floatingButtonEnabled ?? "1") !== "0";
-        const fbPos =
-          en.floatingButtonPosition === "right" ? "right" : "left";
+        const fbEnabled = _flagVal("floatingButtonEnabled", "1");
+        const fbPosRaw = cfgTr.floatingButtonPosition ?? en.floatingButtonPosition;
+        const fbPos = fbPosRaw === "right" ? "right" : "left";
         const fbState: FloatingButtonState = {
           enabled: fbEnabled,
           position: fbPos,
@@ -378,14 +447,49 @@ export default function page({ siteId }: { siteId: string }) {
         setAppearance(app);
         setLastSavedAppearance(app);
 
+        // Reconcile IAB toggle with fresh DB state (res.iabActivated is read live from DB,
+        // not from the session-cached site object which may lag behind Webflow app changes).
+        const freshIabActivated = res?.iabActivated === true;
+        setIabEnabled(freshIabActivated);
+        // Google AC depends on IAB — force it off whenever IAB is not active.
+        if (!freshIabActivated) setGoogleAcEnabled(false);
+        try {
+          if (typeof window !== "undefined" && iabSessionKey) {
+            window.sessionStorage.setItem(iabSessionKey, freshIabActivated ? "1" : "0");
+          }
+        } catch { /* ignore */ }
+
+        // Reconcile region_mode / banner_type from fresh compliance (res.compliance is read live
+        // from DB). The session-cached site.region_mode lags behind when the Webflow app changes it.
+        if (!freshIabActivated && Array.isArray(res?.compliance) && res.compliance.length) {
+          const fc: string[] = res.compliance;
+          const hasGdpr = fc.includes('gdpr');
+          const hasUs = fc.includes('us') || fc.includes('ccpa');
+          const freshRegionMode = hasGdpr && hasUs ? 'both' : hasUs ? 'ccpa' : 'gdpr';
+          const freshBannerType = hasUs && !hasGdpr ? 'ccpa' : 'gdpr';
+          const s = siteRef.current;
+          if (s && s.banner_type !== 'iab') {
+            const curRegion = (s.region_mode || 'gdpr') as string;
+            const curBanner = (s.banner_type || 'gdpr') as string;
+            if (freshRegionMode !== curRegion || freshBannerType !== curBanner) {
+              updateSiteInState({
+                id: String(s.id),
+                banner_type: freshBannerType,
+                region_mode: freshRegionMode,
+              });
+            }
+          }
+        }
+
         const s = siteRef.current;
         if (s) {
           setLastPublishedRegulation({
-            bannerType: s.banner_type === "ccpa" ? "ccpa" : "gdpr",
+            bannerType: s.banner_type === "iab" ? "iab" : s.banner_type === "ccpa" ? "ccpa" : "gdpr",
             regionMode: (s.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
           });
         }
       } catch (e) {
+        if (!cancelled) setCustomizationLoading(false);
         // Keep defaults if customization does not exist yet.
         const app = appearanceFromCustomization(null);
         setAppearance(app);
@@ -416,7 +520,9 @@ export default function page({ siteId }: { siteId: string }) {
             optOutTitle: TRANSLATIONS.en.optOutPreference,
             optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
+            cancelLabel: TRANSLATIONS.en.cancel,
           },
+          categories: makeDefaultCategories('en'),
         });
         const fbDefault: FloatingButtonState = {
           enabled: true,
@@ -428,7 +534,7 @@ export default function page({ siteId }: { siteId: string }) {
         const s = siteRef.current;
         if (s) {
           setLastPublishedRegulation({
-            bannerType: s.banner_type === "ccpa" ? "ccpa" : "gdpr",
+            bannerType: s.banner_type === "iab" ? "iab" : s.banner_type === "ccpa" ? "ccpa" : "gdpr",
             regionMode: (s.region_mode || "gdpr") as "gdpr" | "ccpa" | "both",
           });
         }
@@ -535,14 +641,22 @@ export default function page({ siteId }: { siteId: string }) {
       headingColor: appearance.colors.headingColor,
       acceptButtonBg: appearance.colors.buttonColor,
       acceptButtonText: appearance.colors.buttonTextColor,
+      rejectButtonBg: (prev as any)?.rejectButtonBg || appearance.colors.buttonColor,
+      rejectButtonText: (prev as any)?.rejectButtonText || appearance.colors.buttonTextColor,
       customiseButtonBg: appearance.colors.preferencesButtonBg,
       customiseButtonText: appearance.colors.preferencesButtonText,
       saveButtonBg: appearance.colors.savePreferencesButtonBg,
       saveButtonText: appearance.colors.savePreferencesButtonText,
+      contentEditedFromWebapp: true,
       bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+      buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
       privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
       translations: {
         ...((prev && prev.translations) || {}),
+        config: {
+          ...((prev && prev.translations && prev.translations.config) || {}),
+          bannerLayoutVisual: appearance.layout.position,
+        },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
           title: contentSettings.title,
@@ -556,6 +670,7 @@ export default function page({ siteId }: { siteId: string }) {
           managePreferences: contentSettings.preferenceMessage,
           optOutPreference: contentSettings.ccpa.optOutTitle,
           ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
+          cancel: contentSettings.ccpa.cancelLabel,
           saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
           privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
           closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
@@ -569,6 +684,18 @@ export default function page({ siteId }: { siteId: string }) {
           bannerTextAlign: appearance.type.alignment,
           bannerLayoutVisual: appearance.layout.position,
           bannerEntranceAnimation: appearance.layout.animation,
+          compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
+          isIab: iabEnabled,
+          isGoogleAc: iabEnabled && googleAcEnabled,
+          essential: contentSettings.categories.necessary.name,
+          essentialDescription: contentSettings.categories.necessary.description,
+          analytics: contentSettings.categories.analytics.name,
+          analyticsDescription: contentSettings.categories.analytics.description,
+          marketing: contentSettings.categories.marketing.name,
+          marketingDescription: contentSettings.categories.marketing.description,
+          preferences: contentSettings.categories.preferences.name,
+          preferencesDescription: contentSettings.categories.preferences.description,
+          alwaysActive: contentSettings.categories.alwaysActiveLabel,
         },
       },
     }));
@@ -577,16 +704,24 @@ export default function page({ siteId }: { siteId: string }) {
   }, [
     appearance,
     bothContentFocus,
+    consentType,
     contentSettings,
     currentRegulationSnapshot,
     floatingButton,
+    iabEnabled,
+    googleAcEnabled,
     refresh,
   ]);
 
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
+    const snap = currentRegulationSnapshot;
+    const isIab = iabEnabled;
+    const rm = snap?.regionMode ?? 'gdpr';
+    const compliance = isIab || rm === 'both' ? ['gdpr', 'us'] : rm === 'ccpa' ? ['us'] : ['gdpr'];
     await saveBannerCustomization({
       siteId: String(site.id),
+      compliance,
       customization: {
         ...(customizationBase || {}),
         position: appearance.layout.alignment,
@@ -595,14 +730,35 @@ export default function page({ siteId }: { siteId: string }) {
         headingColor: appearance.colors.headingColor,
         acceptButtonBg: appearance.colors.buttonColor,
         acceptButtonText: appearance.colors.buttonTextColor,
+        rejectButtonBg: (customizationBase as any)?.rejectButtonBg || appearance.colors.buttonColor,
+        rejectButtonText: (customizationBase as any)?.rejectButtonText || appearance.colors.buttonTextColor,
         customiseButtonBg: appearance.colors.preferencesButtonBg,
         customiseButtonText: appearance.colors.preferencesButtonText,
         saveButtonBg: appearance.colors.savePreferencesButtonBg,
         saveButtonText: appearance.colors.savePreferencesButtonText,
+        contentEditedFromWebapp: true,
         bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+          buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
+        bannerLogoPosition: floatingButton.position,
+        showBannerLogo: floatingButton.enabled ? 1 : 0,
+        centerAnimationDirection: appearance.layout.animation,
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
           ...((customizationBase && customizationBase.translations) || {}),
+          config: {
+            ...((customizationBase && customizationBase.translations && customizationBase.translations.config) || {}),
+            bannerLayoutVisual: appearance.layout.position,
+            bannerFontFamily: appearance.type.font,
+            bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
+            bannerTextAlign: appearance.type.alignment,
+            bannerEntranceAnimation: appearance.layout.animation,
+            closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
+            rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
+            customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
+            cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
+            floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
+            floatingButtonPosition: floatingButton.position,
+          },
           en: {
             ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
             title: contentSettings.title,
@@ -616,7 +772,9 @@ export default function page({ siteId }: { siteId: string }) {
             managePreferences: contentSettings.preferenceMessage,
             optOutPreference: contentSettings.ccpa.optOutTitle,
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
+            cancel: contentSettings.ccpa.cancelLabel,
             saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+            privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
             customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
@@ -628,6 +786,20 @@ export default function page({ siteId }: { siteId: string }) {
             bannerTextAlign: appearance.type.alignment,
             bannerLayoutVisual: appearance.layout.position,
             bannerEntranceAnimation: appearance.layout.animation,
+            compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
+            isIab: iabEnabled,
+            ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
+            isGoogleAc: iabEnabled && googleAcEnabled,
+            googleAdditionalConsent: iabEnabled && googleAcEnabled,
+            essential: contentSettings.categories.necessary.name,
+            essentialDescription: contentSettings.categories.necessary.description,
+            analytics: contentSettings.categories.analytics.name,
+            analyticsDescription: contentSettings.categories.analytics.description,
+            marketing: contentSettings.categories.marketing.name,
+            marketingDescription: contentSettings.categories.marketing.description,
+            preferences: contentSettings.categories.preferences.name,
+            preferencesDescription: contentSettings.categories.preferences.description,
+            alwaysActive: contentSettings.categories.alwaysActiveLabel,
           },
         },
       },
@@ -646,7 +818,6 @@ export default function page({ siteId }: { siteId: string }) {
       await persistBannerCustomization();
       setSaveSuccess(true);
     } catch (e) {
-      console.error("[cookie-banner] failed to save banner customization", e);
       setPublishError("Something went wrong while saving. Please try again.");
     } finally {
       setSavingContent(false);
@@ -664,8 +835,14 @@ export default function page({ siteId }: { siteId: string }) {
       setSaveSuccess(false);
       await persistBannerCustomization();
       setPublishSuccess(true);
+      // PostHog: banner went live from the webapp (lifecycle: install_verified → published).
+      // Mirrors the Webflow backend handler, which fires both events on save.
+      try {
+        const phBannerType = iabEnabled ? "iab" : consentType;
+        analytics.bannerCustomized(String(site.id), site.domain ?? undefined, phBannerType);
+        analytics.bannerPublished(String(site.id), site.domain ?? undefined, phBannerType);
+      } catch { /* analytics must never block publish */ }
     } catch (e) {
-      console.error("[cookie-banner] failed to publish banner customization", e);
       setPublishError("Something went wrong while publishing. Please try again.");
     } finally {
       setSavingContent(false);
@@ -697,9 +874,6 @@ export default function page({ siteId }: { siteId: string }) {
     return sid ? `cb_iab_enabled:${sid}` : "";
   }, [site?.id, siteId]);
 
-  const [iabEnabled, setIabEnabled] = useState(false);
-  const [iabHydrated, setIabHydrated] = useState(false);
-
   // Clear this site's IAB sessionStorage key when leaving the page so switching
   // back always re-derives the toggle from the backend banner_type, not stale storage.
   useEffect(() => {
@@ -719,6 +893,16 @@ export default function page({ siteId }: { siteId: string }) {
     if (!iabSessionKey) return;
 
     const stored = window.sessionStorage.getItem(iabSessionKey);
+    const fromSite = String((site as any)?.banner_type || (site as any)?.bannerType || "").toLowerCase();
+
+    // DB is source of truth when it disagrees with sessionStorage.
+    // If the Webflow app reset IAB (banner_type → 'gdpr'/'ccpa'), clear the stale "1" in session.
+    if (fromSite !== 'iab' && stored === "1") {
+      setIabEnabled(false);
+      setIabHydrated(true);
+      return;
+    }
+
     if (stored === "1" || stored === "0") {
       setIabEnabled(stored === "1");
       setIabHydrated(true);
@@ -726,7 +910,6 @@ export default function page({ siteId }: { siteId: string }) {
     }
 
     // Fallback to backend site state when there is no session override yet.
-    const fromSite = String((site as any)?.banner_type || (site as any)?.bannerType || "").toLowerCase();
     if (fromSite === "iab") {
       setIabEnabled(true);
     }
@@ -740,7 +923,6 @@ export default function page({ siteId }: { siteId: string }) {
     window.sessionStorage.setItem(iabSessionKey, iabEnabled ? "1" : "0");
   }, [iabEnabled, iabSessionKey, iabHydrated]);
   const isToggleEnabled =site?.planId==="growth" || site?.planId==="essential";
-console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectivePlanId);
   // Free plan should not have access to Content/Layout/Type sections.
   useEffect(() => {
     if (!isFreePlan) return;
@@ -748,18 +930,55 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       setActive("General");
     }
   }, [active, isFreePlan]);
-  const data=sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId
+  const sitePlanId = sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId;
+  const resolvedPlanId = sitePlanId || effectivePlanId || "";
 
-  console.log(sites.find((s: any) => String(s?.id) === String(activeSiteId)), "site data in page component");
   return (
-    <div className="border-t overflow-x-hidden border-[#00000010] mt-0.25 grid grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]">
+    <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
       <Sidebar
         active={active}
         setActive={setActive}
         iabEnabled={iabEnabled}
-        effectivePlanId={data}
+        effectivePlanId={resolvedPlanId}
+        isLegacy={isLegacySite}
       />
-      <div className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]">
+      {/* Panel toggle — only visible at lg (1024-1279px) */}
+      <button
+        type="button"
+        onClick={() => setEditorOpen((o) => !o)}
+        aria-label={editorOpen ? 'Hide editor panel' : 'Show editor panel'}
+        className={`${
+          isOverlayMode ? 'flex' : 'hidden'
+        } absolute z-40 top-24 items-center justify-center h-12 w-5 bg-white border border-[#e5e5e5] rounded-r-md hover:bg-gray-50 shadow-sm transition-[left] duration-300`}
+        style={{ left: editorOpen ? '620px' : '172px' }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2">
+          <path
+            d={editorOpen ? 'M15 18l-6-6 6-6' : 'M9 6l6 6-6 6'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <div
+        className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]"
+        style={
+          isOverlayMode
+            ? {
+                position: 'absolute',
+                top: 0,
+                left: '172px',
+                width: '454px',
+                zIndex: 30,
+                background: '#fff',
+                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                transform: editorOpen ? 'translateX(0)' : 'translateX(calc(-100% - 172px))',
+                transition: 'transform 300ms',
+                pointerEvents: editorOpen ? 'auto' : 'none',
+              }
+            : undefined
+        }
+      >
         {/* Consent Template Card */}
         {active === "General" && (
           <div>
@@ -825,6 +1044,9 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
           }
           setIabHydrated(true);
 
+          // Google AC is only valid while IAB is on — clear it when turning IAB off.
+          if (iabEnabled) setGoogleAcEnabled(false);
+
           setIabEnabled((prev) =>{
 
              !prev && updateSiteBannerSettings({
@@ -834,7 +1056,6 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       bannerType: "iab",
       regionMode: "gdpr",
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
 
     prev && updateSiteBannerSettings({
@@ -844,15 +1065,12 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
       bannerType: freePreviewBannerType,
       regionMode: freePreviewBannerType,
     }).catch((e) => {
-      console.warn("[cookie-banner] regulation save failed (will retry on next save):", e);
     });
     
             
             return !prev
           });
 
-          console.log("Updating site with IAB support enabled:", !iabEnabled);
-         
         }}
       >
         <div
@@ -877,7 +1095,7 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
         To enable this feature, please switch to the Essential or Growth plan.
       </p>
       <button
-        onClick={() => { setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
+        onClick={() => { analytics.upgradeCtaClicked("cookie_banner_iab", String(siteId), resolvedPlanId); setShowIabUpgrade(false); router.push(`/dashboard/${siteId}/upgrade`); }}
         className="w-full h-[40px] flex items-center justify-center gap-3 bg-[#007AFF] hover:bg-blue-700 text-white text-[15px] font-semibold py-3.75 rounded-md transition"
       >
         Get Pro Plan
@@ -889,23 +1107,87 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
     </div>
   </div>
 </div>
+
+{/* Google Additional Consent Card — visible to all users; toggleable only when IAB is on. */}
+<div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
+  <p className="font-semibold text-base text-black mb-4">
+    Google Additional Consent
+  </p>
+
+  <div className="flex items-center justify-between">
+    <p className="text-xs text-black tracking-tight">
+      {iabEnabled
+        ? "Enable Google Additional Consent (AC) alongside IAB TCF"
+        : "Enable IAB TCF Support first to use Google Additional Consent"}
+    </p>
+
+    {/* Toggle — locked unless IAB is enabled */}
+    <div
+      className={`relative ${
+        iabEnabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+      }`}
+      onClick={() => {
+        if (!iabEnabled) return;
+        setGoogleAcEnabled((prev) => !prev);
+      }}
+    >
+      <div
+        className={`h-[22px] w-[42px] rounded-full transition ${
+          iabEnabled && googleAcEnabled ? "bg-[#007aff]" : "bg-[#d8d8d8]"
+        }`}
+      ></div>
+
+      <div
+        className={`absolute top-[2px] rounded-full w-[18px] h-[18px] bg-white transition ${
+          iabEnabled && googleAcEnabled ? "left-[21px]" : "left-[3px]"
+        }`}
+      ></div>
+    </div>
+  </div>
+</div>
           </div>
         )}
-        {active === "Content" && (
+         {active === "Content" && (
           <>
             <div className="flex justify-end mb-3">
               <button
                 type="button"
-                onClick={() => setContentSettings(makeDefaultContentSettings())}
+                onClick={() => setContentSettings(makeDefaultContentSettings(selectedLangCode))}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
                 <ResetIcon />
                 Reset updates
               </button>
             </div>
+
+            {/* Cookie Notice / Preference Banner tabs */}
+            <div className="w-full max-w-[409px] mx-auto">
+              <div className="flex gap-1 p-1 bg-[#f1f1f3] rounded-lg">
+                {([
+                  { key: "notice", label: "Cookie Notice" },
+                  { key: "preference", label: "Preference Banner" },
+                ] as const).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setContentTab(t.key)}
+                    className={`flex-1 py-2 text-sm rounded-md transition ${
+                      contentTab === t.key
+                        ? "bg-white text-[#111827] shadow-sm font-medium"
+                        : "text-[#6B7280] hover:text-[#111827]"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {contentTab === "notice" && (
             <CookieNoticeAccordion2
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
+              plain
               isOpen={openAccordionKey === "cookieNotice"}
               onToggle={(nextOpen) => setOpenAccordionKey(nextOpen ? "cookieNotice" : null)}
               value={{
@@ -972,8 +1254,14 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
                 })
               }
             />
+            )}
+
+            {contentTab === "preference" && (
+            <div className="w-full max-w-[409px] mx-auto bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg overflow-hidden">
+            <div className="px-[18px] pt-5 pb-6 space-y-6">
             <PreferenceBannerAccordion
               variant={activeContentBannerType}
+              bare
               isOpen={openAccordionKey === "preferenceBanner"}
               onToggle={(nextOpen) =>
                 setOpenAccordionKey(nextOpen ? "preferenceBanner" : null)
@@ -990,6 +1278,7 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
                       message: contentSettings.ccpa.optOutMessage,
                       saveButtonLabel:
                         contentSettings.ccpa.saveMyPreferencesLabel,
+                      cancelLabel: contentSettings.ccpa.cancelLabel,
                     }
               }
               onChange={(next) =>
@@ -1014,11 +1303,27 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
                           saveMyPreferencesLabel:
                             next.saveButtonLabel ??
                             prev.ccpa.saveMyPreferencesLabel,
+                          cancelLabel:
+                            next.cancelLabel ?? prev.ccpa.cancelLabel,
                         },
                       }
                 )
               }
             />
+            {activeContentBannerType === "gdpr" && (
+              <div className="pt-5 border-t border-[#ededed]">
+                               <CookieCategoriesAccordion
+                  bare
+                  value={contentSettings.categories}
+                  onChange={(categories) =>
+                    setContentSettings((prev) => ({ ...prev, categories }))
+                  }
+                />
+              </div>
+            )}
+            </div>
+            </div>
+            )}
             {/* Cookie List section hidden
             <CookieListAccordion
               isOpen={openAccordionKey === "cookieList"}
@@ -1032,6 +1337,7 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
               onChange={setFloatingButton}
             />
 
+            <BannerLinkSection />
 
 </>
         )}
@@ -1043,7 +1349,14 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
             <div className="flex justify-end mb-3">
               <button
                 type="button"
-                onClick={() => setAppearance((a) => ({ ...a, colors: DEFAULT_APPEARANCE.colors }))}
+                onClick={() => {
+                  setAppearance((a) => ({ ...a, colors: DEFAULT_APPEARANCE.colors }));
+                  setCustomizationBase((prev: any) => {
+                    if (!prev) return prev;
+                    const { rejectButtonBg, rejectButtonText, ...rest } = prev;
+                    return rest;
+                  });
+                }}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
                 <ResetIcon />
@@ -1063,10 +1376,27 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
           />
         )}
       </div>
+      {/* Skeleton shown while customization loads from the API */}
+      {customizationLoading && (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-xl bg-slate-100 p-5 flex flex-col gap-3 animate-pulse">
+            <div className="h-4 w-2/5 rounded bg-slate-200" />
+            <div className="h-3 w-full rounded bg-slate-200" />
+            <div className="h-3 w-4/5 rounded bg-slate-200" />
+            <div className="flex gap-2 pt-2 justify-end">
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+              <div className="h-8 w-24 rounded-md bg-slate-200" />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
-      <ConsentPreview
+      {!customizationLoading && <ConsentPreview
       iabEnabled={iabEnabled}
+      googleAcEnabled={iabEnabled && googleAcEnabled}
         key={previewRevision}
+        langCode={selectedLangCode}
         previewBannerType={previewBannerType}
         siteDomain={site?.domain ?? null}
         consentType={consentType}
@@ -1085,7 +1415,7 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
         publishError={publishError}
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
-        onNext={() => setShowInstallModal(true)}
+        onNext={isWebflowSite ? undefined : () => setShowInstallModal(true)}
         bothModeBannerType={
           consentType === "both" ? bothContentFocus : undefined
         }
@@ -1095,11 +1425,13 @@ console.log("IAB toggle enabled:", isToggleEnabled, "effectivePlanId:", effectiv
         forceModalView={
           openAccordionKey === "preferenceBanner"
             ? (activeContentBannerType === "ccpa" ? "ccpa-optout" : "gdpr-preferences")
-            : openAccordionKey === "cookieNotice" || openAccordionKey === "cookieList" || openAccordionKey === null
+            : openAccordionKey === "cookieCategories"
+            ? "gdpr-preferences"
+            : openAccordionKey === "cookieNotice" || openAccordionKey === null
             ? "main"
             : undefined
         }
-      />
+      />}
       <InstallConsentModal
         key={String(siteId)}
         open={showInstallModal}

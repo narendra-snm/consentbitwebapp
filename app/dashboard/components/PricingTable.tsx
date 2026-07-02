@@ -73,8 +73,8 @@ export function PricingTable({
         siteName: domain || null,
         siteDomain: domain || null,
         successUrl: domain
-          ? `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`
-          : `${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`,
+          ? `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`)}`
+          : `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`)}`  ,
         cancelUrl: `${origin}/dashboard`,
       });
       window.location.assign(data.url);
@@ -145,8 +145,8 @@ export function PricingTable({
         </div>
 
         {/* Pricing Table */}
-        <div className="px-6">
-          <div className="grid grid-cols-[200px_220px_220px_316px_1fr] text-left">
+        <div className="px-6 pt-5 overflow-auto xl:overflow-hidden">
+          <div className="grid grid-cols-[200px_220px_220px_316px_316px] text-left">
 
             {/* Header Row */}
             <div></div>

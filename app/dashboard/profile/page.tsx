@@ -1,12 +1,13 @@
-
 "use client";
+
 export const runtime = 'edge';
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, renameSite, checkSiteDomainForRename, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, updateProfile, type BillingUsage } from "@/lib/client-api";
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -14,6 +15,7 @@ import {
   deriveSiteNameFromDomain,
 } from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
+import { analytics } from "@/lib/analytics";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
 // Keep usage cache short so metered pageviews/scans feel "live" without manual refresh.
@@ -73,6 +75,86 @@ function toPlanLabel(raw: unknown): PlanTier {
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
+// Calls POST /api/sites/rename-domain — returns a normalized result.
+// Goes through the Next.js proxy route so the sid cookie is forwarded server-side
+// (same pattern as /api/sites/check-domain).
+async function renameSiteDomain({
+  websiteUrl,
+  excludeSiteId,
+}: {
+  websiteUrl: string;
+  excludeSiteId?: string;
+}) {
+  const res = await fetch(`/api/sites/rename-domain`, {
+    method: 'POST',
+    credentials: 'include',                   // send the sid cookie to our own origin
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',   // ← CSRF guard requires this
+    },
+    body: JSON.stringify({ websiteUrl, excludeSiteId }),
+  });
+
+  console.log('[renameSiteDomain] request', { websiteUrl, excludeSiteId });
+
+  const rawText = await res.text();
+  let parsed: any = null;
+  try { parsed = rawText ? JSON.parse(rawText) : null; } catch { /* non-JSON */ }
+
+  // Worker wraps payloads in { d: "<base64 UTF-8 JSON>" } — decode like lib/client-api.ts does.
+  let data: any = parsed;
+  if (parsed && typeof parsed.d === 'string') {
+    try {
+      const binary = atob(parsed.d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      data = JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through to raw parsed value */ }
+  }
+
+  console.log('[renameSiteDomain] response', {
+    status: res.status,
+    ok: res.ok,
+    rawText,
+    envelope: parsed,
+    data,
+  });
+
+  if (!res.ok) {
+    const err: any = new Error(data?.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.code = data?.code || null;
+    console.log('[renameSiteDomain] error', { status: err.status, code: err.code, message: err.message });
+    throw err;
+  }
+
+  if (!data?.success) {
+    const conflict = {
+      ok: false as const,
+      conflict: true as const,
+      code: data?.code || 'UNKNOWN_CONFLICT',
+      message: data?.message || 'This domain cannot be used.',
+      domain: data?.domain || null,
+    };
+    console.log('[renameSiteDomain] conflict', conflict);
+    return conflict;
+  }
+
+  const success = {
+    ok: true as const,
+    conflict: false as const,
+    domain: data.domain,
+    platform: data.platform || '',
+    platformSiteId: data.platformSiteId || '',
+    detected: !!data.detected,
+    code: data.code,
+    isOldScript: data.isOldScript || false,
+  };
+  console.log('[renameSiteDomain] success', success);
+  return success;
+}
+
+
 export default function SettingsPage() {
   const router = useRouter();
   const { user, organizations: orgsFromSession, sites, loading, effectivePlanId, activeOrganizationId, activeSiteId, updateSiteInState, refresh } =
@@ -119,18 +201,50 @@ export default function SettingsPage() {
   const [manageSaving, setManageSaving] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [installModal, setInstallModal] = useState<{ scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string } | null>(null);
+  // Pending install payload held back behind a caution screen when the rename
+  // response reports `isOldScript: true` — user must acknowledge before we
+  // show the install modal with the new script.
+  const [oldScriptCaution, setOldScriptCaution] = useState<{ scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string } | null>(null);
 
   const ORGS_PER_PAGE = 5;
   const [orgPage, setOrgPage] = useState(1);
 
   const accountOwnerEmail = useMemo(
-    () => String(user?.email || "").trim() || "—",
+    () => String(user?.email || "").trim(),
     [user?.email],
   );
   const accountOwnerName = useMemo(
-    () => String(user?.name || "").trim() || "—",
-    [user?.name],
+    () => String(user?.profile?.name || user?.name || "").trim(),
+    [user?.profile?.name, user?.name],
   );
+  const initialBillingEmail = useMemo(
+    () => String(user?.billingEmail || user?.billing_email || user?.profile?.billingEmail || "").trim(),
+    [user],
+  );
+  const [billingEmailSaving, setBillingEmailSaving] = useState(false);
+  const [billingEmailError, setBillingEmailError] = useState<string | null>(null);
+  const [billingEmailSuccess, setBillingEmailSuccess] = useState(false);
+
+  const handleSaveBillingEmail = useCallback(async (email: string) => {
+    setBillingEmailSaving(true);
+    setBillingEmailError(null);
+    setBillingEmailSuccess(false);
+    try {
+      await updateProfile({ billingEmail: email.trim() || undefined });
+      setBillingEmailSuccess(true);
+      setTimeout(() => setBillingEmailSuccess(false), 3000);
+    } catch (err: any) {
+      setBillingEmailError(err?.message || "Failed to save billing email");
+    } finally {
+      setBillingEmailSaving(false);
+    }
+  }, []);
+
+  const handleSaveName = useCallback(async (name: string) => {
+    await updateProfile({ name: name.trim() });
+    await refresh({ showLoading: false });
+  }, [refresh]);
+
   const accountId = useMemo(() => {
     const firstOrg = Array.isArray(orgsFromSession) ? orgsFromSession[0] : null;
     const raw = user?.id ?? firstOrg?.id ?? firstOrg?.organizationId ?? firstOrg?.organization_id;
@@ -449,9 +563,10 @@ export default function SettingsPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() =>
-                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
-                            }
+                            onClick={() => {
+                              analytics.upgradeCtaClicked("profile_start_trial", org.siteId ? String(org.siteId) : undefined, org.isPaid ? "paid" : "free");
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard");
+                            }}
                             className="bg-[#007aff] h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center"
                           >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[12px] text-white whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Start Trial</p>
@@ -464,9 +579,10 @@ export default function SettingsPage() {
                         {org.isPaid && (
                           <button
                             type="button"
-                            onClick={() =>
-                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard")
-                            }
+                            onClick={() => {
+                              analytics.upgradeCtaClicked("profile_change_plan", org.siteId ? String(org.siteId) : undefined, org.isPaid ? "paid" : "free");
+                              router.push(org.siteId ? `/dashboard/${org.siteId}/upgrade` : "/dashboard");
+                            }}
                             className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
                           >
                             <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Change Plan</p>
@@ -533,7 +649,16 @@ export default function SettingsPage() {
 
           {activeTab === "general" && (
             <div className="text-center">
-              <ProfileForm name={accountOwnerName} email={accountOwnerEmail} />
+              <ProfileForm
+                name={accountOwnerName}
+                email={accountOwnerEmail}
+                billingEmail={initialBillingEmail}
+                onSaveName={handleSaveName}
+                onSaveBillingEmail={handleSaveBillingEmail}
+                billingEmailSaving={billingEmailSaving}
+                billingEmailError={billingEmailError}
+                billingEmailSuccess={billingEmailSuccess}
+              />
             </div>
           )}
 
@@ -625,14 +750,14 @@ export default function SettingsPage() {
             >
               ×
             </button>
-            <p className="font-semibold text-[16px] text-black mb-1">Manage Site</p>
+            <p className="font-semibold text-[16px] text-black mb-1">Change Site URL</p>
             <p className="text-[12px] text-[#6b7280] mb-5">
-              Update the registered website URL for this site. The name shown in your list uses the same host.
+              Move your site to a new domain. Settings, plans, and history will remain unchanged.
             </p>
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-[12px] text-[#6b7280] mb-1">Website URL</label>
+                <label className="block text-[12px] font-medium text-[#374151] mb-1">New Website URL</label>
                 <input
                   type="text"
                   value={manageDomain}
@@ -641,10 +766,10 @@ export default function SettingsPage() {
                     setManageError(null);
                   }}
                   disabled={manageSaving}
-                  className="w-full h-[38px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                  className="w-full h-[42px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
                   placeholder="example.com"
                 />
-                <p className="text-[11px] text-[#9ca3af] mt-1">This updates the Site URL column (registered domain).</p>
+                <p className="text-[11px] text-[#9ca3af] mt-1.5">Your consent banner will be linked to this domain.</p>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-[#6b7280]">Plan</span>
@@ -697,30 +822,17 @@ export default function SettingsPage() {
                   const derivedName = deriveSiteNameFromDomain(manageDomain.trim());
                   setManageSaving(true);
                   try {
-                    const preflight = await checkSiteDomainForRename(
-                      manageDomain.trim(),
-                      managingOrg.siteId,
-                    );
-                    if (!preflight.success) {
-                      setManageError(preflight.error || "Could not validate this website URL.");
+                    const result = await renameSiteDomain({
+                      websiteUrl: manageDomain.trim(),
+                      excludeSiteId: managingOrg.siteId,
+                    });
+                    if (!result.ok) {
+                      setManageError(result.message || "This domain cannot be used.");
                       return;
                     }
-                    if (preflight.available === false) {
-                      setManageError(
-                        preflight.message ||
-                          "This website URL is not available. Choose a different URL.",
-                      );
-                      return;
-                    }
-                    const result = await renameSite(
-                      managingOrg.siteId,
-                      derivedName,
-                      manageDomain.trim(),
-                    );
-                    const updatedSite = (result.site || {}) as Record<string, unknown>;
                     const rawSite = (Array.isArray(sites) ? sites : []).find((s: any) => String(s.id) === managingOrg.siteId);
-                    // `refresh()` replaces the whole `sites` array — run it first, then merge the PATCH
-                    // response so a slightly stale dashboard-init cannot wipe name/domain in the UI.
+                    // `refresh()` replaces the whole `sites` array — run it first, then merge our local
+                    // update so a slightly stale dashboard-init cannot wipe name/domain in the UI.
                     try {
                       if (typeof sessionStorage !== "undefined") {
                         sessionStorage.removeItem("cbSessionCache");
@@ -730,34 +842,33 @@ export default function SettingsPage() {
                     }
                     await refresh({ showLoading: false });
                     const normDomain = normalizeSiteLabel(manageDomain.trim());
+                    const finalDomain = result.domain || normDomain;
                     updateSiteInState({
                       id: managingOrg.siteId,
-                      ...updatedSite,
-                      name: String(updatedSite.name ?? derivedName),
-                      domain: String(updatedSite.domain ?? normDomain),
+                      name: derivedName,
+                      domain: finalDomain,
                     });
                     const scriptUrl =
-                      (updatedSite.embedScriptUrl as string | undefined) ??
-                      (updatedSite.embed_script_url as string | undefined) ??
                       rawSite?.embedScriptUrl ??
                       rawSite?.embed_script_url ??
                       "";
                     const cdnScriptId =
-                      (updatedSite.cdnScriptId as string | undefined) ??
-                      (updatedSite.cdn_script_id as string | undefined) ??
                       rawSite?.cdnScriptId ??
                       rawSite?.cdn_script_id;
-                    const domainForInstall =
-                      updatedSite.domain != null && String(updatedSite.domain).trim() !== ""
-                        ? String(updatedSite.domain)
-                        : normDomain;
-                    setManagingOrg(null);
-                    setInstallModal({
+                    const installPayload = {
                       scriptUrl,
-                      siteDomain: domainForInstall,
+                      siteDomain: finalDomain,
                       siteId: managingOrg.siteId,
                       cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
-                    });
+                    };
+                    setManagingOrg(null);
+                    // If the rename returned an old-script flag, force the user to
+                    // acknowledge the script swap before we reveal the new snippet.
+                    if (result.isOldScript) {
+                      setOldScriptCaution(installPayload);
+                    } else {
+                      setInstallModal(installPayload);
+                    }
                   } catch (e: any) {
                     const code = e?.code as string | undefined;
                     if (code === "DOMAIN_EXISTS_OTHER_ACCOUNT") {
@@ -783,9 +894,87 @@ export default function SettingsPage() {
                     setManageSaving(false);
                   }
                 }}
-                className="flex-1 h-[38px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 h-[42px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {manageSaving ? 'Saving…' : 'Update'}
+                {manageSaving ? 'Saving…' : 'Save New URL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Old-script caution — shown before InstallConsentModal when the rename API
+          reports the site is still on an older ConsentBit script. */}
+      {oldScriptCaution && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[14px] shadow-2xl max-w-[460px] w-full p-7 relative">
+            <div className="w-12 h-12 rounded-full bg-[#FEF3C7] flex items-center justify-center mb-4">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M12 9V13M12 17H12.01M10.29 3.86L1.82 18C1.64537 18.3024 1.55296 18.6453 1.55198 18.9945C1.551 19.3437 1.64149 19.6871 1.81442 19.9905C1.98736 20.2939 2.23673 20.5467 2.53761 20.7239C2.83849 20.9012 3.18074 20.9967 3.53 21H20.47C20.8193 20.9967 21.1615 20.9012 21.4624 20.7239C21.7633 20.5467 22.0126 20.2939 22.1856 19.9905C22.3585 19.6871 22.449 19.3437 22.448 18.9945C22.447 18.6453 22.3546 18.3024 22.18 18L13.71 3.86C13.5318 3.56611 13.2807 3.32312 12.9812 3.15448C12.6817 2.98585 12.3438 2.89725 12 2.89725C11.6562 2.89725 11.3183 2.98585 11.0188 3.15448C10.7193 3.32312 10.4682 3.56611 10.29 3.86Z"
+                  stroke="#D97706"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <p className="font-semibold text-[18px] text-black mb-2 tracking-[-0.3px]">
+              Update your ConsentBit script
+            </p>
+            <p className="text-[13px] text-[#4b5563] leading-[1.55] mb-5">
+              Your domain was updated successfully, but this site is still using an{" "}
+              <span className="font-medium text-[#111827]">older ConsentBit script</span>.
+              Before consent tracking will work on the new domain, you need to:
+            </p>
+
+            <ol className="space-y-2 mb-6 pl-1">
+              <li className="flex gap-2.5 text-[13px] text-[#374151] leading-[1.5]">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#FEF3C7] text-[#92400E] text-[11px] font-semibold flex items-center justify-center mt-0.5">
+                  1
+                </span>
+                <span>
+                  <span className="font-medium text-[#111827]">Remove</span> the existing
+                  ConsentBit script tag from your site&apos;s code (in your Webflow, Framer,
+                  WordPress, or HTML head).
+                </span>
+              </li>
+              <li className="flex gap-2.5 text-[13px] text-[#374151] leading-[1.5]">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#FEF3C7] text-[#92400E] text-[11px] font-semibold flex items-center justify-center mt-0.5">
+                  2
+                </span>
+                <span>
+                  <span className="font-medium text-[#111827]">Install</span> the new script
+                  we&apos;ll show you in the next step.
+                </span>
+              </li>
+            </ol>
+
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[8px] px-3 py-2.5 mb-6">
+              <p className="text-[12px] text-[#92400E] leading-[1.5]">
+                Leaving the old script in place will cause duplicate banners and broken
+                consent on the new domain.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setOldScriptCaution(null)}
+                className="flex-1 h-[42px] rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInstallModal(oldScriptCaution);
+                  setOldScriptCaution(null);
+                }}
+                className="flex-1 h-[42px] rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0062cc]"
+              >
+                OK, show me the new script
               </button>
             </div>
           </div>
