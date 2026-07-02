@@ -8,7 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
 // request BODY (an auto-submitting form in a new tab) instead of putting a token
 // or params in the URL — Webflow app review disallows that. We read the body,
 // stash it in a short-lived, same-origin cookie, and 303-redirect to a clean
-// /checkoutplan URL. The checkout page reads that cookie and clears it.
+// /checkout-plan URL. The checkout page reads that cookie and clears it.
+//
+// The plugin flow lands on /checkout-plan (the read-only-plan variant that shows
+// the plan already chosen in the plugin), NOT the standalone /checkoutplan picker.
 //
 // The body is either { t: <opaque token> } (the normal path) or the raw context
 // fields (platform, version, platformId, domain, interval, plan) when token
@@ -24,7 +27,7 @@ export async function POST(request: NextRequest) {
     ctx = {};
   }
 
-  const dest = new URL('/checkoutplan', request.url);
+  const dest = new URL('/checkout-plan', request.url);
   const res = NextResponse.redirect(dest, 303);
   res.cookies.set('cb_checkout', JSON.stringify(ctx), {
     httpOnly: false, // the client checkout page reads + clears it
@@ -38,5 +41,5 @@ export async function POST(request: NextRequest) {
 
 // A direct GET (e.g. a refresh) just bounces to the checkout page.
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL('/checkoutplan', request.url), 303);
+  return NextResponse.redirect(new URL('/checkout-plan', request.url), 303);
 }
