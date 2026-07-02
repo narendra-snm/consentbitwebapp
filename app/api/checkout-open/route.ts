@@ -8,26 +8,44 @@ import { NextRequest, NextResponse } from 'next/server';
 // request BODY (an auto-submitting form in a new tab) instead of putting a token
 // or params in the URL — Webflow app review disallows that. We read the body,
 // stash it in a short-lived, same-origin cookie, and 303-redirect to a clean
-// /checkout-plan URL. The checkout page reads that cookie and clears it.
+// checkout URL. The checkout page reads that cookie and clears it.
 //
-// The plugin flow lands on /checkout-plan (the read-only-plan variant that shows
-// the plan already chosen in the plugin), NOT the standalone /checkoutplan picker.
+// The destination depends on WHERE the plugin opened checkout from, sent as a
+// `dest` form field:
+//   • plan/install page   → /checkoutplan  (interactive plan picker) — DEFAULT
+//   • upgrade page        → /checkout-plan (read-only: shows the plan already
+//                                           chosen in the plugin)
+// Only these two paths are allowed; anything else falls back to /checkoutplan.
 //
-// The body is either { t: <opaque token> } (the normal path) or the raw context
-// fields (platform, version, platformId, domain, interval, plan) when token
-// creation failed upstream. Either way, nothing sensitive lands in the URL.
+// The rest of the body is either { t: <opaque token> } (the normal path) or the
+// raw context fields (platform, version, platformId, domain, interval, plan)
+// when token creation failed upstream. Either way, nothing sensitive lands in
+// the URL.
+
+const DEST_ALLOW = new Set(['checkoutplan', 'checkout-plan']);
+const DEFAULT_DEST = 'checkoutplan';
+
+function resolveDest(raw: string | undefined): string {
+  return raw && DEST_ALLOW.has(raw) ? raw : DEFAULT_DEST;
+}
+
 export async function POST(request: NextRequest) {
-  let ctx: Record<string, string> = {};
+  const ctx: Record<string, string> = {};
+  let destField: string | undefined;
   try {
     const form = await request.formData();
     for (const [k, v] of form.entries()) {
-      if (typeof v === 'string' && v.length) ctx[k] = v;
+      if (typeof v !== 'string' || !v.length) continue;
+      // `dest` selects the checkout page — it's routing metadata, not checkout
+      // context, so keep it out of the cookie handed to the page.
+      if (k === 'dest') { destField = v; continue; }
+      ctx[k] = v;
     }
   } catch {
-    ctx = {};
+    /* empty context — page falls back to its defaults */
   }
 
-  const dest = new URL('/checkout-plan', request.url);
+  const dest = new URL(`/${resolveDest(destField)}`, request.url);
   const res = NextResponse.redirect(dest, 303);
   res.cookies.set('cb_checkout', JSON.stringify(ctx), {
     httpOnly: false, // the client checkout page reads + clears it
@@ -39,7 +57,9 @@ export async function POST(request: NextRequest) {
   return res;
 }
 
-// A direct GET (e.g. a refresh) just bounces to the checkout page.
+// A direct GET (e.g. a refresh) just bounces to the checkout page. Honour a
+// ?dest= query when present, else fall back to the default picker page.
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL('/checkout-plan', request.url), 303);
+  const raw = new URL(request.url).searchParams.get('dest') || undefined;
+  return NextResponse.redirect(new URL(`/${resolveDest(raw)}`, request.url), 303);
 }
