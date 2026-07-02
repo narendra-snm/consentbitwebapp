@@ -477,30 +477,42 @@ function CheckoutForm({
 
       const cleanedDomain = cleanDomain(domain);
 
-      // Phase 1 — create subscription
-      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethodId: paymentMethod!.id,
-          email: email.trim().toLowerCase(),
-          billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
-          domain: cleanedDomain,
-          siteName: cleanedDomain,
-          planId,
-          interval,
-          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
-        }),
-      });
-
-      const data = (await parseApiResponse(res)) as {
-        success: boolean;
-        error?: string;
-        requiresAction?: boolean;
-        clientSecret?: string;
-        subscriptionId?: string;
+      // Phase 1 — create subscription. If the domain already has an active plan on
+      // this account, retry as an upgrade (confirmUpgrade) — the backend creates the
+      // new plan and cancels the old subscription so there's no double-billing.
+      const postCheckout = async (confirmUpgrade: boolean) => {
+        const r = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethodId: paymentMethod!.id,
+            email: email.trim().toLowerCase(),
+            billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
+            domain: cleanedDomain,
+            siteName: cleanedDomain,
+            planId,
+            interval,
+            ...(confirmUpgrade ? { confirmUpgrade: true } : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
+          }),
+        });
+        return (await parseApiResponse(r)) as {
+          success: boolean;
+          error?: string;
+          code?: string;
+          canUpgrade?: boolean;
+          requiresAction?: boolean;
+          clientSecret?: string;
+          subscriptionId?: string;
+        };
       };
+
+      let data = await postCheckout(false);
+      // Same-account domain already has a plan → treat this as an upgrade and confirm it.
+      if (!data.success && data.code === 'DOMAIN_EXISTS' && data.canUpgrade) {
+        data = await postCheckout(true);
+      }
       if (!data.success) {
         setError(friendlyCardError(data.error));
         setIsSubmitting(false);
@@ -516,7 +528,7 @@ function CheckoutForm({
           return;
         }
 
-        const res2 = await fetch('/api/custom-checkout', {
+        const res2 = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -939,16 +951,34 @@ function CheckoutPageInner() {
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
 
-  const rawT = params.get('t') ?? '';
-  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(rawT ? null : {});
+  const urlT = params.get('t') ?? '';
+  // null = still resolving; object = resolved checkout context.
+  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
-    if (!rawT) return;
-    fetch(`/api/checkout-token?t=${encodeURIComponent(rawT)}`)
-      .then(r => r.json())
-      .then((data: unknown) => setTokenPayload(data as Record<string, string>))
-      .catch(() => setTokenPayload({}));
-  }, [rawT]);
+    // Resolve the checkout context. The extension no longer puts a token or params
+    // in the URL (Webflow review) — it POSTs the context in the request BODY, which
+    // /api/checkout-open stashes in a short-lived same-origin cookie. Priority:
+    // URL token (legacy) → cookie token → raw cookie context.
+    let handoff: Record<string, string> = {};
+    if (typeof document !== 'undefined') {
+      const m = document.cookie.match(/(?:^|;\s*)cb_checkout=([^;]+)/);
+      if (m) {
+        try { handoff = JSON.parse(decodeURIComponent(m[1])) || {}; } catch { handoff = {}; }
+        document.cookie = 'cb_checkout=; Max-Age=0; path=/'; // consume once
+      }
+    }
+    const token = urlT || handoff.t || '';
+    if (token) {
+      fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`)
+        .then(r => r.json())
+        .then((data: unknown) => setTokenPayload((data as Record<string, string>) || {}))
+        .catch(() => setTokenPayload({}));
+    } else {
+      // No token — use the raw context handed off in the cookie (or empty).
+      setTokenPayload(handoff);
+    }
+  }, [urlT]);
 
   // Plan + interval can arrive in the token body (sent as a POST body, not URL
   // params). Apply them once the token resolves; query params remain a fallback.
