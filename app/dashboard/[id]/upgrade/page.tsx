@@ -109,6 +109,11 @@ export default function PricingTable() {
   // 'review' = show prorated amount; 'pay' = show the card form (upgrade only).
   const [tierStep, setTierStep] = useState<"review" | "pay">("review");
 
+  // Prorated "due now" for the currently SELECTED plan (existing paid customers only),
+  // shown live in the Total box as soon as a plan is selected.
+  const [selProration, setSelProration] = useState<{ amountDueCents: number | null; currency: string; direction?: string } | null>(null);
+  const [selProrationLoading, setSelProrationLoading] = useState(false);
+
   useEffect(() => {
     if (!activeOrganizationId || currentTier === "free") return;
     let cancelled = false;
@@ -270,6 +275,36 @@ export default function PricingTable() {
     return () => clearInterval(interval);
   }, [returnedFromStripe]);
 
+  // When an existing paid customer selects a plan (or flips the interval / applies a coupon),
+  // fetch the real prorated amount due now so the Total box reflects their current-plan credit.
+  useEffect(() => {
+    if (!selected || selected === "free" || currentTier === "free" || !activeOrganizationId) {
+      setSelProration(null);
+      setSelProrationLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSelProrationLoading(true);
+    setSelProration(null);
+    (async () => {
+      try {
+        const p = await previewChangeTier({
+          organizationId: activeOrganizationId,
+          siteId: siteId || null,
+          planId: selected as "basic" | "essential" | "growth",
+          interval: billing === "yearly" ? "yearly" : "monthly",
+          promotionCodeId: appliedPromo?.promotionCodeId ?? null,
+        });
+        if (!cancelled) setSelProration({ amountDueCents: p.amountDueCents ?? null, currency: p.currency || "usd", direction: p.direction });
+      } catch {
+        if (!cancelled) setSelProration(null);
+      } finally {
+        if (!cancelled) setSelProrationLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected, billing, currentTier, activeOrganizationId, siteId, appliedPromo?.promotionCodeId]);
+
   if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
 
@@ -356,6 +391,13 @@ export default function PricingTable() {
   };
 
   const total = calculateTotal();
+
+  // Show the prorated "due now" figure (instead of the plan sticker price) once an
+  // existing paid customer has selected a plan.
+  const showProrated = currentTier !== "free" && !!selected && selected !== "free";
+  const proratedStr = selProration?.amountDueCents != null
+    ? new Intl.NumberFormat(undefined, { style: "currency", currency: (selProration.currency || "usd").toUpperCase() }).format(selProration.amountDueCents / 100)
+    : null;
 
   async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
     if (sessionLoading) {
@@ -1080,48 +1122,8 @@ function redirectToDashboard() {
             )}
             {selected && <div className="mb-4" />}
 
-            {promoOn && appliedPromo ? (
-              /* ── Applied state ── */
-              <div className="relative z-10 flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <svg className="h-5 w-5 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <div>
-                    <p className="text-[15px] font-semibold text-green-800">
-                      {discountLabel()} applied — you pay ${total}
-                    </p>
-                    {appliedPromo.discount.duration === "once" && (
-                      <p className="text-xs text-green-600">Applies to first billing cycle</p>
-                    )}
-                    {appliedPromo.discount.duration === "repeating" && appliedPromo.discount.durationInMonths && (
-                      <p className="text-xs text-green-600">
-                        Applies for {appliedPromo.discount.durationInMonths} month
-                        {appliedPromo.discount.durationInMonths > 1 ? "s" : ""}
-                      </p>
-                    )}
-                    {appliedPromo.discount.duration === "forever" && (
-                      <p className="text-xs text-green-600">Applies forever</p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPromoOn(false);
-                    setPromoInput("");
-                    setPromoError(false);
-                    setPromoErrorMsg("");
-                    setAppliedPromo(null);
-                  }}
-                  className="shrink-0 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              /* ── Input state ── */
-              <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
+            {/* ── Promo input (always visible) ── */}
+            <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
                 <input
                   value={promoInput}
                   onChange={(e) => {
@@ -1179,6 +1181,28 @@ function redirectToDashboard() {
                   )}
                 </button>
               </div>
+
+            {/* Applied — simple confirmation below the text box */}
+            {promoOn && appliedPromo && (
+              <div className="relative z-10 mt-3 flex items-center gap-2 text-sm text-green-700">
+                <svg width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="#15803d" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span className="font-medium">Applied</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromoOn(false);
+                    setPromoInput("");
+                    setPromoError(false);
+                    setPromoErrorMsg("");
+                    setAppliedPromo(null);
+                  }}
+                  className="text-green-700 underline underline-offset-2 hover:text-green-800"
+                >
+                  Remove
+                </button>
+              </div>
             )}
 
             {promoError && promoErrorMsg && !promoOn && (
@@ -1202,17 +1226,39 @@ function redirectToDashboard() {
 
               <div>
 
-                <div className="text-gray-500">Total</div>
+                {showProrated ? (
+                  <>
+                    <div className="text-gray-500">Due now (prorated)</div>
 
-                <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
-                  ${total}
-                </div>
+                    {selProrationLoading ? (
+                      <div className="text-[26px] text-[#007aff] font-semibold py-1.5">Calculating…</div>
+                    ) : (
+                      <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
+                        {proratedStr ?? `$${total}`}
+                      </div>
+                    )}
 
-                <div>
-                  {billing === "yearly"
-                    ? "(Billed annually)"
-                    : "(Billed monthly)"}
-                </div>
+                    <div className="text-sm text-gray-500 max-w-[240px]">
+                      {selProration?.direction === "downgrade"
+                        ? "No charge now — change applies at your next renewal."
+                        : `Credit for your current plan is applied. Renews at $${total}${billing === "yearly" ? "/yr" : "/mo"}.`}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-gray-500">Total</div>
+
+                    <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
+                      ${total}
+                    </div>
+
+                    <div>
+                      {billing === "yearly"
+                        ? "(Billed annually)"
+                        : "(Billed monthly)"}
+                    </div>
+                  </>
+                )}
 
               </div>
 
