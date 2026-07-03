@@ -1,36 +1,27 @@
 export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface StripeCoupon {
-  id: string;
-  object: 'coupon';
-  valid: boolean;
-  percent_off: number | null;
-  amount_off: number | null;
-  currency: string | null;
-  name: string | null;
-  duration: 'forever' | 'once' | 'repeating' | null;
-  duration_in_months: number | null;
-}
-
-interface StripePromotionCode {
-  id: string;
-  object: 'promotion_code';
-  code: string;
-  active: boolean;
-  coupon: StripeCoupon;
-}
-
-interface StripeList<T> {
-  object: 'list';
-  data: T[];
-  has_more: boolean;
-}
+import { serverFetchJson } from '@/lib/server-api';
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
+//
+// Thin proxy to the Cloudflare Worker's /api/validate-coupon handler.
+// The Stripe secret lives ONLY on the worker — this route holds no keys.
+// It preserves the browser contract (POST { couponCode } → nested { discount })
+// while the worker returns a flat shape, so we map flat → nested here.
+
+interface WorkerCouponResponse {
+  valid: boolean;
+  error?: string;
+  promotionCodeId?: string | null;
+  couponId?: string | null;
+  name?: string | null;
+  percentOff?: number | null;
+  amountOff?: number | null;   // Stripe amount_off — in smallest currency unit (cents)
+  currency?: string | null;
+  duration?: 'forever' | 'once' | 'repeating' | null;
+  durationInMonths?: number | null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,108 +35,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) {
-      console.error('[validate-coupon] STRIPE_SECRET_KEY is not set');
-      return NextResponse.json(
-        { valid: false, error: 'Payment service not configured' },
-        { status: 500 },
-      );
-    }
+    console.log('[validate-coupon proxy] forwarding to worker', { code: raw });
 
-    const authHeader = `Bearer ${stripeKey}`;
-    const stripeVersion = '2024-06-20';
-
-    // ── Step 1: look up as a Promotion Code (user-facing code, e.g. "SAVE20") ──
-    // Stripe promotion codes are case-insensitive on their end, but we uppercase
-    // for safety and consistent UX.
-    const promoRes = await fetch(
-      `https://api.stripe.com/v1/promotion_codes?code=${encodeURIComponent(raw)}&active=true&limit=1`,
-      {
-        headers: {
-          Authorization: authHeader,
-          'Stripe-Version': stripeVersion,
-        },
-      },
+    // Worker route is GET /api/validate-coupon?code=...  (Stripe secret lives there)
+    const { data, status } = await serverFetchJson(
+      `/api/validate-coupon?code=${encodeURIComponent(raw)}`,
+      { method: 'GET' },
     );
 
-    if (promoRes.ok) {
-      const promoList = (await promoRes.json()) as StripeList<StripePromotionCode>;
+    const w = (data ?? {}) as WorkerCouponResponse;
+    console.log('[validate-coupon proxy] worker responded', { status, valid: w.valid, couponId: w.couponId ?? null });
 
-      if (promoList.data?.length > 0) {
-        const promo = promoList.data[0];
-        const coupon = promo.coupon;
-
-        if (!promo.active || !coupon?.valid) {
-          return NextResponse.json({
-            valid: false,
-            error: 'This coupon has expired or is no longer active',
-          });
-        }
-
-        return NextResponse.json({
-          valid: true,
-          promotionCodeId: promo.id,   // preferred — tracks redemption count
-          couponId: coupon.id,          // underlying coupon ID (fallback)
-          discount: buildDiscount(coupon),
-        });
-      }
-    }
-
-    // ── Step 2: try as a raw Coupon ID (not a promo code) ───────────────────
-    // This covers internal coupon IDs created directly in Stripe Dashboard.
-    const couponRes = await fetch(
-      `https://api.stripe.com/v1/coupons/${encodeURIComponent(raw)}`,
-      {
-        headers: {
-          Authorization: authHeader,
-          'Stripe-Version': stripeVersion,
-        },
-      },
-    );
-
-    if (couponRes.ok) {
-      const coupon = (await couponRes.json()) as StripeCoupon;
-
-      if (!coupon?.valid) {
-        return NextResponse.json({
-          valid: false,
-          error: 'This coupon has expired or is no longer active',
-        });
-      }
-
+    if (!w.valid) {
       return NextResponse.json({
-        valid: true,
-        promotionCodeId: null,
-        couponId: coupon.id,
-        discount: buildDiscount(coupon),
+        valid: false,
+        error: w.error || 'Invalid coupon code. Please check and try again.',
       });
     }
 
-    // Nothing found
     return NextResponse.json({
-      valid: false,
-      error: 'Invalid coupon code. Please check and try again.',
-    });
+      valid: true,
+      promotionCodeId: w.promotionCodeId ?? null,
+      couponId: w.couponId ?? null,
+      discount: {
+        percentOff: w.percentOff ?? null,
+        // Worker returns amount_off in cents; the UI shows whole currency units.
+        amountOff: w.amountOff != null ? w.amountOff / 100 : null,
+        currency: (w.currency ?? 'usd').toUpperCase(),
+        name: w.name ?? null,
+        duration: w.duration ?? null,
+        durationInMonths: w.durationInMonths ?? null,
+      },
+    }, { status: status >= 500 ? 502 : 200 });
   } catch (err) {
-    console.error('[validate-coupon] unexpected error:', err);
+    console.error('[validate-coupon] proxy error:', err);
     return NextResponse.json(
       { valid: false, error: 'Failed to validate coupon. Please try again.' },
       { status: 500 },
     );
   }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function buildDiscount(coupon: StripeCoupon) {
-  return {
-    percentOff: coupon.percent_off ?? null,
-    // Stripe stores amount_off in smallest currency unit (e.g. cents)
-    amountOff: coupon.amount_off != null ? coupon.amount_off / 100 : null,
-    currency: (coupon.currency ?? 'usd').toUpperCase(),
-    name: coupon.name ?? null,
-    duration: coupon.duration ?? null,
-    durationInMonths: coupon.duration_in_months ?? null,
-  };
 }
