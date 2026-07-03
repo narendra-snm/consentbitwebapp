@@ -754,6 +754,10 @@ export type ChangeTierResult = {
   paymentStatus?: string;
   effectiveAt?: string | null;
   nextBillingDate?: string | null;
+  // New-card path: 3D Secure needed — confirm clientSecret with stripe.confirmCardPayment.
+  requiresAction?: boolean;
+  clientSecret?: string;
+  subscriptionId?: string;
 };
 
 export async function changeTier(payload: {
@@ -762,6 +766,7 @@ export async function changeTier(payload: {
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
   promotionCodeId?: string | null;
+  paymentMethodId?: string | null;
 }): Promise<ChangeTierResult> {
   const res = await fetch("/api/subscriptions/change-tier", {
     method: "POST",

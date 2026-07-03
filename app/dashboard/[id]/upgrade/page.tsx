@@ -6,11 +6,23 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
+import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview, type ChangeTierResult } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+// Same publishable-key source and Elements setup as app/checkout/page.tsx.
+const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = _pk ? loadStripe(_pk) : null;
+const STRIPE_FIELD_STYLE = {
+  style: {
+    base: { fontSize: "14px", fontFamily: "Arial, Helvetica, sans-serif", color: "#111827", "::placeholder": { color: "#9ca3af" } },
+    invalid: { color: "#dc2626" },
+  },
+};
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
@@ -94,6 +106,8 @@ export default function PricingTable() {
   const [tierPreviewLoading, setTierPreviewLoading] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
   const [committingTier, setCommittingTier] = useState(false);
+  // 'review' = show prorated amount; 'pay' = show the card form (upgrade only).
+  const [tierStep, setTierStep] = useState<"review" | "pay">("review");
 
   useEffect(() => {
     if (!activeOrganizationId || currentTier === "free") return;
@@ -524,6 +538,7 @@ export default function PricingTable() {
     setTierTarget(plan);
     setTierPreview(null);
     setTierError(null);
+    setTierStep("review");
     setShowTierConfirm(true);
     setTierPreviewLoading(true);
     try {
@@ -542,8 +557,63 @@ export default function PricingTable() {
     }
   }
 
-  // Confirmed → charge the card on file in-place (upgrade) or schedule the change (downgrade).
-  async function confirmChangeTier() {
+  // Downgrade confirmed → schedule the change (no payment now).
+  async function confirmDowngrade() {
+    if (!activeOrganizationId || !tierTarget || committingTier) return;
+    setCommittingTier(true);
+    setTierError(null);
+    try {
+      await changeTier({
+        organizationId: activeOrganizationId,
+        siteId: siteId || null,
+        planId: tierTarget,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        promotionCodeId: appliedPromo?.promotionCodeId ?? null,
+      });
+      setShowTierConfirm(false);
+      await refresh({ showLoading: false });
+      router.push(`/dashboard/${siteId}?upgraded=1`);
+    } catch (e) {
+      setTierError(e instanceof Error ? e.message : "Could not schedule the change. Please try again.");
+      setCommittingTier(false);
+    }
+  }
+
+  // Upgrade payment succeeded (on the new card) → show the success/proceed page with receipt.
+  async function finishUpgradeSuccess(result: ChangeTierResult) {
+    setShowTierConfirm(false);
+    await refresh({ showLoading: false });
+    const amt = result.amountPaidCents != null ? (result.amountPaidCents / 100).toFixed(2) : "";
+    setPaymentDetails({
+      amount: amt,
+      currency: (result.currency || "usd").toUpperCase(),
+      transaction_id: result.invoiceId ?? "",
+      plan_id: result.planId ?? tierTarget ?? "",
+      plan_type: "tier",
+      interval: result.interval ?? "",
+      invoice_id: result.invoiceId ?? "",
+      invoice_url: result.invoiceUrl ?? "",
+      customer_email: "",
+      payment_status: result.paymentStatus ?? "paid",
+      date_of_purchase: new Date().toISOString(),
+    });
+    if (tierTarget) sessionStorage.setItem(`cb_target_plan_${siteId}`, tierTarget);
+    setPaymentProcessing(true);
+  }
+
+  // Upgrade "Continue to payment": if nothing is due now (trial or credit covers it), commit
+  // without a card; otherwise advance to the card-entry step.
+  async function proceedUpgrade() {
+    if (!tierPreview) return;
+    const amount = tierPreview.amountDueCents ?? 0;
+    if (tierPreview.isTrialing || amount <= 0) {
+      await commitUpgradeNoCard();
+    } else {
+      setTierStep("pay");
+    }
+  }
+
+  async function commitUpgradeNoCard() {
     if (!activeOrganizationId || !tierTarget || committingTier) return;
     setCommittingTier(true);
     setTierError(null);
@@ -555,34 +625,9 @@ export default function PricingTable() {
         interval: billing === "yearly" ? "yearly" : "monthly",
         promotionCodeId: appliedPromo?.promotionCodeId ?? null,
       });
-      setShowTierConfirm(false);
-      await refresh({ showLoading: false });
-
-      if (result.direction === "downgrade") {
-        // Scheduled for end of the billing period — nothing charged now.
-        router.push(`/dashboard/${siteId}?upgraded=1`);
-        return;
-      }
-
-      // Upgrade — charged immediately. Show the success/proceed page with receipt details.
-      const amt = result.amountPaidCents != null ? (result.amountPaidCents / 100).toFixed(2) : "";
-      setPaymentDetails({
-        amount: amt,
-        currency: (result.currency || "usd").toUpperCase(),
-        transaction_id: result.invoiceId ?? "",
-        plan_id: result.planId ?? "",
-        plan_type: "tier",
-        interval: result.interval ?? "",
-        invoice_id: result.invoiceId ?? "",
-        invoice_url: result.invoiceUrl ?? "",
-        customer_email: "",
-        payment_status: result.paymentStatus ?? "paid",
-        date_of_purchase: new Date().toISOString(),
-      });
-      sessionStorage.setItem(`cb_target_plan_${siteId}`, tierTarget);
-      setPaymentProcessing(true);
+      await finishUpgradeSuccess(result);
     } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Payment could not be completed. Please try again.");
+      setTierError(e instanceof Error ? e.message : "Could not complete the change. Please try again.");
       setCommittingTier(false);
     }
   }
@@ -794,73 +839,98 @@ function redirectToDashboard() {
               )}
             </div>
 
-            <div className="rounded-[10px] bg-[#eff6ff] border border-[#dbeafe] px-4 py-3 text-[13px] text-[#1e3a8a] leading-relaxed mb-5 min-h-[52px] flex items-center">
-              {tierPreviewLoading ? (
-                "Calculating your pro-rated amount…"
-              ) : tierPreview ? (
-                (() => {
-                  const fmt = (cents: number) =>
-                    new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() })
-                      .format(cents / 100);
-                  const per = tierPreview.interval === "yearly" ? "year" : "month";
-                  if (tierPreview.isTrialing) {
-                    return `You're on a free trial, so nothing is charged now. Your plan changes immediately, and you'll be billed ${fmt(tierPreview.amountDueCents ?? 0)}/${per} when the trial ends.`;
-                  }
-                  if (tierPreview.direction === "downgrade") {
-                    const when = tierPreview.effectiveAt ? new Date(tierPreview.effectiveAt).toLocaleDateString() : "the end of your billing period";
-                    const newAmt = tierPreview.newPlanAmountCents != null ? `${fmt(tierPreview.newPlanAmountCents)}/${per}` : "the new plan price";
-                    return `No payment is due now. You'll keep your current plan until ${when}, then move to the lower plan and pay ${newAmt}.`;
-                  }
-                  const amount = tierPreview.amountDueCents ?? 0;
-                  if (amount <= 0) {
-                    return "No payment is due now — your existing balance covers the change. Your plan upgrades immediately.";
-                  }
-                  return `You will only pay the pro-rated amount for the current billing period: ${fmt(amount)}, charged now to your card on file.`;
-                })()
-              ) : (
-                "You'll pay the pro-rated amount for the current billing period, charged to your card on file."
-              )}
-            </div>
+            {tierStep === "review" ? (
+              <>
+                <div className="rounded-[10px] bg-[#eff6ff] border border-[#dbeafe] px-4 py-3 text-[13px] text-[#1e3a8a] leading-relaxed mb-5 min-h-[52px] flex items-center">
+                  {tierPreviewLoading ? (
+                    "Calculating your pro-rated amount…"
+                  ) : tierPreview ? (
+                    (() => {
+                      const fmt = (cents: number) =>
+                        new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() })
+                          .format(cents / 100);
+                      const per = tierPreview.interval === "yearly" ? "year" : "month";
+                      if (tierPreview.isTrialing) {
+                        return `You're on a free trial, so nothing is charged now. Your plan changes immediately, and you'll be billed ${fmt(tierPreview.amountDueCents ?? 0)}/${per} when the trial ends.`;
+                      }
+                      if (tierPreview.direction === "downgrade") {
+                        const when = tierPreview.effectiveAt ? new Date(tierPreview.effectiveAt).toLocaleDateString() : "the end of your billing period";
+                        const newAmt = tierPreview.newPlanAmountCents != null ? `${fmt(tierPreview.newPlanAmountCents)}/${per}` : "the new plan price";
+                        return `No payment is due now. You'll keep your current plan until ${when}, then move to the lower plan and pay ${newAmt}.`;
+                      }
+                      const amount = tierPreview.amountDueCents ?? 0;
+                      if (amount <= 0) {
+                        return "No payment is due now — your existing balance covers the change. Your plan upgrades immediately.";
+                      }
+                      return `You will only pay the pro-rated amount for the current billing period: ${fmt(amount)}. You'll enter your card on the next step.`;
+                    })()
+                  ) : (
+                    "You'll pay the pro-rated amount for the current billing period on the next step."
+                  )}
+                </div>
 
-            {tierPreview?.couponPreviewSkipped && (
-              <div className="mb-4 text-[12px] text-[#b45309]">
-                Note: the coupon will be applied at payment; the amount above may not reflect it.
-              </div>
-            )}
-
-            {tierError && (
-              <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
-                {tierError}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => { if (!committingTier) { setShowTierConfirm(false); setTierError(null); } }}
-                disabled={committingTier}
-                className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmChangeTier}
-                disabled={committingTier || tierPreviewLoading || !!tierError}
-                className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
-              >
-                {committingTier ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    Processing…
-                  </>
-                ) : tierPreview?.direction === "downgrade" ? (
-                  "Confirm downgrade"
-                ) : (
-                  "Confirm & pay now"
+                {tierPreview?.couponPreviewSkipped && (
+                  <div className="mb-4 text-[12px] text-[#b45309]">
+                    Note: the coupon will be applied at payment; the amount above may not reflect it.
+                  </div>
                 )}
-              </button>
-            </div>
+
+                {tierError && (
+                  <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                    {tierError}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { if (!committingTier) { setShowTierConfirm(false); setTierError(null); } }}
+                    disabled={committingTier}
+                    className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (tierPreview?.direction === "downgrade") void confirmDowngrade(); else void proceedUpgrade(); }}
+                    disabled={committingTier || tierPreviewLoading || !!tierError}
+                    className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {committingTier ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        Processing…
+                      </>
+                    ) : tierPreview?.direction === "downgrade" ? (
+                      "Confirm downgrade"
+                    ) : (
+                      "Continue to payment"
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : stripePromise ? (
+              <Elements stripe={stripePromise}>
+                <TierCardForm
+                  amountLabel={
+                    tierPreview?.amountDueCents != null
+                      ? new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() }).format((tierPreview.amountDueCents || 0) / 100)
+                      : ""
+                  }
+                  organizationId={activeOrganizationId!}
+                  siteId={siteId || null}
+                  planId={tierTarget}
+                  interval={billing === "yearly" ? "yearly" : "monthly"}
+                  promotionCodeId={appliedPromo?.promotionCodeId ?? null}
+                  onSuccess={finishUpgradeSuccess}
+                  onBack={() => setTierStep("review")}
+                />
+              </Elements>
+            ) : (
+              <div className="rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                Payment system misconfigured — set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1219,5 +1289,133 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
         {value}
       </span>
     </div>
+  );
+}
+
+// Card-entry step for a prorated upgrade (option 3): collects a new card via Stripe Elements,
+// charges the prorated amount to it, and handles 3D Secure — mirrors app/checkout/page.tsx.
+function TierCardForm({
+  amountLabel,
+  organizationId,
+  siteId,
+  planId,
+  interval,
+  promotionCodeId,
+  onSuccess,
+  onBack,
+}: {
+  amountLabel: string;
+  organizationId: string;
+  siteId: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId: string | null;
+  onSuccess: (result: ChangeTierResult) => void | Promise<void>;
+  onBack: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!stripe || !elements) { setErr("Payment not ready. Please wait a moment and try again."); return; }
+    const cardEl = elements.getElement(CardNumberElement);
+    if (!cardEl) { setErr("Enter your card details."); return; }
+    setErr("");
+    setSubmitting(true);
+    try {
+      const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
+        type: "card",
+        card: cardEl,
+        billing_details: { name: name.trim() || undefined },
+      });
+      if (pmErr || !paymentMethod) { setErr(pmErr?.message || "Card error. Please check your details."); setSubmitting(false); return; }
+
+      const result = await changeTier({
+        organizationId,
+        siteId,
+        planId,
+        interval,
+        promotionCodeId,
+        paymentMethodId: paymentMethod.id,
+      });
+
+      // 3D Secure required → complete it, then success.
+      if (result.requiresAction && result.clientSecret) {
+        const { error: confErr } = await stripe.confirmCardPayment(result.clientSecret);
+        if (confErr) { setErr(confErr.message || "Card authentication failed. Please try another card."); setSubmitting(false); return; }
+      }
+
+      await onSuccess(result);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Payment failed. Please try again.");
+      setSubmitting(false);
+    }
+  }
+
+  const fieldCls = "rounded-lg border border-gray-300 px-3 py-2.5 transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20";
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-[13px] text-[#374151]">
+        {amountLabel
+          ? <>You&apos;ll be charged <span className="font-semibold text-[#0a091f]">{amountLabel}</span> now — the prorated amount.</>
+          : "Enter your card to complete the upgrade."}
+      </p>
+
+      <div>
+        <label className="mb-1 block text-[13px] text-gray-700">Card number</label>
+        <div className={fieldCls}><CardNumberElement options={STRIPE_FIELD_STYLE} /></div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-[13px] text-gray-700">Expiry</label>
+          <div className={fieldCls}><CardExpiryElement options={STRIPE_FIELD_STYLE} /></div>
+        </div>
+        <div>
+          <label className="mb-1 block text-[13px] text-gray-700">CVC</label>
+          <div className={fieldCls}><CardCvcElement options={STRIPE_FIELD_STYLE} /></div>
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[13px] text-gray-700">Name on card</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Jane Smith"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20"
+        />
+      </div>
+
+      {err && <div className="rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">{err}</div>}
+
+      <div className="flex gap-3 pt-1">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={submitting}
+          className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+        >
+          Back
+        </button>
+        <button
+          type="submit"
+          disabled={submitting || !stripe}
+          className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Processing…
+            </>
+          ) : amountLabel ? `Pay ${amountLabel}` : "Confirm & pay"}
+        </button>
+      </div>
+    </form>
   );
 }
