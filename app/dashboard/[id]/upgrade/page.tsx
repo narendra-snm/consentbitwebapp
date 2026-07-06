@@ -6,11 +6,14 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview, type ChangeTierResult } from "@/lib/client-api";
+import { createCheckoutSession, upgradeSubscription, getBillingSummary, switchBillingInterval, previewSwitchInterval, type SwitchIntervalPreview } from "@/lib/client-api";
+// NEW WORKFLOW (prorated in-place tier change) — kept for later. Re-add to the import above to re-enable:
+//   previewChangeTier, changeTier, type ChangeTierPreview, type ChangeTierResult
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
+/* NEW WORKFLOW (prorated in-place tier change) — Stripe Elements card entry, kept for later.
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -23,6 +26,7 @@ const STRIPE_FIELD_STYLE = {
     invalid: { color: "#dc2626" },
   },
 };
+*/
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
@@ -99,6 +103,7 @@ export default function PricingTable() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
 
+  /* NEW WORKFLOW (prorated in-place tier change) — state kept for later.
   // Tier change (upgrade/downgrade) confirm dialog — prorated amount shown before charging the card on file.
   const [showTierConfirm, setShowTierConfirm] = useState(false);
   const [tierTarget, setTierTarget] = useState<"basic" | "essential" | "growth" | null>(null);
@@ -113,6 +118,7 @@ export default function PricingTable() {
   // shown live in the Total box as soon as a plan is selected.
   const [selProration, setSelProration] = useState<{ amountDueCents: number | null; currency: string; direction?: string } | null>(null);
   const [selProrationLoading, setSelProrationLoading] = useState(false);
+  */
 
   useEffect(() => {
     if (!activeOrganizationId || currentTier === "free") return;
@@ -275,6 +281,7 @@ export default function PricingTable() {
     return () => clearInterval(interval);
   }, [returnedFromStripe]);
 
+  /* NEW WORKFLOW (prorated in-place tier change) — live "due now" fetch, kept for later.
   // When an existing paid customer selects a plan (or flips the interval / applies a coupon),
   // fetch the real prorated amount due now so the Total box reflects their current-plan credit.
   useEffect(() => {
@@ -304,6 +311,7 @@ export default function PricingTable() {
     })();
     return () => { cancelled = true; };
   }, [selected, billing, currentTier, activeOrganizationId, siteId, appliedPromo?.promotionCodeId]);
+  */
 
   if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
@@ -392,12 +400,14 @@ export default function PricingTable() {
 
   const total = calculateTotal();
 
+  /* NEW WORKFLOW (prorated in-place tier change) — Total-box "due now" derivation, kept for later.
   // Show the prorated "due now" figure (instead of the plan sticker price) once an
   // existing paid customer has selected a plan.
   const showProrated = currentTier !== "free" && !!selected && selected !== "free";
   const proratedStr = selProration?.amountDueCents != null
     ? new Intl.NumberFormat(undefined, { style: "currency", currency: (selProration.currency || "usd").toUpperCase() }).format(selProration.amountDueCents / 100)
     : null;
+  */
 
   async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
     if (sessionLoading) {
@@ -414,14 +424,18 @@ export default function PricingTable() {
     }
     if (plan === "free") return;
 
+    /* NEW WORKFLOW (prorated in-place tier change) — kept for later.
     // Existing paid subscription → prorated in-place change. Open the confirmation modal
     // (shows the prorated amount + charges the card on file) instead of a checkout redirect.
     if (currentTier !== "free") {
       void openTierConfirm(plan);
       return;
     }
+    */
 
-    // No existing subscription → standard new checkout (redirect to Stripe).
+    // OLD WORKFLOW — every plan change goes through a Stripe checkout redirect (no proration
+    // calculation). Existing paid subscriptions cancel-and-recreate via upgradeSubscription;
+    // new subscriptions use createCheckoutSession.
     setCheckoutLoading(true);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -431,20 +445,41 @@ export default function PricingTable() {
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";
 
-      const { url } = await createCheckoutSession({
-        organizationId: activeOrganizationId,
-        planId: plan,
-        interval: intervalVal,
-        siteId,
-        successUrl,
-        cancelUrl,
-        ...(appliedPromo
-          ? {
-              stripePromotionCodeId: appliedPromo.promotionCodeId,
-              stripeCouponId: appliedPromo.couponId,
-            }
-          : {}),
-      });
+      let url: string;
+
+      if (currentTier !== "free") {
+        // Existing paid subscription — cancel old and create new checkout session.
+        ({ url } = await upgradeSubscription({
+          siteId,
+          organizationId: activeOrganizationId,
+          planId: plan,
+          interval: intervalVal,
+          successUrl,
+          cancelUrl,
+          ...(appliedPromo
+            ? {
+                promotionCodeId: appliedPromo.promotionCodeId,
+                couponId: appliedPromo.couponId,
+              }
+            : {}),
+        }));
+      } else {
+        // No existing subscription — standard new checkout.
+        ({ url } = await createCheckoutSession({
+          organizationId: activeOrganizationId,
+          planId: plan,
+          interval: intervalVal,
+          siteId,
+          successUrl,
+          cancelUrl,
+          ...(appliedPromo
+            ? {
+                stripePromotionCodeId: appliedPromo.promotionCodeId,
+                stripeCouponId: appliedPromo.couponId,
+              }
+            : {}),
+        }));
+      }
 
       sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
       // Store the target plan so the post-redirect poll can wait for the right plan.
@@ -574,6 +609,7 @@ export default function PricingTable() {
     );
   };
 
+  /* NEW WORKFLOW (prorated in-place tier change) — confirm/commit handlers, kept for later.
   // Different tier on an existing paid subscription → confirm dialog with the prorated amount first.
   async function openTierConfirm(plan: "basic" | "essential" | "growth") {
     if (!activeOrganizationId) return;
@@ -673,6 +709,7 @@ export default function PricingTable() {
       setCommittingTier(false);
     }
   }
+  */
 
   // Shown when the user is already on this tier but the grid is toggled to the other interval.
   const SwitchIntervalButton = ({ target }: { target: "monthly" | "yearly" }) => (
@@ -848,7 +885,8 @@ function redirectToDashboard() {
         </div>
       )}
 
-      {/* Tier change (upgrade/downgrade) confirm dialog — prorated Payment Confirmation */}
+      {/* NEW WORKFLOW (prorated in-place tier change) — confirm dialog disabled, kept for later. */}
+      {/* DISABLED — re-enable together with the tier-change handlers, state, and Stripe imports above:
       {showTierConfirm && tierTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -976,6 +1014,7 @@ function redirectToDashboard() {
           </div>
         </div>
       )}
+      */}
 
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
@@ -1226,39 +1265,20 @@ function redirectToDashboard() {
 
               <div>
 
-                {showProrated ? (
-                  <>
-                    <div className="text-gray-500">Due now (prorated)</div>
+                {/* OLD WORKFLOW — plain plan-price total (no proration calculation).
+                    The NEW WORKFLOW showed a live "Due now (prorated)" figure here; see the
+                    commented showProrated/proratedStr/selProration code above to re-enable. */}
+                <div className="text-gray-500">Total</div>
 
-                    {selProrationLoading ? (
-                      <div className="text-[26px] text-[#007aff] font-semibold py-1.5">Calculating…</div>
-                    ) : (
-                      <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
-                        {proratedStr ?? `$${total}`}
-                      </div>
-                    )}
+                <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
+                  ${total}
+                </div>
 
-                    <div className="text-sm text-gray-500 max-w-[240px]">
-                      {selProration?.direction === "downgrade"
-                        ? "No charge now — change applies at your next renewal."
-                        : `Credit for your current plan is applied. Renews at $${total}${billing === "yearly" ? "/yr" : "/mo"}.`}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-gray-500">Total</div>
-
-                    <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
-                      ${total}
-                    </div>
-
-                    <div>
-                      {billing === "yearly"
-                        ? "(Billed annually)"
-                        : "(Billed monthly)"}
-                    </div>
-                  </>
-                )}
+                <div>
+                  {billing === "yearly"
+                    ? "(Billed annually)"
+                    : "(Billed monthly)"}
+                </div>
 
               </div>
 
@@ -1338,6 +1358,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
+/* NEW WORKFLOW (prorated in-place tier change) — card-entry step, kept for later.
 // Card-entry step for a prorated upgrade (option 3): collects a new card via Stripe Elements,
 // charges the prorated amount to it, and handles 3D Secure — mirrors app/checkout/page.tsx.
 function TierCardForm({
@@ -1465,3 +1486,4 @@ function TierCardForm({
     </form>
   );
 }
+*/
