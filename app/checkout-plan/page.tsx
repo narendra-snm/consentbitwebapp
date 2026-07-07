@@ -964,6 +964,31 @@ function CheckoutPageInner() {
   const version = tokenPayload.version ?? params.get('version') ?? '';
   const initBillingEmail = (tokenPayload.billingEmail ?? '').trim().toLowerCase();
 
+  // The checkout context (plan/site) is handed off in a one-shot, ~5-minute cookie.
+  // If it's gone — expired, already consumed (refresh/reopen), or the token expired —
+  // we have no domain/site to bill. Show a clear "expired" screen up front instead of
+  // an empty form that only fails after the user has entered their card details.
+  if (!domain && !wfSiteId) {
+    return (
+      <div className="min-h-screen bg-[#f4f5f9] flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm">
+          <img alt="Consentbit" className="mx-auto mb-6 w-[140px] h-auto" src="/images/ConsentBit-logo-Dark.png" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </div>
+          <h1 className="mb-2 text-lg font-semibold text-[#231d4f]">Checkout link expired</h1>
+          <p className="text-sm leading-relaxed text-[#6b7280]">
+            This checkout session has expired or was already used. Please reopen checkout
+            from the ConsentBit app in your Webflow Designer to continue.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
       <div className="mx-auto max-w-5xl">
