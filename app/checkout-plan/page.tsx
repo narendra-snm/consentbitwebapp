@@ -405,6 +405,10 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Persists after payment succeeds — unlike showSuccess it is NOT cleared by
+  // "Stay on this page", so the trial button stays disabled and can never charge
+  // a second time once the account is set up.
+  const [paid, setPaid] = useState(false);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -434,6 +438,9 @@ function CheckoutForm({
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Guard against a second charge: once a payment has succeeded or one is in
+    // flight, ignore further submits (backstops Enter-key / double submits).
+    if (isSubmitting || paid) return;
     setError('');
 
     const errs = validate();
@@ -549,6 +556,7 @@ function CheckoutForm({
         }
       }
 
+      setPaid(true);
       setShowSuccess(true);
       setIsSubmitting(false);
     } catch {
@@ -858,7 +866,7 @@ function CheckoutForm({
       <div className="space-y-2">
         <button
           type="submit"
-          disabled={isSubmitting || !stripe}
+          disabled={isSubmitting || !stripe || paid}
           className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
@@ -880,6 +888,8 @@ function CheckoutForm({
               </svg>
               Processing…
             </>
+          ) : paid ? (
+            'Trial started ✓'
           ) : (
             'Start 14-day free trial →'
           )}
