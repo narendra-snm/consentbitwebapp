@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import {
@@ -16,17 +16,6 @@ import {
 
 type PlanId = 'basic' | 'essential' | 'growth';
 type Interval = 'monthly' | 'yearly';
-
-interface AppliedCoupon {
-  promotionCodeId: string;
-  code: string;
-  name: string;
-  percentOff: number | null;
-  amountOff: number | null; // cents
-  currency: string;
-  duration: 'once' | 'repeating' | 'forever';
-  durationInMonths: number | null;
-}
 
 interface PlanConfig {
   name: string;
@@ -92,7 +81,7 @@ const PLANS: Record<PlanId, PlanConfig> = {
 const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
-//check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
+
 const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 // console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
 const stripePromise = _pk ? loadStripe(_pk) : null
@@ -160,6 +149,23 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
       error: text.trimStart().startsWith('<') ? 'Something went wrong. Please try again.' : text,
     };
   }
+}
+
+function friendlyCardError(msg?: string): string {
+  if (!msg) return 'Please check your card information and try again.';
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('declined') ||
+    lower.includes('test card') ||
+    lower.includes('insufficient') ||
+    lower.includes('card number') ||
+    lower.includes('expir') ||
+    lower.includes('cvc') ||
+    lower.includes('invalid')
+  ) {
+    return 'Please check your card information and try again.';
+  }
+  return msg;
 }
 
 function trialEndLabel() {
@@ -230,46 +236,17 @@ function FormSection({
 
 // ─── Order summary ────────────────────────────────────────────────────────────
 
-function OrderSummary({
-  planId,
-  interval,
-  appliedCoupon,
-}: {
-  planId: PlanId;
-  interval: Interval;
-  appliedCoupon: AppliedCoupon | null;
-}) {
+function OrderSummary({ planId, interval }: { planId: PlanId; interval: Interval }) {
   const plan = PLANS[planId];
   const price = interval === 'yearly' ? plan.yearly : plan.monthly;
   const firstCharge = trialEndLabel();
 
-  const firstChargeBase = plan.monthly;
-  let discount = 0;
-  if (appliedCoupon) {
-    if (appliedCoupon.percentOff != null) {
-      discount = (firstChargeBase * appliedCoupon.percentOff) / 100;
-    } else if (appliedCoupon.amountOff != null) {
-      discount = appliedCoupon.amountOff / 100;
-    }
-  }
-  const firstChargeFinal = Math.max(0, firstChargeBase - discount);
-  const fmt = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
-
-  const rows: Array<{ label: string; value: string; pill?: boolean; bold?: boolean; discount?: boolean }> = [
+  const rows = [
     { label: plan.name, value: `$${price}/mo` },
     { label: 'Billing', value: interval === 'yearly' ? 'Yearly' : 'Monthly' },
     { label: 'Trial period', value: '14 days', pill: true },
-    ...(appliedCoupon
-      ? [{
-          label: `Coupon ${appliedCoupon.code}`,
-          value: appliedCoupon.percentOff != null
-            ? `−${appliedCoupon.percentOff}%`
-            : `−${fmt((appliedCoupon.amountOff ?? 0) / 100)}`,
-          discount: true,
-        }]
-      : []),
     { label: 'Due today', value: '$0.00', bold: true },
-    { label: 'First charge', value: `${fmt(firstChargeFinal)} on ${firstCharge}` },
+    { label: 'First charge', value: `$${plan.monthly} on ${firstCharge}` },
   ];
 
   return (
@@ -295,8 +272,6 @@ function OrderSummary({
                 <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-700">
                   {row.value}
                 </span>
-              ) : row.discount ? (
-                <span className="font-semibold text-green-600">{row.value}</span>
               ) : (
                 <span className={row.bold ? 'font-bold text-gray-900' : 'text-gray-700'}>
                   {row.value}
@@ -329,7 +304,7 @@ function OrderSummary({
         </div>
 
         <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4">
-          {/* {[
+          {[
             ['🛡️', '30-day money-back'],
             ['🔒', 'Your data is safe'],
             ['⚡', 'Load in under 3 seconds'],
@@ -338,11 +313,11 @@ function OrderSummary({
               <span>{icon}</span>
               <span>{text}</span>
             </div>
-          ))} */}
+          ))}
         </div>
       </div>
 
-      {/* <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+      <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
         <p className="text-xs text-gray-500">Trusted by 4,200+ websites</p>
         <div className="mt-1 flex items-center gap-0.5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -352,7 +327,7 @@ function OrderSummary({
           ))}
           <span className="ml-1 text-xs text-gray-500">340 reviews</span>
         </div>
-      </div> */}
+      </div>
     </div>
   );
 }
@@ -396,13 +371,10 @@ interface CheckoutFormProps {
   domain: string;
   platform: string;
   wfSiteId?: string;
+  version?: string;
   initBillingEmail?: string;
   planId: PlanId;
   interval: Interval;
-  onPlanChange: (p: PlanId) => void;
-  onIntervalChange: (i: Interval) => void;
-  appliedCoupon: AppliedCoupon | null;
-  onCouponChange: (c: AppliedCoupon | null) => void;
 }
 
 function CheckoutForm({
@@ -410,13 +382,10 @@ function CheckoutForm({
   domain: initDomain,
   platform,
   wfSiteId,
+  version,
   initBillingEmail = '',
   planId,
   interval,
-  onPlanChange,
-  onIntervalChange,
-  appliedCoupon,
-  onCouponChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -436,66 +405,13 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [couponInput, setCouponInput] = useState('');
-  const [couponLoading, setCouponLoading] = useState(false);
-  const [couponError, setCouponError] = useState('');
+  // Persists after payment succeeds — unlike showSuccess it is NOT cleared by
+  // "Stay on this page", so the trial button stays disabled and can never charge
+  // a second time once the account is set up.
+  const [paid, setPaid] = useState(false);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
-  }
-
-  async function applyCoupon() {
-    const code = couponInput.trim();
-    if (!code) {
-      setCouponError('Enter a coupon code.');
-      return;
-    }
-    setCouponError('');
-    setCouponLoading(true);
-    try {
-      const res = await fetch(
-        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: 'include' },
-      );
-      const data = (await parseApiResponse(res)) as {
-        valid: boolean;
-        error?: string;
-        promotionCodeId?: string;
-        code?: string;
-        name?: string;
-        percentOff?: number | null;
-        amountOff?: number | null;
-        currency?: string;
-        duration?: 'once' | 'repeating' | 'forever';
-        durationInMonths?: number | null;
-      };
-      // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
-      if (!data.valid || !data.promotionCodeId) {
-        setCouponError(data.error || 'Invalid or expired code.');
-        onCouponChange(null);
-        setCouponLoading(false);
-        return;
-      }
-      onCouponChange({
-        promotionCodeId: data.promotionCodeId,
-        code: data.code || code,
-        name: data.name || code,
-        percentOff: data.percentOff ?? null,
-        amountOff: data.amountOff ?? null,
-        currency: data.currency || 'usd',
-        duration: data.duration || 'once',
-        durationInMonths: data.durationInMonths ?? null,
-      });
-    } catch {
-      setCouponError('Could not validate code. Please try again.');
-    }
-    setCouponLoading(false);
-  }
-
-  function removeCoupon() {
-    onCouponChange(null);
-    setCouponInput('');
-    setCouponError('');
   }
 
   function handleEmailChange(v: string) {
@@ -522,6 +438,10 @@ function CheckoutForm({
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Guard against a second charge: once a payment has succeeded (success modal
+    // shown) or one is in flight, ignore further submits. The button is also
+    // disabled in these states, but this backstops Enter-key / double submits.
+    if (isSubmitting || paid) return;
     setError('');
 
     const errs = validate();
@@ -544,7 +464,6 @@ function CheckoutForm({
 
     setIsSubmitting(true);
     try {
-      console.log('[Checkout] submit start', { planId, interval, domain: cleanDomain(domain), wfSiteId: wfSiteId || null, platform: platform || null, separateBilling, hasCoupon: !!appliedCoupon });
       const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
         type: 'card',
         card: cardEl,
@@ -555,59 +474,64 @@ function CheckoutForm({
       });
 
       if (pmErr) {
-        setError(pmErr.message || 'Card error. Please check your details.');
+        setError(friendlyCardError(pmErr.message));
         setIsSubmitting(false);
         return;
       }
 
       const cleanedDomain = cleanDomain(domain);
 
-      // Phase 1 — create subscription
-      console.log('[Checkout] phase 1 → POST /api/custom-checkout', { paymentMethodId: paymentMethod?.id });
-      const res = await fetch('https://manager.consentbit.com/api/custom-checkout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethodId: paymentMethod!.id,
-          email: email.trim().toLowerCase(),
-          billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
-          domain: cleanedDomain,
-          siteName: cleanedDomain,
-          planId,
-          interval,
-          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
-        }),
-      });
-
-      console.log('[Checkout] phase 1 ← response', { ok: res.ok, status: res.status });
-      const data = (await parseApiResponse(res)) as {
-        success: boolean;
-        error?: string;
-        requiresAction?: boolean;
-        clientSecret?: string;
-        subscriptionId?: string;
+      // Phase 1 — create subscription. If the domain already has an active plan on
+      // this account, retry as an upgrade (confirmUpgrade) — the backend creates the
+      // new plan and cancels the old subscription so there's no double-billing.
+      const postCheckout = async (confirmUpgrade: boolean) => {
+        const r = await fetch('https://manager.consentbit.com/api/custom-checkout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethodId: paymentMethod!.id,
+            email: email.trim().toLowerCase(),
+            billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
+            domain: cleanedDomain,
+            siteName: cleanedDomain,
+            planId,
+            interval,
+            ...(confirmUpgrade ? { confirmUpgrade: true } : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
+          }),
+        });
+        return (await parseApiResponse(r)) as {
+          success: boolean;
+          error?: string;
+          code?: string;
+          canUpgrade?: boolean;
+          requiresAction?: boolean;
+          clientSecret?: string;
+          subscriptionId?: string;
+        };
       };
+
+      let data = await postCheckout(false);
+      // Same-account domain already has a plan → treat this as an upgrade and confirm it.
+      if (!data.success && data.code === 'DOMAIN_EXISTS' && data.canUpgrade) {
+        data = await postCheckout(true);
+      }
       if (!data.success) {
-        console.warn('[Checkout] phase 1 not successful', { status: res.status, error: data.error });
-        setError(data.error || 'Something went wrong. Please try again.');
+        setError(friendlyCardError(data.error));
         setIsSubmitting(false);
         return;
       }
 
       // Phase 2 — 3D Secure confirmation required
       if (data.requiresAction && data.clientSecret) {
-        console.log('[Checkout] phase 2 → 3DS required, confirming card', { subscriptionId: data.subscriptionId });
         const { error: confirmErr } = await stripe.confirmCardPayment(data.clientSecret);
         if (confirmErr) {
-          console.warn('[Checkout] phase 2 3DS confirm failed', confirmErr);
-          setError(confirmErr.message || '3D Secure verification failed. Please try another card.');
+          setError(friendlyCardError(confirmErr.message));
           setIsSubmitting(false);
           return;
         }
 
-        console.log('[Checkout] phase 2 → POST /api/custom-checkout (confirm)');
         const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
@@ -620,37 +544,24 @@ function CheckoutForm({
             siteName: cleanedDomain,
             planId,
             interval,
-            ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow', version: version || 'v2' } : {}),
           }),
         });
 
-        console.log('[Checkout] phase 2 ← response', { ok: res2.ok, status: res2.status });
         const d2 = (await parseApiResponse(res2)) as { success: boolean; error?: string };
-
+        
         if (!d2.success) {
-          console.warn('[Checkout] phase 2 not successful', { status: res2.status, error: d2.error });
           setError(d2.error || 'Account setup failed after payment. Please contact support.');
           setIsSubmitting(false);
           return;
         }
       }
 
-      console.log('[Checkout] success');
+      setPaid(true);
       setShowSuccess(true);
       setIsSubmitting(false);
-    } catch (err) {
-      // Surface the real cause — a bare message here hid network/CORS/Stripe.js failures.
-      const e = err as { name?: string; message?: string; type?: string; code?: string };
-      console.error('[Checkout] submit threw', {
-        name: e?.name,
-        message: e?.message,
-        type: e?.type,
-        code: e?.code,
-        error: err,
-      });
-      const detail = e?.message ? ` (${e.message})` : '';
-      setError(`An unexpected error occurred. Please try again.${detail}`);
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
       setIsSubmitting(false);
     }
   }
@@ -831,92 +742,53 @@ function CheckoutForm({
         </div>
       </FormSection>
 
-      {/* 3 — Choose a plan */}
-      <FormSection n={3} title="Choose a plan">
-        {/* Interval toggle */}
-        <div className="mb-4 flex w-fit items-center gap-0.5 rounded-lg bg-gray-100 p-1">
-          {(['monthly', 'yearly'] as Interval[]).map(i => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onIntervalChange(i)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
-                interval === i
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {i === 'monthly' ? 'Monthly' : 'Yearly'}
-              {i === 'yearly' && (
-                <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                  SAVE 20%
+      {/* 3 — Your plan (locked — chosen in the plugin, shown read-only) */}
+      <FormSection n={3} title="Your plan">
+        {(() => {
+          const p = PLANS[planId];
+          const price = interval === 'yearly' ? p.yearly : p.monthly;
+          return (
+            <div className="relative w-full rounded-xl border-2 border-[#262E84] bg-[#262E84]/5 p-4">
+              {p.popular && (
+                <span className="absolute -top-2.5 left-4 rounded-full bg-[#262E84] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  Most popular
                 </span>
               )}
-            </button>
-          ))}
-        </div>
-
-        {/* Plan cards */}
-        <div className="space-y-2">
-          {(Object.entries(PLANS) as [PlanId, PlanConfig][]).map(([id, p]) => {
-            const active = planId === id;
-            const price = interval === 'yearly' ? p.yearly : p.monthly;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onPlanChange(id)}
-                className={`relative w-full rounded-xl border-2 p-4 text-left transition-all ${
-                  active
-                    ? 'border-[#262E84] bg-[#262E84]/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {p.popular && (
-                  <span className="absolute -top-2.5 left-4 rounded-full bg-[#262E84] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                    Most popular
-                  </span>
-                )}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
-                        active ? 'border-[#262E84]' : 'border-gray-300'
-                      }`}
-                    >
-                      {active && <div className="h-2 w-2 rounded-full bg-[#262E84]" />}
-                    </div>
-                    <div>
-                      <p
-                        className={`text-sm font-semibold ${
-                          active ? 'text-[#262E84]' : 'text-gray-900'
-                        }`}
-                      >
-                        {p.name}
-                      </p>
-                      {/* <p className="text-xs text-gray-400 invisible">
-                        {p.domains} {p.domains === 1 ? 'domain' : 'domains'}
-                      </p> */}
-                    </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#262E84]">
+                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
                   </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-lg font-bold ${
-                        active ? 'text-[#262E84]' : 'text-gray-900'
-                      }`}
-                    >
-                      ${price}
-                      <span className="text-xs font-normal text-gray-400">/mo</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#262E84]">{p.name}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                      {interval === 'yearly' ? 'Billed yearly' : 'Billed monthly'}
+                      {interval === 'yearly' && (
+                        <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                          SAVE 20%
+                        </span>
+                      )}
                     </p>
-                    {interval === 'yearly' && (
-                      <p className="text-[10px] text-gray-400">billed ${p.yearlyTotal}/yr</p>
-                    )}
                   </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-[#262E84]">
+                    ${price}
+                    <span className="text-xs font-normal text-gray-400">/mo</span>
+                  </p>
+                  {interval === 'yearly' && (
+                    <p className="text-[10px] text-gray-400">billed ${p.yearlyTotal}/yr</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        <p className="mt-3 text-xs text-gray-500">
+          Selected in the Consentbit plugin. To change your plan, go back to the plugin.
+        </p>
       </FormSection>
 
       {/* 4 — Payment details */}
@@ -986,63 +858,6 @@ function CheckoutForm({
         </div>
       </FormSection>
 
-      {/* 5 — Coupon (optional) */}
-      <FormSection n={5} title="Have a coupon?">
-        {appliedCoupon ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-green-800 truncate">
-                {appliedCoupon.code} applied
-              </p>
-              <p className="text-xs text-green-700">
-                {appliedCoupon.percentOff != null
-                  ? `${appliedCoupon.percentOff}% off your first charge`
-                  : appliedCoupon.amountOff != null
-                    ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} off your first charge`
-                    : 'Discount applied'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={removeCoupon}
-              className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <Field label="Coupon code" error={couponError}>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={couponInput}
-                onChange={e => {
-                  setCouponInput(e.target.value);
-                  if (couponError) setCouponError('');
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    applyCoupon();
-                  }
-                }}
-                placeholder="Enter coupon code"
-                disabled={couponLoading}
-                className={inputCls(!!couponError, couponLoading)}
-              />
-              <button
-                type="button"
-                onClick={applyCoupon}
-                disabled={couponLoading || !couponInput.trim()}
-                className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {couponLoading ? 'Checking…' : 'Apply'}
-              </button>
-            </div>
-          </Field>
-        )}
-      </FormSection>
-
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
@@ -1052,7 +867,7 @@ function CheckoutForm({
       <div className="space-y-2">
         <button
           type="submit"
-          disabled={isSubmitting || !stripe}
+          disabled={isSubmitting || !stripe || paid}
           className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
@@ -1074,6 +889,8 @@ function CheckoutForm({
               </svg>
               Processing…
             </>
+          ) : paid ? (
+            'Trial started ✓'
           ) : (
             'Start 14-day free trial →'
           )}
@@ -1101,19 +918,87 @@ function CheckoutPageInner() {
   const [interval, setInterval] = useState<Interval>(
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
-  const rawD = params.get('d') ?? '';
-  let decoded: Record<string, string> = {};
-  if (rawD) {
-    try { decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rawD))))); } catch { try { decoded = JSON.parse(atob(decodeURIComponent(rawD))); } catch { /* use raw params */ } }
+  const urlT = params.get('t') ?? '';
+  // null = still resolving; object = resolved checkout context.
+  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    // Resolve the checkout context. The extension no longer puts a token or params
+    // in the URL (Webflow review) — it POSTs the context in the request BODY, which
+    // /api/checkout-open stashes in a short-lived same-origin cookie. Priority:
+    // URL token (legacy) → cookie token → raw cookie context.
+    let handoff: Record<string, string> = {};
+    if (typeof document !== 'undefined') {
+      const m = document.cookie.match(/(?:^|;\s*)cb_checkout=([^;]+)/);
+      if (m) {
+        try { handoff = JSON.parse(decodeURIComponent(m[1])) || {}; } catch { handoff = {}; }
+        document.cookie = 'cb_checkout=; Max-Age=0; path=/'; // consume once
+      }
+    }
+    const token = urlT || handoff.t || '';
+    if (token) {
+      fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`)
+        .then(r => r.json())
+        .then((data: unknown) => setTokenPayload((data as Record<string, string>) || {}))
+        .catch(() => setTokenPayload({}));
+    } else {
+      // No token — use the raw context handed off in the cookie (or empty).
+      setTokenPayload(handoff);
+    }
+  }, [urlT]);
+
+  // Plan + interval can arrive in the token body (sent as a POST body, not URL
+  // params). Apply them once the token resolves; query params remain a fallback.
+  useEffect(() => {
+    if (!tokenPayload) return;
+    const tp = tokenPayload.plan;
+    if (tp && VALID_PLANS.has(tp as PlanId)) setPlanId(tp as PlanId);
+    const ti = tokenPayload.interval;
+    if (ti === 'yearly' || ti === 'monthly') setInterval(ti);
+  }, [tokenPayload]);
+
+  if (tokenPayload === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#262E84] border-t-transparent" />
+      </div>
+    );
   }
 
-  const email = (decoded.email ?? params.get('email') ?? '').trim().toLowerCase();
-  const domain = cleanDomain(decoded.domain ?? params.get('domain') ?? '');
-  const platform = decoded.platform ?? params.get('platform') ?? '';
-  const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
-  const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
+  const email = (tokenPayload.email ?? params.get('email') ?? '').trim().toLowerCase();
+  const domain = cleanDomain(tokenPayload.domain ?? params.get('domain') ?? '');
+  const platform = tokenPayload.platform ?? params.get('platform') ?? '';
+  const wfSiteId = tokenPayload.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+  // App version (Webflow v2 onboarding passes version=v2). Defaults to v2 for
+  // the Webflow flow when not explicitly provided.
+  const version = tokenPayload.version ?? params.get('version') ?? '';
+  const initBillingEmail = (tokenPayload.billingEmail ?? '').trim().toLowerCase();
+
+  // The checkout context (plan/site) is handed off in a one-shot, ~5-minute cookie.
+  // If it's gone — expired, already consumed (refresh/reopen), or the token expired —
+  // we have no domain/site to bill. Show a clear "expired" screen up front instead of
+  // an empty form that only fails after the user has entered their card details.
+  if (!domain && !wfSiteId) {
+    return (
+      <div className="min-h-screen bg-[#f4f5f9] flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm">
+          <img alt="Consentbit" className="mx-auto mb-6 w-[140px] h-auto" src="/images/ConsentBit-logo-Dark.png" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </div>
+          <h1 className="mb-2 text-lg font-semibold text-[#231d4f]">Checkout link expired</h1>
+          <p className="text-sm leading-relaxed text-[#6b7280]">
+            This checkout session has expired or was already used. Please reopen checkout
+            from the ConsentBit app in your Webflow Designer to continue.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
@@ -1135,13 +1020,10 @@ function CheckoutPageInner() {
                   domain={domain}
                   platform={platform}
                   wfSiteId={wfSiteId}
+                  version={version}
                   initBillingEmail={initBillingEmail}
                   planId={planId}
                   interval={interval}
-                  onPlanChange={setPlanId}
-                  onIntervalChange={setInterval}
-                  appliedCoupon={appliedCoupon}
-                  onCouponChange={setAppliedCoupon}
                 />
               </Elements>
             ) : (
@@ -1159,7 +1041,7 @@ function CheckoutPageInner() {
 
           {/* Summary — shows above form on mobile */}
           <div className="order-first lg:order-last">
-            <OrderSummary planId={planId} interval={interval} appliedCoupon={appliedCoupon} />
+            <OrderSummary planId={planId} interval={interval} />
           </div>
         </div>
       </div>

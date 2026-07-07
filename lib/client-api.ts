@@ -700,6 +700,74 @@ export async function previewSwitchInterval(
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
   return data as SwitchIntervalPreview;
 }
+
+// —— Tier change (upgrade/downgrade of an existing paid subscription, in-place proration) ——
+export type ChangeTierPreview = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  currentPlanId: string;
+  currentInterval: string;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;      // upgrade: charged now; downgrade: 0
+  newPlanAmountCents?: number | null;  // downgrade: what they'll pay from next period
+  currency: string;
+  couponPreviewSkipped?: boolean;      // coupon couldn't be applied to the preview figure
+  trialEnd: string | null;
+  effectiveAt: string | null;          // downgrade: when the change takes effect
+};
+
+export async function previewChangeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierPreview> {
+  const res = await fetch("/api/subscriptions/change-tier/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as ChangeTierPreview;
+}
+
+export type ChangeTierResult = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  scheduled: boolean;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  amountPaidCents?: number | null;
+  currency?: string;
+  invoiceId?: string | null;
+  invoiceUrl?: string | null;
+  paymentStatus?: string;
+  effectiveAt?: string | null;
+  nextBillingDate?: string | null;
+};
+
+export async function changeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierResult> {
+  const res = await fetch("/api/subscriptions/change-tier", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Could not complete the plan change");
+  return data as ChangeTierResult;
+}
 // billing summary ends here
 
 // —— Cookie scan (site scanner) ——
@@ -833,9 +901,13 @@ export async function addCustomCookieRule(payload: {
 }
 
 export async function deleteCustomCookieRule(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`/api/custom-cookie-rules?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
+  // POST + action:'delete' (not the DELETE method) so it works where DELETE is
+  // blocked at the edge — same pattern as publishCustomCookieRules / /api/cookies.
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    body: JSON.stringify({ action: 'delete', id }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Failed to delete cookie rule: ${res.status}`);

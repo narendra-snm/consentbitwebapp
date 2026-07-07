@@ -6,7 +6,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, upgradeSubscription, getBillingSummary, switchBillingInterval, previewSwitchInterval, type SwitchIntervalPreview } from "@/lib/client-api";
+import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations/LoadingScreen";
@@ -110,6 +110,14 @@ export default function PricingTable() {
   const [preview, setPreview] = useState<SwitchIntervalPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+
+  // Tier change (upgrade/downgrade) confirm dialog — prorated amount shown before charging the card on file.
+  const [showTierConfirm, setShowTierConfirm] = useState(false);
+  const [tierTarget, setTierTarget] = useState<"basic" | "essential" | "growth" | null>(null);
+  const [tierPreview, setTierPreview] = useState<ChangeTierPreview | null>(null);
+  const [tierPreviewLoading, setTierPreviewLoading] = useState(false);
+  const [tierError, setTierError] = useState<string | null>(null);
+  const [committingTier, setCommittingTier] = useState(false);
 
   useEffect(() => {
     if (!activeOrganizationId || currentTier === "free") return;
@@ -359,6 +367,15 @@ export default function PricingTable() {
       return;
     }
     if (plan === "free") return;
+
+    // Existing paid subscription → prorated in-place change. Open the confirmation modal
+    // (shows the prorated amount + charges the card on file) instead of a checkout redirect.
+    if (currentTier !== "free") {
+      void openTierConfirm(plan);
+      return;
+    }
+
+    // No existing subscription → standard new checkout (redirect to Stripe).
     setCheckoutLoading(true);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -368,31 +385,15 @@ export default function PricingTable() {
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";
 
-      let url: string;
-
-      if (currentTier !== "free") {
-        // Existing paid subscription — cancel old and create new checkout session
-        ({ url } = await upgradeSubscription({
-          siteId,
-          organizationId: activeOrganizationId,
-          planId: plan,
-          interval: intervalVal,
-          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-          successUrl,
-          cancelUrl,
-        }));
-      } else {
-        // No existing subscription — standard new checkout
-        ({ url } = await createCheckoutSession({
-          organizationId: activeOrganizationId,
-          planId: plan,
-          interval: intervalVal,
-          siteId,
-          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-          successUrl,
-          cancelUrl,
-        }));
-      }
+      const { url } = await createCheckoutSession({
+        organizationId: activeOrganizationId,
+        planId: plan,
+        interval: intervalVal,
+        siteId,
+        ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+        successUrl,
+        cancelUrl,
+      });
 
       sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
       // Store the target plan so the post-redirect poll can wait for the right plan.
@@ -519,6 +520,75 @@ export default function PricingTable() {
     } catch (e) {
       setSwitchError(e instanceof Error ? e.message : "Could not switch billing periods. Please try again.");
       setSwitching(false);
+    }
+  }
+
+  // Different tier on an existing paid subscription → confirm dialog with the prorated amount first.
+  async function openTierConfirm(plan: "basic" | "essential" | "growth") {
+    if (!activeOrganizationId) return;
+    setTierTarget(plan);
+    setTierPreview(null);
+    setTierError(null);
+    setShowTierConfirm(true);
+    setTierPreviewLoading(true);
+    try {
+      const p = await previewChangeTier({
+        organizationId: activeOrganizationId,
+        siteId: siteId || null,
+        planId: plan,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        promotionCodeId: appliedCoupon?.promotionCodeId ?? null,
+      });
+      setTierPreview(p);
+    } catch (e) {
+      setTierError(e instanceof Error ? e.message : "Could not load the charge details.");
+    } finally {
+      setTierPreviewLoading(false);
+    }
+  }
+
+  // Confirmed → charge the card on file in-place (upgrade) or schedule the change (downgrade).
+  async function confirmChangeTier() {
+    if (!activeOrganizationId || !tierTarget || committingTier) return;
+    setCommittingTier(true);
+    setTierError(null);
+    try {
+      const result = await changeTier({
+        organizationId: activeOrganizationId,
+        siteId: siteId || null,
+        planId: tierTarget,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        promotionCodeId: appliedCoupon?.promotionCodeId ?? null,
+      });
+      setShowTierConfirm(false);
+      await refresh({ showLoading: false });
+
+      if (result.direction === "downgrade") {
+        // Scheduled for end of the billing period — nothing charged now.
+        router.push(`/dashboard/${siteId}?upgraded=1`);
+        return;
+      }
+
+      // Upgrade — charged immediately. Show the success/proceed page with receipt details.
+      const amt = result.amountPaidCents != null ? (result.amountPaidCents / 100).toFixed(2) : "";
+      setPaymentDetails({
+        amount: amt,
+        currency: (result.currency || "usd").toUpperCase(),
+        transaction_id: result.invoiceId ?? "",
+        plan_id: result.planId ?? "",
+        plan_type: "tier",
+        interval: result.interval ?? "",
+        invoice_id: result.invoiceId ?? "",
+        invoice_url: result.invoiceUrl ?? "",
+        customer_email: "",
+        payment_status: result.paymentStatus ?? "paid",
+        date_of_purchase: new Date().toISOString(),
+      });
+      sessionStorage.setItem(`cb_target_plan_${siteId}`, tierTarget);
+      setPaymentProcessing(true);
+    } catch (e) {
+      setTierError(e instanceof Error ? e.message : "Payment could not be completed. Please try again.");
+      setCommittingTier(false);
     }
   }
 
@@ -690,6 +760,110 @@ function redirectToDashboard() {
                   </>
                 ) : (
                   `Switch to ${switchTarget === "yearly" ? "Yearly" : "Monthly"}`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tier change (upgrade/downgrade) confirm dialog — prorated Payment Confirmation */}
+      {showTierConfirm && tierTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => { if (!committingTier) setShowTierConfirm(false); }}
+          />
+          <div className="relative z-10 w-[460px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+            <h3 className="text-[20px] font-bold text-[#0a091f] mb-5">Payment Confirmation</h3>
+
+            <div className="space-y-2.5 text-[14px] mb-4">
+              <div className="flex gap-2">
+                <span className="text-[#6b7280] min-w-[92px]">Current plan:</span>
+                <span className="text-[#111827] font-medium">
+                  {({ basic: "Basic", essential: "Essential", growth: "Growth", free: "Free" } as Record<string, string>)[currentTier]}
+                  {" "}({billing === "yearly" ? "yearly" : "monthly"})
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-[#6b7280] min-w-[92px]">New plan:</span>
+                <span className="text-[#111827] font-medium">
+                  {({ basic: "Basic", essential: "Essential", growth: "Growth" } as Record<string, string>)[tierTarget]}
+                  {" "}(${getPrice(tierTarget)}/month{billing === "yearly" ? ", billed yearly" : ""})
+                </span>
+              </div>
+              {appliedCoupon && (
+                <div className="flex gap-2">
+                  <span className="text-[#6b7280] min-w-[92px]">Coupon:</span>
+                  <span className="text-[#15803d] font-medium">{appliedCoupon.code} applied</span>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-[10px] bg-[#eff6ff] border border-[#dbeafe] px-4 py-3 text-[13px] text-[#1e3a8a] leading-relaxed mb-5 min-h-[52px] flex items-center">
+              {tierPreviewLoading ? (
+                "Calculating your pro-rated amount…"
+              ) : tierPreview ? (
+                (() => {
+                  const fmt = (cents: number) =>
+                    new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() })
+                      .format(cents / 100);
+                  const per = tierPreview.interval === "yearly" ? "year" : "month";
+                  if (tierPreview.isTrialing) {
+                    return `You're on a free trial, so nothing is charged now. Your plan changes immediately, and you'll be billed ${fmt(tierPreview.amountDueCents ?? 0)}/${per} when the trial ends.`;
+                  }
+                  if (tierPreview.direction === "downgrade") {
+                    const when = tierPreview.effectiveAt ? new Date(tierPreview.effectiveAt).toLocaleDateString() : "the end of your billing period";
+                    const newAmt = tierPreview.newPlanAmountCents != null ? `${fmt(tierPreview.newPlanAmountCents)}/${per}` : "the new plan price";
+                    return `No payment is due now. You'll keep your current plan until ${when}, then move to the lower plan and pay ${newAmt}.`;
+                  }
+                  const amount = tierPreview.amountDueCents ?? 0;
+                  if (amount <= 0) {
+                    return "No payment is due now — your existing balance covers the change. Your plan upgrades immediately.";
+                  }
+                  return `You will only pay the pro-rated amount for the current billing period: ${fmt(amount)}, charged now to your card on file.`;
+                })()
+              ) : (
+                "You'll pay the pro-rated amount for the current billing period, charged to your card on file."
+              )}
+            </div>
+
+            {tierPreview?.couponPreviewSkipped && (
+              <div className="mb-4 text-[12px] text-[#b45309]">
+                Note: the coupon will be applied at payment; the amount above may not reflect it.
+              </div>
+            )}
+
+            {tierError && (
+              <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                {tierError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { if (!committingTier) { setShowTierConfirm(false); setTierError(null); } }}
+                disabled={committingTier}
+                className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmChangeTier}
+                disabled={committingTier || tierPreviewLoading || !!tierError}
+                className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+              >
+                {committingTier ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Processing…
+                  </>
+                ) : tierPreview?.direction === "downgrade" ? (
+                  "Confirm downgrade"
+                ) : (
+                  "Confirm & pay now"
                 )}
               </button>
             </div>

@@ -11,6 +11,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
+import { getConsentbitCdnOrigin } from '@/lib/consentbit-script';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -453,9 +454,23 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Persists after payment succeeds — unlike showSuccess it is NOT cleared by
+  // "Stay on this page", so the trial button stays disabled and can never charge
+  // a second time once the account is set up.
+  const [paid, setPaid] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
+
+  // The account email can arrive after this form has mounted (the parent resolves it
+  // asynchronously when the checkout handoff didn't include it). Adopt it only while
+  // our fields are still empty so we never overwrite anything the user has typed.
+  useEffect(() => {
+    if (!initEmail) return;
+    setEmail((prev) => (prev ? prev : initEmail));
+    setBillingEmail((prev) => (prev ? prev : (hasSeparateBilling ? initBillingEmail : initEmail)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initEmail, initBillingEmail]);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -539,6 +554,9 @@ function CheckoutForm({
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Guard against a second charge: once a payment has succeeded or one is in
+    // flight, ignore further submits (backstops Enter-key / double submits).
+    if (isSubmitting || paid) return;
     setError('');
 
     const errs = validate();
@@ -644,6 +662,7 @@ function CheckoutForm({
         }
       }
 
+      setPaid(true);
       setShowSuccess(true);
       setIsSubmitting(false);
     } catch {
@@ -1049,7 +1068,7 @@ function CheckoutForm({
       <div className="space-y-2">
         <button
           type="submit"
-          disabled={isSubmitting || !stripe}
+          disabled={isSubmitting || !stripe || paid}
           className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
@@ -1071,6 +1090,8 @@ function CheckoutForm({
               </svg>
               Processing…
             </>
+          ) : paid ? (
+            'Trial started ✓'
           ) : (
             'Start 14-day free trial →'
           )}
@@ -1100,16 +1121,78 @@ function CheckoutPageInner() {
   );
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
-  const rawT = params.get('t') ?? '';
-  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(rawT ? null : {});
+  const urlT = params.get('t') ?? '';
+  // null = still resolving; object = resolved checkout context.
+  const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
-    if (!rawT) return;
-    fetch(`/api/checkout-token?t=${encodeURIComponent(rawT)}`)
-      .then(r => r.json())
-      .then((data: unknown) => setTokenPayload(data as Record<string, string>))
-      .catch(() => setTokenPayload({}));
-  }, [rawT]);
+    // Resolve the checkout context. The extension no longer puts a token or params
+    // in the URL (Webflow review) — it POSTs the context in the request BODY, which
+    // /api/checkout-open stashes in a short-lived same-origin cookie. Priority:
+    // URL token (legacy) → cookie token → raw cookie context.
+    let handoff: Record<string, string> = {};
+    if (typeof document !== 'undefined') {
+      const m = document.cookie.match(/(?:^|;\s*)cb_checkout=([^;]+)/);
+      if (m) {
+        try { handoff = JSON.parse(decodeURIComponent(m[1])) || {}; } catch { handoff = {}; }
+        document.cookie = 'cb_checkout=; Max-Age=0; path=/'; // consume once
+      }
+    }
+    const token = urlT || handoff.t || '';
+    if (token) {
+      fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`)
+        .then(r => r.json())
+        .then((data: unknown) => setTokenPayload((data as Record<string, string>) || {}))
+        .catch(() => setTokenPayload({}));
+    } else {
+      // No token — use the raw context handed off in the cookie (or empty).
+      setTokenPayload(handoff);
+    }
+  }, [urlT]);
+
+  // Plan + interval can arrive in the body/cookie (not URL params). Apply them once
+  // the context resolves; the initial URL-param values remain the fallback.
+  useEffect(() => {
+    if (!tokenPayload) return;
+    const tp = tokenPayload.plan;
+    if (tp && VALID_PLANS.has(tp as PlanId)) setPlanId(tp as PlanId);
+    const ti = tokenPayload.interval;
+    if (ti === 'yearly' || ti === 'monthly') setInterval(ti as Interval);
+  }, [tokenPayload]);
+
+  // Fallback: the checkout handoff (token / cookie) occasionally arrives without the
+  // account email, so step 1 shows "—". When it's missing but we know the Webflow
+  // site, resolve the email from the worker's authless OAuth-status endpoint (the
+  // source of truth, keyed by siteId) and merge it in. Best-effort — on failure the
+  // field stays blank and editable.
+  useEffect(() => {
+    if (!tokenPayload) return;
+    const haveEmail = (tokenPayload.email ?? params.get('email') ?? '').trim();
+    if (haveEmail) return;
+    const sid = tokenPayload.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+    if (!sid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = new URL(`${getConsentbitCdnOrigin()}/api/webflow/oauth/status`);
+        url.searchParams.set('siteId', sid);
+        url.searchParams.set('verify', 'false');
+        const r = await fetch(url.toString());
+        const d = (await r.json()) as Record<string, string>;
+        if (!cancelled && d?.email) {
+          setTokenPayload((prev) => ({
+            ...(prev || {}),
+            email: d.email,
+            ...(d.billingEmail ? { billingEmail: d.billingEmail } : {}),
+          }));
+        }
+      } catch {
+        /* leave blank — the field is editable so the user can still enter it */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenPayload]);
 
   if (tokenPayload === null) {
     return (
