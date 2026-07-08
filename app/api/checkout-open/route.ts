@@ -57,9 +57,24 @@ export async function POST(request: NextRequest) {
   return res;
 }
 
-// A direct GET (e.g. a refresh) just bounces to the checkout page. Honour a
-// ?dest= query when present, else fall back to the default checkout-plan page.
+// GET path — used by the Webflow Designer extension's checkout link. The extension
+// opens this URL in a new tab with a SHORT-LIVED OPAQUE token (?t=…) — no PII or
+// params. We stash { t } in the same short-lived, same-origin cookie the POST path
+// uses and 303-redirect to the clean checkout page, so the token never reaches the
+// checkout page's URL. A plain GET with no token (e.g. a refresh) just bounces.
 export async function GET(request: NextRequest) {
-  const raw = new URL(request.url).searchParams.get('dest') || undefined;
-  return NextResponse.redirect(new URL(`/${resolveDest(raw)}`, request.url), 303);
+  const params = new URL(request.url).searchParams;
+  const token = params.get('t') || undefined;
+  const dest = new URL(`/${resolveDest(params.get('dest') || undefined)}`, request.url);
+  const res = NextResponse.redirect(dest, 303);
+  if (token) {
+    res.cookies.set('cb_checkout', JSON.stringify({ t: token }), {
+      httpOnly: false, // the client checkout page reads + clears it
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300, // 5 minutes — consumed on the very next page load
+    });
+  }
+  return res;
 }
