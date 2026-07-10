@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations//LoadingScreen";
 
@@ -256,6 +257,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       return;
     }
     setSelectedPlan(planId);
+    // Step 8 — plan card selected in the add-site pricing menu.
+    analytics.planSelected(
+      planId,
+      billingPeriod === "yearly" ? "annual" : "monthly",
+      ({ free: 0, basic: 9, essential: 20, growth: 56 } as const)[planId],
+      undefined
+    );
     const validationError = validateDomain(websiteUrl);
     if (validationError) {
       setUrlError(validationError);
@@ -301,6 +309,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
         const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
         const cancelUrl = `${origin}${returnTo}`;
+        // Step 9 — final proceed-to-checkout before the Stripe redirect.
+        analytics.checkoutInitiated(
+          planId as "basic" | "essential" | "growth",
+          undefined,
+          billingPeriod === "yearly" ? "annual" : "monthly"
+        );
         const data = await createCheckoutSession({
           organizationId: activeOrganizationId,
           planId: planId as "basic" | "essential" | "growth",

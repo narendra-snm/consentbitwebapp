@@ -215,14 +215,14 @@ export async function firstSetup(payload: {
 
   const result = await parseApiResponse(res);
 
-  // PostHog: fire domain_added here so EVERY caller is covered (onboarding wizard,
+  // PostHog: fire domain_submitted here so EVERY caller is covered (onboarding wizard,
   // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
   // is always the free-plan creation path (paid plans go through createCheckoutSession).
   // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
   try {
     const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
     const { analytics } = await import("./analytics");
-    analytics.domainAdded(payload.websiteUrl, siteId, "free");
+    analytics.domainSubmitted(payload.websiteUrl, siteId, "free");
   } catch { /* analytics must never block setup */ }
 
   return result;

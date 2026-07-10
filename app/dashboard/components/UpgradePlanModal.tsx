@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
+import { analytics } from '@/lib/analytics';
 
 type PlanTier = 'free' | 'basic' | 'essential' | 'growth';
 
@@ -60,6 +61,9 @@ export function UpgradePlanModal({
       return;
     }
     setLoading(true);
+    // Steps 8 + 9 — the upgrade CTA selects the next tier then goes straight to checkout.
+    analytics.planSelected(nextPlan, 'monthly', ({ basic: 9, essential: 20, growth: 56 } as const)[nextPlan], siteId ?? undefined);
+    analytics.checkoutInitiated(nextPlan, siteId ?? undefined, 'monthly');
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const returnTo =
