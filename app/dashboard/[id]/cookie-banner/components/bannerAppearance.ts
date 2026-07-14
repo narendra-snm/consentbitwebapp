@@ -1,5 +1,5 @@
 /** Shared draft state for Layout / Colors / Type — published in one `saveBannerCustomization` call. */
-
+//ff
 export type BannerLayoutValue = {
   /** Visual style in the editor (not all are used by the live embed yet). */
   position: 'box' | 'banner' | 'bottom-center';
