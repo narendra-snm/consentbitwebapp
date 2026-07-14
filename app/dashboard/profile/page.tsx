@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, updateProfile, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -655,6 +655,7 @@ export default function SettingsPage() {
                 billingEmail={initialBillingEmail}
                 onSaveName={handleSaveName}
                 onSaveBillingEmail={handleSaveBillingEmail}
+                onRequestTransfer={requestOwnershipTransfer}
                 billingEmailSaving={billingEmailSaving}
                 billingEmailError={billingEmailError}
                 billingEmailSuccess={billingEmailSuccess}

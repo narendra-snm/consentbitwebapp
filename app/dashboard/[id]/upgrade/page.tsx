@@ -11,6 +11,7 @@ import { createCheckoutSession, upgradeSubscription, getBillingSummary, switchBi
 //   previewChangeTier, changeTier, type ChangeTierPreview, type ChangeTierResult
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
 /* NEW WORKFLOW (prorated in-place tier change) — Stripe Elements card entry, kept for later.
@@ -144,8 +145,24 @@ export default function PricingTable() {
   }, [activeOrganizationId, siteId, currentTier]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
-  
+
   const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
+
+  // Step 11 — fire thank_you_page_viewed once when the success/confirmation view mounts
+  // (covers both the Stripe return and the in-place upgrade receipt).
+  const thankYouFiredRef = useRef(false);
+  useEffect(() => {
+    if (!paymentProcessing || thankYouFiredRef.current) return;
+    thankYouFiredRef.current = true;
+    analytics.thankYouPageViewed({
+      site_id: siteId ? String(siteId) : undefined,
+      plan_tier: paymentDetails.plan_id || paymentDetails.plan_type || undefined,
+      billing_cycle:
+        paymentDetails.interval === "yearly"
+          ? "annual"
+          : paymentDetails.interval || undefined,
+    });
+  }, [paymentProcessing, siteId, paymentDetails]);
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
   useEffect(() => {
@@ -424,6 +441,13 @@ export default function PricingTable() {
     }
     if (plan === "free") return;
 
+    // Step 9 — final proceed-to-checkout intent (fires before the Stripe redirect).
+    analytics.checkoutInitiated(
+      plan,
+      siteId ? String(siteId) : undefined,
+      billing === "yearly" ? "annual" : "monthly"
+    );
+
     /* NEW WORKFLOW (prorated in-place tier change) — kept for later.
     // Existing paid subscription → prorated in-place change. Open the confirmation modal
     // (shows the prorated amount + charges the card on file) instead of a checkout redirect.
@@ -591,6 +615,13 @@ export default function PricingTable() {
         disabled={checkoutLoading}
         onClick={() => {
           setSelected(plan);
+          // Step 8 — plan card selected in the pricing menu.
+          analytics.planSelected(
+            plan,
+            billing === "yearly" ? "annual" : "monthly",
+            getPrice(plan),
+            siteId ? String(siteId) : undefined
+          );
           setTimeout(() => {
             proceedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 50);

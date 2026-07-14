@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
+import { analytics } from '@/lib/analytics';
 
 export function PricingTable({
   onclick,
@@ -33,6 +34,8 @@ export function PricingTable({
 
   async function handleFreeClick() {
     setFreeLoading(true);
+    // Step 8 — free plan card selected in the pricing menu.
+    analytics.planSelected('free', billingInterval === 'year' ? 'annual' : 'monthly', 0, siteId ?? undefined);
     try {
       await onclick();
     } finally {
@@ -62,6 +65,10 @@ export function PricingTable({
     }
     try {
       setLoadingPlan(planId);
+      // Step 8 + 9 — plan card selected then straight to checkout in this menu.
+      const cycle = billingInterval === 'year' ? 'annual' : 'monthly';
+      analytics.planSelected(planId, cycle, prices[planId], siteId ?? undefined);
+      analytics.checkoutInitiated(planId, siteId ?? undefined, cycle);
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const domain = pendingDomain ?? '';
       // Do NOT create the site before checkout — site is created after successful payment

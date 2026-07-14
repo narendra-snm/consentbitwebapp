@@ -196,11 +196,9 @@ export function SignupForm() {
         clearScanId();
         try { sessionStorage.removeItem(PENDING_KEY); } catch {}
         setPendingOtp(false);
-        analytics.accountCreated(email.trim().toLowerCase(), name.trim());
-        // Completing signup also starts a logged-in session, so fire user_logged_in too.
-        // Without this, the account_created → user_logged_in funnel step drops every
-        // first-time user (they'd otherwise only log in explicitly on a later visit).
-        analytics.userLoggedIn(email.trim().toLowerCase());
+        // Funnel order: auth_email_submitted (step 2) precedes user_account_created (step 3).
+        analytics.authEmailSubmitted(email.trim().toLowerCase());
+        analytics.userAccountCreated(email.trim().toLowerCase(), name.trim());
         analytics.identify(email.trim().toLowerCase(), name.trim());
         router.push('/dashboard');
       }

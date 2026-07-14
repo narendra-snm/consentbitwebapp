@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PaymentDone from "@/components/animations//PaymentDone";
+import { analytics } from "@/lib/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PaymentDetails {
@@ -52,6 +53,7 @@ export function PostSetupClient() {
   const [dashUrl, setDashUrl] = useState<string | null>(null);
   // ─── NEW: holds all payment details parsed from the URL ───────────────────
   const [details, setDetails] = useState<PaymentDetails>(EMPTY_DETAILS);
+  const thankYouFiredRef = useRef(false);
   // ──────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -94,6 +96,19 @@ export function PostSetupClient() {
       date_of_purchase: params.get("date")             ?? "",
     };
     setDetails(parsed);
+
+    // Step 11 — this is the payment-success confirmation page for the PricingTable /
+    // add-site checkout flows. Fire thank_you_page_viewed once on mount.
+    if (!thankYouFiredRef.current) {
+      thankYouFiredRef.current = true;
+      analytics.thankYouPageViewed({
+        site_id: siteId || undefined,
+        plan_tier: parsed.plan_id || parsed.plan_type || undefined,
+        billing_cycle:
+          parsed.interval === "yearly" ? "annual" : parsed.interval || undefined,
+        domain: domain || undefined,
+      });
+    }
     // ─────────────────────────────────────────────────────────────────────
 
     // ── 4. Pre-write storage so the opener tab can pick it up ─────────────
