@@ -182,10 +182,10 @@ function buildConsentRows(
 
       let status = 'rejected';
       if (e.action) {
-        status = e.action === 'acceptance' ? 'given' : 'rejected';
+        status = e.action === 'acceptance' ? 'accepted' : 'rejected';
       } else {
         if (prefs.marketing || prefs.Marketing || prefs.analytics || prefs.Analytics || prefs.personalization || prefs.Personalization) {
-          status = 'given';
+          status = 'accepted';
         }
       }
 

@@ -64,7 +64,11 @@ export function getLoaderIabScript(customization, opts = {}, isGAC = false) {
  * Cookie Consent UI Integration
  * Works with TCFManager for proper consent handling
  */
-const BASE_URL = "https://test-cmp.pages.dev/";
+const BASE_URL = "./";
+
+// Google Additional Consent (AC) toggle — baked from the isGAC build argument.
+const IS_GAC = ${isGoogleAC};
+window.__cbIsGAC = IS_GAC;
 
 // Google Additional Consent (AC) toggle — baked from the isGAC build argument.
 const IS_GAC = ${isGoogleAC};
@@ -259,7 +263,7 @@ function injectStyles() {
 .cb-accordion-wrapper{display:flex;flex-direction:column;gap:10px}
 .cb-accordion{border:1px solid #ebebeb;border-radius:\${brSm};overflow:hidden;background:\${s.bannerBg}}
 .cb-accordion-item,.cb-accordion-iab-item{display:flex;gap:12px;padding:14px 16px;cursor:pointer;transition:background-color .2s}
-.cb-accordion-item:hover,.cb-accordion-iab-item:hover,.cb-child-accordion-item:hover{background-color:#f9f9f9}
+.cb-accordion-item:hover,.cb-accordion-iab-item:hover,.cb-child-accordion-item:hover{}
 .cb-accordion-chevron,.cb-child-accordion-chevron{flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .cb-accordion-chevron{width:20px;height:20px}
 .cb-child-accordion-chevron{width:16px;height:16px}
@@ -279,7 +283,7 @@ function injectStyles() {
 .cb-switch input[type="checkbox"]:checked::before{transform:translateX(20px)}
 .cb-accordion-body,.cb-child-accordion-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
 .cb-accordion.active .cb-accordion-body,.cb-child-accordion.active .cb-child-accordion-body{max-height:2000px}
-.cb-audit-table{background-color:#f4f4f4;border:1px solid #ebebeb;border-radius:\${brSm};padding:14px}
+.cb-audit-table{border:1px solid #ebebeb;border-radius:\${brSm};padding:14px}
 .cb-child-accordion{border-top:1px solid #ebebeb}
 .cb-child-accordion:first-child{border-top:none}
 .cb-child-accordion-item{display:flex;gap:12px;padding:12px 16px;cursor:pointer;transition:background-color .2s}
@@ -301,7 +305,7 @@ function injectStyles() {
 .cb-switch-sm input[type="checkbox"]:checked::before{transform:translateX(16px)}
 .cb-switch-sm input[type="checkbox"]:disabled{cursor:not-allowed}
 .cb-switch-sm input[type="checkbox"]:disabled:checked{opacity:.7}
-.cb-footer-wrapper{border-top:1px solid #f4f4f4;background-color:\${s.bannerBg};flex-shrink:0}
+.cb-footer-wrapper{border-top:1px solid #f4f4f4;flex-shrink:0}
 .cb-footer-shadow{display:block;height:20px;margin-top:-20px;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,\${s.bannerBg} 100%)}
 .cb-prefrence-btn-wrapper{padding:14px 22px;display:flex;gap:10px;justify-content:\${s.textAlign === 'center' ? 'center' : s.textAlign === 'right' ? 'flex-start' : 'flex-end'};flex-wrap:wrap}
 .cb-btn{padding:9px 20px;border-radius:\${brBtn};font-size:13px;font-weight:\${s.fontWeight};cursor:pointer;transition:opacity .2s;border:2px solid;white-space:nowrap}
@@ -812,7 +816,7 @@ function blockNonEssentialScripts() {
       s.setAttribute('type', 'javascript/blocked');
       blocked++;
       // console.log('[ConsentBit][Block] 🚫 BLOCKED:', src, '| categories:', resolveScriptCategories(src, s));
-    } catch(e) { }
+    } catch(e) { console.warn('[ConsentBit][Block] Failed to block:', src, e); }
   });
   // console.log('[ConsentBit][Block] ✅ Done — blocked:', blocked, '| allowed/skipped:', skipped);
 }
@@ -859,6 +863,7 @@ function releaseBlockedScripts() {
       released++;
       // console.log('[ConsentBit][Release] Released:', src);
     } catch(e) {
+      console.warn('[ConsentBit][Release] Failed:', src, e);
     } finally {
       __cbInternalCreate = false;
     }
@@ -1815,6 +1820,7 @@ async function loadVendors() {
 
         initVendorSearch(vendorsList, searchInput);
     } catch (error) {
+        console.error('Error loading vendors:', error);
         if (loading) loading.textContent = 'Failed to load vendors. Please try again.';
     }
 }
@@ -1869,6 +1875,7 @@ function updateNoResultsMessage(vendorsList, searchTerm, allVendors) {
 // Load existing preferences into UI
 function loadExistingPreferences() {
     if (!window.tcfManager) {
+        console.warn('TCF Manager not initialized yet');
         return;
     }
 

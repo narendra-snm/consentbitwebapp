@@ -101,7 +101,7 @@ export function LoginForm() {
         await verifyVerificationCode({ email, purpose: 'login', code, scanId: getScanId() });
         clearScanId();
         analytics.identify(email, '');
-        analytics.authEmailSubmitted(email);
+        analytics.userLoggedIn(email);
         router.push(nextPath);
       }
     } catch (err: unknown) {

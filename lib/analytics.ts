@@ -30,18 +30,16 @@ export const analytics = {
     posthog.reset();
   },
 
-  // Step 2 — fires on the Magic Link / Sign In form submit success.
-  authEmailSubmitted(email: string, signupSource?: string) {
-    posthog.capture("auth_email_submitted", {
+  userLoggedIn(email: string) {
+    posthog.capture("user_logged_in", {
       email,
-      signup_source: signupSource || resolveSignupSource(),
       platform: "webapp",
+      source: typeof window !== "undefined" ? (sessionStorage.getItem("entry_source") || "direct") : "direct",
     });
   },
 
-  // Step 3 — a new account was created (first successful entry into the app).
-  userAccountCreated(email: string, name: string) {
-    posthog.capture("user_account_created", {
+  accountCreated(email: string, name: string) {
+    posthog.capture("account_created", {
       email,
       name,
       platform: "webapp",
@@ -85,46 +83,6 @@ export const analytics = {
     });
   },
 
-  // Step 8 — a plan card was selected in the dashboard pricing menu.
-  planSelected(
-    planTier: "free" | "basic" | "essential" | "growth",
-    billingCycle: "monthly" | "annual",
-    planPrice: number | string,
-    siteId?: string
-  ) {
-    posthog.capture("plan_selected", {
-      plan_tier: planTier,
-      billing_cycle: billingCycle,
-      plan_price: String(planPrice),
-      site_id: siteId,
-      platform: "webapp",
-    });
-  },
-
-  // Step 9 — final "Proceed to checkout" / "Start Trial" click before Stripe.
-  checkoutInitiated(
-    planTier: "basic" | "essential" | "growth",
-    siteId?: string,
-    billingCycle?: "monthly" | "annual"
-  ) {
-    posthog.capture("checkout_initiated", {
-      plan_tier: planTier,
-      ...(billingCycle ? { billing_cycle: billingCycle } : {}),
-      site_id: siteId,
-      platform: "webapp",
-    });
-  },
-
-  // Step 11 — success / confirmation page mount.
-  thankYouPageViewed(context?: Record<string, unknown>) {
-    posthog.capture("thank_you_page_viewed", {
-      platform: "webapp",
-      ...(context || {}),
-    });
-  },
-
-  // --- Retained events (not part of the numbered funnel spec) ---
-
   bannerCustomized(siteId: string, domain?: string, bannerType?: string) {
     posthog.capture("banner_customized", {
       site_id: siteId,
@@ -144,7 +102,7 @@ export const analytics = {
   },
 
   // Fires when a user clicks any upgrade / "get pro" CTA — intent signal that sits
-  // between banner_published and checkout_initiated. `source` identifies which button.
+  // between banner_published and paid_plan_activated. `source` identifies which button.
   upgradeCtaClicked(source: string, siteId?: string, currentPlan?: string) {
     posthog.capture("upgrade_cta_clicked", {
       source,

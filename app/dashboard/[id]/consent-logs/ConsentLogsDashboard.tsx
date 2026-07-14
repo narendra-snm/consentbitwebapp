@@ -59,8 +59,8 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
     c.preferences !== undefined;
 
   if (method === 'CCPA') {
-    if (hasCcpa && c.ccpa) {
-      return c.ccpa.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+    if (hasCcpa) {
+      return c.ccpa?.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
     }
     if (hasGdprKeys) {
       // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
@@ -84,7 +84,7 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
 
   if (hasCcpa && c.ccpa) {
     // CCPA-shape stored under a GDPR banner — derive from doNotSell
-    const suffix = c.ccpa.doNotSell ? 'Rejected' : 'Accepted';
+    const suffix = c.ccpa?.doNotSell ? 'Rejected' : 'Accepted';
     return `Analytics: ${suffix}, Marketing: ${suffix}, Preferences: ${suffix}`;
   }
 
@@ -449,7 +449,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -487,7 +487,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -528,6 +528,7 @@ export function ConsentLogsDashboard({
     return Array.from(new Set(all));
   }, [consentRows]);
   const isMultiDomain = consentDomains.length > 1;
+  console.log('ismultiledomain', isMultiDomain, { domains: consentDomains });
 
   // Domain dropdown selection (null = "All domains"). Reset whenever new data arrives.
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
@@ -782,7 +783,7 @@ export function ConsentLogsDashboard({
       const isFramerBeforeCutoff =
         yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
       const isWebflowBeforeCutoff =
-        yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+        yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
       const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
       const hasHistoricalR2Data = isLegacy || !!platformSiteId;
       const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;
@@ -825,7 +826,7 @@ export function ConsentLogsDashboard({
     const isFramerBeforeCutoff =
       yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const isWebflowBeforeCutoff =
-      yearNum < 2026 || (yearNum === 2026 && monthNum <= 6);
+      yearNum < 2026 || (yearNum === 2026 && monthNum <= 5);
     const useFramerLegacySource = isFramerLegacy && isFramerBeforeCutoff;
     const hasHistoricalR2Data = isLegacy || !!platformSiteId;
     const useWebflowLegacySource = !isFramerPlatform && hasHistoricalR2Data && isWebflowBeforeCutoff;

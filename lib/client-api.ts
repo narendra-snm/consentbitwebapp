@@ -254,14 +254,14 @@ export async function firstSetup(payload: {
 
   const result = await parseApiResponse(res);
 
-  // PostHog: fire domain_submitted here so EVERY caller is covered (onboarding wizard,
+  // PostHog: fire domain_added here so EVERY caller is covered (onboarding wizard,
   // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
   // is always the free-plan creation path (paid plans go through createCheckoutSession).
   // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
   try {
     const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
     const { analytics } = await import("./analytics");
-    analytics.domainSubmitted(payload.websiteUrl, siteId, "free");
+    analytics.domainAdded(payload.websiteUrl, siteId, "free");
   } catch { /* analytics must never block setup */ }
 
   return result;
@@ -444,8 +444,7 @@ export type CreateCheckoutPayload = {
   siteDomain?: string | null;
   /** Stripe Coupon ID (underlying coupon). Prefer stripePromotionCodeId when available. */
   stripeCouponId?: string | null;
-  /** Stripe Promotion Code ID — tracks redemption counts and respects per-customer limits. */
-  stripePromotionCodeId?: string | null;
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
 };
@@ -571,6 +570,7 @@ export async function upgradeSubscription(payload: {
   organizationId: string;
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
   /** Stripe Promotion Code ID — preferred when applying a user-facing promo code. */
@@ -744,8 +744,9 @@ export async function previewSwitchInterval(
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
   return data as SwitchIntervalPreview;
 }
+// billing summary ends here
 
-// —— Tier change (upgrade/downgrade of an existing paid subscription, in-place proration) ——
+// change tier (in-place upgrade/downgrade, charges card on file) starts here
 export type ChangeTierPreview = {
   success: true;
   direction: "upgrade" | "downgrade";
@@ -754,14 +755,15 @@ export type ChangeTierPreview = {
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
   isTrialing: boolean;
-  amountDueCents: number | null;      // upgrade: charged now; downgrade: 0
-  newPlanAmountCents?: number | null;  // downgrade: what they'll pay from next period
+  amountDueCents: number | null;   // upgrade: prorated charge now; downgrade: 0; trial: price at trial end
+  newPlanAmountCents?: number | null; // downgrade: what they'll pay from the next period
   currency: string;
-  couponPreviewSkipped?: boolean;      // coupon couldn't be applied to the preview figure
+  couponPreviewSkipped?: boolean;
   trialEnd: string | null;
-  effectiveAt: string | null;          // downgrade: when the change takes effect
+  effectiveAt: string | null;      // downgrade: when the change takes effect
 };
 
+// Preview the prorated amount for a tier change WITHOUT committing it.
 export async function previewChangeTier(payload: {
   organizationId: string;
   siteId?: string | null;
@@ -791,21 +793,20 @@ export type ChangeTierResult = {
   invoiceId?: string | null;
   invoiceUrl?: string | null;
   paymentStatus?: string;
-  effectiveAt?: string | null;
   nextBillingDate?: string | null;
-  // New-card path: 3D Secure needed — confirm clientSecret with stripe.confirmCardPayment.
+  effectiveAt?: string | null;
+  // Present only if a new card requiring 3D Secure was used (not our default path):
   requiresAction?: boolean;
   clientSecret?: string;
-  subscriptionId?: string;
 };
 
+// Commit an in-place tier change. No paymentMethodId → charges the card already on file.
 export async function changeTier(payload: {
   organizationId: string;
   siteId?: string | null;
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
   promotionCodeId?: string | null;
-  paymentMethodId?: string | null;
 }): Promise<ChangeTierResult> {
   const res = await fetch("/api/subscriptions/change-tier", {
     method: "POST",
@@ -814,10 +815,10 @@ export async function changeTier(payload: {
     body: JSON.stringify(payload),
   });
   const data = await parseApiResponse(res);
-  if (!res.ok || !data.success) throw new Error(data.error || "Could not complete the plan change");
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to change plan");
   return data as ChangeTierResult;
 }
-// billing summary ends here
+// change tier ends here
 
 // —— Cookie scan (site scanner) ——
 export type ScanHistoryRow = {

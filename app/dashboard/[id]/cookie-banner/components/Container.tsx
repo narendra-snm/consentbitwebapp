@@ -692,7 +692,7 @@ export default function page({ siteId }: { siteId: string }) {
           bannerEntranceAnimation: appearance.layout.animation,
           compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
           isIab: iabEnabled,
-          isGoogleAc: isGacAllowed && iabEnabled && googleAcEnabled,
+          isGoogleAc: iabEnabled && googleAcEnabled,
           essential: contentSettings.categories.necessary.name,
           essentialDescription: contentSettings.categories.necessary.description,
           analytics: contentSettings.categories.analytics.name,
@@ -716,7 +716,6 @@ export default function page({ siteId }: { siteId: string }) {
     floatingButton,
     iabEnabled,
     googleAcEnabled,
-    isGacAllowed,
     refresh,
   ]);
 
@@ -796,8 +795,8 @@ export default function page({ siteId }: { siteId: string }) {
             compliance: consentType === 'both' ? 'BOTH' : consentType === 'ccpa' ? 'CCPA' : 'GDPR',
             isIab: iabEnabled,
             ...(iabEnabled ? { iab_enabled: true } : { iab_enabled: false }),
-            isGoogleAc: isGacAllowed && iabEnabled && googleAcEnabled,
-            googleAdditionalConsent: isGacAllowed && iabEnabled && googleAcEnabled,
+            isGoogleAc: iabEnabled && googleAcEnabled,
+            googleAdditionalConsent: iabEnabled && googleAcEnabled,
             essential: contentSettings.categories.necessary.name,
             essentialDescription: contentSettings.categories.necessary.description,
             analytics: contentSettings.categories.analytics.name,
@@ -1115,9 +1114,7 @@ export default function page({ siteId }: { siteId: string }) {
   </div>
 </div>
 
-{/* Google Additional Consent Card — gated to the test account until Google certification.
-    Visible always (for that account), toggleable only when IAB is on. */}
-{isGacAllowed && (
+{/* Google Additional Consent Card — visible to all users; toggleable only when IAB is on. */}
 <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
   <p className="font-semibold text-base text-black mb-4">
     Google Additional Consent
@@ -1154,10 +1151,9 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   </div>
 </div>
-)}
           </div>
         )}
-        {active === "Content" && (
+         {active === "Content" && (
           <>
             <div className="flex justify-end mb-3">
               <button
@@ -1404,7 +1400,7 @@ export default function page({ siteId }: { siteId: string }) {
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
       {!customizationLoading && <ConsentPreview
       iabEnabled={iabEnabled}
-      googleAcEnabled={isGacAllowed && iabEnabled && googleAcEnabled}
+      googleAcEnabled={iabEnabled && googleAcEnabled}
         key={previewRevision}
         langCode={selectedLangCode}
         previewBannerType={previewBannerType}

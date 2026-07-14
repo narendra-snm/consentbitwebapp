@@ -15,8 +15,9 @@ import {
   type BillingSummary,
   type SwitchIntervalPreview,
 } from "@/lib/client-api";
+import dynamic from "next/dynamic";
 
-
+const PaymentMethodCard = dynamic(() => import("./PaymentMethodCard"), { ssr: false });
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -958,26 +959,25 @@ export default function BillingPage({
           </div>
         </div>
 
-        {/* Billing Details + Payment Method — single card with blue border */}
-       
-<BillingDetailsCard
-  name={userName}
-  email={userEmail}
-  country={summary?.billingCountry || "Not available"}
-  address={summary?.billingAddress || "Not available"}
-  onVisitStripePortal={handleVisitPortal}
-  onOpenPortal={handleOpenPortalFooter}
-/>
+        {/* Billing Details */}
+        <BillingDetailsCard
+          name={userName}
+          email={userEmail}
+          country={summary?.billingCountry || "Not available"}
+          address={summary?.billingAddress || "Not available"}
+          onVisitStripePortal={handleVisitPortal}
+        />
 
-<PaymentMethodCard
-  pm={pm}
-  organizationId={organizationId}
-  billingCountry={summary?.billingCountry || ""}
-  onUpdateSuccess={(newPm) => {
-    setSummary((prev) => prev ? { ...prev, paymentMethod: newPm } : prev);
-    summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
-  }}
-/>
+        {/* Payment Method — inline Stripe card form */}
+        <PaymentMethodCard
+          pm={pm}
+          organizationId={organizationId}
+          billingCountry={summary?.billingCountry || ""}
+          onUpdateSuccess={(newPm) => {
+            setSummary((prev) => prev ? { ...prev, paymentMethod: newPm } : prev);
+            summaryCache.delete(`${organizationId}:${activeSiteId || ""}`);
+          }}
+        />
       </div>
     </div>
     </>

@@ -444,8 +444,10 @@ function StepThree({
       });
       if (res.found) {
         setVerified(true);
-        // installation_verified is emitted from the consent-manager worker when the
-        // backend detects the tag live (see handleVerifyScript / scanSite).
+        const secondsFromCopy = copyTimestampRef.current
+          ? Math.round((Date.now() - copyTimestampRef.current) / 1000)
+          : undefined;
+        analytics.installationVerified(url, siteData?.siteId, secondsFromCopy);
       } else {
         if (typeof window !== 'undefined' && res && typeof res === 'object' && 'debug' in res && res.debug) {
         }
@@ -461,7 +463,7 @@ function StepThree({
   const handleCopy = () => {
     navigator.clipboard.writeText(codeSnippet);
     copyTimestampRef.current = Date.now();
-    analytics.scriptCopied(siteData?.domain || publicUrl, siteData?.siteId);
+    analytics.installCodeCopied(siteData?.domain || publicUrl, siteData?.siteId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

@@ -18,6 +18,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
 import { analytics } from "@/lib/analytics";
@@ -130,7 +131,7 @@ export default function Header() {
       sites,
       effectivePlanId,
     });
-
+console.log("Resolved plan key:", { resolvedPlanKey, activeSite, effectivePlanId });
     // `DashboardSessionProvider` stores empty `effectivePlanId` for free sites (`pickPlanIdFromSite`
     // returns null for free). Treat unknown/empty as free once init finished — same as SideBar / upgrade page.
     const waitingForSiteSync =

@@ -6,9 +6,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, upgradeSubscription, getBillingSummary, switchBillingInterval, previewSwitchInterval, type SwitchIntervalPreview } from "@/lib/client-api";
-// NEW WORKFLOW (prorated in-place tier change) — kept for later. Re-add to the import above to re-enable:
-//   previewChangeTier, changeTier, type ChangeTierPreview, type ChangeTierResult
+import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { analytics } from "@/lib/analytics";
@@ -30,6 +28,30 @@ const STRIPE_FIELD_STYLE = {
 */
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
+
+type AppliedCoupon = {
+  promotionCodeId: string;
+  code: string;
+  name: string;
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string;
+  duration: 'once' | 'repeating' | 'forever';
+  durationInMonths: number | null;
+};
+
+/** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
+function decodeEnvelope(parsed: unknown): unknown {
+  if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
+    try {
+      const binary = atob((parsed as { d: string }).d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through */ }
+  }
+  return parsed;
+}
 
 
 /** Mail success animation shown after payment */
@@ -104,22 +126,14 @@ export default function PricingTable() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
 
-  /* NEW WORKFLOW (prorated in-place tier change) — state kept for later.
-  // Tier change (upgrade/downgrade) confirm dialog — prorated amount shown before charging the card on file.
+  // Tier-change confirm dialog (upgrade/downgrade an existing paid sub in-place,
+  // charging the card on file for the prorated difference — no checkout redirect).
   const [showTierConfirm, setShowTierConfirm] = useState(false);
   const [tierTarget, setTierTarget] = useState<"basic" | "essential" | "growth" | null>(null);
   const [tierPreview, setTierPreview] = useState<ChangeTierPreview | null>(null);
   const [tierPreviewLoading, setTierPreviewLoading] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
-  const [committingTier, setCommittingTier] = useState(false);
-  // 'review' = show prorated amount; 'pay' = show the card form (upgrade only).
-  const [tierStep, setTierStep] = useState<"review" | "pay">("review");
-
-  // Prorated "due now" for the currently SELECTED plan (existing paid customers only),
-  // shown live in the Total box as soon as a plan is selected.
-  const [selProration, setSelProration] = useState<{ amountDueCents: number | null; currency: string; direction?: string } | null>(null);
-  const [selProrationLoading, setSelProrationLoading] = useState(false);
-  */
+  const [changingTier, setChangingTier] = useState(false);
 
   useEffect(() => {
     if (!activeOrganizationId || currentTier === "free") return;
@@ -229,22 +243,9 @@ export default function PricingTable() {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
   const [promoInput, setPromoInput] = useState("");
-  const [promoOn, setPromoOn] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [promoError, setPromoError] = useState(false);
-  const [promoErrorMsg, setPromoErrorMsg] = useState("Invalid promo code. Please try again.");
-  const [promoValidating, setPromoValidating] = useState(false);
-  const [appliedPromo, setAppliedPromo] = useState<{
-    promotionCodeId: string | null;
-    couponId: string;
-    discount: {
-      percentOff: number | null;
-      amountOff: number | null;
-      currency: string | null;
-      name: string | null;
-      duration: string | null;
-      durationInMonths: number | null;
-    };
-  } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -348,71 +349,69 @@ export default function PricingTable() {
     if (!selected) return 0;
     const mp = prices[selected];
     let total = billing === "yearly" ? mp * 12 * 0.8 : mp;
-    if (promoOn && appliedPromo) {
-      if (appliedPromo.discount.percentOff != null) {
-        total = total * (1 - appliedPromo.discount.percentOff / 100);
-      } else if (appliedPromo.discount.amountOff != null) {
-        total = Math.max(0, total - appliedPromo.discount.amountOff);
+
+    if (appliedCoupon) {
+      if (appliedCoupon.percentOff != null) {
+        total = total * (1 - appliedCoupon.percentOff / 100);
+      } else if (appliedCoupon.amountOff != null) {
+        total = Math.max(0, total - appliedCoupon.amountOff / 100);
       }
     }
-    return Math.round(total);
-  };
 
-  const discountLabel = () => {
-    if (!appliedPromo) return "";
-    if (appliedPromo.discount.percentOff != null) return `${appliedPromo.discount.percentOff}% off`;
-    if (appliedPromo.discount.amountOff != null) return `$${appliedPromo.discount.amountOff} off`;
-    return "Discount applied";
+    return Math.round(total);
   };
 
   const applyPromo = async () => {
     const code = promoInput.trim();
-    if (!code) return;
-    setPromoValidating(true);
+    if (!code) {
+      setAppliedCoupon(null);
+      setPromoError(true);
+      return;
+    }
     setPromoError(false);
-    setPromoErrorMsg("");
+    setPromoLoading(true);
     try {
-      const res = await fetch("/api/validate-coupon", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ couponCode: code }),
-      });
-      const data = await res.json() as {
-        valid: boolean;
+      const res = await fetch(
+        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const text = await res.text();
+      type CouponResponse = {
+        valid?: boolean;
         error?: string;
-        promotionCodeId?: string | null;
-        couponId?: string;
-        discount?: {
-          percentOff: number | null;
-          amountOff: number | null;
-          currency: string | null;
-          name: string | null;
-          duration: string | null;
-          durationInMonths: number | null;
-        };
+        promotionCodeId?: string;
+        code?: string;
+        name?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+        duration?: 'once' | 'repeating' | 'forever';
+        durationInMonths?: number | null;
       };
-      if (data.valid && data.couponId && data.discount) {
-        setAppliedPromo({
-          promotionCodeId: data.promotionCodeId ?? null,
-          couponId: data.couponId,
-          discount: data.discount,
-        });
-        setPromoOn(true);
-        setPromoError(false);
-      } else {
-        setAppliedPromo(null);
-        setPromoOn(false);
+      let data: CouponResponse | null = null;
+      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
+      // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
+      if (!data || !data.valid || !data.promotionCodeId) {
+        setAppliedCoupon(null);
         setPromoError(true);
-        setPromoErrorMsg(data.error || "Invalid promo code. Please try again.");
+      } else {
+        setAppliedCoupon({
+          promotionCodeId: data.promotionCodeId,
+          code: data.code || code,
+          name: data.name || code,
+          percentOff: data.percentOff ?? null,
+          amountOff: data.amountOff ?? null,
+          currency: data.currency || 'usd',
+          duration: data.duration || 'once',
+          durationInMonths: data.durationInMonths ?? null,
+        });
+        setPromoError(false);
       }
     } catch {
-      setAppliedPromo(null);
-      setPromoOn(false);
+      setAppliedCoupon(null);
       setPromoError(true);
-      setPromoErrorMsg("Could not validate code. Please try again.");
-    } finally {
-      setPromoValidating(false);
     }
+    setPromoLoading(false);
   };
 
   const total = calculateTotal();
@@ -441,25 +440,15 @@ export default function PricingTable() {
     }
     if (plan === "free") return;
 
-    // Step 9 — final proceed-to-checkout intent (fires before the Stripe redirect).
-    analytics.checkoutInitiated(
-      plan,
-      siteId ? String(siteId) : undefined,
-      billing === "yearly" ? "annual" : "monthly"
-    );
-
-    /* NEW WORKFLOW (prorated in-place tier change) — kept for later.
-    // Existing paid subscription → prorated in-place change. Open the confirmation modal
-    // (shows the prorated amount + charges the card on file) instead of a checkout redirect.
+    // Existing paid subscription → change tier in place. Opens a confirm dialog that
+    // previews the prorated amount, then charges the card already on file (no redirect,
+    // no re-entering card details). Downgrades are scheduled for period end.
     if (currentTier !== "free") {
-      void openTierConfirm(plan);
+      await openTierConfirm(plan);
       return;
     }
-    */
 
-    // OLD WORKFLOW — every plan change goes through a Stripe checkout redirect (no proration
-    // calculation). Existing paid subscriptions cancel-and-recreate via upgradeSubscription;
-    // new subscriptions use createCheckoutSession.
+    // No existing subscription → hosted Stripe Checkout to collect the first card.
     setCheckoutLoading(true);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -469,41 +458,15 @@ export default function PricingTable() {
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";
 
-      let url: string;
-
-      if (currentTier !== "free") {
-        // Existing paid subscription — cancel old and create new checkout session.
-        ({ url } = await upgradeSubscription({
-          siteId,
-          organizationId: activeOrganizationId,
-          planId: plan,
-          interval: intervalVal,
-          successUrl,
-          cancelUrl,
-          ...(appliedPromo
-            ? {
-                promotionCodeId: appliedPromo.promotionCodeId,
-                couponId: appliedPromo.couponId,
-              }
-            : {}),
-        }));
-      } else {
-        // No existing subscription — standard new checkout.
-        ({ url } = await createCheckoutSession({
-          organizationId: activeOrganizationId,
-          planId: plan,
-          interval: intervalVal,
-          siteId,
-          successUrl,
-          cancelUrl,
-          ...(appliedPromo
-            ? {
-                stripePromotionCodeId: appliedPromo.promotionCodeId,
-                stripeCouponId: appliedPromo.couponId,
-              }
-            : {}),
-        }));
-      }
+      const { url } = await createCheckoutSession({
+        organizationId: activeOrganizationId,
+        planId: plan,
+        interval: intervalVal,
+        siteId,
+        ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+        successUrl,
+        cancelUrl,
+      });
 
       sessionStorage.setItem(`cb_stripe_redirect_${siteId}`, '1');
       // Store the target plan so the post-redirect poll can wait for the right plan.
@@ -516,38 +479,50 @@ export default function PricingTable() {
     }
   }
 
-  // Same tier, different interval → open a confirm dialog showing the prorated balance first.
-  async function openSwitchConfirm(target: "monthly" | "yearly") {
+  // Existing paid sub, tier upgrade/downgrade → preview the prorated charge, then confirm.
+  async function openTierConfirm(plan: "basic" | "essential" | "growth") {
     if (!activeOrganizationId) return;
-    setSwitchTarget(target);
-    setPreview(null);
-    setSwitchError(null);
-    setShowSwitchConfirm(true);
-    setPreviewLoading(true);
+    setTierTarget(plan);
+    setTierPreview(null);
+    setTierError(null);
+    setShowTierConfirm(true);
+    setTierPreviewLoading(true);
     try {
-      const p = await previewSwitchInterval(activeOrganizationId, target);
-      setPreview(p);
+      const p = await previewChangeTier({
+        organizationId: activeOrganizationId,
+        siteId: siteId || null,
+        planId: plan,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+      });
+      setTierPreview(p);
     } catch (e) {
-      setSwitchError(e instanceof Error ? e.message : "Could not load the charge details.");
+      setTierError(e instanceof Error ? e.message : "Could not load the charge details.");
     } finally {
-      setPreviewLoading(false);
+      setTierPreviewLoading(false);
     }
   }
 
-  // Confirmed → charge the card on file in-place (no checkout redirect).
-  async function confirmSwitch() {
-    if (!activeOrganizationId || !switchTarget || switching) return;
-    setSwitching(true);
-    setSwitchError(null);
+  // Confirmed → apply the tier change in-place, charging the card on file (no redirect).
+  async function confirmTierChange() {
+    if (!activeOrganizationId || !tierTarget || changingTier) return;
+    setChangingTier(true);
+    setTierError(null);
     try {
-      await switchBillingInterval(activeOrganizationId, switchTarget);
-      setCurrentInterval(switchTarget);
+      await changeTier({
+        organizationId: activeOrganizationId,
+        siteId: siteId || null,
+        planId: tierTarget,
+        interval: billing === "yearly" ? "yearly" : "monthly",
+        ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+      });
       await refresh({ showLoading: false });
-      setShowSwitchConfirm(false);
+      setShowTierConfirm(false);
+      setChangingTier(false);
       router.push(`/dashboard/${siteId}?upgraded=1`);
     } catch (e) {
-      setSwitchError(e instanceof Error ? e.message : "Could not switch billing periods. Please try again.");
-      setSwitching(false);
+      setTierError(e instanceof Error ? e.message : "Could not change your plan. Please try again.");
+      setChangingTier(false);
     }
   }
 
@@ -640,107 +615,40 @@ export default function PricingTable() {
     );
   };
 
-  /* NEW WORKFLOW (prorated in-place tier change) — confirm/commit handlers, kept for later.
-  // Different tier on an existing paid subscription → confirm dialog with the prorated amount first.
-  async function openTierConfirm(plan: "basic" | "essential" | "growth") {
+  // Same tier, different interval → open a confirm dialog showing the prorated balance first.
+  async function openSwitchConfirm(target: "monthly" | "yearly") {
     if (!activeOrganizationId) return;
-    setTierTarget(plan);
-    setTierPreview(null);
-    setTierError(null);
-    setTierStep("review");
-    setShowTierConfirm(true);
-    setTierPreviewLoading(true);
+    setSwitchTarget(target);
+    setPreview(null);
+    setSwitchError(null);
+    setShowSwitchConfirm(true);
+    setPreviewLoading(true);
     try {
-      const p = await previewChangeTier({
-        organizationId: activeOrganizationId,
-        siteId: siteId || null,
-        planId: plan,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        promotionCodeId: appliedPromo?.promotionCodeId ?? null,
-      });
-      setTierPreview(p);
+      const p = await previewSwitchInterval(activeOrganizationId, target);
+      setPreview(p);
     } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not load the charge details.");
+      setSwitchError(e instanceof Error ? e.message : "Could not load the charge details.");
     } finally {
-      setTierPreviewLoading(false);
+      setPreviewLoading(false);
     }
   }
 
-  // Downgrade confirmed → schedule the change (no payment now).
-  async function confirmDowngrade() {
-    if (!activeOrganizationId || !tierTarget || committingTier) return;
-    setCommittingTier(true);
-    setTierError(null);
+  // Confirmed → charge the card on file in-place (no checkout redirect).
+  async function confirmSwitch() {
+    if (!activeOrganizationId || !switchTarget || switching) return;
+    setSwitching(true);
+    setSwitchError(null);
     try {
-      await changeTier({
-        organizationId: activeOrganizationId,
-        siteId: siteId || null,
-        planId: tierTarget,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        promotionCodeId: appliedPromo?.promotionCodeId ?? null,
-      });
-      setShowTierConfirm(false);
+      await switchBillingInterval(activeOrganizationId, switchTarget);
+      setCurrentInterval(switchTarget);
       await refresh({ showLoading: false });
+      setShowSwitchConfirm(false);
       router.push(`/dashboard/${siteId}?upgraded=1`);
     } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not schedule the change. Please try again.");
-      setCommittingTier(false);
+      setSwitchError(e instanceof Error ? e.message : "Could not switch billing periods. Please try again.");
+      setSwitching(false);
     }
   }
-
-  // Upgrade payment succeeded (on the new card) → show the success/proceed page with receipt.
-  async function finishUpgradeSuccess(result: ChangeTierResult) {
-    setShowTierConfirm(false);
-    await refresh({ showLoading: false });
-    const amt = result.amountPaidCents != null ? (result.amountPaidCents / 100).toFixed(2) : "";
-    setPaymentDetails({
-      amount: amt,
-      currency: (result.currency || "usd").toUpperCase(),
-      transaction_id: result.invoiceId ?? "",
-      plan_id: result.planId ?? tierTarget ?? "",
-      plan_type: "tier",
-      interval: result.interval ?? "",
-      invoice_id: result.invoiceId ?? "",
-      invoice_url: result.invoiceUrl ?? "",
-      customer_email: "",
-      payment_status: result.paymentStatus ?? "paid",
-      date_of_purchase: new Date().toISOString(),
-    });
-    if (tierTarget) sessionStorage.setItem(`cb_target_plan_${siteId}`, tierTarget);
-    setPaymentProcessing(true);
-  }
-
-  // Upgrade "Continue to payment": if nothing is due now (trial or credit covers it), commit
-  // without a card; otherwise advance to the card-entry step.
-  async function proceedUpgrade() {
-    if (!tierPreview) return;
-    const amount = tierPreview.amountDueCents ?? 0;
-    if (tierPreview.isTrialing || amount <= 0) {
-      await commitUpgradeNoCard();
-    } else {
-      setTierStep("pay");
-    }
-  }
-
-  async function commitUpgradeNoCard() {
-    if (!activeOrganizationId || !tierTarget || committingTier) return;
-    setCommittingTier(true);
-    setTierError(null);
-    try {
-      const result = await changeTier({
-        organizationId: activeOrganizationId,
-        siteId: siteId || null,
-        planId: tierTarget,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        promotionCodeId: appliedPromo?.promotionCodeId ?? null,
-      });
-      await finishUpgradeSuccess(result);
-    } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not complete the change. Please try again.");
-      setCommittingTier(false);
-    }
-  }
-  */
 
   // Shown when the user is already on this tier but the grid is toggled to the other interval.
   const SwitchIntervalButton = ({ target }: { target: "monthly" | "yearly" }) => (
@@ -753,6 +661,7 @@ export default function PricingTable() {
       {target === "yearly" ? "Upgrade to Yearly" : "Switch to Monthly"}
     </button>
   );
+
 function redirectToDashboard() {
   router.push(`/dashboard/${siteId}?upgraded=1`);
 }
@@ -916,136 +825,91 @@ function redirectToDashboard() {
         </div>
       )}
 
-      {/* NEW WORKFLOW (prorated in-place tier change) — confirm dialog disabled, kept for later. */}
-      {/* DISABLED — re-enable together with the tier-change handlers, state, and Stripe imports above:
+      {/* Tier-change confirm dialog — prorated upgrade/downgrade on the card on file */}
       {showTierConfirm && tierTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => { if (!committingTier) setShowTierConfirm(false); }}
+            onClick={() => { if (!changingTier) setShowTierConfirm(false); }}
           />
-          <div className="relative z-10 w-[460px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
-            <h3 className="text-[20px] font-bold text-[#0a091f] mb-5">Payment Confirmation</h3>
+          <div className="relative z-10 w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+            <div className="flex justify-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-[#eff6ff] flex items-center justify-center">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2v10M12 17h.01" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round"/>
+                  <circle cx="12" cy="12" r="10" stroke="#007AFF" strokeWidth="2"/>
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-[18px] font-bold text-black text-center mb-2">
+              {tierPreview?.direction === "downgrade" ? "Change to" : "Upgrade to"}{" "}
+              {tierTarget.charAt(0).toUpperCase() + tierTarget.slice(1)}?
+            </h3>
 
-            <div className="space-y-2.5 text-[14px] mb-4">
-              <div className="flex gap-2">
-                <span className="text-[#6b7280] min-w-[92px]">Current plan:</span>
-                <span className="text-[#111827] font-medium">
-                  {({ basic: "Basic", essential: "Essential", growth: "Growth", free: "Free" } as Record<string, string>)[currentTier]}
-                  {" "}({billing === "yearly" ? "yearly" : "monthly"})
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-[#6b7280] min-w-[92px]">New plan:</span>
-                <span className="text-[#111827] font-medium">
-                  {({ basic: "Basic", essential: "Essential", growth: "Growth" } as Record<string, string>)[tierTarget]}
-                  {" "}(${getPrice(tierTarget)}/month{billing === "yearly" ? ", billed yearly" : ""})
-                </span>
-              </div>
-              {promoOn && appliedPromo && (
-                <div className="flex gap-2">
-                  <span className="text-[#6b7280] min-w-[92px]">Coupon:</span>
-                  <span className="text-[#15803d] font-medium">{discountLabel()} applied</span>
-                </div>
+            <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5 min-h-[40px]">
+              {tierPreviewLoading ? (
+                "Calculating your balance..."
+              ) : tierPreview ? (
+                (() => {
+                  const fmt = (cents: number) =>
+                    new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() })
+                      .format(cents / 100);
+                  const amount = tierPreview.amountDueCents ?? 0;
+                  const planName = tierTarget.charAt(0).toUpperCase() + tierTarget.slice(1);
+                  if (tierPreview.isTrialing) {
+                    const when = tierPreview.trialEnd ? new Date(tierPreview.trialEnd).toLocaleDateString() : "your trial ends";
+                    return `You're on a free trial, so nothing is charged now. Your plan changes to ${planName} immediately, and when your trial ends (${when}) you'll be billed ${fmt(amount)}.`;
+                  }
+                  if (tierPreview.direction === "downgrade") {
+                    const when = tierPreview.effectiveAt ? new Date(tierPreview.effectiveAt).toLocaleDateString() : "the end of your billing period";
+                    return `No payment is due now. You'll keep your current features until ${when}, when your plan changes to ${planName}.`;
+                  }
+                  if (amount <= 0) {
+                    return `No payment is due now. Any unused balance will be credited toward future invoices. Your plan changes to ${planName} immediately.`;
+                  }
+                  return `You'll be charged ${fmt(amount)} now — the prorated difference — to the card already on file. Your plan changes to ${planName} immediately.`;
+                })()
+              ) : (
+                "Review the prorated amount for this change."
               )}
             </div>
 
-            {tierStep === "review" ? (
-              <>
-                <div className="rounded-[10px] bg-[#eff6ff] border border-[#dbeafe] px-4 py-3 text-[13px] text-[#1e3a8a] leading-relaxed mb-5 min-h-[52px] flex items-center">
-                  {tierPreviewLoading ? (
-                    "Calculating your pro-rated amount…"
-                  ) : tierPreview ? (
-                    (() => {
-                      const fmt = (cents: number) =>
-                        new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() })
-                          .format(cents / 100);
-                      const per = tierPreview.interval === "yearly" ? "year" : "month";
-                      if (tierPreview.isTrialing) {
-                        return `You're on a free trial, so nothing is charged now. Your plan changes immediately, and you'll be billed ${fmt(tierPreview.amountDueCents ?? 0)}/${per} when the trial ends.`;
-                      }
-                      if (tierPreview.direction === "downgrade") {
-                        const when = tierPreview.effectiveAt ? new Date(tierPreview.effectiveAt).toLocaleDateString() : "the end of your billing period";
-                        const newAmt = tierPreview.newPlanAmountCents != null ? `${fmt(tierPreview.newPlanAmountCents)}/${per}` : "the new plan price";
-                        return `No payment is due now. You'll keep your current plan until ${when}, then move to the lower plan and pay ${newAmt}.`;
-                      }
-                      const amount = tierPreview.amountDueCents ?? 0;
-                      if (amount <= 0) {
-                        return "No payment is due now — your existing balance covers the change. Your plan upgrades immediately.";
-                      }
-                      return `You will only pay the pro-rated amount for the current billing period: ${fmt(amount)}. You'll enter your card on the next step.`;
-                    })()
-                  ) : (
-                    "You'll pay the pro-rated amount for the current billing period on the next step."
-                  )}
-                </div>
-
-                {tierPreview?.couponPreviewSkipped && (
-                  <div className="mb-4 text-[12px] text-[#b45309]">
-                    Note: the coupon will be applied at payment; the amount above may not reflect it.
-                  </div>
-                )}
-
-                {tierError && (
-                  <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
-                    {tierError}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => { if (!committingTier) { setShowTierConfirm(false); setTierError(null); } }}
-                    disabled={committingTier}
-                    className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { if (tierPreview?.direction === "downgrade") void confirmDowngrade(); else void proceedUpgrade(); }}
-                    disabled={committingTier || tierPreviewLoading || !!tierError}
-                    className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
-                  >
-                    {committingTier ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        Processing…
-                      </>
-                    ) : tierPreview?.direction === "downgrade" ? (
-                      "Confirm downgrade"
-                    ) : (
-                      "Continue to payment"
-                    )}
-                  </button>
-                </div>
-              </>
-            ) : stripePromise ? (
-              <Elements stripe={stripePromise}>
-                <TierCardForm
-                  amountLabel={
-                    tierPreview?.amountDueCents != null
-                      ? new Intl.NumberFormat(undefined, { style: "currency", currency: (tierPreview.currency || "usd").toUpperCase() }).format((tierPreview.amountDueCents || 0) / 100)
-                      : ""
-                  }
-                  organizationId={activeOrganizationId!}
-                  siteId={siteId || null}
-                  planId={tierTarget}
-                  interval={billing === "yearly" ? "yearly" : "monthly"}
-                  promotionCodeId={appliedPromo?.promotionCodeId ?? null}
-                  onSuccess={finishUpgradeSuccess}
-                  onBack={() => setTierStep("review")}
-                />
-              </Elements>
-            ) : (
-              <div className="rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
-                Payment system misconfigured — set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.
+            {tierError && (
+              <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                {tierError}
               </div>
             )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { if (!changingTier) { setShowTierConfirm(false); setTierError(null); } }}
+                disabled={changingTier}
+                className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+              >
+                Keep Current
+              </button>
+              <button
+                type="button"
+                onClick={confirmTierChange}
+                disabled={changingTier || tierPreviewLoading}
+                className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+              >
+                {changingTier ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Processing...
+                  </>
+                ) : tierPreview?.direction === "downgrade" ? (
+                  "Confirm Change"
+                ) : (
+                  "Confirm & Pay"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
-      */}
 
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
@@ -1194,84 +1058,42 @@ function redirectToDashboard() {
 
             {/* ── Promo input (always visible) ── */}
             <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
-                <input
-                  value={promoInput}
-                  onChange={(e) => {
-                    setPromoInput(e.target.value.toUpperCase());
-                    setPromoOn(false);
-                    setPromoError(false);
-                    setPromoErrorMsg("");
-                    setAppliedPromo(null);
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyPromo(); } }}
-                  disabled={!selected || promoValidating}
-                  className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg font-mono tracking-wider uppercase"
-                  placeholder="Enter promo code"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
 
-                {promoInput && !promoValidating && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPromoOn(false);
-                      setPromoInput("");
-                      setPromoError(false);
-                      setPromoErrorMsg("");
-                      setAppliedPromo(null);
-                    }}
-                    className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
-                  >
-                    ×
-                  </button>
-                )}
+              <input
+                value={promoInput}
+                onChange={(e) => { setPromoInput(e.target.value); setAppliedCoupon(null); setPromoError(false); }}
+                disabled={!selected || promoLoading}
+                className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg"
+                placeholder="Enter promo code"
+              />
 
+              {promoInput && (
                 <button
                   type="button"
-                  onClick={() => void applyPromo()}
-                  disabled={!selected || !promoInput.trim() || promoValidating}
-                  className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] flex items-center justify-center gap-1.5"
+                  onClick={() => { setAppliedCoupon(null); setPromoInput(''); setPromoError(false); }}
+                  className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
                 >
-                  {promoValidating ? (
-                    <>
-                      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Checking
-                    </>
-                  ) : (
-                    <>
-                      <svg width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                      </svg>
-                      Apply
-                    </>
-                  )}
+                  ×
                 </button>
-              </div>
+              )}
 
-            {/* Applied — simple confirmation below the text box */}
-            {promoOn && appliedPromo && (
-              <div className="relative z-10 mt-3 flex items-center gap-2 text-sm text-green-700">
-                <svg width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="#15803d" strokeWidth="2" strokeLinecap="round"/>
+              <button
+                type="button"
+                onClick={applyPromo}
+                disabled={!selected || !promoInput.trim() || promoLoading}
+                className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                <span className="font-medium">Applied</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPromoOn(false);
-                    setPromoInput("");
-                    setPromoError(false);
-                    setPromoErrorMsg("");
-                    setAppliedPromo(null);
-                  }}
-                  className="text-green-700 underline underline-offset-2 hover:text-green-800"
-                >
-                  Remove
-                </button>
+                {promoLoading ? 'Checking…' : 'Apply'}
+              </button>
+
+            </div>
+
+            {appliedCoupon && (
+              <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
+                Promo applied. You pay ${total}
               </div>
             )}
 
