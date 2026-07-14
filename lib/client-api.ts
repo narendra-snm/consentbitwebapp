@@ -702,6 +702,80 @@ export async function previewSwitchInterval(
 }
 // billing summary ends here
 
+// change tier (in-place upgrade/downgrade, charges card on file) starts here
+export type ChangeTierPreview = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  currentPlanId: string;
+  currentInterval: string;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;   // upgrade: prorated charge now; downgrade: 0; trial: price at trial end
+  newPlanAmountCents?: number | null; // downgrade: what they'll pay from the next period
+  currency: string;
+  couponPreviewSkipped?: boolean;
+  trialEnd: string | null;
+  effectiveAt: string | null;      // downgrade: when the change takes effect
+};
+
+// Preview the prorated amount for a tier change WITHOUT committing it.
+export async function previewChangeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierPreview> {
+  const res = await fetch("/api/subscriptions/change-tier/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as ChangeTierPreview;
+}
+
+export type ChangeTierResult = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  scheduled: boolean;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  amountPaidCents?: number | null;
+  currency?: string;
+  invoiceId?: string | null;
+  invoiceUrl?: string | null;
+  paymentStatus?: string;
+  nextBillingDate?: string | null;
+  effectiveAt?: string | null;
+  // Present only if a new card requiring 3D Secure was used (not our default path):
+  requiresAction?: boolean;
+  clientSecret?: string;
+};
+
+// Commit an in-place tier change. No paymentMethodId → charges the card already on file.
+export async function changeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierResult> {
+  const res = await fetch("/api/subscriptions/change-tier", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to change plan");
+  return data as ChangeTierResult;
+}
+// change tier ends here
+
 // —— Cookie scan (site scanner) ——
 export type ScanHistoryRow = {
   id: string;
