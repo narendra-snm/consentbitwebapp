@@ -21,7 +21,6 @@ import { getBillingUsage } from "@/lib/client-api";
 import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
-import { analytics } from "@/lib/analytics";
 
 /** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
 const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain", "post-setup"]);

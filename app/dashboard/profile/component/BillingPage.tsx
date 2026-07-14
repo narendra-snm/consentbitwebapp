@@ -26,7 +26,6 @@ import {
 } from "@/lib/site-manage-helpers";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
-import dynamic from "next/dynamic";
 import BillingDetailsCard from "./BillingDetailsCard";
 const PaymentMethodCard = dynamic(() => import("./PaymentMethodCard"), { ssr: false });
 
