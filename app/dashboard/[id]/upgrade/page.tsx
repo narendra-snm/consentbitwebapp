@@ -1097,14 +1097,14 @@ function redirectToDashboard() {
               </div>
             )}
 
-            {promoError && promoErrorMsg && !promoOn && (
+            {promoError && !appliedCoupon && (
               <div className="relative z-10 mt-3 flex items-center gap-1.5 text-sm text-[#ef4444]">
                 <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="7.5" cy="7.5" r="6.5" stroke="#ef4444" strokeWidth="1.5"/>
                   <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
                   <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
                 </svg>
-                {promoErrorMsg}
+                Invalid or expired promo code.
               </div>
             )}
 

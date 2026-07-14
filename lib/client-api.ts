@@ -570,7 +570,6 @@ export async function upgradeSubscription(payload: {
   organizationId: string;
   planId: "basic" | "essential" | "growth";
   interval: "monthly" | "yearly";
-  promotionCodeId?: string | null;
   successUrl?: string;
   cancelUrl?: string;
   /** Stripe Promotion Code ID — preferred when applying a user-facing promo code. */

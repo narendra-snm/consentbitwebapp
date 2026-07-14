@@ -243,20 +243,7 @@ function OrderSummary({
   const basePrice = interval === 'yearly' ? plan.yearly : plan.monthly;
   const firstCharge = trialEndLabel();
 
-  // Compute discounted price for display
-  let discountedPrice = basePrice;
-  let discountLabel = '';
-  if (couponData) {
-    if (couponData.discount.percentOff != null) {
-      discountedPrice = Math.round(basePrice * (1 - couponData.discount.percentOff / 100) * 100) / 100;
-      discountLabel = `${couponData.discount.percentOff}% off`;
-    } else if (couponData.discount.amountOff != null) {
-      discountedPrice = Math.max(0, Math.round((basePrice - couponData.discount.amountOff) * 100) / 100);
-      discountLabel = `$${couponData.discount.amountOff} off`;
-    }
-  }
-
-  const price = discountedPrice;
+  const price = basePrice;
 
   const firstChargeBase = plan.monthly;
   let discount = 0;
@@ -270,7 +257,7 @@ function OrderSummary({
   const firstChargeFinal = Math.max(0, firstChargeBase - discount);
   const fmt = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
 
-  const rows: Array<{ label: string; value: string; pill?: boolean; bold?: boolean; discount?: boolean }> = [
+  const rows: Array<{ label: string; value: string; pill?: boolean; bold?: boolean; discount?: boolean; green?: boolean }> = [
     { label: plan.name, value: `$${price}/mo` },
     { label: 'Billing', value: interval === 'yearly' ? 'Yearly' : 'Monthly' },
     { label: 'Trial period', value: '14 days', pill: true },
@@ -456,6 +443,7 @@ function CheckoutForm({
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
+  const [showCoupon, setShowCoupon] = useState(false);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -959,29 +947,29 @@ function CheckoutForm({
                   </svg>
                   <div>
                     <p className="text-sm font-semibold text-green-800">
-                      {appliedCoupon.discount.percentOff != null
-                        ? `${appliedCoupon.discount.percentOff}% discount applied`
-                        : appliedCoupon.discount.amountOff != null
-                        ? `$${appliedCoupon.discount.amountOff} discount applied`
+                      {appliedCoupon.percentOff != null
+                        ? `${appliedCoupon.percentOff}% discount applied`
+                        : appliedCoupon.amountOff != null
+                        ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} discount applied`
                         : 'Discount applied'}
                     </p>
-                    {appliedCoupon.discount.duration === 'once' && (
+                    {appliedCoupon.duration === 'once' && (
                       <p className="text-xs text-green-600">Applied to first billing cycle</p>
                     )}
-                    {appliedCoupon.discount.duration === 'repeating' && appliedCoupon.discount.durationInMonths && (
+                    {appliedCoupon.duration === 'repeating' && appliedCoupon.durationInMonths && (
                       <p className="text-xs text-green-600">
-                        Applied for {appliedCoupon.discount.durationInMonths} month
-                        {appliedCoupon.discount.durationInMonths > 1 ? 's' : ''}
+                        Applied for {appliedCoupon.durationInMonths} month
+                        {appliedCoupon.durationInMonths > 1 ? 's' : ''}
                       </p>
                     )}
-                    {appliedCoupon.discount.duration === 'forever' && (
+                    {appliedCoupon.duration === 'forever' && (
                       <p className="text-xs text-green-600">Applied forever</p>
                     )}
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={handleRemoveCoupon}
+                  onClick={removeCoupon}
                   className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
                 >
                   Remove
@@ -996,25 +984,25 @@ function CheckoutForm({
                     value={couponInput}
                     onChange={e => {
                       setCouponInput(e.target.value.toUpperCase());
-                      if (couponStatus !== 'idle') { setCouponStatus('idle'); setCouponError(''); }
+                      if (couponError) setCouponError('');
                     }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyCoupon(); } }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void applyCoupon(); } }}
                     placeholder="Enter coupon code"
                     className={[
                       'flex-1 min-w-0 rounded-lg border px-3 py-2.5 text-sm font-mono tracking-wider outline-none transition uppercase',
                       'focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20',
-                      couponStatus === 'invalid' ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white',
+                      couponError ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white',
                     ].join(' ')}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <button
                     type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={couponValidating || !couponInput.trim()}
+                    onClick={applyCoupon}
+                    disabled={couponLoading || !couponInput.trim()}
                     className="shrink-0 rounded-lg bg-[#262E84] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {couponValidating ? (
+                    {couponLoading ? (
                       <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -1025,7 +1013,7 @@ function CheckoutForm({
                   </button>
                 </div>
 
-                {couponStatus === 'invalid' && couponError && (
+                {couponError && (
                   <div className="flex items-center gap-1.5 text-xs text-red-500">
                     <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <circle cx="12" cy="12" r="9" />
@@ -1235,9 +1223,6 @@ function CheckoutPageInner() {
   const platform = decoded.platform ?? params.get('platform') ?? '';
   const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
   const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
-
-  // Coupon state — lifted to page so OrderSummary can reflect the discount live
-  const [couponData, setCouponData] = useState<CouponData | null>(null);
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">

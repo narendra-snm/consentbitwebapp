@@ -111,4 +111,58 @@ export const analytics = {
       platform: "webapp",
     });
   },
+
+  // A plan card was selected on a pricing / upgrade surface. `cycle` is normalized
+  // to "monthly" | "annual"; `price` is the displayed monthly amount in dollars.
+  planSelected(planId: string, cycle: string, price: number, siteId?: string) {
+    posthog.capture("plan_selected", {
+      plan_tier: planId,
+      billing_cycle: cycle,
+      price,
+      site_id: siteId,
+      platform: "webapp",
+    });
+  },
+
+  // Fires immediately before a Stripe Checkout / subscription session is created.
+  checkoutInitiated(planId: string, siteId?: string, cycle?: string) {
+    posthog.capture("checkout_initiated", {
+      plan_tier: planId,
+      site_id: siteId,
+      billing_cycle: cycle,
+      platform: "webapp",
+    });
+  },
+
+  // "Copy install code" button click in the setup wizard.
+  installCodeCopied(domain: string, siteId?: string) {
+    posthog.capture("install_code_copied", {
+      domain,
+      site_id: siteId,
+      platform: "webapp",
+    });
+  },
+
+  // A new domain/site was added to the account.
+  domainAdded(domain: string, siteId: string | null, plan: string) {
+    posthog.capture("domain_added", {
+      domain,
+      site_id: siteId,
+      plan_tier: plan,
+      platform: "webapp",
+    });
+  },
+
+  // Post-checkout thank-you / confirmation page view.
+  thankYouPageViewed(props: {
+    site_id?: string;
+    plan_tier?: string;
+    billing_cycle?: string;
+    domain?: string;
+  }) {
+    posthog.capture("thank_you_page_viewed", {
+      ...props,
+      platform: "webapp",
+    });
+  },
 };
