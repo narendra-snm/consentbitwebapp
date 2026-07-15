@@ -62,7 +62,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Estas cookies rastrean a los usuarios en diferentes sitios web para ofrecer anuncios relevantes y pueden procesar datos personales, por lo que requieren el consentimiento explícito.',
     preferencesDescription: 'Estas cookies recuerdan configuraciones como el idioma o la región y almacenan preferencias de visualización para ofrecer una experiencia más personalizada y fluida.',
     ccpaDescription:
-      'Puede optar por no vender o compartir su información personal para publicidad.',
+      'Utilizamos cookies para brindarle la mejor experiencia posible. También nos permiten analizar el comportamiento de los usuarios para mejorar constantemente el sitio web para usted.',
     ccpaOptOut:
       'Utilizamos cookies y tecnologías similares para personalizar y mejorar su experiencia. Algunas de estas tecnologías pueden implicar la "venta" o "compartición" de su información personal según las leyes de privacidad estatales.',
     optOutPreference: 'Preferencia de Exclusión',
@@ -101,7 +101,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Ces cookies suivent les utilisateurs sur différents sites web pour diffuser des publicités pertinentes et peuvent traiter des données personnelles, nécessitant ainsi un consentement explicite.',
     preferencesDescription: 'Ces cookies mémorisent des paramètres tels que la langue ou la région et enregistrent les préférences d\'affichage afin d\'offrir une expérience plus personnalisée et fluide.',
     ccpaDescription:
-      'Vous pouvez refuser la vente ou le partage de vos informations personnelles à des fins publicitaires.',
+      'Nous utilisons des cookies pour vous offrir la meilleure expérience possible. Ils nous permettent également d\'analyser le comportement des utilisateurs afin d\'améliorer constamment le site web pour vous.',
     ccpaOptOut:
       'Nous utilisons des cookies et des technologies similaires pour personnaliser et améliorer votre expérience. Certaines de ces technologies peuvent impliquer la "vente" ou le "partage" de vos informations personnelles selon les lois de confidentialité des États.',
     optOutPreference: 'Préférence de Désinscription',
@@ -140,7 +140,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Diese Cookies verfolgen Benutzer über Websites hinweg, um relevante Anzeigen zu liefern und können persönliche Daten verarbeiten, was eine ausdrückliche Zustimmung erfordert.',
     preferencesDescription: 'Diese Cookies merken sich Einstellungen wie Sprache oder Region und speichern Anzeigepräferenzen, um eine personalisiertere, nahtlose Erfahrung zu bieten.',
     ccpaDescription:
-      'Sie können dem Verkauf oder der Weitergabe Ihrer persönlichen Informationen für Werbezwecke widersprechen.',
+      'Wir verwenden Cookies, um Ihnen das bestmögliche Erlebnis zu bieten. Sie ermöglichen es uns außerdem, das Nutzerverhalten zu analysieren, um die Website kontinuierlich für Sie zu verbessern.',
     ccpaOptOut:
       'Wir verwenden Cookies und ähnliche Technologien, um Ihre Erfahrung zu personalisieren und zu verbessern. Einige dieser Technologien können den "Verkauf" oder die "Weitergabe" Ihrer persönlichen Informationen gemäß den staatlichen Datenschutzgesetzen beinhalten.',
     optOutPreference: 'Opt-out Einstellung',
@@ -179,7 +179,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Questi cookie tracciano gli utenti su diversi siti web per fornire annunci rilevanti e possono elaborare dati personali, richiedendo un consenso esplicito.',
     preferencesDescription: 'Questi cookie ricordano le impostazioni come lingua o regione e memorizzano le preferenze di visualizzazione per offrire un\'esperienza più personalizzata e fluida.',
     ccpaDescription:
-      'Puoi rifiutare la vendita o la condivisione delle tue informazioni personali per la pubblicità.',
+      'Utilizziamo i cookie per offrirti la migliore esperienza possibile. Ci permettono inoltre di analizzare il comportamento degli utenti per migliorare costantemente il sito web per te.',
     ccpaOptOut:
       'Utilizziamo cookie e tecnologie simili per personalizzare e migliorare la tua esperienza. Alcune di queste tecnologie possono comportare la "vendita" o la "condivisione" delle tue informazioni personali secondo le leggi sulla privacy statali.',
     optOutPreference: 'Preferenza di Rinuncia',
@@ -218,7 +218,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Esses cookies rastreiam usuários em diferentes sites para fornecer anúncios relevantes e podem processar dados pessoais, exigindo consentimento explícito.',
     preferencesDescription: 'Esses cookies lembram configurações como idioma ou região e armazenam preferências de exibição para oferecer uma experiência mais personalizada e fluida.',
     ccpaDescription:
-      'Você pode optar por não vender ou compartilhar suas informações pessoais para publicidade.',
+      'Usamos cookies para lhe proporcionar a melhor experiência possível. Eles também nos permitem analisar o comportamento dos usuários para melhorar constantemente o site para você.',
     ccpaOptOut:
       'Usamos cookies e tecnologias semelhantes para personalizar e melhorar sua experiência. Algumas dessas tecnologias podem envolver a "venda" ou "compartilhamento" de suas informações pessoais sob as leis de privacidade estaduais.',
     optOutPreference: 'Preferência de Exclusão',
@@ -257,7 +257,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Deze cookies volgen gebruikers op verschillende websites om relevante advertenties te leveren en kunnen persoonlijke gegevens verwerken, wat expliciete toestemming vereist.',
     preferencesDescription: 'Deze cookies onthouden instellingen zoals taal of regio en slaan weergavevoorkeuren op om een meer gepersonaliseerde, naadloze ervaring te bieden.',
     ccpaDescription:
-      'U kunt zich afmelden voor de verkoop of het delen van uw persoonlijke informatie voor advertenties.',
+      'We gebruiken cookies om u de best mogelijke ervaring te bieden. Ze stellen ons ook in staat om gebruikersgedrag te analyseren om de website voortdurend voor u te verbeteren.',
     ccpaOptOut:
       'We gebruiken cookies en vergelijkbare technologieën om uw ervaring te personaliseren en te verbeteren. Sommige van deze technologieën kunnen de "verkoop" of "deling" van uw persoonlijke informatie onder de staatswetten voor privacy inhouden.',
     optOutPreference: 'Opt-out Voorkeur',
@@ -296,7 +296,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Dessa cookies spårar användare på olika webbplatser för att leverera relevanta annonser och kan behandla personuppgifter, vilket kräver uttryckligt samtycke.',
     preferencesDescription: 'Dessa cookies kommer ihåg inställningar som språk eller region och lagrar visningspreferenser för att erbjuda en mer personlig och smidig upplevelse.',
     ccpaDescription:
-      'Du kan välja att inte sälja eller dela dina personuppgifter för reklam.',
+      'Vi använder cookies för att ge dig bästa möjliga upplevelse. De gör det också möjligt för oss att analysera användarbeteende för att ständigt förbättra webbplatsen för dig.',
     ccpaOptOut:
       'Vi använder cookies och liknande teknologier för att personalisera och förbättra din upplevelse. Vissa av dessa teknologier kan innebära "försäljning" eller "delning" av dina personuppgifter enligt statliga integritetslagar.',
     optOutPreference: 'Opt-out Inställning',
@@ -335,7 +335,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     marketingDescription: 'Te pliki cookie śledzą użytkowników na różnych stronach, aby dostarczać odpowiednie reklamy i mogą przetwarzać dane osobowe, co wymaga wyraźnej zgody.',
     preferencesDescription: 'Te pliki cookie zapamiętują ustawienia takie jak język lub region oraz przechowują preferencje wyświetlania, aby zapewnić bardziej spersonalizowane doświadczenie.',
     ccpaDescription:
-      'Możesz zrezygnować ze sprzedaży lub udostępniania swoich danych osobowych w celach reklamowych.',
+      'Używamy plików cookie, aby zapewnić Ci najlepsze możliwe wrażenia. Pozwalają nam one również analizować zachowania użytkowników, aby stale ulepszać dla Ciebie tę witrynę.',
     ccpaOptOut:
       'Używamy plików cookie i podobnych technologii, aby personalizować i ulepszać Twoje doświadczenie. Niektóre z tych technologii mogą obejmować "sprzedaż" lub "udostępnianie" Twoich danych osobowych zgodnie z przepisami o ochronie prywatności.',
     optOutPreference: 'Preferencja Rezygnacji',
