@@ -407,7 +407,7 @@ export default function BillingPage({
     setShowSwitchModal(true);
     setSwitchPreviewLoading(true);
     try {
-      const p = await previewSwitchInterval(organizationId, target);
+      const p = await previewSwitchInterval(organizationId, target, activeSiteId || null);
       setSwitchPreview(p);
     } catch {
       /* fall back to static text */
@@ -421,7 +421,7 @@ export default function BillingPage({
     setSwitchLoading(true);
     setSwitchError(null);
     try {
-      const result = await switchBillingInterval(organizationId, switchTarget);
+      const result = await switchBillingInterval(organizationId, switchTarget, activeSiteId || null);
       // 1. Optimistically update the local billing summary
       setSummary((prev) =>
         prev
