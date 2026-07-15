@@ -665,12 +665,13 @@ export async function updatePaymentMethod(
 export async function switchBillingInterval(
   organizationId: string,
   targetInterval: "monthly" | "yearly",
+  siteId?: string | null,
 ): Promise<{ success: true; interval: string; nextBillingDate: string | null }> {
   const res = await fetch("/api/subscriptions/switch-interval", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ organizationId, targetInterval }),
+    body: JSON.stringify({ organizationId, targetInterval, ...(siteId ? { siteId } : {}) }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to switch billing interval");
@@ -689,12 +690,13 @@ export type SwitchIntervalPreview = {
 export async function previewSwitchInterval(
   organizationId: string,
   targetInterval: "monthly" | "yearly",
+  siteId?: string | null,
 ): Promise<SwitchIntervalPreview> {
   const res = await fetch("/api/subscriptions/switch-interval/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ organizationId, targetInterval }),
+    body: JSON.stringify({ organizationId, targetInterval, ...(siteId ? { siteId } : {}) }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
