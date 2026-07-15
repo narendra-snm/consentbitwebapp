@@ -546,7 +546,7 @@ export default function PricingTable() {
     setShowSwitchConfirm(true);
     setPreviewLoading(true);
     try {
-      const p = await previewSwitchInterval(activeOrganizationId, target);
+      const p = await previewSwitchInterval(activeOrganizationId, target, siteId || null);
       setPreview(p);
     } catch (e) {
       setSwitchError(e instanceof Error ? e.message : "Could not load the charge details.");
