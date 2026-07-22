@@ -937,6 +937,15 @@ function CheckoutPageInner() {
       }
     }
     const token = urlT || handoff.t || '';
+    // Strip the opaque token from the address bar as soon as it's captured, so it
+    // doesn't linger in the URL or browser history. It's already read into `token`
+    // above, so removing it here can't affect the exchange below. history.replaceState
+    // (not the Next router) is intentional — it won't re-trigger this effect.
+    if (urlT && typeof window !== 'undefined') {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('t');
+      window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+    }
     if (token) {
       fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`)
         .then(r => r.json())
