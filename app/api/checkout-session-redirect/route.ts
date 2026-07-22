@@ -30,9 +30,25 @@ export async function GET(request: NextRequest) {
   if (!redirectTo) {
     return new NextResponse('Bad Request: missing redirect param', { status: 400 });
   }
+
+  // Open-redirect guard: the redirect target MUST be same-origin as this app.
+  // Every legitimate caller builds `redirect=${window.location.origin}/...`, so
+  // anything pointing off-origin is a crafted link — reject it before we redirect
+  // (and before we attach Stripe session PII to the destination).
+  const reqOrigin = new URL(request.url).origin;
+  let dest: URL;
+  try {
+    dest = new URL(redirectTo, reqOrigin);
+  } catch {
+    return new NextResponse('Bad Request: invalid redirect URL', { status: 400 });
+  }
+  if (dest.origin !== reqOrigin) {
+    return new NextResponse('Bad Request: redirect not allowed', { status: 400 });
+  }
+
   // If session_id is missing or invalid just redirect without extra params
   if (!sessionId.startsWith('cs_')) {
-    return NextResponse.redirect(redirectTo, { status: 302 });
+    return NextResponse.redirect(dest.toString(), { status: 302 });
   }
 
   let data: SessionData = { success: false };
@@ -46,7 +62,6 @@ export async function GET(request: NextRequest) {
     // Best-effort — redirect anyway without extra params
   }
 
-  const dest = new URL(redirectTo);
   if (data.success) {
     if (data.amount)         dest.searchParams.set('amount',         data.amount);
     if (data.currency)       dest.searchParams.set('currency',       data.currency);
