@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import {
@@ -922,12 +922,18 @@ function CheckoutPageInner() {
   const urlT = params.get('t') ?? '';
   // null = still resolving; object = resolved checkout context.
   const [tokenPayload, setTokenPayload] = useState<Record<string, string> | null>(null);
+  const resolvedRef = useRef(false);
 
   useEffect(() => {
-    // Resolve the checkout context. The extension no longer puts a token or params
-    // in the URL (Webflow review) — it POSTs the context in the request BODY, which
-    // /api/checkout-open stashes in a short-lived same-origin cookie. Priority:
-    // URL token (legacy) → cookie token → raw cookie context.
+    // Resolve the checkout context exactly ONCE. The guard is essential: we strip the
+    // ?t= token from the URL below, and Next.js patches history.replaceState so that
+    // change updates useSearchParams — which would re-run this effect with an empty
+    // token and overwrite the resolved context with {} (the "expired" screen). The ref
+    // stops that second run.
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+
+    // Priority: URL token (?t=) → cookie token → raw cookie context.
     let handoff: Record<string, string> = {};
     if (typeof document !== 'undefined') {
       const m = document.cookie.match(/(?:^|;\s*)cb_checkout=([^;]+)/);
@@ -937,28 +943,30 @@ function CheckoutPageInner() {
       }
     }
     const token = urlT || handoff.t || '';
-    // Strip the opaque token from the address bar as soon as it's captured, so it
-    // doesn't linger in the URL or browser history. It's already read into `token`
-    // above, so removing it here can't affect the exchange below. history.replaceState
-    // (not the Next router) is intentional — it won't re-trigger this effect.
-    if (urlT && typeof window !== 'undefined') {
-      const u = new URL(window.location.href);
-      u.searchParams.delete('t');
-      window.history.replaceState({}, '', u.pathname + u.search + u.hash);
-    }
+
+    // Strip the token from the address bar only AFTER the exchange resolves — never
+    // before, or the resulting re-render races the in-flight fetch.
+    const stripToken = () => {
+      if (urlT && typeof window !== 'undefined') {
+        const u = new URL(window.location.href);
+        u.searchParams.delete('t');
+        window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+      }
+    };
+
     if (token) {
-      // Abort a slow/hanging token exchange after 8s so the page never spins
-      // forever — it falls back to rendering (empty payload) instead of a stuck spinner.
+      // Abort a slow/hanging token exchange after 8s so the page never spins forever.
       const ctrl = new AbortController();
       const timeout = setTimeout(() => ctrl.abort(), 8000);
       fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`, { signal: ctrl.signal })
         .then(r => r.json())
         .then((data: unknown) => setTokenPayload((data as Record<string, string>) || {}))
         .catch(() => setTokenPayload({}))
-        .finally(() => clearTimeout(timeout));
+        .finally(() => { clearTimeout(timeout); stripToken(); });
     } else {
       // No token — use the raw context handed off in the cookie (or empty).
       setTokenPayload(handoff);
+      stripToken();
     }
   }, [urlT]);
 
