@@ -947,10 +947,15 @@ function CheckoutPageInner() {
       window.history.replaceState({}, '', u.pathname + u.search + u.hash);
     }
     if (token) {
-      fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`)
+      // Abort a slow/hanging token exchange after 8s so the page never spins
+      // forever — it falls back to rendering (empty payload) instead of a stuck spinner.
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+      fetch(`/api/checkout-token?t=${encodeURIComponent(token)}`, { signal: ctrl.signal })
         .then(r => r.json())
         .then((data: unknown) => setTokenPayload((data as Record<string, string>) || {}))
-        .catch(() => setTokenPayload({}));
+        .catch(() => setTokenPayload({}))
+        .finally(() => clearTimeout(timeout));
     } else {
       // No token — use the raw context handed off in the cookie (or empty).
       setTokenPayload(handoff);
