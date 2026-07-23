@@ -93,9 +93,21 @@ const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 //check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
-const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-// console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
-const stripePromise = _pk ? loadStripe(_pk) : null
+const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim()
+if (typeof window !== 'undefined') {
+  console.log(
+    '[Stripe] publishable key:',
+    _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : _pk.startsWith('pk_test') ? 'TEST' : 'INVALID PREFIX'})` : 'NOT SET',
+  )
+}
+// loadStripe rejects if the key is malformed / not a publishable key (e.g. sk_live/rk_live pasted by mistake).
+// Without this catch the failure is silent and the submit button stays disabled forever.
+const stripePromise = _pk
+  ? loadStripe(_pk).catch((err) => {
+      console.error('[Stripe] failed to initialize — button will stay disabled:', err)
+      return null
+    })
+  : null
 
 const STRIPE_STYLE = {
   style: {
@@ -128,7 +140,10 @@ function isValidEmail(v: string) {
 
 function isValidDomain(v: string) {
   const d = cleanDomain(v);
-  return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/.test(d);
+  // Allow hyphens in every label (incl. subdomains like www.touchstone-communities.com),
+  // ending in a letters-only TLD. The old regex only allowed hyphens in the first label,
+  // so domains such as www.my-company.com were wrongly rejected.
+  return /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(d);
 }
 
 function cleanDomain(v: string) {
