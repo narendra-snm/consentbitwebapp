@@ -9,7 +9,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; /
 import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
-import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
 
@@ -145,24 +144,8 @@ export default function PricingTable() {
   }, [activeOrganizationId, siteId, currentTier]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
-
+  
   const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
-
-  // Step 11 — fire thank_you_page_viewed once when the success/confirmation view mounts
-  // (covers both the Stripe return and the in-place upgrade receipt).
-  const thankYouFiredRef = useRef(false);
-  useEffect(() => {
-    if (!paymentProcessing || thankYouFiredRef.current) return;
-    thankYouFiredRef.current = true;
-    analytics.thankYouPageViewed({
-      site_id: siteId ? String(siteId) : undefined,
-      plan_tier: paymentDetails.plan_id || paymentDetails.plan_type || undefined,
-      billing_cycle:
-        paymentDetails.interval === "yearly"
-          ? "annual"
-          : paymentDetails.interval || undefined,
-    });
-  }, [paymentProcessing, siteId, paymentDetails]);
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
   useEffect(() => {
@@ -536,13 +519,6 @@ export default function PricingTable() {
         disabled={checkoutLoading}
         onClick={() => {
           setSelected(plan);
-          // Step 8 — plan card selected in the pricing menu.
-          analytics.planSelected(
-            plan,
-            billing === "yearly" ? "annual" : "monthly",
-            getPrice(plan),
-            siteId ? String(siteId) : undefined
-          );
           setTimeout(() => {
             proceedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 50);
@@ -593,75 +569,6 @@ export default function PricingTable() {
     } catch (e) {
       setSwitchError(e instanceof Error ? e.message : "Could not switch billing periods. Please try again.");
       setSwitching(false);
-    }
-  }
-
-  // Different tier on an existing paid subscription → confirm dialog with the prorated amount first.
-  async function openTierConfirm(plan: "basic" | "essential" | "growth") {
-    if (!activeOrganizationId) return;
-    setTierTarget(plan);
-    setTierPreview(null);
-    setTierError(null);
-    setShowTierConfirm(true);
-    setTierPreviewLoading(true);
-    try {
-      const p = await previewChangeTier({
-        organizationId: activeOrganizationId,
-        siteId: siteId || null,
-        planId: plan,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        promotionCodeId: appliedCoupon?.promotionCodeId ?? null,
-      });
-      setTierPreview(p);
-    } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not load the charge details.");
-    } finally {
-      setTierPreviewLoading(false);
-    }
-  }
-
-  // Confirmed → charge the card on file in-place (upgrade) or schedule the change (downgrade).
-  async function confirmChangeTier() {
-    if (!activeOrganizationId || !tierTarget || committingTier) return;
-    setCommittingTier(true);
-    setTierError(null);
-    try {
-      const result = await changeTier({
-        organizationId: activeOrganizationId,
-        siteId: siteId || null,
-        planId: tierTarget,
-        interval: billing === "yearly" ? "yearly" : "monthly",
-        promotionCodeId: appliedCoupon?.promotionCodeId ?? null,
-      });
-      setShowTierConfirm(false);
-      await refresh({ showLoading: false });
-
-      if (result.direction === "downgrade") {
-        // Scheduled for end of the billing period — nothing charged now.
-        router.push(`/dashboard/${siteId}?upgraded=1`);
-        return;
-      }
-
-      // Upgrade — charged immediately. Show the success/proceed page with receipt details.
-      const amt = result.amountPaidCents != null ? (result.amountPaidCents / 100).toFixed(2) : "";
-      setPaymentDetails({
-        amount: amt,
-        currency: (result.currency || "usd").toUpperCase(),
-        transaction_id: result.invoiceId ?? "",
-        plan_id: result.planId ?? "",
-        plan_type: "tier",
-        interval: result.interval ?? "",
-        invoice_id: result.invoiceId ?? "",
-        invoice_url: result.invoiceUrl ?? "",
-        customer_email: "",
-        payment_status: result.paymentStatus ?? "paid",
-        date_of_purchase: new Date().toISOString(),
-      });
-      sessionStorage.setItem(`cb_target_plan_${siteId}`, tierTarget);
-      setPaymentProcessing(true);
-    } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Payment could not be completed. Please try again.");
-      setCommittingTier(false);
     }
   }
 

@@ -1168,6 +1168,7 @@ function CheckoutPageInner() {
 }
 
 export default function CheckoutPage() {
+  console.log("[CheckoutPage] render");
   return (
     <Suspense
       fallback={
