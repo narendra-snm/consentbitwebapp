@@ -463,7 +463,7 @@ function StepThree({
   const handleCopy = () => {
     navigator.clipboard.writeText(codeSnippet);
     copyTimestampRef.current = Date.now();
-    analytics.installCodeCopied(siteData?.domain || publicUrl, siteData?.siteId);
+    analytics.scriptCopied(siteData?.domain || publicUrl, siteData?.siteId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

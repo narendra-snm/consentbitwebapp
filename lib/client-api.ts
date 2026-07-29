@@ -261,7 +261,7 @@ export async function firstSetup(payload: {
   try {
     const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
     const { analytics } = await import("./analytics");
-    analytics.domainAdded(payload.websiteUrl, siteId, "free");
+    analytics.domainSubmitted(payload.websiteUrl, siteId, "free");
   } catch { /* analytics must never block setup */ }
 
   return result;
