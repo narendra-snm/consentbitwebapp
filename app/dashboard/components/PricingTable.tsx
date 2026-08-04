@@ -199,14 +199,11 @@ export function PricingTable({
 
             {/* Row 2 */}
             <Feature title="No of scans" />
-            <Cell>100</Cell>
-            <Cell>750</Cell>
+            <Cell>100 scans</Cell>
+            <Cell>750 scans</Cell>
             <Cell highlight>5000 scans</Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">10000 scans</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 scans
-              </div>
             </Cell>
 
             {/* Row 3 */}
@@ -215,15 +212,9 @@ export function PricingTable({
             <Cell>100,000 page views/m</Cell>
             <Cell highlight>
               <div className="font-bold text-[#5243c2]">500,000 pageviews/m</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 scans
-              </div>
             </Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">2 Million pageviews/m</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.39 for additional 10000 scans
-              </div>
             </Cell>
 
             {/* Row 4 */}
