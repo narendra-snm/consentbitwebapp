@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/lib/client-api";
+import { analytics } from "@/lib/analytics";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations//LoadingScreen";
 
@@ -37,7 +38,7 @@ const plans: PricingPlan[] = [
     name: "Free",
     price: 0,
     domains: "01",
-    scans: "100",
+    scans: "100 scans",
     pageViews: "7500",
     iabTcf: "NIL",
     compliance: "GDPR/CCPA",
@@ -50,7 +51,7 @@ const plans: PricingPlan[] = [
     name: "Basic",
     price: 9,
     domains: "01",
-    scans: "750",
+    scans: "750 scans",
     pageViews: "100,000/m",
     iabTcf: "NIL",
     compliance: "GDPR/CCPA",
@@ -62,27 +63,25 @@ const plans: PricingPlan[] = [
     name: "Essential",
     price: 20,
     domains: "01",
-    scans: "5000",
+    scans: "5000 scans",
     pageViews: "500,000",
     iabTcf: "Yes",
     compliance: "GDPR+CCPA",
     buttonText: "14 day free trial",
     buttonColor: "#4CBB66",
     isRecommended: true,
-    additionalNote: "+ $.49 for additional 10000 scans",
   },
   {
     id: "growth",
     name: "Growth",
     price: 56,
     domains: "01",
-    scans: "10000",
+    scans: "10000 scans",
     pageViews: "2 Million/m",
     iabTcf: "Yes",
     compliance: "GDPR+CCPA",
     buttonText: "14 day free trial",
     buttonColor: "#007AFF",
-    additionalNote: "+ $.39 for additional 10000 scans",
   },
 ];
 
@@ -256,6 +255,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       return;
     }
     setSelectedPlan(planId);
+    // Step 8 — plan card selected in the add-site pricing menu.
+    analytics.planSelected(
+      planId,
+      billingPeriod === "yearly" ? "annual" : "monthly",
+      ({ free: 0, basic: 9, essential: 20, growth: 56 } as const)[planId],
+      undefined
+    );
     const validationError = validateDomain(websiteUrl);
     if (validationError) {
       setUrlError(validationError);
@@ -301,6 +307,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
         const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
         const cancelUrl = `${origin}${returnTo}`;
+        // Step 9 — final proceed-to-checkout before the Stripe redirect.
+        analytics.checkoutInitiated(
+          planId as "basic" | "essential" | "growth",
+          undefined,
+          billingPeriod === "yearly" ? "annual" : "monthly"
+        );
         const data = await createCheckoutSession({
           organizationId: activeOrganizationId,
           planId: planId as "basic" | "essential" | "growth",

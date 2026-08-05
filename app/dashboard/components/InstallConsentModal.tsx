@@ -105,7 +105,7 @@ export default function InstallConsentModal({
     const ok = await copyToClipboard(installCode);
     if (ok) {
       copyTimestampRef.current = Date.now();
-      analytics.installCodeCopied(siteDomain || publicUrl, siteId);
+      analytics.scriptCopied(siteDomain || publicUrl, siteId);
       if (which === "icon") {
         setCopiedIcon(true);
         window.setTimeout(() => setCopiedIcon(false), 2000);
@@ -140,10 +140,8 @@ export default function InstallConsentModal({
       });
       if (res.found) {
         setVerified(true);
-        const secondsFromCopy = copyTimestampRef.current
-          ? Math.round((Date.now() - copyTimestampRef.current) / 1000)
-          : undefined;
-        analytics.installationVerified(url, siteId, secondsFromCopy);
+        // installation_verified is emitted from the consent-manager worker when the
+        // backend detects the tag live (see handleVerifyScript / scanSite).
         onVerified?.();
       } else {
         if (typeof window !== "undefined" && "debug" in res && res.debug) {

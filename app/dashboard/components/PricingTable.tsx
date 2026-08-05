@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
+import { analytics } from '@/lib/analytics';
 
 export function PricingTable({
   onclick,
@@ -33,6 +34,8 @@ export function PricingTable({
 
   async function handleFreeClick() {
     setFreeLoading(true);
+    // Step 8 — free plan card selected in the pricing menu.
+    analytics.planSelected('free', billingInterval === 'year' ? 'annual' : 'monthly', 0, siteId ?? undefined);
     try {
       await onclick();
     } finally {
@@ -62,6 +65,10 @@ export function PricingTable({
     }
     try {
       setLoadingPlan(planId);
+      // Step 8 + 9 — plan card selected then straight to checkout in this menu.
+      const cycle = billingInterval === 'year' ? 'annual' : 'monthly';
+      analytics.planSelected(planId, cycle, prices[planId], siteId ?? undefined);
+      analytics.checkoutInitiated(planId, siteId ?? undefined, cycle);
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const domain = pendingDomain ?? '';
       // Do NOT create the site before checkout — site is created after successful payment
@@ -192,14 +199,11 @@ export function PricingTable({
 
             {/* Row 2 */}
             <Feature title="No of scans" />
-            <Cell>100</Cell>
-            <Cell>750</Cell>
+            <Cell>100 scans</Cell>
+            <Cell>750 scans</Cell>
             <Cell highlight>5000 scans</Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">10000 scans</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 scans
-              </div>
             </Cell>
 
             {/* Row 3 */}
@@ -208,15 +212,9 @@ export function PricingTable({
             <Cell>100,000 page views/m</Cell>
             <Cell highlight>
               <div className="font-bold text-[#5243c2]">500,000 pageviews/m</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.49 for additional 10000 scans
-              </div>
             </Cell>
             <Cell>
               <div className="font-bold text-[#5243c2]">2 Million pageviews/m</div>
-              <div className="text-[13px] text-[#4B5563]">
-                + $.39 for additional 10000 scans
-              </div>
             </Cell>
 
             {/* Row 4 */}

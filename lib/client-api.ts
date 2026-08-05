@@ -186,6 +186,45 @@ export async function updateProfile(payload: { name?: string; billingEmail?: str
 }
 //profile update ends here
 
+//transfer ownership starts here
+/**
+ * Request an account ownership transfer. Sends an authorization link to the CURRENT
+ * owner's email; nothing changes until that link is clicked.
+ */
+export async function requestOwnershipTransfer(payload: { newEmail: string; newName: string }) {
+  const res = await fetch('/api/auth/transfer-ownership/request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest', // CSRF guard (authenticated mutation)
+    },
+    credentials: 'include',
+    body: JSON.stringify({
+      newEmail: payload.newEmail.trim().toLowerCase(),
+      newName: payload.newName.trim(),
+      // Let the worker build the authorization link against this exact app origin.
+      appOrigin: typeof window !== 'undefined' ? window.location.origin : '',
+    }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to start ownership transfer');
+  return data as { success: true; sentTo?: string; authorizeLink?: string; expiresAt?: string };
+}
+
+/** Complete the transfer by submitting the token from the emailed authorization link. */
+export async function authorizeOwnershipTransfer(token: string) {
+  const res = await fetch('/api/auth/transfer-ownership/authorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to authorize ownership transfer');
+  return data as { success: true; newOwner?: { email: string; name: string } };
+}
+//transfer ownership ends here
+
 //first setup starts here
 export async function firstSetup(payload: {
   websiteUrl: string; // Website URL/Domain (e.g., valuable-tenets-951054.framer.app)
@@ -215,14 +254,14 @@ export async function firstSetup(payload: {
 
   const result = await parseApiResponse(res);
 
-  // PostHog: fire domain_added here so EVERY caller is covered (onboarding wizard,
+  // PostHog: fire domain_submitted here so EVERY caller is covered (onboarding wizard,
   // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
   // is always the free-plan creation path (paid plans go through createCheckoutSession).
   // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
   try {
     const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
     const { analytics } = await import("./analytics");
-    analytics.domainAdded(payload.websiteUrl, siteId, "free");
+    analytics.domainSubmitted(payload.websiteUrl, siteId, "free");
   } catch { /* analytics must never block setup */ }
 
   return result;
@@ -702,9 +741,8 @@ export async function previewSwitchInterval(
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
   return data as SwitchIntervalPreview;
 }
-// billing summary ends here
 
-// change tier (in-place upgrade/downgrade, charges card on file) starts here
+// —— Tier change (upgrade/downgrade of an existing paid subscription, in-place proration) ——
 export type ChangeTierPreview = {
   success: true;
   direction: "upgrade" | "downgrade";
@@ -909,9 +947,13 @@ export async function addCustomCookieRule(payload: {
 }
 
 export async function deleteCustomCookieRule(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`/api/custom-cookie-rules?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
+  // POST + action:'delete' (not the DELETE method) so it works where DELETE is
+  // blocked at the edge — same pattern as publishCustomCookieRules / /api/cookies.
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    body: JSON.stringify({ action: 'delete', id }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Failed to delete cookie rule: ${res.status}`);
