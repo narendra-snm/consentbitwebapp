@@ -94,12 +94,6 @@ const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 //check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
 const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim()
-if (typeof window !== 'undefined') {
-  console.log(
-    '[Stripe] publishable key:',
-    _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : _pk.startsWith('pk_test') ? 'TEST' : 'INVALID PREFIX'})` : 'NOT SET',
-  )
-}
 // loadStripe rejects if the key is malformed / not a publishable key (e.g. sk_live/rk_live pasted by mistake).
 // Without this catch the failure is silent and the submit button stays disabled forever.
 const stripePromise = _pk
