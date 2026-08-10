@@ -11,6 +11,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
+import { getConsentbitCdnOrigin } from '@/lib/consentbit-script';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -455,10 +456,23 @@ function CheckoutForm({
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Persists after payment succeeds — unlike showSuccess it is NOT cleared by
+  // "Stay on this page", so the trial button stays disabled and can never charge
+  // a second time once the account is set up.
   const [paid, setPaid] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
+
+  // The account email can arrive after this form has mounted (the parent resolves it
+  // asynchronously when the checkout handoff didn't include it). Adopt it only while
+  // our fields are still empty so we never overwrite anything the user has typed.
+  useEffect(() => {
+    if (!initEmail) return;
+    setEmail((prev) => (prev ? prev : initEmail));
+    setBillingEmail((prev) => (prev ? prev : (hasSeparateBilling ? initBillingEmail : initEmail)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initEmail, initBillingEmail]);
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
@@ -1138,14 +1152,48 @@ function CheckoutPageInner() {
     }
   }, [urlT]);
 
-  // Plan + interval can arrive in the token body (sent as a POST body, not URL
-  // params). Apply them once the token resolves; query params remain a fallback.
+  // Plan + interval can arrive in the body/cookie (not URL params). Apply them once
+  // the context resolves; the initial URL-param values remain the fallback.
   useEffect(() => {
     if (!tokenPayload) return;
     const tp = tokenPayload.plan;
     if (tp && VALID_PLANS.has(tp as PlanId)) setPlanId(tp as PlanId);
     const ti = tokenPayload.interval;
-    if (ti === 'yearly' || ti === 'monthly') setInterval(ti);
+    if (ti === 'yearly' || ti === 'monthly') setInterval(ti as Interval);
+  }, [tokenPayload]);
+
+  // Fallback: the checkout handoff (token / cookie) occasionally arrives without the
+  // account email, so step 1 shows "—". When it's missing but we know the Webflow
+  // site, resolve the email from the worker's authless OAuth-status endpoint (the
+  // source of truth, keyed by siteId) and merge it in. Best-effort — on failure the
+  // field stays blank and editable.
+  useEffect(() => {
+    if (!tokenPayload) return;
+    const haveEmail = (tokenPayload.email ?? params.get('email') ?? '').trim();
+    if (haveEmail) return;
+    const sid = tokenPayload.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
+    if (!sid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = new URL(`${getConsentbitCdnOrigin()}/api/webflow/oauth/status`);
+        url.searchParams.set('siteId', sid);
+        url.searchParams.set('verify', 'false');
+        const r = await fetch(url.toString());
+        const d = (await r.json()) as Record<string, string>;
+        if (!cancelled && d?.email) {
+          setTokenPayload((prev) => ({
+            ...(prev || {}),
+            email: d.email,
+            ...(d.billingEmail ? { billingEmail: d.billingEmail } : {}),
+          }));
+        }
+      } catch {
+        /* leave blank — the field is editable so the user can still enter it */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenPayload]);
 
   if (tokenPayload === null) {

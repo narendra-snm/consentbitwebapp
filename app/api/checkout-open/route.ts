@@ -12,18 +12,18 @@ import { NextRequest, NextResponse } from 'next/server';
 //
 // The destination depends on WHERE the plugin opened checkout from, sent as a
 // `dest` form field:
-//   • plan/install page   → /checkoutplan  (interactive plan picker) — DEFAULT
-//   • upgrade page        → /checkout-plan (read-only: shows the plan already
-//                                           chosen in the plugin)
-// Only these two paths are allowed; anything else falls back to /checkoutplan.
+//   • upgrade / plan-select → /checkout-plan (read-only: shows the plan already
+//                                             chosen in the plugin) — DEFAULT
+//   • interactive picker    → /checkoutplan  (kept in the allow-list for back-compat)
+// Anything else falls back to /checkout-plan.
 //
 // The rest of the body is either { t: <opaque token> } (the normal path) or the
 // raw context fields (platform, version, platformId, domain, interval, plan)
 // when token creation failed upstream. Either way, nothing sensitive lands in
 // the URL.
 
-const DEST_ALLOW = new Set(['checkoutplan', 'checkout-plan']);
-const DEFAULT_DEST = 'checkoutplan';
+const DEST_ALLOW = new Set(['checkout-plan', 'checkoutplan']);
+const DEFAULT_DEST = 'checkout-plan';
 
 function resolveDest(raw: string | undefined): string {
   return raw && DEST_ALLOW.has(raw) ? raw : DEFAULT_DEST;

@@ -254,7 +254,7 @@ export async function firstSetup(payload: {
 
   const result = await parseApiResponse(res);
 
-  // PostHog: fire domain_added here so EVERY caller is covered (onboarding wizard,
+  // PostHog: fire domain_submitted here so EVERY caller is covered (onboarding wizard,
   // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
   // is always the free-plan creation path (paid plans go through createCheckoutSession).
   // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
@@ -745,9 +745,8 @@ export async function previewSwitchInterval(
   if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
   return data as SwitchIntervalPreview;
 }
-// billing summary ends here
 
-// change tier (in-place upgrade/downgrade, charges card on file) starts here
+// —— Tier change (upgrade/downgrade of an existing paid subscription, in-place proration) ——
 export type ChangeTierPreview = {
   success: true;
   direction: "upgrade" | "downgrade";
@@ -952,9 +951,13 @@ export async function addCustomCookieRule(payload: {
 }
 
 export async function deleteCustomCookieRule(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`/api/custom-cookie-rules?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
+  // POST + action:'delete' (not the DELETE method) so it works where DELETE is
+  // blocked at the edge — same pattern as publishCustomCookieRules / /api/cookies.
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    body: JSON.stringify({ action: 'delete', id }),
   });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Failed to delete cookie rule: ${res.status}`);

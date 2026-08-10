@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import PoweredByFooter from "./PoweredByFooter";
 
 // ─── Default Style Config ────────────────────────────────────────────────────
 const defaultStyleConfig = {
@@ -1143,6 +1144,9 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
               Save My Preferences
             </button>
           </div>
+
+          {/* Powered by ConsentBit */}
+          <PoweredByFooter radius={radii.br} />
         </div>
       </div>
       <style>{`@keyframes cbIabPopIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>

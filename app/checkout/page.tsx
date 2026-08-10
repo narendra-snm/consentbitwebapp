@@ -1,8 +1,8 @@
-﻿'use client';
+﻿"use client";
 
-import { Suspense, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { loadStripe } from '@stripe/stripe-js';
+import { Suspense, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
   CardNumberElement,
@@ -10,12 +10,12 @@ import {
   CardCvcElement,
   useStripe,
   useElements,
-} from '@stripe/react-stripe-js';
+} from "@stripe/react-stripe-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PlanId = 'basic' | 'essential' | 'growth';
-type Interval = 'monthly' | 'yearly';
+type PlanId = "basic" | "essential" | "growth";
+type Interval = "monthly" | "yearly";
 
 interface AppliedCoupon {
   promotionCodeId: string;
@@ -24,7 +24,7 @@ interface AppliedCoupon {
   percentOff: number | null;
   amountOff: number | null; // cents
   currency: string;
-  duration: 'once' | 'repeating' | 'forever';
+  duration: "once" | "repeating" | "forever";
   durationInMonths: number | null;
 }
 
@@ -44,80 +44,89 @@ interface PlanConfig {
 // Feature lists match the upgrade comparison grid (domains / scans / pageviews / IAB-TCF / compliance).
 const PLANS: Record<PlanId, PlanConfig> = {
   basic: {
-    name: 'Basic',
+    name: "Basic",
     monthly: 9,
     yearly: Math.round(9 * 0.8),
     yearlyTotal: Math.round(9 * 12 * 0.8),
     domains: 1,
     features: [
-      '1 domain',
-      '750 scans',
-      '100,000 pageviews/month',
-      'GDPR / CCPA compliance',
+      "1 domain",
+      "750 scans",
+      "100,000 pageviews/month",
+      "GDPR / CCPA compliance",
     ],
   },
   essential: {
-    name: 'Essential',
+    name: "Essential",
     monthly: 20,
     yearly: Math.round(20 * 0.8),
     yearlyTotal: Math.round(20 * 12 * 0.8),
     domains: 1,
     popular: true,
     features: [
-      '1 domain',
-      '5,000 scans',
-      '500,000 pageviews/month',
-      '+ $0.49 / 10,000 extra pageviews',
-      'IAB / TCF v2.2 included',
-      'GDPR + CCPA compliance',
+      "1 domain",
+      "5,000 scans",
+      "500,000 pageviews/month",
+      "+ $0.49 / 10,000 extra pageviews",
+      "IAB / TCF v2.2 included",
+      "GDPR + CCPA compliance",
     ],
   },
   growth: {
-    name: 'Growth',
+    name: "Growth",
     monthly: 56,
     yearly: Math.round(56 * 0.8),
     yearlyTotal: Math.round(56 * 12 * 0.8),
     domains: 1,
     features: [
-      '1 domain',
-      '10,000 scans (+ $0.49 / 10k extra)',
-      '2,000,000 pageviews/month',
-      '+ $0.39 / 10,000 extra pageviews',
-      'IAB / TCF v2.2 included',
-      'GDPR + CCPA compliance',
+      "1 domain",
+      "10,000 scans (+ $0.49 / 10k extra)",
+      "2,000,000 pageviews/month",
+      "+ $0.39 / 10,000 extra pageviews",
+      "IAB / TCF v2.2 included",
+      "GDPR + CCPA compliance",
     ],
   },
 };
 
-const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
+const VALID_PLANS = new Set<PlanId>(["basic", "essential", "growth"]);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 //check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
-const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-// console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
-const stripePromise = _pk ? loadStripe(_pk) : null
+const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
+// loadStripe rejects if the key is malformed / not a publishable key (e.g. sk_live/rk_live pasted by mistake).
+// Without this catch the failure is silent and the submit button stays disabled forever.
+const stripePromise = _pk
+  ? loadStripe(_pk).catch((err) => {
+      console.error(
+        "[Stripe] failed to initialize — button will stay disabled:",
+        err,
+      );
+      return null;
+    })
+  : null;
 
 const STRIPE_STYLE = {
   style: {
     base: {
-      fontSize: '14px',
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      color: '#111827',
-      '::placeholder': { color: '#9ca3af' },
+      fontSize: "14px",
+      fontFamily: "Arial, Helvetica, sans-serif",
+      color: "#111827",
+      "::placeholder": { color: "#9ca3af" },
     },
-    invalid: { color: '#dc2626' },
+    invalid: { color: "#dc2626" },
   },
 };
 
 // ─── Platform labels ──────────────────────────────────────────────────────────
 
 const PLATFORM_LABELS: Record<string, string> = {
-  framer: 'Framer',
-  webflow: 'Webflow',
-  wordpress: 'WordPress',
-  shopify: 'Shopify',
-  squarespace: 'Squarespace',
-  wix: 'Wix',
+  framer: "Framer",
+  webflow: "Webflow",
+  wordpress: "WordPress",
+  shopify: "Shopify",
+  squarespace: "Squarespace",
+  wix: "Wix",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,16 +137,30 @@ function isValidEmail(v: string) {
 
 function isValidDomain(v: string) {
   const d = cleanDomain(v);
-  return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/.test(d);
+  // Allow hyphens in every label (incl. subdomains like www.touchstone-communities.com),
+  // ending in a letters-only TLD. The old regex only allowed hyphens in the first label,
+  // so domains such as www.my-company.com were wrongly rejected.
+  return /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(
+    d,
+  );
 }
 
 function cleanDomain(v: string) {
-  return v.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase().trim();
+  return v
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase()
+    .trim();
 }
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }) — same as lib/client-api.ts. */
 function decodeEnvelope(parsed: unknown): unknown {
-  if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    typeof (parsed as { d?: unknown }).d === "string"
+  ) {
     try {
       const binary = atob((parsed as { d: string }).d);
       const bytes = new Uint8Array(binary.length);
@@ -150,14 +173,18 @@ function decodeEnvelope(parsed: unknown): unknown {
   return parsed;
 }
 
-async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
+async function parseApiResponse(
+  res: Response,
+): Promise<Record<string, unknown>> {
   const text = await res.text();
   try {
     return decodeEnvelope(JSON.parse(text)) as Record<string, unknown>;
   } catch {
     return {
       success: false,
-      error: text.trimStart().startsWith('<') ? 'Something went wrong. Please try again.' : text,
+      error: text.trimStart().startsWith("<")
+        ? "Something went wrong. Please try again."
+        : text,
     };
   }
 }
@@ -165,22 +192,22 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
 function trialEndLabel() {
   const d = new Date();
   d.setDate(d.getDate() + 14);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // ─── Shared UI helpers ────────────────────────────────────────────────────────
 
 function inputCls(hasError: boolean, disabled = false) {
   return [
-    'w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition',
-    'focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20',
-    hasError ? 'border-red-400' : 'border-gray-300',
-    disabled ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'bg-white',
-  ].join(' ');
+    "w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition",
+    "focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20",
+    hasError ? "border-red-400" : "border-gray-300",
+    disabled ? "bg-gray-50 text-gray-400 cursor-not-allowed" : "bg-white",
+  ].join(" ");
 }
 
 const stripeFieldCls =
-  'rounded-lg border border-gray-300 px-3 py-2.5 transition focus-within:border-[#262E84] focus-within:ring-2 focus-within:ring-[#262E84]/20';
+  "rounded-lg border border-gray-300 px-3 py-2.5 transition focus-within:border-[#262E84] focus-within:ring-2 focus-within:ring-[#262E84]/20";
 
 function Field({
   label,
@@ -240,7 +267,7 @@ function OrderSummary({
   appliedCoupon: AppliedCoupon | null;
 }) {
   const plan = PLANS[planId];
-  const basePrice = interval === 'yearly' ? plan.yearly : plan.monthly;
+  const basePrice = interval === "yearly" ? plan.yearly : plan.monthly;
   const firstCharge = trialEndLabel();
 
   const price = basePrice;
@@ -255,23 +282,37 @@ function OrderSummary({
     }
   }
   const firstChargeFinal = Math.max(0, firstChargeBase - discount);
-  const fmt = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
+  const fmt = (n: number) =>
+    Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 
-  const rows: Array<{ label: string; value: string; pill?: boolean; bold?: boolean; discount?: boolean; green?: boolean }> = [
+  const rows: Array<{
+    label: string;
+    value: string;
+    pill?: boolean;
+    bold?: boolean;
+    discount?: boolean;
+    green?: boolean;
+  }> = [
     { label: plan.name, value: `$${price}/mo` },
-    { label: 'Billing', value: interval === 'yearly' ? 'Yearly' : 'Monthly' },
-    { label: 'Trial period', value: '14 days', pill: true },
+    { label: "Billing", value: interval === "yearly" ? "Yearly" : "Monthly" },
+    { label: "Trial period", value: "14 days", pill: true },
     ...(appliedCoupon
-      ? [{
-          label: `Coupon ${appliedCoupon.code}`,
-          value: appliedCoupon.percentOff != null
-            ? `−${appliedCoupon.percentOff}%`
-            : `−${fmt((appliedCoupon.amountOff ?? 0) / 100)}`,
-          discount: true,
-        }]
+      ? [
+          {
+            label: `Coupon ${appliedCoupon.code}`,
+            value:
+              appliedCoupon.percentOff != null
+                ? `−${appliedCoupon.percentOff}%`
+                : `−${fmt((appliedCoupon.amountOff ?? 0) / 100)}`,
+            discount: true,
+          },
+        ]
       : []),
-    { label: 'Due today', value: '$0.00', bold: true },
-    { label: 'First charge', value: `${fmt(firstChargeFinal)} on ${firstCharge}` },
+    { label: "Due today", value: "$0.00", bold: true },
+    {
+      label: "First charge",
+      value: `${fmt(firstChargeFinal)} on ${firstCharge}`,
+    },
   ];
 
   return (
@@ -290,9 +331,16 @@ function OrderSummary({
         </p>
 
         <div className="mt-4 divide-y divide-gray-100">
-          {rows.map(row => (
-            <div key={row.label} className="flex items-center justify-between py-1.5 text-xs">
-              <span className={row.green ? 'font-medium text-green-700' : 'text-gray-500'}>
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              className="flex items-center justify-between py-1.5 text-xs"
+            >
+              <span
+                className={
+                  row.green ? "font-medium text-green-700" : "text-gray-500"
+                }
+              >
                 {row.label}
               </span>
               {row.pill ? (
@@ -300,9 +348,15 @@ function OrderSummary({
                   {row.value}
                 </span>
               ) : row.discount ? (
-                <span className="font-semibold text-green-600">{row.value}</span>
+                <span className="font-semibold text-green-600">
+                  {row.value}
+                </span>
               ) : (
-                <span className={row.bold ? 'font-bold text-gray-900' : 'text-gray-700'}>
+                <span
+                  className={
+                    row.bold ? "font-bold text-gray-900" : "text-gray-700"
+                  }
+                >
                   {row.value}
                 </span>
               )}
@@ -311,10 +365,15 @@ function OrderSummary({
         </div>
 
         <div className="mt-4 border-t border-gray-100 pt-4">
-          <p className="mb-2 text-xs font-semibold text-gray-700">What&apos;s included</p>
+          <p className="mb-2 text-xs font-semibold text-gray-700">
+            What&apos;s included
+          </p>
           <ul className="space-y-1.5">
-            {plan.features.map(f => (
-              <li key={f} className="flex items-start gap-2 text-xs text-gray-600">
+            {plan.features.map((f) => (
+              <li
+                key={f}
+                className="flex items-start gap-2 text-xs text-gray-600"
+              >
                 <svg
                   className="mt-px h-3.5 w-3.5 shrink-0 text-green-500"
                   viewBox="0 0 20 20"
@@ -364,33 +423,33 @@ function OrderSummary({
 // ─── Countries ────────────────────────────────────────────────────────────────
 
 const COUNTRIES = [
-  'United States',
-  'United Kingdom',
-  'Canada',
-  'Australia',
-  'Germany',
-  'France',
-  'Netherlands',
-  'Spain',
-  'Italy',
-  'Sweden',
-  'Norway',
-  'Denmark',
-  'Finland',
-  'Switzerland',
-  'Austria',
-  'Belgium',
-  'Poland',
-  'Portugal',
-  'Ireland',
-  'India',
-  'Singapore',
-  'Japan',
-  'New Zealand',
-  'South Africa',
-  'Brazil',
-  'Mexico',
-  'Other',
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "Australia",
+  "Germany",
+  "France",
+  "Netherlands",
+  "Spain",
+  "Italy",
+  "Sweden",
+  "Norway",
+  "Denmark",
+  "Finland",
+  "Switzerland",
+  "Austria",
+  "Belgium",
+  "Poland",
+  "Portugal",
+  "Ireland",
+  "India",
+  "Singapore",
+  "Japan",
+  "New Zealand",
+  "South Africa",
+  "Brazil",
+  "Mexico",
+  "Other",
 ];
 
 // ─── Checkout form ────────────────────────────────────────────────────────────
@@ -414,7 +473,7 @@ function CheckoutForm({
   domain: initDomain,
   platform,
   wfSiteId,
-  initBillingEmail = '',
+  initBillingEmail = "",
   planId,
   interval,
   onPlanChange,
@@ -426,41 +485,46 @@ function CheckoutForm({
   const elements = useElements();
   const router = useRouter();
 
-  const hasSeparateBilling = !!initBillingEmail && initBillingEmail !== initEmail;
+  const hasSeparateBilling =
+    !!initBillingEmail && initBillingEmail !== initEmail;
   const [email, setEmail] = useState(initEmail);
   /** Account email starts read-only; toggled to an editable input via the Edit button. */
   const [editEmail, setEditEmail] = useState(false);
   // Domain is locked — derived from URL params, never editable from the UI.
   const domain = initDomain;
-  const [billingEmail, setBillingEmail] = useState(hasSeparateBilling ? initBillingEmail : initEmail);
+  const [billingEmail, setBillingEmail] = useState(
+    hasSeparateBilling ? initBillingEmail : initEmail,
+  );
   const [separateBilling, setSeparateBilling] = useState(hasSeparateBilling);
-  const [nameOnCard, setNameOnCard] = useState('');
-  const [country, setCountry] = useState('United States');
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<string, string>>>({});
-  const [error, setError] = useState('');
+  const [nameOnCard, setNameOnCard] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<string, string>>
+  >({});
+  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [couponInput, setCouponInput] = useState('');
+  const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
-  const [couponError, setCouponError] = useState('');
+  const [couponError, setCouponError] = useState("");
   const [showCoupon, setShowCoupon] = useState(false);
 
   function clearErr(field: string) {
-    setFieldErrors(p => ({ ...p, [field]: '' }));
+    setFieldErrors((p) => ({ ...p, [field]: "" }));
   }
 
   async function applyCoupon() {
     const code = couponInput.trim();
     if (!code) {
-      setCouponError('Enter a coupon code.');
+      setCouponError("Enter a coupon code.");
       return;
     }
-    setCouponError('');
+    setCouponError("");
     setCouponLoading(true);
     try {
       const res = await fetch(
         `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: 'include' },
+        { credentials: "include" },
       );
       const data = (await parseApiResponse(res)) as {
         valid: boolean;
@@ -471,12 +535,12 @@ function CheckoutForm({
         percentOff?: number | null;
         amountOff?: number | null;
         currency?: string;
-        duration?: 'once' | 'repeating' | 'forever';
+        duration?: "once" | "repeating" | "forever";
         durationInMonths?: number | null;
       };
       // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
       if (!data.valid || !data.promotionCodeId) {
-        setCouponError(data.error || 'Invalid or expired code.');
+        setCouponError(data.error || "Invalid or expired code.");
         onCouponChange(null);
         setCouponLoading(false);
         return;
@@ -487,25 +551,25 @@ function CheckoutForm({
         name: data.name || code,
         percentOff: data.percentOff ?? null,
         amountOff: data.amountOff ?? null,
-        currency: data.currency || 'usd',
-        duration: data.duration || 'once',
+        currency: data.currency || "usd",
+        duration: data.duration || "once",
         durationInMonths: data.durationInMonths ?? null,
       });
     } catch {
-      setCouponError('Could not validate code. Please try again.');
+      setCouponError("Could not validate code. Please try again.");
     }
     setCouponLoading(false);
   }
 
   function removeCoupon() {
     onCouponChange(null);
-    setCouponInput('');
-    setCouponError('');
+    setCouponInput("");
+    setCouponError("");
   }
 
   function handleEmailChange(v: string) {
     setEmail(v);
-    clearErr('email');
+    clearErr("email");
     if (!separateBilling) setBillingEmail(v);
   }
 
@@ -516,18 +580,19 @@ function CheckoutForm({
 
   function validate() {
     const errs: Record<string, string> = {};
-    if (!isValidEmail(email)) errs.email = 'Enter a valid email address.';
-    if (!domain.trim()) errs.domain = 'Domain is required.';
-    else if (!isValidDomain(domain)) errs.domain = 'Enter a valid domain, e.g. example.com';
+    if (!isValidEmail(email)) errs.email = "Enter a valid email address.";
+    if (!domain.trim()) errs.domain = "Domain is required.";
+    else if (!isValidDomain(domain))
+      errs.domain = "Enter a valid domain, e.g. example.com";
     if (separateBilling && !isValidEmail(billingEmail))
-      errs.billingEmail = 'Enter a valid billing email.';
-    if (!nameOnCard.trim()) errs.nameOnCard = 'Name on card is required.';
+      errs.billingEmail = "Enter a valid billing email.";
+    if (!nameOnCard.trim()) errs.nameOnCard = "Name on card is required.";
     return errs;
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError('');
+    setError("");
 
     const errs = validate();
     if (Object.keys(errs).length) {
@@ -537,20 +602,29 @@ function CheckoutForm({
     setFieldErrors({});
 
     if (!stripe || !elements) {
-      setError('Payment not ready. Please wait a moment and try again.');
+      setError("Payment not ready. Please wait a moment and try again.");
       return;
     }
 
     const cardEl = elements.getElement(CardNumberElement);
     if (!cardEl) {
-      setError('Card details are incomplete.');
+      setError("Card details are incomplete.");
       return;
     }
 
     setIsSubmitting(true);
     try {
+      console.log("[Checkout] submit start", {
+        planId,
+        interval,
+        domain: cleanDomain(domain),
+        wfSiteId: wfSiteId || null,
+        platform: platform || null,
+        separateBilling,
+        hasCoupon: !!appliedCoupon,
+      });
       const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
-        type: 'card',
+        type: "card",
         card: cardEl,
         billing_details: {
           email: separateBilling ? billingEmail.trim() : email.trim(),
@@ -559,7 +633,7 @@ function CheckoutForm({
       });
 
       if (pmErr) {
-        setError(pmErr.message || 'Card error. Please check your details.');
+        setError(pmErr.message || "Card error. Please check your details.");
         setIsSubmitting(false);
         return;
       }
@@ -567,23 +641,37 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
-      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethodId: paymentMethod!.id,
-          email: email.trim().toLowerCase(),
-          billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
-          domain: cleanedDomain,
-          siteName: cleanedDomain,
-          planId,
-          interval,
-          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
-        }),
+      console.log("[Checkout] phase 1 → POST /api/custom-checkout", {
+        paymentMethodId: paymentMethod?.id,
       });
+      const res = await fetch(
+        "https://manager.consentbit.com/api/custom-checkout",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentMethodId: paymentMethod!.id,
+            email: email.trim().toLowerCase(),
+            billingEmail: separateBilling
+              ? billingEmail.trim().toLowerCase()
+              : email.trim().toLowerCase(),
+            domain: cleanedDomain,
+            siteName: cleanedDomain,
+            planId,
+            interval,
+            ...(appliedCoupon
+              ? { promotionCodeId: appliedCoupon.promotionCodeId }
+              : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || "webflow" } : {}),
+          }),
+        },
+      );
 
+      console.log("[Checkout] phase 1 ← response", {
+        ok: res.ok,
+        status: res.status,
+      });
       const data = (await parseApiResponse(res)) as {
         success: boolean;
         error?: string;
@@ -592,97 +680,163 @@ function CheckoutForm({
         subscriptionId?: string;
       };
       if (!data.success) {
-        setError(data.error || 'Something went wrong. Please try again.');
+        console.warn("[Checkout] phase 1 not successful", {
+          status: res.status,
+          error: data.error,
+        });
+        setError(data.error || "Something went wrong. Please try again.");
         setIsSubmitting(false);
         return;
       }
 
       // Phase 2 — 3D Secure confirmation required
       if (data.requiresAction && data.clientSecret) {
-        const { error: confirmErr } = await stripe.confirmCardPayment(data.clientSecret);
+        console.log("[Checkout] phase 2 → 3DS required, confirming card", {
+          subscriptionId: data.subscriptionId,
+        });
+        const { error: confirmErr } = await stripe.confirmCardPayment(
+          data.clientSecret,
+        );
         if (confirmErr) {
-          setError(confirmErr.message || '3D Secure verification failed. Please try another card.');
+          console.warn("[Checkout] phase 2 3DS confirm failed", confirmErr);
+          setError(
+            confirmErr.message ||
+              "3D Secure verification failed. Please try another card.",
+          );
           setIsSubmitting(false);
           return;
         }
 
-        const res2 = await fetch('/api/custom-checkout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            subscriptionId: data.subscriptionId,
-            email: email.trim().toLowerCase(),
-            billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
-            domain: cleanedDomain,
-            siteName: cleanedDomain,
-            planId,
-            interval,
-            ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
-            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
-          }),
-        });
+        console.log("[Checkout] phase 2 → POST /api/custom-checkout (confirm)");
+        const res2 = await fetch(
+          "https://manager.consentbit.com/api/custom-checkout",
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subscriptionId: data.subscriptionId,
+              email: email.trim().toLowerCase(),
+              billingEmail: separateBilling
+                ? billingEmail.trim().toLowerCase()
+                : email.trim().toLowerCase(),
+              domain: cleanedDomain,
+              siteName: cleanedDomain,
+              planId,
+              interval,
+              ...(appliedCoupon
+                ? { promotionCodeId: appliedCoupon.promotionCodeId }
+                : {}),
+              ...(wfSiteId
+                ? { wfSiteId, platform: platform || "webflow" }
+                : {}),
+            }),
+          },
+        );
 
-        const d2 = (await parseApiResponse(res2)) as { success: boolean; error?: string };
-        
+        console.log("[Checkout] phase 2 ← response", {
+          ok: res2.ok,
+          status: res2.status,
+        });
+        const d2 = (await parseApiResponse(res2)) as {
+          success: boolean;
+          error?: string;
+        };
+
         if (!d2.success) {
-          setError(d2.error || 'Account setup failed after payment. Please contact support.');
+          console.warn("[Checkout] phase 2 not successful", {
+            status: res2.status,
+            error: d2.error,
+          });
+          setError(
+            d2.error ||
+              "Account setup failed after payment. Please contact support.",
+          );
           setIsSubmitting(false);
           return;
         }
       }
 
+      console.log("[Checkout] success");
       setShowSuccess(true);
       setIsSubmitting(false);
-    } catch {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (err) {
+      // Surface the real cause — a bare message here hid network/CORS/Stripe.js failures.
+      const e = err as {
+        name?: string;
+        message?: string;
+        type?: string;
+        code?: string;
+      };
+      console.error("[Checkout] submit threw", {
+        name: e?.name,
+        message: e?.message,
+        type: e?.type,
+        code: e?.code,
+        error: err,
+      });
+      const detail = e?.message ? ` (${e.message})` : "";
+      setError(`An unexpected error occurred. Please try again.${detail}`);
       setIsSubmitting(false);
     }
   }
 
   const platformLabel =
-    PLATFORM_LABELS[platform.toLowerCase()] || (platform ? platform : '');
+    PLATFORM_LABELS[platform.toLowerCase()] || (platform ? platform : "");
 
   return (
     <>
-    {showSuccess && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fadeIn"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold text-gray-900">You&apos;re all set!</h2>
-          <p className="mt-1.5 text-sm text-gray-600">
-            Your 14-day free trial has started. No charge until {trialEndLabel()}.
-          </p>
-          <div className="mt-5 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard?postSetup=1')}
-              className="w-full rounded-[10px] bg-[#262E84] py-3 text-sm font-semibold text-white transition hover:bg-[#1e246c]"
-            >
-              Go to dashboard →
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSuccess(false)}
-              className="w-full rounded-[10px] border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
-            >
-              Stay on this page
-            </button>
+      {showSuccess && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fadeIn"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+              <svg
+                className="h-8 w-8 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              You&apos;re all set!
+            </h2>
+            <p className="mt-1.5 text-sm text-gray-600">
+              Your 14-day free trial has started. No charge until{" "}
+              {trialEndLabel()}.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => router.push("/dashboard?postSetup=1")}
+                className="w-full rounded-[10px] bg-[#262E84] py-3 text-sm font-semibold text-white transition hover:bg-[#1e246c]"
+              >
+                Go to dashboard →
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSuccess(false)}
+                className="w-full rounded-[10px] border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Stay on this page
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Platform badge */}
-      {/* {platformLabel && (
+      )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Platform badge */}
+        {/* {platformLabel && (
         <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#262E84] text-sm font-bold text-white">
             {platformLabel[0]}
@@ -698,500 +852,624 @@ function CheckoutForm({
         </div>
       )} */}
 
-      {/* 1 — Your account (locked, synced from URL params) */}
-      <FormSection n={1} title="Your account">
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">
-            {platformLabel
-              ? `We've set up your account automatically using your ${platformLabel} identity and site.`
-              : "We've set up your account automatically using your identity and site."}
-          </p>
+        {/* 1 — Your account (locked, synced from URL params) */}
+        <FormSection n={1} title="Your account">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              {platformLabel
+                ? `We've set up your account automatically using your ${platformLabel} identity and site.`
+                : "We've set up your account automatically using your identity and site."}
+            </p>
 
-          {/* Account email — read-only by default with Edit toggle */}
-          {!editEmail ? (
-            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
-                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Account email</p>
-                <p className="text-sm font-semibold text-gray-900 truncate">{email || '—'}</p>
-              </div>
-              <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
-                Verified
-              </span>
-              <button
-                type="button"
-                onClick={() => setEditEmail(true)}
-                className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#262E84] hover:bg-gray-50"
-              >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit
-              </button>
-            </div>
-          ) : (
-            <Field label="Account email" error={fieldErrors.email}>
-              <div className="flex items-center gap-2">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => handleEmailChange(e.target.value)}
-                  placeholder="you@example.com"
-                  autoFocus
-                  className={inputCls(!!fieldErrors.email)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setEditEmail(false)}
-                  className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-                >
-                  Done
-                </button>
-              </div>
-            </Field>
-          )}
-
-          {/* Domain card */}
-          <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
-              <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <circle cx="12" cy="12" r="9" />
-                <path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Domain</p>
-              <p className="text-sm font-semibold text-gray-900 truncate">{domain || '—'}</p>
-            </div>
-            {platformLabel && (
-              <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-[#262E84]">
-                <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#262E84] text-white text-[9px] font-bold">
-                  {platformLabel[0]}
-                </span>
-                {platformLabel}
-              </span>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-500">
-            {platformLabel
-              ? `Synced from your connected ${platformLabel} site.`
-              : 'Loaded from your session.'}
-          </p>
-        </div>
-      </FormSection>
-
-      {/* 2 — Billing contact */}
-      <FormSection n={2} title="Billing contact">
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">
-            By default we send Stripe invoices to your account email. Uncheck to use a different address.
-          </p>
-          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={!separateBilling}
-              onChange={e => handleSeparateBillingChange(!e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 accent-[#262E84]"
-            />
-            <span className="font-medium">Use account email for billing as well</span>
-          </label>
-          <Field label="Billing email" error={fieldErrors.billingEmail}>
-            <input
-              type="email"
-              value={billingEmail}
-              disabled={!separateBilling}
-              onChange={e => {
-                setBillingEmail(e.target.value);
-                clearErr('billingEmail');
-              }}
-              placeholder="billing@company.com"
-              className={inputCls(!!fieldErrors.billingEmail, !separateBilling)}
-            />
-          </Field>
-        </div>
-      </FormSection>
-
-      {/* 3 — Choose a plan */}
-      <FormSection n={3} title="Choose a plan">
-        {/* Interval toggle */}
-        <div className="mb-4 flex w-fit items-center gap-0.5 rounded-lg bg-gray-100 p-1">
-          {(['monthly', 'yearly'] as Interval[]).map(i => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onIntervalChange(i)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
-                interval === i
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {i === 'monthly' ? 'Monthly' : 'Yearly'}
-              {i === 'yearly' && (
-                <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                  SAVE 20%
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Plan cards */}
-        <div className="space-y-2">
-          {(Object.entries(PLANS) as [PlanId, PlanConfig][]).map(([id, p]) => {
-            const active = planId === id;
-            const price = interval === 'yearly' ? p.yearly : p.monthly;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onPlanChange(id)}
-                className={`relative w-full rounded-xl border-2 p-4 text-left transition-all ${
-                  active
-                    ? 'border-[#262E84] bg-[#262E84]/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {p.popular && (
-                  <span className="absolute -top-2.5 left-4 rounded-full bg-[#262E84] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                    Most popular
-                  </span>
-                )}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
-                        active ? 'border-[#262E84]' : 'border-gray-300'
-                      }`}
-                    >
-                      {active && <div className="h-2 w-2 rounded-full bg-[#262E84]" />}
-                    </div>
-                    <div>
-                      <p
-                        className={`text-sm font-semibold ${
-                          active ? 'text-[#262E84]' : 'text-gray-900'
-                        }`}
-                      >
-                        {p.name}
-                      </p>
-                      {/* <p className="text-xs text-gray-400 invisible">
-                        {p.domains} {p.domains === 1 ? 'domain' : 'domains'}
-                      </p> */}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-lg font-bold ${
-                        active ? 'text-[#262E84]' : 'text-gray-900'
-                      }`}
-                    >
-                      ${price}
-                      <span className="text-xs font-normal text-gray-400">/mo</span>
-                    </p>
-                    {interval === 'yearly' && (
-                      <p className="text-[10px] text-gray-400">billed ${p.yearlyTotal}/yr</p>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </FormSection>
-
-      {/* Coupon code ─────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <button
-          type="button"
-          onClick={() => setShowCoupon(s => !s)}
-          className="flex w-full items-center justify-between text-sm font-medium text-[#262E84] hover:text-[#1e246c]"
-        >
-          <span className="flex items-center gap-2">
-            {/* ticket icon */}
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-            </svg>
-            Have a coupon code?
-            {appliedCoupon && (
-              <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Applied
-              </span>
-            )}
-          </span>
-          {/* chevron */}
-          <svg
-            className={`h-4 w-4 transition-transform ${showCoupon ? 'rotate-180' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {showCoupon && (
-          <div className="mt-3 space-y-2">
-            {appliedCoupon ? (
-              /* Applied state */
-              <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            {/* Account email — read-only by default with Edit toggle */}
+            {!editEmail ? (
+              <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+                  <svg
+                    className="h-4 w-4 text-gray-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
                   </svg>
-                  <div>
-                    <p className="text-sm font-semibold text-green-800">
-                      {appliedCoupon.percentOff != null
-                        ? `${appliedCoupon.percentOff}% discount applied`
-                        : appliedCoupon.amountOff != null
-                        ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} discount applied`
-                        : 'Discount applied'}
-                    </p>
-                    {appliedCoupon.duration === 'once' && (
-                      <p className="text-xs text-green-600">Applied to first billing cycle</p>
-                    )}
-                    {appliedCoupon.duration === 'repeating' && appliedCoupon.durationInMonths && (
-                      <p className="text-xs text-green-600">
-                        Applied for {appliedCoupon.durationInMonths} month
-                        {appliedCoupon.durationInMonths > 1 ? 's' : ''}
-                      </p>
-                    )}
-                    {appliedCoupon.duration === 'forever' && (
-                      <p className="text-xs text-green-600">Applied forever</p>
-                    )}
-                  </div>
                 </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Account email
+                  </p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {email || "—"}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+                  Verified
+                </span>
                 <button
                   type="button"
-                  onClick={removeCoupon}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                  onClick={() => setEditEmail(true)}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#262E84] hover:bg-gray-50"
                 >
-                  Remove
+                  <svg
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  Edit
                 </button>
               </div>
             ) : (
-              /* Input state */
-              <>
-                <div className="flex gap-2">
+              <Field label="Account email" error={fieldErrors.email}>
+                <div className="flex items-center gap-2">
                   <input
-                    type="text"
-                    value={couponInput}
-                    onChange={e => {
-                      setCouponInput(e.target.value.toUpperCase());
-                      if (couponError) setCouponError('');
-                    }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void applyCoupon(); } }}
-                    placeholder="Enter coupon code"
-                    className={[
-                      'flex-1 min-w-0 rounded-lg border px-3 py-2.5 text-sm font-mono tracking-wider outline-none transition uppercase',
-                      'focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20',
-                      couponError ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white',
-                    ].join(' ')}
-                    autoComplete="off"
-                    spellCheck={false}
+                    type="email"
+                    value={email}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    placeholder="you@example.com"
+                    autoFocus
+                    className={inputCls(!!fieldErrors.email)}
                   />
                   <button
                     type="button"
-                    onClick={applyCoupon}
-                    disabled={couponLoading || !couponInput.trim()}
-                    className="shrink-0 rounded-lg bg-[#262E84] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setEditEmail(false)}
+                    className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                   >
-                    {couponLoading ? (
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    ) : (
-                      'Apply'
-                    )}
+                    Done
                   </button>
                 </div>
+              </Field>
+            )}
 
-                {couponError && (
-                  <div className="flex items-center gap-1.5 text-xs text-red-500">
-                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <circle cx="12" cy="12" r="9" />
-                      <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
-                    </svg>
-                    {couponError}
-                  </div>
+            {/* Domain card */}
+            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+                <svg
+                  className="h-4 w-4 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path
+                    strokeLinecap="round"
+                    d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Domain
+                </p>
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {domain || "—"}
+                </p>
+              </div>
+              {platformLabel && (
+                <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-[#262E84]">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#262E84] text-white text-[9px] font-bold">
+                    {platformLabel[0]}
+                  </span>
+                  {platformLabel}
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500">
+              {platformLabel
+                ? `Synced from your connected ${platformLabel} site.`
+                : "Loaded from your session."}
+            </p>
+          </div>
+        </FormSection>
+
+        {/* 2 — Billing contact */}
+        <FormSection n={2} title="Billing contact">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              By default we send Stripe invoices to your account email. Uncheck
+              to use a different address.
+            </p>
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={!separateBilling}
+                onChange={(e) => handleSeparateBillingChange(!e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 accent-[#262E84]"
+              />
+              <span className="font-medium">
+                Use account email for billing as well
+              </span>
+            </label>
+            <Field label="Billing email" error={fieldErrors.billingEmail}>
+              <input
+                type="email"
+                value={billingEmail}
+                disabled={!separateBilling}
+                onChange={(e) => {
+                  setBillingEmail(e.target.value);
+                  clearErr("billingEmail");
+                }}
+                placeholder="billing@company.com"
+                className={inputCls(
+                  !!fieldErrors.billingEmail,
+                  !separateBilling,
                 )}
-              </>
+              />
+            </Field>
+          </div>
+        </FormSection>
+
+        {/* 3 — Choose a plan */}
+        <FormSection n={3} title="Choose a plan">
+          {/* Interval toggle */}
+          <div className="mb-4 flex w-fit items-center gap-0.5 rounded-lg bg-gray-100 p-1">
+            {(["monthly", "yearly"] as Interval[]).map((i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onIntervalChange(i)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
+                  interval === i
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {i === "monthly" ? "Monthly" : "Yearly"}
+                {i === "yearly" && (
+                  <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                    SAVE 20%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Plan cards */}
+          <div className="space-y-2">
+            {(Object.entries(PLANS) as [PlanId, PlanConfig][]).map(
+              ([id, p]) => {
+                const active = planId === id;
+                const price = interval === "yearly" ? p.yearly : p.monthly;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onPlanChange(id)}
+                    className={`relative w-full rounded-xl border-2 p-4 text-left transition-all ${
+                      active
+                        ? "border-[#262E84] bg-[#262E84]/5"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {p.popular && (
+                      <span className="absolute -top-2.5 left-4 rounded-full bg-[#262E84] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        Most popular
+                      </span>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
+                            active ? "border-[#262E84]" : "border-gray-300"
+                          }`}
+                        >
+                          {active && (
+                            <div className="h-2 w-2 rounded-full bg-[#262E84]" />
+                          )}
+                        </div>
+                        <div>
+                          <p
+                            className={`text-sm font-semibold ${
+                              active ? "text-[#262E84]" : "text-gray-900"
+                            }`}
+                          >
+                            {p.name}
+                          </p>
+                          {/* <p className="text-xs text-gray-400 invisible">
+                        {p.domains} {p.domains === 1 ? 'domain' : 'domains'}
+                      </p> */}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`text-lg font-bold ${
+                            active ? "text-[#262E84]" : "text-gray-900"
+                          }`}
+                        >
+                          ${price}
+                          <span className="text-xs font-normal text-gray-400">
+                            /mo
+                          </span>
+                        </p>
+                        {interval === "yearly" && (
+                          <p className="text-[10px] text-gray-400">
+                            billed ${p.yearlyTotal}/yr
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              },
             )}
           </div>
-        )}
-      </div>
+        </FormSection>
 
-      {/* 4 — Payment details */}
-      <FormSection n={4} title="Payment details">
-        <div className="space-y-3">
-          {/* Card logos */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white">
-              <span className="text-[10px] font-bold italic tracking-tight text-[#1a1f71]">
-                VISA
-              </span>
-            </div>
-            <div className="relative flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white overflow-hidden">
-              <div className="absolute left-2 h-4 w-4 rounded-full bg-[#eb001b]" />
-              <div className="absolute left-4 h-4 w-4 rounded-full bg-[#f79e1b] opacity-90" />
-            </div>
-            <div className="flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white">
-              <span className="text-[10px] font-semibold tracking-tight text-[#6772e5]">
-                stripe
-              </span>
-            </div>
-          </div>
-
-          <Field label="Card number">
-            <div className={stripeFieldCls}>
-              <CardNumberElement options={STRIPE_STYLE} />
-            </div>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Expiry">
-              <div className={stripeFieldCls}>
-                <CardExpiryElement options={STRIPE_STYLE} />
-              </div>
-            </Field>
-            <Field label="CVV">
-              <div className={stripeFieldCls}>
-                <CardCvcElement options={STRIPE_STYLE} />
-              </div>
-            </Field>
-          </div>
-
-          <Field label="Name on card" error={fieldErrors.nameOnCard}>
-            <input
-              type="text"
-              value={nameOnCard}
-              onChange={e => {
-                setNameOnCard(e.target.value);
-                clearErr('nameOnCard');
-              }}
-              placeholder="Jane Smith"
-              className={inputCls(!!fieldErrors.nameOnCard)}
-            />
-          </Field>
-
-          <Field label="Country">
-            <select
-              value={country}
-              onChange={e => setCountry(e.target.value)}
-              className={inputCls(false)}
-            >
-              {COUNTRIES.map(c => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </FormSection>
-
-      {/* 5 — Coupon (optional) */}
-      <FormSection n={5} title="Have a coupon?">
-        {appliedCoupon ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-green-800 truncate">
-                {appliedCoupon.code} applied
-              </p>
-              <p className="text-xs text-green-700">
-                {appliedCoupon.percentOff != null
-                  ? `${appliedCoupon.percentOff}% off your first charge`
-                  : appliedCoupon.amountOff != null
-                    ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} off your first charge`
-                    : 'Discount applied'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={removeCoupon}
-              className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <Field label="Coupon code" error={couponError}>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={couponInput}
-                onChange={e => {
-                  setCouponInput(e.target.value);
-                  if (couponError) setCouponError('');
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    applyCoupon();
-                  }
-                }}
-                placeholder="Enter coupon code"
-                disabled={couponLoading}
-                className={inputCls(!!couponError, couponLoading)}
-              />
-              <button
-                type="button"
-                onClick={applyCoupon}
-                disabled={couponLoading || !couponInput.trim()}
-                className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+        {/* Coupon code ─────────────────────────────────────────────────────── */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <button
+            type="button"
+            onClick={() => setShowCoupon((s) => !s)}
+            className="flex w-full items-center justify-between text-sm font-medium text-[#262E84] hover:text-[#1e246c]"
+          >
+            <span className="flex items-center gap-2">
+              {/* ticket icon */}
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.8}
               >
-                {couponLoading ? 'Checking…' : 'Apply'}
-              </button>
-            </div>
-          </Field>
-        )}
-      </FormSection>
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <button
-          type="submit"
-          disabled={isSubmitting || !stripe}
-          className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSubmitting ? (
-            <>
-              <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
                 <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"
                 />
               </svg>
-              Processing…
-            </>
-          ) : (
-            'Start 14-day free trial →'
+              Have a coupon code?
+              {appliedCoupon && (
+                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                  <svg
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Applied
+                </span>
+              )}
+            </span>
+            {/* chevron */}
+            <svg
+              className={`h-4 w-4 transition-transform ${showCoupon ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+
+          {showCoupon && (
+            <div className="mt-3 space-y-2">
+              {appliedCoupon ? (
+                /* Applied state */
+                <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="h-4 w-4 shrink-0 text-green-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-green-800">
+                        {appliedCoupon.percentOff != null
+                          ? `${appliedCoupon.percentOff}% discount applied`
+                          : appliedCoupon.amountOff != null
+                            ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} discount applied`
+                            : "Discount applied"}
+                      </p>
+                      {appliedCoupon.duration === "once" && (
+                        <p className="text-xs text-green-600">
+                          Applied to first billing cycle
+                        </p>
+                      )}
+                      {appliedCoupon.duration === "repeating" &&
+                        appliedCoupon.durationInMonths && (
+                          <p className="text-xs text-green-600">
+                            Applied for {appliedCoupon.durationInMonths} month
+                            {appliedCoupon.durationInMonths > 1 ? "s" : ""}
+                          </p>
+                        )}
+                      {appliedCoupon.duration === "forever" && (
+                        <p className="text-xs text-green-600">
+                          Applied forever
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                /* Input state */
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponInput}
+                      onChange={(e) => {
+                        setCouponInput(e.target.value.toUpperCase());
+                        if (couponError) setCouponError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void applyCoupon();
+                        }
+                      }}
+                      placeholder="Enter coupon code"
+                      className={[
+                        "flex-1 min-w-0 rounded-lg border px-3 py-2.5 text-sm font-mono tracking-wider outline-none transition uppercase",
+                        "focus:border-[#262E84] focus:ring-2 focus:ring-[#262E84]/20",
+                        couponError
+                          ? "border-red-400 bg-red-50"
+                          : "border-gray-300 bg-white",
+                      ].join(" ")}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      disabled={couponLoading || !couponInput.trim()}
+                      className="shrink-0 rounded-lg bg-[#262E84] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {couponLoading ? (
+                        <svg
+                          className="h-4 w-4 animate-spin"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                      ) : (
+                        "Apply"
+                      )}
+                    </button>
+                  </div>
+
+                  {couponError && (
+                    <div className="flex items-center gap-1.5 text-xs text-red-500">
+                      <svg
+                        className="h-3.5 w-3.5 shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+                      </svg>
+                      {couponError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
-        </button>
-        <p className="text-center text-xs text-gray-400">
-          No charge for 14 days · Cancel anytime · Free during the trial
-        </p>
-      </div>
-    </form>
+        </div>
+
+        {/* 4 — Payment details */}
+        <FormSection n={4} title="Payment details">
+          <div className="space-y-3">
+            {/* Card logos */}
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white">
+                <span className="text-[10px] font-bold italic tracking-tight text-[#1a1f71]">
+                  VISA
+                </span>
+              </div>
+              <div className="relative flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white overflow-hidden">
+                <div className="absolute left-2 h-4 w-4 rounded-full bg-[#eb001b]" />
+                <div className="absolute left-4 h-4 w-4 rounded-full bg-[#f79e1b] opacity-90" />
+              </div>
+              <div className="flex h-7 w-11 items-center justify-center rounded border border-gray-200 bg-white">
+                <span className="text-[10px] font-semibold tracking-tight text-[#6772e5]">
+                  stripe
+                </span>
+              </div>
+            </div>
+
+            <Field label="Card number">
+              <div className={stripeFieldCls}>
+                <CardNumberElement options={STRIPE_STYLE} />
+              </div>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Expiry">
+                <div className={stripeFieldCls}>
+                  <CardExpiryElement options={STRIPE_STYLE} />
+                </div>
+              </Field>
+              <Field label="CVV">
+                <div className={stripeFieldCls}>
+                  <CardCvcElement options={STRIPE_STYLE} />
+                </div>
+              </Field>
+            </div>
+
+            <Field label="Name on card" error={fieldErrors.nameOnCard}>
+              <input
+                type="text"
+                value={nameOnCard}
+                onChange={(e) => {
+                  setNameOnCard(e.target.value);
+                  clearErr("nameOnCard");
+                }}
+                placeholder="Jane Smith"
+                className={inputCls(!!fieldErrors.nameOnCard)}
+              />
+            </Field>
+
+            <Field label="Country">
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className={inputCls(false)}
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </FormSection>
+
+        {/* 5 — Coupon (optional) */}
+        <FormSection n={5} title="Have a coupon?">
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-green-800 truncate">
+                  {appliedCoupon.code} applied
+                </p>
+                <p className="text-xs text-green-700">
+                  {appliedCoupon.percentOff != null
+                    ? `${appliedCoupon.percentOff}% off your first charge`
+                    : appliedCoupon.amountOff != null
+                      ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} off your first charge`
+                      : "Discount applied"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={removeCoupon}
+                className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <Field label="Coupon code" error={couponError}>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => {
+                    setCouponInput(e.target.value);
+                    if (couponError) setCouponError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyCoupon();
+                    }
+                  }}
+                  placeholder="Enter coupon code"
+                  disabled={couponLoading}
+                  className={inputCls(!!couponError, couponLoading)}
+                />
+                <button
+                  type="button"
+                  onClick={applyCoupon}
+                  disabled={couponLoading || !couponInput.trim()}
+                  className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {couponLoading ? "Checking…" : "Apply"}
+                </button>
+              </div>
+            </Field>
+          )}
+        </FormSection>
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <button
+            type="submit"
+            disabled={isSubmitting || !stripe}
+            className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#262E84] py-3.5 text-base font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? (
+              <>
+                <svg
+                  className="h-5 w-5 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+                Processing…
+              </>
+            ) : (
+              "Start 14-day free trial →"
+            )}
+          </button>
+          <p className="text-center text-xs text-gray-400">
+            No charge for 14 days · Cancel anytime · Free during the trial
+          </p>
+        </div>
+      </form>
     </>
   );
 }
@@ -1201,37 +1479,57 @@ function CheckoutForm({
 function CheckoutPageInner() {
   const params = useSearchParams();
 
-  const rawPlan = params.get('plan') ?? 'essential';
-  const rawInterval = params.get('interval') ?? 'monthly';
+  const rawPlan = params.get("plan") ?? "essential";
+  const rawInterval = params.get("interval") ?? "monthly";
 
   const [planId, setPlanId] = useState<PlanId>(
-    VALID_PLANS.has(rawPlan as PlanId) ? (rawPlan as PlanId) : 'essential',
+    VALID_PLANS.has(rawPlan as PlanId) ? (rawPlan as PlanId) : "essential",
   );
   const [interval, setInterval] = useState<Interval>(
-    rawInterval === 'yearly' ? 'yearly' : 'monthly',
+    rawInterval === "yearly" ? "yearly" : "monthly",
   );
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
+    null,
+  );
 
-  const rawD = params.get('d') ?? '';
+  const rawD = params.get("d") ?? "";
   let decoded: Record<string, string> = {};
   if (rawD) {
-    try { decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rawD))))); } catch { try { decoded = JSON.parse(atob(decodeURIComponent(rawD))); } catch { /* use raw params */ } }
+    try {
+      decoded = JSON.parse(
+        decodeURIComponent(escape(atob(decodeURIComponent(rawD)))),
+      );
+    } catch {
+      try {
+        decoded = JSON.parse(atob(decodeURIComponent(rawD)));
+      } catch {
+        /* use raw params */
+      }
+    }
   }
 
-  const email = (decoded.email ?? params.get('email') ?? '').trim().toLowerCase();
-  const domain = cleanDomain(decoded.domain ?? params.get('domain') ?? '');
-  const platform = decoded.platform ?? params.get('platform') ?? '';
-  const wfSiteId = decoded.platformId ?? params.get('platformId') ?? params.get('wfSiteId') ?? '';
-  const initBillingEmail = (decoded.billingEmail ?? '').trim().toLowerCase();
+  const email = (decoded.email ?? params.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const domain = cleanDomain(decoded.domain ?? params.get("domain") ?? "");
+  const platform = decoded.platform ?? params.get("platform") ?? "";
+  const wfSiteId =
+    decoded.platformId ??
+    params.get("platformId") ??
+    params.get("wfSiteId") ??
+    "";
+  const initBillingEmail = (decoded.billingEmail ?? "").trim().toLowerCase();
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] py-10 px-4">
       <div className="mx-auto max-w-5xl">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <img alt="Consentbit" className="mx-auto w-[100px] xl:w-[170px] h-auto" src="/images/ConsentBit-logo-Dark.png"></img>
-        
-       
+          <img
+            alt="Consentbit"
+            className="mx-auto w-[100px] xl:w-[170px] h-auto"
+            src="/images/ConsentBit-logo-Dark.png"
+          ></img>
         </div>
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_340px]">
@@ -1256,10 +1554,10 @@ function CheckoutPageInner() {
             ) : (
               <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
                 <p className="text-sm text-red-600">
-                  Payment system misconfigured — set{' '}
+                  Payment system misconfigured — set{" "}
                   <code className="rounded bg-red-100 px-1 font-mono text-xs">
                     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-                  </code>{' '}
+                  </code>{" "}
                   in your environment.
                 </p>
               </div>
@@ -1268,7 +1566,11 @@ function CheckoutPageInner() {
 
           {/* Summary — shows above form on mobile */}
           <div className="order-first lg:order-last">
-            <OrderSummary planId={planId} interval={interval} appliedCoupon={appliedCoupon} />
+            <OrderSummary
+              planId={planId}
+              interval={interval}
+              appliedCoupon={appliedCoupon}
+            />
           </div>
         </div>
       </div>
@@ -1277,6 +1579,7 @@ function CheckoutPageInner() {
 }
 
 export default function CheckoutPage() {
+  console.log("[CheckoutPage] render");
   return (
     <Suspense
       fallback={

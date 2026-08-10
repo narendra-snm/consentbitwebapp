@@ -110,55 +110,58 @@ export const analytics = {
     });
   },
 
-  // Step 8 — a plan card was selected in the dashboard pricing menu. `cycle` is
-  // normalized to "monthly" | "annual"; `price` is the displayed monthly amount.
-  planSelected(planId: string, cycle: string, price: number, siteId?: string) {
+  // Step 8 — a plan card was selected in the dashboard pricing menu.
+  planSelected(
+    planTier: "free" | "basic" | "essential" | "growth",
+    billingCycle: "monthly" | "annual",
+    planPrice: number | string,
+    siteId?: string
+  ) {
     posthog.capture("plan_selected", {
-      plan_tier: planId,
-      billing_cycle: cycle,
-      plan_price: String(price),
+      plan_tier: planTier,
+      billing_cycle: billingCycle,
+      plan_price: String(planPrice),
       site_id: siteId,
       platform: "webapp",
     });
     gaEvent("plan_selected", {
-      plan_tier: planId,
-      billing_cycle: cycle,
-      plan_price: String(price),
+      plan_tier: planTier,
+      billing_cycle: billingCycle,
+      plan_price: String(planPrice),
       site_id: siteId,
       platform: "webapp",
     });
   },
 
   // Step 9 — final "Proceed to checkout" / "Start Trial" click before Stripe.
-  checkoutInitiated(planId: string, siteId?: string, cycle?: string) {
+  checkoutInitiated(
+    planTier: "basic" | "essential" | "growth",
+    siteId?: string,
+    billingCycle?: "monthly" | "annual"
+  ) {
     posthog.capture("checkout_initiated", {
-      plan_tier: planId,
+      plan_tier: planTier,
+      ...(billingCycle ? { billing_cycle: billingCycle } : {}),
       site_id: siteId,
-      billing_cycle: cycle,
       platform: "webapp",
     });
     gaEvent("checkout_initiated", {
-      plan_tier: planId,
+      plan_tier: planTier,
+      billing_cycle: billingCycle,
       site_id: siteId,
-      billing_cycle: cycle,
       platform: "webapp",
     });
   },
 
   // Step 11 — success / confirmation page mount.
-  thankYouPageViewed(props: {
-    site_id?: string;
-    plan_tier?: string;
-    billing_cycle?: string;
-    domain?: string;
-  }) {
+  thankYouPageViewed(context?: Record<string, unknown>) {
     posthog.capture("thank_you_page_viewed", {
-      ...props,
       platform: "webapp",
+      ...(context || {}),
     });
     gaEvent("thank_you_page_viewed", {
-      ...(props as GaParams),
       platform: "webapp",
+      ...(context as GaParams | undefined),
     });
   },
 

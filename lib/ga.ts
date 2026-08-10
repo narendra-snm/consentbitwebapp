@@ -1,24 +1,16 @@
 "use client";
 
 /**
- * Thin GA4 (gtag.js) wrapper for the TEST webapp. The gtag snippet itself is
- * loaded once in app/layout.tsx; this module only pushes events into it.
+ * Thin GA4 (gtag.js) wrapper. The gtag snippet itself is loaded once in
+ * app/layout.tsx; this module only pushes events into it.
  *
  * IMPORTANT — Google forbids sending PII (email, name, raw user identifiers) to
  * GA4. Every helper here takes only non-PII parameters; the user is identified
  * by a SHA-256 hash of their email via `user_id`, never the address itself.
- *
- * NOTE — this app shares the production measurement ID, so every event is
- * auto-tagged `environment: "test"`. Register `environment` as a custom
- * dimension in GA4 and filter on it to keep test traffic out of real reports.
  */
 
 // Must match the gtag('config', ...) id in app/layout.tsx.
 export const GA_MEASUREMENT_ID = "G-GMTRK01CHJ";
-
-// Distinguishes this app's hits from the production webapp inside the shared
-// GA4 property. Change to "production" only if this code is ever promoted.
-export const GA_ENVIRONMENT = "test";
 
 type GaValue = string | number | boolean;
 export type GaParams = Record<string, GaValue | null | undefined>;
@@ -52,11 +44,7 @@ function clean(params: GaParams): Record<string, GaValue> {
 
 /** Send a GA4 custom event. Name must be snake_case, <= 40 chars. */
 export function gaEvent(name: string, params: GaParams = {}) {
-  push("event", name, {
-    ...clean(params),
-    environment: GA_ENVIRONMENT,
-    send_to: GA_MEASUREMENT_ID,
-  });
+  push("event", name, { ...clean(params), send_to: GA_MEASUREMENT_ID });
 }
 
 /**

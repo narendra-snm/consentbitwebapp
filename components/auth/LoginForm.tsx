@@ -91,6 +91,11 @@ export function LoginForm() {
 
     setError(null);
     setLoading(true);
+    // router.replace() is fire-and-forget: it starts the transition and returns
+    // immediately. Clearing `loading` afterwards would drop the button out of its
+    // pending state while /dashboard (a force-dynamic route) is still loading,
+    // leaving the UI looking idle for ~1s before the page swaps.
+    let navigating = false;
     try {
       if (step === 1) {
         await requestVerificationCode({ email, purpose: 'login' });
@@ -102,7 +107,10 @@ export function LoginForm() {
         clearScanId();
         analytics.identify(email, '');
         analytics.authEmailSubmitted(email);
-        router.push(nextPath);
+        navigating = true;
+        // replace, not push — a logged-in user pressing Back should not land
+        // back on the login screen.
+        router.replace(nextPath);
       }
     } catch (err: unknown) {
       if (step === 2) setVerifyFailed(true);
@@ -114,7 +122,9 @@ export function LoginForm() {
           : 'Invalid or expired code. Please try again.'
       );
     } finally {
-      setLoading(false);
+      // Stay in the loading state through the route transition; this component
+      // unmounts when it commits.
+      if (!navigating) setLoading(false);
     }
   };
 

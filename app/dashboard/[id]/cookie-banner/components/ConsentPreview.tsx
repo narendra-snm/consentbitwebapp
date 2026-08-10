@@ -9,6 +9,7 @@ import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 import type { BannerLayoutValue } from './bannerAppearance';
 import { pxBorderRadiusToRem, weightLabelToNumeric } from './bannerAppearance';
 import {CookieConsentBanner} from "./Iab"
+import PoweredByFooter from "./PoweredByFooter";
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
@@ -983,13 +984,17 @@ export default function ConsentPreview({
                   {safeContent.saveMyPreferencesLabel || t("save")}
                 </button>
               </div>
+
+              {/* Powered by ConsentBit */}
+              <PoweredByFooter />
             </div>
           ) : (
             <div
               key={`ccpa-optout-${bannerAnimation}`}
-              className="relative rounded-md shadow-lg w-full min-w-0 p-4 border border-[#e2e8f0]"
+              className="relative rounded-md shadow-lg w-full min-w-0 border border-[#e2e8f0] overflow-hidden"
               style={{ backgroundColor: colors.bannerBg, borderRadius: `${initialLayout?.borderRadius ?? 12}px`, ...previewAnimStyle }}
             >
+              <div className="p-4">
               {content?.closeButton ? (
                 <button
                   className="absolute top-3 right-3 opacity-70 cursor-pointer leading-none"
@@ -1056,6 +1061,10 @@ export default function ConsentPreview({
                   {content?.saveMyPreferencesLabel || t("saveMyPreferences")}
                 </button>
               </div>
+              </div>
+
+              {/* Powered by ConsentBit */}
+              <PoweredByFooter />
             </div>
           )}
             </div>

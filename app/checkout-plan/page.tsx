@@ -438,8 +438,9 @@ function CheckoutForm({
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    // Guard against a second charge: once a payment has succeeded or one is in
-    // flight, ignore further submits (backstops Enter-key / double submits).
+    // Guard against a second charge: once a payment has succeeded (success modal
+    // shown) or one is in flight, ignore further submits. The button is also
+    // disabled in these states, but this backstops Enter-key / double submits.
     if (isSubmitting || paid) return;
     setError('');
 
@@ -484,7 +485,7 @@ function CheckoutForm({
       // this account, retry as an upgrade (confirmUpgrade) — the backend creates the
       // new plan and cancels the old subscription so there's no double-billing.
       const postCheckout = async (confirmUpgrade: boolean) => {
-        const r = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+        const r = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -531,7 +532,7 @@ function CheckoutForm({
           return;
         }
 
-        const res2 = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+        const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

@@ -444,10 +444,8 @@ function StepThree({
       });
       if (res.found) {
         setVerified(true);
-        const secondsFromCopy = copyTimestampRef.current
-          ? Math.round((Date.now() - copyTimestampRef.current) / 1000)
-          : undefined;
-        analytics.installationVerified(url, siteData?.siteId, secondsFromCopy);
+        // installation_verified is emitted from the consent-manager worker when the
+        // backend detects the tag live (see handleVerifyScript / scanSite).
       } else {
         if (typeof window !== 'undefined' && res && typeof res === 'object' && 'debug' in res && res.debug) {
         }

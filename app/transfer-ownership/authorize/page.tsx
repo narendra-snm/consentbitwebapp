@@ -34,8 +34,8 @@ function AuthorizeInner() {
         const res = await authorizeOwnershipTransfer(token);
         setNewOwner(res?.newOwner || null);
         setStatus("success");
-      } catch (err: any) {
-        setMessage(err?.message || "We couldn't complete the ownership transfer.");
+      } catch (err: unknown) {
+        setMessage(err instanceof Error ? err.message : "We couldn't complete the ownership transfer.");
         setStatus("error");
       }
     })();
