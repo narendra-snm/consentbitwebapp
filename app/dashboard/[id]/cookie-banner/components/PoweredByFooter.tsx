@@ -53,7 +53,18 @@ export default function PoweredByFooter({ radius }: { radius?: string }) {
         justifyContent: "flex-end",
         gap: 8,
         padding: "0 20px",
-        background: "#F7F8FA",
+        // Fixed chrome: the footer never picks up the banner's Colors / Type settings.
+        // Every visual property is stated here so nothing cascades in from the banner card.
+        backgroundColor: "#F7F8FA",
+        color: "#A2ABBA",
+        fontFamily:
+          "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontWeight: 500,
+        fontStyle: "normal",
+        fontSize: 11,
+        lineHeight: 1,
+        textAlign: "right",
+        opacity: 1,
         borderTop: "1px solid #EFF1F4",
         borderRadius: radius ? `0 0 ${radius} ${radius}` : undefined,
       }}
@@ -74,6 +85,8 @@ export default function PoweredByFooter({ radius }: { radius?: string }) {
       >
         <span
           style={{
+            fontFamily:
+              "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
             fontSize: 11,
             fontWeight: 500,
             letterSpacing: "0.02em",
