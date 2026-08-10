@@ -11,7 +11,18 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       defaults: "2026-01-30",
       persistence: "localStorage",
       capture_pageview: true,
+      // Session replay is stated explicitly rather than inherited from `defaults`,
+      // so recording behaviour does not change when that preset is bumped.
+      disable_session_recording: false,
+      session_recording: {
+        maskAllInputs: true,
+        maskTextSelector: "[data-ph-mask]",
+      },
     });
+
+    // The module-scoped instance is otherwise unreachable from DevTools, which
+    // makes replay/capture issues impossible to diagnose in a deployed build.
+    (window as unknown as { posthog: typeof posthog }).posthog = posthog;
   }, []);
 
   return <PHProvider client={posthog}>{children}</PHProvider>;
