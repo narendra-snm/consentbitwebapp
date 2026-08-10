@@ -93,9 +93,15 @@ const VALID_PLANS = new Set<PlanId>(['basic', 'essential', 'growth']);
 
 // ─── Stripe setup ─────────────────────────────────────────────────────────────
 //check for publishable key on every page that uses Stripe, since env vars can be unexpectedly unavailable in deployed environments (e.g. Vercel Edge Functions).
-const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-// console.log('[Stripe] publishable key:', _pk ? `${_pk.slice(0, 12)}... (${_pk.startsWith('pk_live') ? 'LIVE' : 'TEST'})` : 'NOT SET')
-const stripePromise = _pk ? loadStripe(_pk) : null
+const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim()
+// loadStripe rejects if the key is malformed / not a publishable key (e.g. sk_live/rk_live pasted by mistake).
+// Without this catch the failure is silent and the submit button stays disabled forever.
+const stripePromise = _pk
+  ? loadStripe(_pk).catch((err) => {
+      console.error('[Stripe] failed to initialize — button will stay disabled:', err)
+      return null
+    })
+  : null
 
 const STRIPE_STYLE = {
   style: {
@@ -128,7 +134,10 @@ function isValidEmail(v: string) {
 
 function isValidDomain(v: string) {
   const d = cleanDomain(v);
-  return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/.test(d);
+  // Allow hyphens in every label (incl. subdomains like www.touchstone-communities.com),
+  // ending in a letters-only TLD. The old regex only allowed hyphens in the first label,
+  // so domains such as www.my-company.com were wrongly rejected.
+  return /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(d);
 }
 
 function cleanDomain(v: string) {
@@ -544,6 +553,7 @@ function CheckoutForm({
 
     setIsSubmitting(true);
     try {
+      console.log('[Checkout] submit start', { planId, interval, domain: cleanDomain(domain), wfSiteId: wfSiteId || null, platform: platform || null, separateBilling, hasCoupon: !!appliedCoupon });
       const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
         type: 'card',
         card: cardEl,
@@ -562,6 +572,7 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
+      console.log('[Checkout] phase 1 → POST /api/custom-checkout', { paymentMethodId: paymentMethod?.id });
       const res = await fetch('https://manager.consentbit.com/api/custom-checkout', {
         method: 'POST',
         credentials: 'include',
@@ -579,6 +590,7 @@ function CheckoutForm({
         }),
       });
 
+      console.log('[Checkout] phase 1 ← response', { ok: res.ok, status: res.status });
       const data = (await parseApiResponse(res)) as {
         success: boolean;
         error?: string;
@@ -587,6 +599,7 @@ function CheckoutForm({
         subscriptionId?: string;
       };
       if (!data.success) {
+        console.warn('[Checkout] phase 1 not successful', { status: res.status, error: data.error });
         setError(data.error || 'Something went wrong. Please try again.');
         setIsSubmitting(false);
         return;
@@ -594,14 +607,17 @@ function CheckoutForm({
 
       // Phase 2 — 3D Secure confirmation required
       if (data.requiresAction && data.clientSecret) {
+        console.log('[Checkout] phase 2 → 3DS required, confirming card', { subscriptionId: data.subscriptionId });
         const { error: confirmErr } = await stripe.confirmCardPayment(data.clientSecret);
         if (confirmErr) {
+          console.warn('[Checkout] phase 2 3DS confirm failed', confirmErr);
           setError(confirmErr.message || '3D Secure verification failed. Please try another card.');
           setIsSubmitting(false);
           return;
         }
 
-        const res2 = await fetch('/api/custom-checkout', {
+        console.log('[Checkout] phase 2 → POST /api/custom-checkout (confirm)');
+        const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -618,19 +634,32 @@ function CheckoutForm({
           }),
         });
 
+        console.log('[Checkout] phase 2 ← response', { ok: res2.ok, status: res2.status });
         const d2 = (await parseApiResponse(res2)) as { success: boolean; error?: string };
-        
+
         if (!d2.success) {
+          console.warn('[Checkout] phase 2 not successful', { status: res2.status, error: d2.error });
           setError(d2.error || 'Account setup failed after payment. Please contact support.');
           setIsSubmitting(false);
           return;
         }
       }
 
+      console.log('[Checkout] success');
       setShowSuccess(true);
       setIsSubmitting(false);
-    } catch {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (err) {
+      // Surface the real cause — a bare message here hid network/CORS/Stripe.js failures.
+      const e = err as { name?: string; message?: string; type?: string; code?: string };
+      console.error('[Checkout] submit threw', {
+        name: e?.name,
+        message: e?.message,
+        type: e?.type,
+        code: e?.code,
+        error: err,
+      });
+      const detail = e?.message ? ` (${e.message})` : '';
+      setError(`An unexpected error occurred. Please try again.${detail}`);
       setIsSubmitting(false);
     }
   }
@@ -1148,6 +1177,7 @@ function CheckoutPageInner() {
 }
 
 export default function CheckoutPage() {
+  console.log("[CheckoutPage] render");
   return (
     <Suspense
       fallback={

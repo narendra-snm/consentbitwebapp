@@ -887,8 +887,8 @@ function redirectToDashboard() {
           <Feature
             label="No of Scans"
             values={[
-              "100",
-              "750",
+              "100 scans",
+              "750 scans",
               "5000 scans",
               "10000 scans",
             ]}
@@ -1108,10 +1108,6 @@ function Feature({
           `}
         >
          <p><span className={`${v==="NIL" ? "text-[#8E8E8E]" : ""}  ${(i===0 || i===1) && label==="Compliance" ? "text-[#8E8E8E]" : ""}`}>{v}</span></p> 
-         {i === 2 && label === "No of Page Views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.49 for additional 10000 page views</p>)}
-         {i === 3 && label === "No of Page Views" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.39 for additional 10000 page views</p>)}
-         {i === 3 && label === "No of Scans" && (<p className="text-[13px] font-normal text-[#4B5563]">+ $0.49 for additional 10000 scans</p>)}
-
         </div>
       ))}
     </>
