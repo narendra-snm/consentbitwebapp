@@ -42,7 +42,7 @@ function ConsentBitLogo() {
 
 function WhaleSyncLogo() {
   return (
-    <svg fill="none" height="20" viewBox="0 0 148.889 20" width="149">
+    <svg className="h-[16px] sm:h-[18px] xl:h-[20px] w-auto" fill="none" viewBox="0 0 148.889 20">
       <g clipPath="url(#ws_clip)">
         <path d={svgPaths.p29019980} fill="white" />
         <path d={svgPaths.p1f1cc980} fill="white" />
@@ -65,7 +65,7 @@ function WhaleSyncLogo() {
 
 function BuildQLogo() {
   return (
-    <svg fill="none" height="20" viewBox="0 0 67.0064 19.9565" width="67">
+    <svg className="h-[16px] sm:h-[18px] xl:h-[20px] w-auto" fill="none" viewBox="0 0 67.0064 19.9565">
       <path d={svgPaths.p128504c0} fill="white" />
       <path d={svgPaths.p1a70edf0} fill="white" />
       <path d={svgPaths.p26309a00} fill="white" />
@@ -83,7 +83,7 @@ function BuildQLogo() {
 
 function QuickReceiptsLogo() {
   return (
-    <svg fill="none" height="20" viewBox="0 0 139.871 19.375" width="140">
+    <svg className="h-[16px] sm:h-[18px] xl:h-[20px] w-auto" fill="none" viewBox="0 0 139.871 19.375">
       <path d={svgPaths.p2a72e400} fill="white" />
       <path d={svgPaths.p36bc6b80} fill="white" />
       <path d={svgPaths.p29ee4200} fill="white" />
@@ -140,7 +140,12 @@ export default function AuthShell({
         Every lg:clamp() below is written as clamp(floor, Nvh, current) so tall
         screens render exactly as before and only short ones compress.
       */}
-      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[61fr_39fr] lg:h-screen">
+      {/*
+        The 61/39 split leaves the right panel only ~287px of text width at
+        1024px, which rewraps the copy into enough extra lines to overflow the
+        viewport. Give it more room until xl, where 61/39 is comfortable again.
+      */}
+      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[56fr_44fr] xl:grid-cols-[61fr_39fr] lg:h-screen">
         {/* ─── Left panel (white) ─── */}
         <div className="bg-white flex flex-col min-h-0 px-5 py-8 sm:px-8 sm:py-10 md:px-12 lg:px-[72px] lg:py-[clamp(20px,5vh,45px)]">
 
@@ -206,12 +211,12 @@ export default function AuthShell({
           </div>
 
           {/* Content */}
-          <div className="relative z-10 flex flex-col flex-1 min-h-0 px-6 pt-12 pb-10 sm:px-10 lg:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
+          <div className="relative z-10 flex flex-col flex-1 min-h-0 px-6 pt-12 pb-10 sm:px-10 lg:px-9 xl:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
             <h2
-              className="text-white text-[26px] sm:text-[30px] lg:text-[34px] font-medium tracking-[-0.68px] leading-[36px] sm:leading-[40px] lg:leading-[44px] mb-8 lg:mb-[clamp(16px,3.1vh,28px)]"
+              className="text-white text-[26px] sm:text-[30px] lg:text-[30px] xl:text-[34px] font-medium tracking-[-0.68px] leading-[36px] sm:leading-[40px] lg:leading-[40px] xl:leading-[44px] mb-8 lg:mb-[clamp(16px,3.1vh,28px)]"
               style={{ fontFamily: FONT_DISPLAY }}
             >
-              Consent that keeps your<br className="hidden lg:inline" />{" "}site compliant.
+              Consent that keeps your<br className="hidden xl:inline" />{" "}site compliant.
             </h2>
 
             {/* Feature 1 */}
@@ -226,7 +231,7 @@ export default function AuthShell({
                 className="text-white text-[16px] leading-7"
                 style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
               >
-                One script tag. Auto-scans and categorises every cookie<br className="hidden lg:inline" />
+                One script tag. Auto-scans and categorises every cookie<br className="hidden xl:inline" />
                 {" "}on your site, styled to match your brand.
               </p>
             </div>
@@ -243,7 +248,7 @@ export default function AuthShell({
                 className="text-white text-[16px] leading-7"
                 style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
               >
-                Trackers stay off until the visitor opts in — with<br className="hidden lg:inline" />
+                Trackers stay off until the visitor opts in — with<br className="hidden xl:inline" />
                 {" "}a full audit log.
               </p>
             </div>
@@ -251,7 +256,7 @@ export default function AuthShell({
 
           {/* Testimonial + logos block */}
           <div
-            className="relative z-10 shrink-0 border-t border-b border-[rgba(225,227,231,0.1)] px-6 py-8 sm:px-10 lg:px-[56px] lg:py-[clamp(24px,6vh,54px)]"
+            className="relative z-10 shrink-0 border-t border-b border-[rgba(225,227,231,0.1)] px-6 py-8 sm:px-10 lg:px-9 xl:px-[56px] lg:py-[clamp(24px,6vh,54px)]"
             style={{ backdropFilter: "blur(12px)", background: "rgba(240,248,252,0.05)" }}
           >
             {/* Quote */}
@@ -259,7 +264,7 @@ export default function AuthShell({
               className="text-white text-[15px] sm:text-[16px] leading-7 mb-[17px]"
               style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
             >
-              &ldquo;Live in minutes, blocked tracking until consent, and<br className="hidden lg:inline" />
+              &ldquo;Live in minutes, blocked tracking until consent, and<br className="hidden xl:inline" />
               {" "}didn&apos;t impact load time.&rdquo;
             </p>
 
@@ -275,16 +280,25 @@ export default function AuthShell({
             </div>
 
             {/* Partner logos with mask fade */}
+            {/*
+              Height is auto below lg so the row can wrap on very narrow phones
+              instead of being sliced by overflow-hidden; the mask is sized
+              100% x 100% (rather than a fixed 30px) so it still covers the
+              strip at whatever height that produces. At lg it is a single
+              30px row exactly as before.
+            */}
             <div
-              className="h-[30px] relative overflow-hidden"
+              className="relative overflow-hidden lg:h-[30px]"
               style={{
                 maskImage: `url("${imgContainer}")`,
                 WebkitMaskImage: `url("${imgContainer}")`,
-                maskSize: "100% 30px",
-                WebkitMaskSize: "100% 30px",
+                maskSize: "100% 100%",
+                WebkitMaskSize: "100% 100%",
+                maskRepeat: "no-repeat",
+                WebkitMaskRepeat: "no-repeat",
               }}
             >
-              <div className="flex items-center gap-[12px] sm:gap-[16px] h-full">
+              <div className="flex flex-wrap lg:flex-nowrap items-center gap-x-[12px] gap-y-[10px] sm:gap-x-[16px] lg:h-full">
                 <div className="opacity-90 flex items-center shrink-0">
                   <WhaleSyncLogo />
                 </div>
