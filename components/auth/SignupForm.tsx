@@ -173,6 +173,13 @@ export function SignupForm() {
     setError(null);
     setLoading(true);
     if (debugEnabled) setDebugLine(`request started; step=${effectiveStep}`);
+    // router.push()/replace() are fire-and-forget: they start the transition and
+    // return immediately. Clearing `loading` afterwards would drop the button out
+    // of its pending state while /dashboard (a force-dynamic route) is still
+    // loading, leaving the UI looking idle for ~1s before the page swaps.
+    // Only set for the step-2 branch — the step-1 replace() is a same-route URL
+    // update, after which the form stays mounted and must become interactive again.
+    let navigating = false;
     try {
       if (effectiveStep === 1) {
         await requestVerificationCode({ name, email, purpose: 'signup' });
@@ -200,7 +207,10 @@ export function SignupForm() {
         analytics.authEmailSubmitted(email.trim().toLowerCase());
         analytics.userAccountCreated(email.trim().toLowerCase(), name.trim());
         analytics.identify(email.trim().toLowerCase(), name.trim());
-        router.push('/dashboard');
+        navigating = true;
+        // replace, not push — a signed-up user pressing Back should not land
+        // back on the signup screen.
+        router.replace('/dashboard');
       }
     } catch (err: unknown) {
       try {
@@ -223,7 +233,9 @@ export function SignupForm() {
       if (debugEnabled) setDebugLine(`request failed: ${msg}`);
       setError(msg);
     } finally {
-      setLoading(false);
+      // Stay in the loading state through the route transition; this component
+      // unmounts when it commits.
+      if (!navigating) setLoading(false);
     }
   }
 

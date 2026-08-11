@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { DM_Sans } from "next/font/google";
+import { DM_Sans, Funnel_Display, Manrope } from "next/font/google";
 import "react-datepicker/dist/react-datepicker.css";
 import {AppProvider} from "./context/AppProvider"
 import { PostHogProvider } from "@/components/providers/PostHogProvider"
@@ -10,6 +10,20 @@ const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   variable: "--font-dm-sans",
+});
+
+// Display face for the auth screens' headings.
+const funnelDisplay = Funnel_Display({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-funnel-display",
+});
+
+// Used for the testimonial attribution on the auth screens.
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-manrope",
 });
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,7 +54,7 @@ export default function RootLayout({
     <html lang="en">
 
       <body
-        className={`${dmSans.className} antialiased`}
+        className={`${dmSans.className} ${dmSans.variable} ${funnelDisplay.variable} ${manrope.variable} antialiased`}
       >
         {/* Google Tag Manager (noscript) */}
         <noscript>
