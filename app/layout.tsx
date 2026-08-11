@@ -6,23 +6,25 @@ import { DM_Sans, Funnel_Display, Manrope } from "next/font/google";
 import "react-datepicker/dist/react-datepicker.css";
 import {AppProvider} from "./context/AppProvider"
 import { PostHogProvider } from "@/components/providers/PostHogProvider"
+// All three of these are variable fonts. Do NOT add a `weight` array: that makes
+// next/font download one static instance file per weight at build time (10 files
+// across these three), which is enough parallel traffic to trip the
+// "Failed to fetch font file from fonts.gstatic.com" error on CI. Omitting weight
+// pulls a single variable file per family that covers the whole weight range.
 const dmSans = DM_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
   variable: "--font-dm-sans",
 });
 
 // Display face for the auth screens' headings.
 const funnelDisplay = Funnel_Display({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   variable: "--font-funnel-display",
 });
 
 // Used for the testimonial attribution on the auth screens.
 const manrope = Manrope({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
   variable: "--font-manrope",
 });
 const geistSans = Geist({
