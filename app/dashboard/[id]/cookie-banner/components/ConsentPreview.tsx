@@ -150,7 +150,8 @@ export default function ConsentPreview({
   // Site homepage iframe preview intentionally disabled — some sites block embedding (CSP/XFO)
   // and it distracts from banner layout. Keep banner on a neutral canvas instead.
   void siteDomain;
-  const { colors, alignment, bannerLayout, fontFamily: bannerFont, weight } =
+  // `fontFamily` is intentionally not read — the banner renders in the system UI font.
+  const { colors, alignment, bannerLayout, weight } =
     useAppContext();
 
   const isFreeForced = Boolean(previewBannerType);
@@ -249,14 +250,19 @@ export default function ConsentPreview({
     return (0.299*r + 0.587*g + 0.114*b) > 128 ? '#0f172a' : '#ffffff';
   }, [colors.bannerBg]);
 
-  /** Type tab: font + weight (same as `bannerFontFamily` / `bannerFontWeight` on publish). */
+  /**
+   * Type tab: weight only. The live banner renders in the visitor's system UI font and names
+   * no family (see `fontFamilyCss` in consent-manager/src/handlers/cdnNm.js), so the preview
+   * must use the identical stack or it shows a font the published banner will never use.
+   * `bannerFontFamily` is still stored on publish — re-read `fontFamily` from useAppContext()
+   * here if the font picker is re-enabled, and revert the loader in the same change.
+   */
   const bannerTypographyStyle = useMemo(() => {
-    const safe = String(bannerFont || 'Inter').replace(/['"]/g, '');
     return {
-      fontFamily: `'${safe}', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
+      fontFamily: `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
       fontWeight: Number(weightLabelToNumeric(weight)),
     } as const;
-  }, [bannerFont, weight]);
+  }, [weight]);
 
   const layoutPos =
     initialLayout?.position ?? bannerLayout?.position ?? "box";
