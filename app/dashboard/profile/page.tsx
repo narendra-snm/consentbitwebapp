@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
-import { getBillingUsage, updateProfile, type BillingUsage } from "@/lib/client-api";
+import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
   normalizeSiteLabel,
   isDuplicateDomainForOthers,
@@ -305,6 +305,56 @@ export default function SettingsPage() {
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
 
+  // ── Transfer Ownership ────────────────────────────────────────────────────
+  // Hands the whole account (sites, subscription, consent data) to a new email.
+  // The worker renames the User row in place, so nothing downstream has to move;
+  // the authorization link is emailed to the CURRENT owner and nothing changes
+  // until they click it.
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferNewEmail, setTransferNewEmail] = useState("");
+  const [transferNewName, setTransferNewName] = useState("");
+  const [transferConfirm, setTransferConfirm] = useState(false);
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferSentTo, setTransferSentTo] = useState<string | null>(null);
+  const [transferDevLink, setTransferDevLink] = useState<string | null>(null);
+
+  const isTransferEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(transferNewEmail.trim());
+  const canSubmitTransfer =
+    isTransferEmailValid &&
+    transferNewName.trim().length > 0 &&
+    transferNewEmail.trim().toLowerCase() !== String(accountOwnerEmail || "").toLowerCase() &&
+    transferConfirm &&
+    !transferSaving;
+
+  const resetTransfer = useCallback(() => {
+    setTransferOpen(false);
+    setTransferNewEmail("");
+    setTransferNewName("");
+    setTransferConfirm(false);
+    setTransferError(null);
+    setTransferSentTo(null);
+    setTransferDevLink(null);
+  }, []);
+
+  const handleSubmitTransfer = useCallback(async () => {
+    if (!canSubmitTransfer) return;
+    setTransferSaving(true);
+    setTransferError(null);
+    try {
+      const res = await requestOwnershipTransfer({
+        newEmail: transferNewEmail.trim().toLowerCase(),
+        newName: transferNewName.trim(),
+      });
+      setTransferSentTo(res?.sentTo || accountOwnerEmail);
+      if (res?.authorizeLink) setTransferDevLink(res.authorizeLink);
+    } catch (err: any) {
+      setTransferError(err?.message || "Failed to start ownership transfer");
+    } finally {
+      setTransferSaving(false);
+    }
+  }, [accountOwnerEmail, canSubmitTransfer, transferNewEmail, transferNewName]);
+
   const fetchUsage = useCallback(
     async (
       orgId: string,
@@ -492,7 +542,7 @@ export default function SettingsPage() {
               <p className=" font-semibold leading-[20px] text-[16px] text-black tracking-[-1px] mb-[8px]" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Account Owner :
               </p>
-              <div className="bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 pr-2 py-1.5 flex items-center justify-between mb-[40px]">
+              <div className={`bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 pr-2 py-1.5 flex items-center justify-between ${transferOpen ? "mb-[16px]" : "mb-[40px]"}`}>
                 <div>
                   <p className="font-['DM_Sans:Medium',sans-serif] font-medium leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>{accountOwnerEmail}</p>
                   <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[13px] text-black" style={{ fontVariationSettings: "'opsz' 14" }}>Acc ID: {accountId}</p>
@@ -500,7 +550,112 @@ export default function SettingsPage() {
                     Current Plan: {currentPlan}
                   </p>
                 </div>
+
+                {/* Change / transfer the account email — lives on the right of the owner card */}
+                <div className="shrink-0 pr-1.5">
+                  <button
+                    type="button"
+                    onClick={() => (transferOpen ? resetTransfer() : setTransferOpen(true))}
+                    className="px-3.5 py-2 bg-white border border-[#cadbee] text-[#007AFF] text-[13px] rounded-[6px] hover:bg-[#f5f9ff] transition-colors whitespace-nowrap"
+                  >
+                    {transferOpen ? (transferSentTo ? "Close" : "Cancel") : "Change account email"}
+                  </button>
+                </div>
               </div>
+
+              {/* Transfer Ownership panel — expands under the owner card */}
+              {transferOpen && (
+                <div className="mb-[40px]">
+                  {transferSentTo ? (
+                    <div className="rounded-[8px] border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3">
+                      <p className="text-[#15803D] text-[13px] font-medium mb-1">Authorization email sent</p>
+                      <p className="text-[#4B5563] text-[13px] leading-[20px]">
+                        We sent an authorization link to <strong>{transferSentTo}</strong>. Open that email and click
+                        “Authorize transfer” to complete the change. The link expires shortly for your security, and
+                        everyone is signed out once it&apos;s used.
+                      </p>
+                      {transferDevLink && (
+                        <p className="text-[#4B5563] text-xs mt-2 break-all">
+                          Dev link:{" "}
+                          <a href={transferDevLink} className="text-[#2563EB] underline">
+                            {transferDevLink}
+                          </a>
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={resetTransfer}
+                        className="mt-3 px-3 py-1.5 border border-[#E5E5E5] text-[#6B7280] text-xs rounded-[6px] bg-white hover:bg-[#F9FAFB] transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-[8px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-4 flex flex-col gap-3">
+                      <p className="text-[#9CA3AF] text-xs leading-[18px]">
+                        This moves the whole account — every site, the subscription and all consent data — to a new
+                        email. We&apos;ll send an authorization link to{" "}
+                        <span className="text-[#6B7280]">{accountOwnerEmail}</span>; nothing changes until you click it.
+                      </p>
+                      <div>
+                        <label className="block text-[#4B5563] text-xs mb-1">New owner name</label>
+                        <input
+                          type="text"
+                          value={transferNewName}
+                          onChange={(e) => { setTransferNewName(e.target.value); setTransferError(null); }}
+                          placeholder="Jane Doe"
+                          className="w-full max-w-[420px] min-h-[42px] px-3 border border-[#E5E5E5] rounded-[6px] text-[13px] text-[#111827] bg-white outline-none focus:border-[#EF4444] transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#4B5563] text-xs mb-1">New owner email</label>
+                        <input
+                          type="email"
+                          value={transferNewEmail}
+                          onChange={(e) => { setTransferNewEmail(e.target.value); setTransferError(null); }}
+                          placeholder="jane@example.com"
+                          className="w-full max-w-[420px] min-h-[42px] px-3 border border-[#E5E5E5] rounded-[6px] text-[13px] text-[#111827] bg-white outline-none focus:border-[#EF4444] transition-colors"
+                        />
+                        {transferNewEmail.trim() && !isTransferEmailValid && (
+                          <p className="text-red-500 text-xs mt-1">Enter a valid email address.</p>
+                        )}
+                        {isTransferEmailValid &&
+                          transferNewEmail.trim().toLowerCase() === String(accountOwnerEmail || "").toLowerCase() && (
+                          <p className="text-red-500 text-xs mt-1">This is already the current owner&apos;s email.</p>
+                        )}
+                      </div>
+                      <label className="flex items-start gap-2 text-xs text-[#4B5563] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={transferConfirm}
+                          onChange={(e) => setTransferConfirm(e.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>I understand this transfers the entire account to the new email and I will lose access.</span>
+                      </label>
+                      {transferError && <p className="text-red-500 text-xs">{transferError}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={!canSubmitTransfer}
+                          onClick={handleSubmitTransfer}
+                          className="px-4 py-2 bg-[#DC2626] text-white text-[13px] rounded-[6px] hover:bg-[#B91C1C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {transferSaving ? "Sending…" : "Send authorization email"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={transferSaving}
+                          onClick={resetTransfer}
+                          className="px-4 py-2 border border-[#E5E5E5] bg-white text-[#6B7280] text-[13px] rounded-[6px] hover:bg-[#F9FAFB] disabled:opacity-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Organizations Table */}
               <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] ">
