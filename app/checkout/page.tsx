@@ -523,8 +523,8 @@ function CheckoutForm({
     setCouponLoading(true);
     try {
       const res = await fetch(
-        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: "include" },
+        `https://consent-webapp-manager.web-8fb.workers.dev/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
       );
       const data = (await parseApiResponse(res)) as {
         valid: boolean;
@@ -641,32 +641,23 @@ function CheckoutForm({
       const cleanedDomain = cleanDomain(domain);
 
       // Phase 1 — create subscription
-      console.log("[Checkout] phase 1 → POST /api/custom-checkout", {
-        paymentMethodId: paymentMethod?.id,
+      console.log('[Checkout] phase 1 → POST /api/custom-checkout', { paymentMethodId: paymentMethod?.id });
+      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethodId: paymentMethod!.id,
+          email: email.trim().toLowerCase(),
+          billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
+          domain: cleanedDomain,
+          siteName: cleanedDomain,
+          planId,
+          interval,
+          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+          ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
+        }),
       });
-      const res = await fetch(
-        "https://manager.consentbit.com/api/custom-checkout",
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            paymentMethodId: paymentMethod!.id,
-            email: email.trim().toLowerCase(),
-            billingEmail: separateBilling
-              ? billingEmail.trim().toLowerCase()
-              : email.trim().toLowerCase(),
-            domain: cleanedDomain,
-            siteName: cleanedDomain,
-            planId,
-            interval,
-            ...(appliedCoupon
-              ? { promotionCodeId: appliedCoupon.promotionCodeId }
-              : {}),
-            ...(wfSiteId ? { wfSiteId, platform: platform || "webflow" } : {}),
-          }),
-        },
-      );
 
       console.log("[Checkout] phase 1 ← response", {
         ok: res.ok,
@@ -707,32 +698,23 @@ function CheckoutForm({
           return;
         }
 
-        console.log("[Checkout] phase 2 → POST /api/custom-checkout (confirm)");
-        const res2 = await fetch(
-          "https://manager.consentbit.com/api/custom-checkout",
-          {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              subscriptionId: data.subscriptionId,
-              email: email.trim().toLowerCase(),
-              billingEmail: separateBilling
-                ? billingEmail.trim().toLowerCase()
-                : email.trim().toLowerCase(),
-              domain: cleanedDomain,
-              siteName: cleanedDomain,
-              planId,
-              interval,
-              ...(appliedCoupon
-                ? { promotionCodeId: appliedCoupon.promotionCodeId }
-                : {}),
-              ...(wfSiteId
-                ? { wfSiteId, platform: platform || "webflow" }
-                : {}),
-            }),
-          },
-        );
+        console.log('[Checkout] phase 2 → POST /api/custom-checkout (confirm)');
+        const res2 = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriptionId: data.subscriptionId,
+            email: email.trim().toLowerCase(),
+            billingEmail: separateBilling ? billingEmail.trim().toLowerCase() : email.trim().toLowerCase(),
+            domain: cleanedDomain,
+            siteName: cleanedDomain,
+            planId,
+            interval,
+            ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+            ...(wfSiteId ? { wfSiteId, platform: platform || 'webflow' } : {}),
+          }),
+        });
 
         console.log("[Checkout] phase 2 ← response", {
           ok: res2.ok,
