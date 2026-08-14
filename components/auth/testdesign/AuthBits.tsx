@@ -15,7 +15,7 @@ export function AuthSubmitButton({
     <button
       type="submit"
       disabled={disabled}
-      className="bg-[#0777e6] border border-[#0777e6] rounded-full h-[52px] px-8 w-full sm:w-auto text-white text-[18px] font-semibold tracking-[-0.36px] leading-[18px] cursor-pointer transition-colors hover:bg-[#0668c9] hover:border-[#0668c9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0777e6] disabled:opacity-60 disabled:cursor-not-allowed"
+      className="bg-[#0777e6] border border-[#0777e6] rounded-full h-[57px] px-8 w-full sm:w-auto text-white text-[18px] font-semibold tracking-[-0.36px] leading-[18px] cursor-pointer transition-colors hover:bg-[#0668c9] hover:border-[#0668c9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0777e6] disabled:opacity-60 disabled:cursor-not-allowed"
       style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
     >
       {children}

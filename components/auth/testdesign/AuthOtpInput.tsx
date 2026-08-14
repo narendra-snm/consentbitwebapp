@@ -112,7 +112,7 @@ export default function AuthOtpInput({
           disabled={disabled}
           aria-invalid={invalid || undefined}
           aria-label={`Verification code digit ${idx + 1}`}
-          className={`min-w-0 flex-1 max-w-[56px] h-[52px] bg-white border rounded-xl text-center text-[#202022] text-[18px] font-medium outline-none transition-colors focus:border-[#0777e6] focus:ring-2 focus:ring-[#0777e6]/25 disabled:bg-[#f7f8fa] disabled:text-[#757575] ${
+          className={`min-w-0 flex-1 max-w-[62px] h-[57px] bg-white border rounded-xl text-center text-[#202022] text-[18px] font-medium outline-none transition-colors focus:border-[#0777e6] focus:ring-2 focus:ring-[#0777e6]/25 disabled:bg-[#f7f8fa] disabled:text-[#757575] ${
             invalid ? "border-[#b03240]" : "border-[#e1e3e7]"
           }`}
           style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
