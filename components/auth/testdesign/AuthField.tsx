@@ -64,7 +64,7 @@ export default function AuthField({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         aria-invalid={invalid || undefined}
-        className={`w-full bg-white border rounded-xl h-[52px] px-5 text-[#202022] text-[16px] leading-normal outline-none transition-colors placeholder:text-[#757575] focus:border-[#0777e6] focus:ring-2 focus:ring-[#0777e6]/25 disabled:bg-[#f7f8fa] disabled:text-[#757575] ${
+        className={`w-full bg-white border rounded-xl h-[57px] px-5 text-[#202022] text-[16px] leading-normal outline-none transition-colors placeholder:text-[#757575] focus:border-[#0777e6] focus:ring-2 focus:ring-[#0777e6]/25 disabled:bg-[#f7f8fa] disabled:text-[#757575] ${
           invalid ? "border-[#b03240]" : "border-[#e1e3e7]"
         }`}
         style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
