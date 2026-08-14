@@ -32,7 +32,7 @@ export default function GettingStarted({ activeSiteId, isLegacy = false }: { act
           </a>
 
           <a
-            href="https://docs.consentbit.com/support"
+            href="https://www.consentbit.com/contact"
             target="_blank"
             rel="noreferrer"
             className="flex items-center font-medium gap-1 text-[#007AFF] text-[15px] cursor-pointer whitespace-nowrap"
