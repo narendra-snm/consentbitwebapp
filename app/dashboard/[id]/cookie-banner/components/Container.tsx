@@ -402,11 +402,13 @@ export default function page({ siteId }: { siteId: string }) {
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: T.doNotSell,
-            optOutTitle: T.optOutPreference,
-            optOutMessage: T.ccpaOptOutPreferenceIntro,
+            doNotSellLabel: en.doNotSell || T.doNotSell,
+            optOutTitle: en.optOutPreference || T.optOutPreference,
+            optOutMessage: en.ccpaOptOutPreferenceIntro || T.ccpaOptOutPreferenceIntro,
+            // CCPA keeps its own key so it no longer collides with the GDPR save label.
+            // Falls back to the shared key for records saved before the split.
             saveMyPreferencesLabel:
-              en.saveMyPreferences || T.saveMyPreferences,
+              en.ccpaSaveMyPreferences || en.saveMyPreferences || T.saveMyPreferences,
             cancelLabel: en.cancel || T.cancel,
           },
           categories: {
@@ -672,6 +674,7 @@ export default function page({ siteId }: { siteId: string }) {
           ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
           cancel: contentSettings.ccpa.cancelLabel,
           saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+          ccpaSaveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
           privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
           closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
           rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
@@ -774,6 +777,7 @@ export default function page({ siteId }: { siteId: string }) {
             ccpaOptOutPreferenceIntro: contentSettings.ccpa.optOutMessage,
             cancel: contentSettings.ccpa.cancelLabel,
             saveMyPreferences: contentSettings.gdpr.saveMyPreferencesLabel || contentSettings.ccpa.saveMyPreferencesLabel,
+            ccpaSaveMyPreferences: contentSettings.ccpa.saveMyPreferencesLabel,
             privacyPolicy: contentSettings.cookiePolicyLabel || "Privacy Policy",
             closeButtonEnabled: contentSettings.closeButton ? "1" : "0",
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
