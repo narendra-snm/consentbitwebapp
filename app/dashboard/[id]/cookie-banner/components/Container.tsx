@@ -1286,32 +1286,37 @@ export default function page({ siteId }: { siteId: string }) {
                     }
               }
               onChange={(next) =>
-                setContentSettings((prev) =>
-                  activeContentBannerType === "gdpr"
+                setContentSettings((prev) => {
+                  // GDPR and CCPA share a single `saveMyPreferences` key (the live banner has
+                  // only one), so an edit in either editor must update both. Without this the
+                  // write at publish time — `gdpr.save… || ccpa.save…` — always resolves to the
+                  // GDPR value and silently discards a CCPA-only edit.
+                  const saveLabel =
+                    next.saveButtonLabel ??
+                    (activeContentBannerType === "gdpr"
+                      ? prev.gdpr.saveMyPreferencesLabel
+                      : prev.ccpa.saveMyPreferencesLabel);
+                  return activeContentBannerType === "gdpr"
                     ? {
                         ...prev,
                         preferenceTitle: next.title,
                         preferenceMessage: next.message,
-                        gdpr: {
-                          ...prev.gdpr,
-                          saveMyPreferencesLabel:
-                            next.saveButtonLabel ?? prev.gdpr.saveMyPreferencesLabel,
-                        },
+                        gdpr: { ...prev.gdpr, saveMyPreferencesLabel: saveLabel },
+                        ccpa: { ...prev.ccpa, saveMyPreferencesLabel: saveLabel },
                       }
                     : {
                         ...prev,
+                        gdpr: { ...prev.gdpr, saveMyPreferencesLabel: saveLabel },
                         ccpa: {
                           ...prev.ccpa,
                           optOutTitle: next.title,
                           optOutMessage: next.message,
-                          saveMyPreferencesLabel:
-                            next.saveButtonLabel ??
-                            prev.ccpa.saveMyPreferencesLabel,
+                          saveMyPreferencesLabel: saveLabel,
                           cancelLabel:
                             next.cancelLabel ?? prev.ccpa.cancelLabel,
                         },
-                      }
-                )
+                      };
+                })
               }
             />
             {activeContentBannerType === "gdpr" && (
