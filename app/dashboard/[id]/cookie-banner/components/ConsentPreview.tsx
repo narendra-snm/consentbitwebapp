@@ -287,6 +287,10 @@ export default function ConsentPreview({
 
   type ModalView = "main" | "gdpr-preferences" | "ccpa-optout";
   const [modalView, setModalView] = useState<ModalView>("main");
+  // Kept in a ref (assigned during render, so it is current before any effect runs)
+  // for the banner-selection reset below, which must not list it as a dependency.
+  const forceModalViewRef = useRef<ModalView | undefined>(forceModalView);
+  forceModalViewRef.current = forceModalView;
   useEffect(() => {
     if (forceModalView) setModalView(forceModalView);
   }, [forceModalView]);
@@ -332,8 +336,12 @@ export default function ConsentPreview({
   }, [content]);
 
   useEffect(() => {
-    // When the banner selection changes, reset to main preview.
-    setModalView("main");
+    // When the banner selection changes, reset to main preview — unless the editor
+    // is pinning a view. Switching GDPR → CCPA while the Preference Banner tab is
+    // open changes both `selectedBannerType` and `forceModalView` in one commit; the
+    // effect above runs first, so an unconditional "main" here would immediately
+    // undo it and drop the preview back to the notice banner.
+    setModalView(forceModalViewRef.current ?? "main");
   }, [selectedBannerType]);
 
   useEffect(() => {

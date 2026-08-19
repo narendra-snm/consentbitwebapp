@@ -1432,7 +1432,14 @@ export default function page({ siteId }: { siteId: string }) {
           consentType === "both" ? setBothContentFocus : undefined
         }
         forceModalView={
-          openAccordionKey === "preferenceBanner"
+          // In Content, the tab itself decides what the preview shows: the Preference
+          // Banner tab renders its editor `bare` (always expanded), so openAccordionKey
+          // never moves to "preferenceBanner" and the preview would stay on the notice.
+          active === "Content"
+            ? contentTab === "preference"
+              ? (activeContentBannerType === "ccpa" ? "ccpa-optout" : "gdpr-preferences")
+              : "main"
+            : openAccordionKey === "preferenceBanner"
             ? (activeContentBannerType === "ccpa" ? "ccpa-optout" : "gdpr-preferences")
             : openAccordionKey === "cookieCategories"
             ? "gdpr-preferences"
