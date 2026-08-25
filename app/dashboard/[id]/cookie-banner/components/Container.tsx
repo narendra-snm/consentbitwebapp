@@ -402,9 +402,14 @@ export default function page({ siteId }: { siteId: string }) {
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: T.doNotSell,
-            optOutTitle: T.optOutPreference,
-            optOutMessage: T.ccpaOptOutPreferenceIntro,
+            // These three are written to translations.en on publish and are read live by the
+            // CDN banner — read them back here too, or a saved edit silently reverts on reload.
+            doNotSellLabel: en.doNotSell || T.doNotSell,
+            optOutTitle: en.optOutPreference || T.optOutPreference,
+            optOutMessage:
+              en.ccpaOptOutPreferenceIntro || T.ccpaOptOutPreferenceIntro,
+            // GDPR and CCPA share one `saveMyPreferences` key (the CDN banner has only one),
+            // so both editors are kept in sync rather than diverging — see handleSaveLabelChange.
             saveMyPreferencesLabel:
               en.saveMyPreferences || T.saveMyPreferences,
             cancelLabel: en.cancel || T.cancel,
@@ -1282,32 +1287,37 @@ export default function page({ siteId }: { siteId: string }) {
                     }
               }
               onChange={(next) =>
-                setContentSettings((prev) =>
-                  activeContentBannerType === "gdpr"
+                setContentSettings((prev) => {
+                  // GDPR and CCPA share a single `saveMyPreferences` key (the live banner has
+                  // only one), so an edit in either editor must update both. Without this the
+                  // write at publish time — `gdpr.save… || ccpa.save…` — always resolves to the
+                  // GDPR value and silently discards a CCPA-only edit.
+                  const saveLabel =
+                    next.saveButtonLabel ??
+                    (activeContentBannerType === "gdpr"
+                      ? prev.gdpr.saveMyPreferencesLabel
+                      : prev.ccpa.saveMyPreferencesLabel);
+                  return activeContentBannerType === "gdpr"
                     ? {
                         ...prev,
                         preferenceTitle: next.title,
                         preferenceMessage: next.message,
-                        gdpr: {
-                          ...prev.gdpr,
-                          saveMyPreferencesLabel:
-                            next.saveButtonLabel ?? prev.gdpr.saveMyPreferencesLabel,
-                        },
+                        gdpr: { ...prev.gdpr, saveMyPreferencesLabel: saveLabel },
+                        ccpa: { ...prev.ccpa, saveMyPreferencesLabel: saveLabel },
                       }
                     : {
                         ...prev,
+                        gdpr: { ...prev.gdpr, saveMyPreferencesLabel: saveLabel },
                         ccpa: {
                           ...prev.ccpa,
                           optOutTitle: next.title,
                           optOutMessage: next.message,
-                          saveMyPreferencesLabel:
-                            next.saveButtonLabel ??
-                            prev.ccpa.saveMyPreferencesLabel,
+                          saveMyPreferencesLabel: saveLabel,
                           cancelLabel:
                             next.cancelLabel ?? prev.ccpa.cancelLabel,
                         },
-                      }
-                )
+                      };
+                })
               }
             />
             {activeContentBannerType === "gdpr" && (
