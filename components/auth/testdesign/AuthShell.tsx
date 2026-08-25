@@ -5,7 +5,9 @@ import { imgContainer } from "./assets/svg-tjaqh";
 import imgIabTcfRegisteredCmp from "./assets/fa3ad034b7eda7a03d39af49833903394aa41edb.png";
 import imgCcpaCompliant from "./assets/741906b41fc569c54e33f599ab20ae40cd795eca.png";
 import imgGdprCompliant from "./assets/3b90840cbfde4cbf39462354fd1ef4b14bc946e4.png";
-import imgGoogleCertifiedCmpPartner from "./assets/f3ecfc9b99a6932bf2ff016f70ae1148dd6b5b15.png";
+// Temporarily hidden — to re-enable, uncomment this import and the matching
+// <img> in the compliance badges row below. The asset file is still in ./assets.
+// import imgGoogleCertifiedCmpPartner from "./assets/f3ecfc9b99a6932bf2ff016f70ae1148dd6b5b15.png";
 import imgImage2 from "./assets/b3d5b75fafbd787f73904c1747a249ffc1d09c82.png";
 import imgNathan from "./assets/48013064cc57404b3aa5475781e454ab01e24399.png";
 import { FONT_DISPLAY, FONT_MANROPE, FONT_SANS, OPSZ } from "./fonts";
@@ -194,7 +196,9 @@ export default function AuthShell({
             <img alt="IAB TCF Registered CMP" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgIabTcfRegisteredCmp.src} />
             <img alt="CCPA Compliant" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgCcpaCompliant.src} />
             <img alt="GDPR Compliant" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgGdprCompliant.src} />
+            {/* Temporarily hidden — re-enable together with its import at the top of this file.
             <img alt="Google Certified CMP Partner" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgGoogleCertifiedCmpPartner.src} />
+            */}
           </div>
         </div>
 
