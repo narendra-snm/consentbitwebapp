@@ -26,38 +26,51 @@ async function parseApiResponse(res: Response): Promise<any> {
   return decodeEnvelope(parsed);
 }
 
-/** Hash password for sending to server (never send plain password in request body). */
-export async function hashPasswordForRequest(email: string, password: string): Promise<string> {
-  const e = email.trim().toLowerCase();
-  const p = (password ?? '').trim();
-  const data = new TextEncoder().encode(`${e}|${p}`);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-//password hashing ends here
-
-
 //login starts here
 
+/**
+ * Raised when the email is valid but the account has no password — created through OTP
+ * signup, Webflow/Framer, or a migration. The login screen catches this to offer the
+ * email-code route instead of showing a dead-end credential error.
+ */
+export class PasswordNotSetError extends Error {
+  readonly canUseOtp = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'PasswordNotSetError';
+  }
+}
+
+/**
+ * Password login.
+ *
+ * The password is sent as plaintext over HTTPS and hashed server-side with PBKDF2.
+ * It is deliberately NOT hashed in the browser: TLS already protects it in transit, and
+ * the previous client-side SHA-256 scheme made the stored value directly replayable —
+ * anyone who could read the database could authenticate as any user.
+ */
 export async function login(email: string, password: string) {
   const emailNorm = email.trim().toLowerCase();
-  const passwordHash = await hashPasswordForRequest(emailNorm, password);
-  // Send hash; optionally send password so backend can verify server-side if hash mismatch (e.g. encoding)
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email: emailNorm, passwordHash, password }),
+    body: JSON.stringify({ email: emailNorm, password }),
   });
 
-  if (!res.ok) {
-    throw new Error(`Login failed: ${res.status}`);
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    const message = data?.error || `Login failed: ${res.status}`;
+    if (data?.passwordNotSet) throw new PasswordNotSetError(message);
+    throw new Error(message);
   }
 
-  return parseApiResponse(res);
+  try {
+    sessionStorage.setItem('cbLastUserEmail', emailNorm);
+    sessionStorage.removeItem('cbSessionCache');
+  } catch {}
 
+  return data;
 }
 //login ends here
 
@@ -66,6 +79,11 @@ export async function requestVerificationCode(payload: {
   email: string;
   purpose: 'login' | 'signup';
   name?: string;
+  // Signup only. Sent here rather than at verify time so the account is created in one
+  // step once the code checks out — the worker hashes it and parks it on the
+  // verification row, so no User exists until the email is proven.
+  password?: string;
+  confirmPassword?: string;
 }) {
   const res = await fetch('/api/auth/request-code', {
     method: 'POST',
@@ -75,6 +93,8 @@ export async function requestVerificationCode(payload: {
       email: payload.email.trim().toLowerCase(),
       purpose: payload.purpose,
       name: payload.name,
+      ...(payload.password ? { password: payload.password } : {}),
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
     }),
   });
   const data = await parseApiResponse(res);
@@ -128,36 +148,64 @@ export type SignupPayload = {
   name: string;
   email: string;
   password: string;
-  confirmPassword: string;
+  /** Optional. The signup form uses a single password field with a reveal toggle. */
+  confirmPassword?: string;
 };
 
+/**
+ * Signup step 1 — validates the password and emails a 6-digit code. The account is not
+ * created here; finish with verifyVerificationCode({ purpose: 'signup', code }).
+ *
+ * Replaces the old POST /api/auth/signup, which created an account straight from the
+ * request body and so let anyone register an email they did not control.
+ */
 export async function signup(payload: SignupPayload) {
-  const email = payload.email.trim().toLowerCase();
-  const passwordHash = await hashPasswordForRequest(email, payload.password);
-  const confirmPasswordHash = await hashPasswordForRequest(email, payload.confirmPassword);
-  const res = await fetch('/api/auth/signup', {
+  return requestVerificationCode({
+    email: payload.email,
+    purpose: 'signup',
+    name: payload.name.trim(),
+    password: payload.password,
+    confirmPassword: payload.confirmPassword,
+  });
+}
+
+//signup ends here
+
+//set / change password starts here
+
+/**
+ * Set a first password, or change an existing one, for the signed-in user.
+ *
+ * `currentPassword` is required only when the account already has a password — the
+ * worker enforces this, so a stolen session cannot silently take over an account.
+ * This doubles as the password-reset path: log in with an email code, then set a new one.
+ */
+export async function setPassword(payload: {
+  newPassword: string;
+  currentPassword?: string;
+  /** Optional. The UI uses a single field with a reveal toggle; the worker only
+   *  compares this when it is actually sent. */
+  confirmPassword?: string;
+}) {
+  const res = await fetch('/api/auth/set-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({
-      name: payload.name.trim(),
-      email,
-      passwordHash,
-      confirmPasswordHash,
-      // Send snake_case too for backend/D1 schemas that expect it.
-      password_hash: passwordHash,
-      confirm_password_hash: confirmPasswordHash,
+      newPassword: payload.newPassword,
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+      ...(payload.currentPassword ? { currentPassword: payload.currentPassword } : {}),
     }),
   });
 
   const data = await parseApiResponse(res);
-  if (!res.ok) {
-    throw new Error(data.error || `Signup failed: ${res.status}`);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not update password: ${res.status}`);
   }
-  return data;
+  return data as { success: true; hasPassword: true; message: string };
 }
 
-//signup ends here
+//set / change password ends here
 
 //me endpoint starts here
 export async function getMe() {
