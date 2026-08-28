@@ -22,6 +22,11 @@ const LIMITS = {
   // Keep this generous so defaults + user edits aren't truncated in preview.
   message: 600,
   button: 20,
+  // The save-preferences button. MUST stay in step with the runtime: cdnM.js caps every
+  // button label at 20 characters (`E` in its minified limit table) and truncates
+  // mid-word, so a larger value here would make the preview promise text the live banner
+  // never renders. Every shipped translation is kept at or under 20 for the same reason.
+  saveButton: 20,
   policyLabel: 30,
 } as const;
 
@@ -329,7 +334,7 @@ export default function ConsentPreview({
       preferencesLabel: safeField('preferencesLabel', c.preferencesLabel, LIMITS.button),
       doNotSellLabel: c.doNotSellLabel ? clampLen(c.doNotSellLabel, 60) : c.doNotSellLabel,
       cookiePolicyLabel: clampLen(c.cookiePolicyLabel, LIMITS.policyLabel),
-      saveMyPreferencesLabel: safeField('saveMyPreferencesLabel', c.saveMyPreferencesLabel, LIMITS.button),
+      saveMyPreferencesLabel: safeField('saveMyPreferencesLabel', c.saveMyPreferencesLabel, LIMITS.saveButton),
       ccpaOptOutTitle: clampLen(c.ccpaOptOutTitle, LIMITS.title),
       ccpaOptOutMessage: clampLen(c.ccpaOptOutMessage, LIMITS.message),
     };

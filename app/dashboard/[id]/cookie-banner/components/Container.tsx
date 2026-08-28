@@ -25,7 +25,7 @@ import {
   pxBorderRadiusToRem,
   weightLabelToNumeric,
 } from "./bannerAppearance";
-import { TRANSLATIONS } from "./translations";
+import { TRANSLATIONS, LANGUAGE_OPTIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
@@ -62,6 +62,19 @@ function makeDefaultContentSettings(langCode = 'en') {
     categories: makeDefaultCategories(langCode),
   };
 }
+
+/**
+ * Fields of `contentSettings` that are settings rather than copy. A language switch
+ * rewrites everything except these, and they are excluded from the "has the user edited
+ * anything?" comparison that decides whether to warn before switching.
+ */
+const NON_LINGUISTIC_CONTENT_KEYS = [
+  "privacyPolicyUrl",
+  "closeButton",
+  "rejectButton",
+  "customizeButton",
+  "cookiePolicyLink",
+] as const;
 
 function makeDefaultCategories(langCode = 'en'): CookieCategoryContent {
   const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
@@ -136,6 +149,10 @@ export default function page({ siteId }: { siteId: string }) {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [contentSettings, setContentSettings] = useState(makeDefaultContentSettings);
   const [selectedLangCode, setSelectedLangCode] = useState<string>('en');
+  /** Baseline for the Publish/Save dirty check — null until the site's saved language loads. */
+  const [lastSavedLangCode, setLastSavedLangCode] = useState<string | null>(null);
+  /** Language the user picked while edited content is on screen, pending confirmation. */
+  const [pendingLangCode, setPendingLangCode] = useState<string | null>(null);
   const [customizationBase, setCustomizationBase] = useState<any>(null);
   const [customizationLoading, setCustomizationLoading] = useState(true);
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
@@ -375,6 +392,9 @@ export default function page({ siteId }: { siteId: string }) {
         const cfgTr = customization?.translations?.config || {};
         const langCode = (en.languageSelected as string) || 'en';
         setSelectedLangCode(langCode);
+        // Baseline for langDirty — without it the freshly-loaded language would read as
+        // an unsaved change and light up Publish on every visit.
+        setLastSavedLangCode(langCode);
         const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
         // For toggle flags: prefer translations.config (written by both webapp and Webflow app), fall back to translations.en.
         const _flagVal = (key: string, def: string) => { const v = cfgTr[key] ?? en[key]; return typeof v === "boolean" ? v : String(v ?? def) !== "0"; };
@@ -496,6 +516,8 @@ export default function page({ siteId }: { siteId: string }) {
         const app = appearanceFromCustomization(null);
         setAppearance(app);
         setLastSavedAppearance(app);
+        // No saved customization yet, so English is the baseline the defaults below match.
+        setLastSavedLangCode('en');
         setLastSavedContentSettings({
           title: "We value your privacy",
           acceptAll: "Accept",
@@ -561,6 +583,75 @@ export default function page({ siteId }: { siteId: string }) {
     [contentSettings, lastSavedContentSettings],
   );
 
+  /**
+   * Swap every banner + preference-banner string to the picked language's defaults.
+   *
+   * All of the TEXT is replaced rather than merged: a half-translated banner (a German
+   * heading over English category descriptions) is worse than either language on its own,
+   * so switching is all-or-nothing. The non-linguistic settings in `contentSettings` are
+   * carried over untouched — the privacy-policy URL and the four element toggles are
+   * choices about the banner, not about its language, and resetting them on a language
+   * switch would be a silent data loss the user never asked for.
+   *
+   * `applyLanguage` is the unguarded version; `handleLanguageChange` is what the dropdown
+   * calls, and it asks first when the user has typed their own copy.
+   */
+  const applyLanguage = useCallback((code: string) => {
+    setSelectedLangCode(code);
+    setContentSettings((prev) => ({
+      ...makeDefaultContentSettings(code),
+      privacyPolicyUrl: prev.privacyPolicyUrl,
+      closeButton: prev.closeButton,
+      rejectButton: prev.rejectButton,
+      customizeButton: prev.customizeButton,
+      cookiePolicyLink: prev.cookiePolicyLink,
+    }));
+  }, []);
+
+  /**
+   * True when the on-screen copy is still the untouched defaults of the current language.
+   * Compared against freshly-built defaults rather than a stored flag so it stays right
+   * after a reload, where nothing remembers whether the text was ever hand-edited.
+   *
+   * Only the fields a language switch would actually overwrite are compared — a set
+   * privacy-policy URL or a flipped toggle survives the switch, so letting either of them
+   * count as "edited" would pop the confirm dialog with nothing at stake.
+   */
+  const contentIsPristineForLang = useMemo(() => {
+    const stripNonLinguistic = (c: typeof contentSettings) => {
+      const text: Record<string, unknown> = { ...c };
+      for (const k of NON_LINGUISTIC_CONTENT_KEYS) delete text[k];
+      return text;
+    };
+    return (
+      JSON.stringify(stripNonLinguistic(contentSettings)) ===
+      JSON.stringify(stripNonLinguistic(makeDefaultContentSettings(selectedLangCode)))
+    );
+  }, [contentSettings, selectedLangCode]);
+
+  const handleLanguageChange = useCallback(
+    (code: string) => {
+      if (code === selectedLangCode) return;
+      // Nothing of the user's would be lost, so skip the prompt.
+      if (contentIsPristineForLang) {
+        applyLanguage(code);
+        return;
+      }
+      setPendingLangCode(code);
+    },
+    [applyLanguage, contentIsPristineForLang, selectedLangCode],
+  );
+
+  const confirmLanguageChange = useCallback(() => {
+    if (pendingLangCode) applyLanguage(pendingLangCode);
+    setPendingLangCode(null);
+  }, [applyLanguage, pendingLangCode]);
+
+  const langDirty = useMemo(() => {
+    if (lastSavedLangCode === null) return false;
+    return selectedLangCode !== lastSavedLangCode;
+  }, [selectedLangCode, lastSavedLangCode]);
+
   const floatingDirty = useMemo(() => {
     if (!lastSavedFloatingButton) return false;
     return JSON.stringify(floatingButton) !== JSON.stringify(lastSavedFloatingButton);
@@ -591,7 +682,7 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       publishSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty)
+      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setPublishSuccess(false);
     }
@@ -601,13 +692,14 @@ export default function page({ siteId }: { siteId: string }) {
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
+    langDirty,
     publishSuccess,
   ]);
 
   useEffect(() => {
     if (
       saveSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty)
+      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setSaveSuccess(false);
     }
@@ -617,6 +709,7 @@ export default function page({ siteId }: { siteId: string }) {
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
+    langDirty,
     saveSuccess,
   ]);
 
@@ -625,10 +718,12 @@ export default function page({ siteId }: { siteId: string }) {
     floatingDirty ||
     appearanceDirty ||
     bothFocusDirty ||
-    regulationDirty;
+    regulationDirty ||
+    langDirty;
 
   const applyPersistSuccessState = useCallback(() => {
     setLastSavedContentSettings(contentSettings);
+    setLastSavedLangCode(selectedLangCode);
     setLastSavedFloatingButton(floatingButton);
     setLastSavedAppearance(appearance);
     setLastPublishedBothFocus(bothContentFocus);
@@ -661,6 +756,10 @@ export default function page({ siteId }: { siteId: string }) {
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
+          // The banner's language. The runtime reads translations.en.languageSelected
+          // (cdnM.js) to pick its section labels, so it has to be written back here or a
+          // language switch would be lost on reload and never reach the live banner.
+          languageSelected: selectedLangCode,
           title: contentSettings.title,
           acceptAll: contentSettings.acceptAll,
           description: contentSettings.gdpr.message,
@@ -713,6 +812,7 @@ export default function page({ siteId }: { siteId: string }) {
     floatingButton,
     iabEnabled,
     googleAcEnabled,
+    selectedLangCode,
     refresh,
   ]);
 
@@ -764,6 +864,9 @@ export default function page({ siteId }: { siteId: string }) {
           },
           en: {
             ...(((customizationBase && customizationBase.translations && customizationBase.translations.en) || {})),
+            // See the note on the other payload: the runtime keys its section labels off
+            // this, so it must be persisted alongside the translated strings.
+            languageSelected: selectedLangCode,
             title: contentSettings.title,
             acceptAll: contentSettings.acceptAll,
             description: contentSettings.gdpr.message,
@@ -1156,12 +1259,56 @@ export default function page({ siteId }: { siteId: string }) {
             <div className="flex justify-end mb-3">
               <button
                 type="button"
-                onClick={() => setContentSettings(makeDefaultContentSettings(selectedLangCode))}
+                // Reset goes back to the ENGLISH defaults and puts the dropdown back on
+                // English — "reset" means the out-of-the-box banner, and the shipped
+                // banner is English. Resetting into whatever language happened to be
+                // selected would leave the user with no way back to the original.
+                onClick={() => {
+                  setSelectedLangCode("en");
+                  setContentSettings(makeDefaultContentSettings("en"));
+                }}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
                 <ResetIcon />
                 Reset updates
               </button>
+            </div>
+
+            {/* Its own row above the two tabs: the language governs BOTH the Cookie Notice
+                and the Preference Banner, so putting it inside either tab would imply it
+                only applies to that half. Label + control styling is copied from the
+                Title/Message fields in CookieNoticeAccordion2 so this reads as one of the
+                same form controls. */}
+            <div className="space-y-2 mb-6">
+              <label
+                htmlFor="banner-language"
+                className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                style={{ fontVariationSettings: "'opsz' 14" }}
+              >
+                Select Language
+              </label>
+              <div className="relative">
+                <select
+                  id="banner-language"
+                  value={selectedLangCode}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  // pr-10 rather than px-4: the chevron sits in that gap, so a long
+                  // language name can't run underneath it.
+                  className="w-full h-12 pl-4 pr-10 appearance-none cursor-pointer bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+                  style={{ fontVariationSettings: "'opsz' 14" }}
+                >
+                  {LANGUAGE_OPTIONS.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                  <svg className="w-4 h-4 text-[#111827]" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {/* Cookie Notice / Preference Banner tabs */}
@@ -1457,6 +1604,53 @@ export default function page({ siteId }: { siteId: string }) {
         cdnScriptId={site?.cdnScriptId ? String(site.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
       />
+
+      {/* Switching language replaces every string, so edited copy gets an explicit
+          confirm — the same guard the Webflow app uses. Only shown when there is
+          actually something of the user's to lose. */}
+      {pendingLangCode && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setPendingLangCode(null)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lang-switch-title"
+            className="relative w-full max-w-[420px] rounded-[10px] bg-white p-6 shadow-xl"
+          >
+            <h2 id="lang-switch-title" className="text-base font-semibold text-[#111827]">
+              Change banner language?
+            </h2>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              Switching to{" "}
+              <strong className="text-[#111827]">
+                {LANGUAGE_OPTIONS.find((l) => l.code === pendingLangCode)?.label ?? pendingLangCode}
+              </strong>{" "}
+              replaces the text on the cookie notice and the preference banner with that
+              language&apos;s defaults. Your edits to the current text will be lost.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingLangCode(null)}
+                className="rounded-md border border-[#e5e5e5] bg-white px-4 py-2 text-sm text-[#374151] hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLanguageChange}
+                className="rounded-md bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+              >
+                Change language
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
