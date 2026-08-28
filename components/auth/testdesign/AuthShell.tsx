@@ -5,7 +5,9 @@ import { imgContainer } from "./assets/svg-tjaqh";
 import imgIabTcfRegisteredCmp from "./assets/fa3ad034b7eda7a03d39af49833903394aa41edb.png";
 import imgCcpaCompliant from "./assets/741906b41fc569c54e33f599ab20ae40cd795eca.png";
 import imgGdprCompliant from "./assets/3b90840cbfde4cbf39462354fd1ef4b14bc946e4.png";
-import imgGoogleCertifiedCmpPartner from "./assets/f3ecfc9b99a6932bf2ff016f70ae1148dd6b5b15.png";
+// Temporarily hidden — to re-enable, uncomment this import and the matching
+// <img> in the compliance badges row below. The asset file is still in ./assets.
+// import imgGoogleCertifiedCmpPartner from "./assets/f3ecfc9b99a6932bf2ff016f70ae1148dd6b5b15.png";
 import imgImage2 from "./assets/b3d5b75fafbd787f73904c1747a249ffc1d09c82.png";
 import imgNathan from "./assets/48013064cc57404b3aa5475781e454ab01e24399.png";
 import { FONT_DISPLAY, FONT_MANROPE, FONT_SANS, OPSZ } from "./fonts";
@@ -170,7 +172,7 @@ export default function AuthShell({
           {/* Form area */}
           {/* lg:py-0 — justify-center already centres this block, so the old
               lg:py-10 was 80px of invisible padding. */}
-          <div className="flex flex-col flex-1 min-h-0 justify-center py-6 lg:py-0 w-full max-w-110">
+          <div className="flex flex-col flex-1 min-h-0 justify-center py-6 lg:py-0 w-full max-w-[480px]">
             <h1
               className="text-[#202022] text-[26px] sm:text-[28px] lg:text-[32px] font-bold tracking-[-0.32px] leading-9 lg:leading-10 mb-1.5"
               style={{ fontFamily: FONT_DISPLAY }}
@@ -188,11 +190,15 @@ export default function AuthShell({
           </div>
 
           {/* Compliance badges */}
-          <div className="flex flex-wrap items-center shrink-0 gap-[10px] sm:gap-[14px] mt-8 lg:mt-auto pt-6 lg:pt-[clamp(12px,2.6vh,24px)]">
+          {/* Mobile gap stays at 10px — a wider one makes the four badges wrap
+              earlier on a 320-375px phone. */}
+          <div className="flex flex-wrap items-center shrink-0 gap-[10px] sm:gap-[18px] lg:gap-[26px] mt-8 lg:mt-auto pt-6 lg:pt-[clamp(12px,2.6vh,24px)]">
             <img alt="IAB TCF Registered CMP" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgIabTcfRegisteredCmp.src} />
             <img alt="CCPA Compliant" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgCcpaCompliant.src} />
             <img alt="GDPR Compliant" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgGdprCompliant.src} />
+            {/* Temporarily hidden — re-enable together with its import at the top of this file.
             <img alt="Google Certified CMP Partner" className="h-[44px] sm:h-[52px] lg:h-[clamp(44px,6.6vh,60px)] w-auto object-contain" src={imgGoogleCertifiedCmpPartner.src} />
+            */}
           </div>
         </div>
 
@@ -211,16 +217,21 @@ export default function AuthShell({
           </div>
 
           {/* Content */}
-          <div className="relative z-10 flex flex-col flex-1 min-h-0 px-6 pt-12 pb-10 sm:px-10 lg:px-9 xl:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
+          {/*
+            lg:justify-center — previously all the leftover flex-1 slack piled up
+            below the last feature, which is the long gap the designer marked
+            "reduce the space". Centring splits it above and below instead.
+          */}
+          <div className="relative z-10 flex flex-col flex-1 min-h-0 lg:justify-center px-6 pt-12 pb-10 sm:px-10 lg:px-9 xl:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
             <h2
-              className="text-white text-[26px] sm:text-[30px] lg:text-[30px] xl:text-[34px] font-medium tracking-[-0.68px] leading-[36px] sm:leading-[40px] lg:leading-[40px] xl:leading-[44px] mb-8 lg:mb-[clamp(16px,3.1vh,28px)]"
+              className="text-white text-[26px] sm:text-[30px] lg:text-[30px] xl:text-[34px] font-medium tracking-[-0.68px] leading-[36px] sm:leading-[40px] lg:leading-[40px] xl:leading-[44px] mb-8 lg:mb-[clamp(20px,4.2vh,38px)]"
               style={{ fontFamily: FONT_DISPLAY }}
             >
               Consent that keeps your<br className="hidden xl:inline" />{" "}site compliant.
             </h2>
 
             {/* Feature 1 */}
-            <div className="mb-8 lg:mb-[clamp(16px,3.1vh,28px)]">
+            <div className="mb-8 lg:mb-[clamp(20px,4.2vh,38px)]">
               <p
                 className="text-[#69b4ff] text-[19px] font-semibold leading-7 mb-1.5"
                 style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
@@ -256,12 +267,12 @@ export default function AuthShell({
 
           {/* Testimonial + logos block */}
           <div
-            className="relative z-10 shrink-0 border-t border-b border-[rgba(225,227,231,0.1)] px-6 py-8 sm:px-10 lg:px-9 xl:px-[56px] lg:py-[clamp(24px,6vh,54px)]"
+            className="relative z-10 shrink-0 border-t border-b border-[rgba(225,227,231,0.1)] px-6 py-8 sm:px-10 lg:px-9 xl:px-[56px] lg:py-[clamp(20px,5vh,54px)]"
             style={{ backdropFilter: "blur(12px)", background: "rgba(240,248,252,0.05)" }}
           >
             {/* Quote */}
             <p
-              className="text-white text-[15px] sm:text-[16px] leading-7 mb-[17px]"
+              className="text-white text-[15px] sm:text-[16px] xl:text-[17px] font-semibold leading-7 mb-[17px]"
               style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
             >
               &ldquo;Live in minutes, blocked tracking until consent, and<br className="hidden xl:inline" />
@@ -269,7 +280,7 @@ export default function AuthShell({
             </p>
 
             {/* Attribution */}
-            <div className="flex items-center gap-[10px] mb-6 lg:mb-[clamp(16px,3.5vh,32px)]">
+            <div className="flex items-center gap-[10px] mb-6 lg:mb-[clamp(20px,4.5vh,42px)]">
               <img alt="Nathan Chase" className="w-[28px] h-[28px] shrink-0 rounded-full object-cover" src={imgNathan.src} />
               <span
                 className="text-[#69b4ff] text-[13px] sm:text-[14px] font-semibold leading-[26px]"
