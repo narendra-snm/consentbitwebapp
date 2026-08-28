@@ -183,6 +183,14 @@ export default function TestSignupForm() {
         setError("Please enter a valid email address.");
         return;
       }
+      /* DISABLED — password signup is switched off until the worker supports it.
+         authRequestCode.js has NO password handling at all and authVerifyCode.js is
+         explicitly "fully passwordless", so the password was accepted here and then
+         silently discarded: the account was created without one and the user could
+         never log in with it. Blocking on a policy the backend never applies would
+         only stop people signing up. Restore with the field below once the worker
+         accepts password/confirmPassword on /api/auth/request-code.
+
       // Mirrors validatePasswordPolicy() in the worker, which is the authority — this
       // only spares the user a round-trip for the obvious cases.
       if (!password) {
@@ -197,6 +205,7 @@ export default function TestSignupForm() {
         setError("Password must contain at least one letter and one number.");
         return;
       }
+      */
     } else if (code.replace(/\s/g, "").length < 6) {
       setError("Please enter the 6-digit verification code.");
       return;
@@ -218,7 +227,7 @@ export default function TestSignupForm() {
           name,
           email,
           purpose: "signup",
-          password,
+          // password,  // DISABLED — the worker ignores it (see the note above).
         });
         setSecondsLeft(CODE_TTL_SECONDS);
         setVerifyFailed(false);
@@ -314,6 +323,9 @@ export default function TestSignupForm() {
               disabled={loading}
               autoComplete="email"
             />
+            {/* DISABLED — see the note in the submit handler. Showing this field while
+                the worker discards the value would promise a password the account never
+                gets. Signup is name + email → emailed code until the backend lands.
             <AuthField
               label="Password"
               type="password"
@@ -326,6 +338,7 @@ export default function TestSignupForm() {
               autoComplete="new-password"
               hint="At least 8 characters, including a letter and a number."
             />
+            */}
           </>
         ) : (
           <div className="mb-[10px]" ref={otpWrapRef}>

@@ -1369,19 +1369,27 @@ export default function page({ siteId }: { siteId: string }) {
             {/* Its own row above the two tabs: the language governs BOTH the Cookie Notice
                 and the Preference Banner, so putting it inside either tab would imply it
                 only applies to that half. */}
-            <div className="mb-4">
+            {/* Label + control styling is copied from the Title/Message fields in
+                CookieNoticeAccordion2 so this reads as one of the same form controls:
+                DM Sans at text-base, h-12, and the 3px translucent-blue border that
+                turns solid on focus. */}
+            <div className="space-y-2 mb-6">
               <label
                 htmlFor="banner-language"
-                className="block mb-1.5 text-xs font-medium text-[#374151]"
+                className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 Select Language
               </label>
-              <div className="relative w-full max-w-[220px]">
+              <div className="relative">
                 <select
                   id="banner-language"
                   value={selectedLangCode}
                   onChange={(e) => handleLanguageChange(e.target.value)}
-                  className="w-full appearance-none bg-white border border-[#e5e5e5] rounded-md pl-3 pr-8 py-2 text-sm text-[#374151] hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  // pr-10 rather than px-4: the chevron sits in that gap, so a long
+                  // language name can't run underneath it.
+                  className="w-full h-12 pl-4 pr-10 appearance-none cursor-pointer bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+                  style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   {LANGUAGE_OPTIONS.map((l) => (
                     <option key={l.code} value={l.code}>
@@ -1389,8 +1397,8 @@ export default function page({ siteId }: { siteId: string }) {
                     </option>
                   ))}
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
-                  <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                  <svg className="w-4 h-4 text-[#111827]" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                   </svg>
                 </div>
