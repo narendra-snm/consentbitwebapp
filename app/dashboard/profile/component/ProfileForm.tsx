@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import PasswordSection from "./PasswordSection";
 
 type Props = {
   name?: string;
@@ -188,6 +189,10 @@ export default function ProfileDisplay({
             </div>
           )}
         </div>
+
+        {/* Password — set a first one, or change an existing one. Reads its own
+            hasPassword flag from /api/auth/me, so no extra props to thread through. */}
+        <PasswordSection />
 
       </div>
 

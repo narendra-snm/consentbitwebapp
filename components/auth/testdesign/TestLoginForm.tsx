@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
+import {
+  requestVerificationCode,
+  verifyVerificationCode,
+  login,
+  PasswordNotSetError,
+} from "@/lib/client-api";
 import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import { analytics } from "@/lib/analytics";
 import AuthShell from "./AuthShell";
@@ -35,6 +40,10 @@ export default function TestLoginForm() {
 
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  // "otp" stays the default: every existing account can use it, whereas a password only
+  // exists for accounts created since passwords were introduced or set from Settings.
+  const [method, setMethod] = useState<"otp" | "password">("otp");
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -93,11 +102,24 @@ export default function TestLoginForm() {
     setSecondsLeft(0);
   }
 
+  /** Switch between password and email-code sign-in, keeping the typed email. */
+  function switchMethod(next: "otp" | "password", message?: string) {
+    setMethod(next);
+    setStep(1);
+    setCode("");
+    setPassword("");
+    setError(null);
+    setNotice(message ?? null);
+    setVerifyFailed(false);
+    setSecondsLeft(0);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     // Client-side validation — no API call is made for invalid/empty input.
-    if (step === 1) {
+    // Email is required by both methods; the second factor differs.
+    if (method === "password" || step === 1) {
       if (!email.trim()) {
         setError("Please enter your email address.");
         return;
@@ -106,7 +128,13 @@ export default function TestLoginForm() {
         setError("Please enter a valid email address.");
         return;
       }
-    } else if (code.replace(/\s/g, "").length < 6) {
+    }
+    if (method === "password") {
+      if (!password) {
+        setError("Please enter your password.");
+        return;
+      }
+    } else if (step === 2 && code.replace(/\s/g, "").length < 6) {
       setError("Please enter the 6-digit verification code.");
       return;
     }
@@ -120,7 +148,13 @@ export default function TestLoginForm() {
     // leaving the UI looking idle for ~1s before the page swaps.
     let navigating = false;
     try {
-      if (step === 1) {
+      if (method === "password") {
+        await login(email, password);
+        analytics.identify(email.trim().toLowerCase(), "");
+        analytics.authEmailSubmitted(email.trim().toLowerCase());
+        navigating = true;
+        router.replace(nextPath);
+      } else if (step === 1) {
         await requestVerificationCode({ email, purpose: "login" });
         setSecondsLeft(CODE_TTL_SECONDS);
         setVerifyFailed(false);
@@ -141,10 +175,20 @@ export default function TestLoginForm() {
         router.replace(nextPath);
       }
     } catch (err: unknown) {
-      if (step === 2) setVerifyFailed(true);
+      // The account exists but predates passwords (OTP signup, Webflow/Framer, a
+      // migration). Drop the user into the code flow rather than leaving them stuck on a
+      // password they never set.
+      if (err instanceof PasswordNotSetError) {
+        switchMethod("otp", err.message);
+        setLoading(false);
+        return;
+      }
+      if (method === "otp" && step === 2) setVerifyFailed(true);
       setError(
         err instanceof Error
           ? err.message
+          : method === "password"
+          ? "Could not log you in. Please check your details and try again."
           : step === 1
           ? "Failed to send code. Please try again."
           : "Invalid or expired code. Please try again.",
@@ -161,29 +205,76 @@ export default function TestLoginForm() {
       headerPrompt="Don't have an account?"
       headerLinkLabel="Sign up"
       headerLinkHref="/signup"
-      title={step === 1 ? "Log in to your account" : "Enter your code"}
+      title={
+        method === "password" || step === 1 ? "Log in to your account" : "Enter your code"
+      }
       subtitle={
-        step === 1
+        method === "password"
+          ? "Enter your email and password."
+          : step === 1
           ? "Enter your email and we'll send you a verification code."
           : `We sent a 6-digit code to ${email}.`
       }
     >
       <form onSubmit={handleSubmit} noValidate>
-        {step === 1 ? (
-          <AuthField
-            label="Email ID"
-            type="email"
-            value={email}
-            onChange={(v) => {
-              setEmail(v);
-              setError(null);
-            }}
-            placeholder="you@company.com"
-            disabled={loading}
-            autoComplete="email"
-            autoFocus
-            invalid={!!error}
-          />
+        {method === "password" ? (
+          <>
+            <AuthField
+              label="Email ID"
+              type="email"
+              value={email}
+              onChange={(v) => {
+                setEmail(v);
+                setError(null);
+              }}
+              placeholder="you@company.com"
+              disabled={loading}
+              autoComplete="email"
+              autoFocus
+              invalid={!!error}
+            />
+            <AuthField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(v) => {
+                setPassword(v);
+                setError(null);
+              }}
+              disabled={loading}
+              autoComplete="current-password"
+              invalid={!!error}
+            />
+            {notice && (
+              <div className="-mt-2 mb-4">
+                <AuthNotice message={notice} />
+              </div>
+            )}
+          </>
+        ) : step === 1 ? (
+          <>
+            <AuthField
+              label="Email ID"
+              type="email"
+              value={email}
+              onChange={(v) => {
+                setEmail(v);
+                setError(null);
+              }}
+              placeholder="you@company.com"
+              disabled={loading}
+              autoComplete="email"
+              autoFocus
+              invalid={!!error}
+            />
+            {/* Carries the "this account has no password yet" hand-off from the
+                password form, which otherwise has nowhere to surface on step 1. */}
+            {notice && (
+              <div className="-mt-2 mb-4">
+                <AuthNotice message={notice} />
+              </div>
+            )}
+          </>
         ) : (
           <div className="mb-[10px]">
             <span
@@ -238,7 +329,11 @@ export default function TestLoginForm() {
             </div>
           )}
           <AuthSubmitButton disabled={loading}>
-            {loading
+            {method === "password"
+              ? loading
+                ? "Logging in…"
+                : "Log in"
+              : loading
               ? step === 1
                 ? "Sending code…"
                 : "Verifying…"
@@ -246,10 +341,32 @@ export default function TestLoginForm() {
               ? "Send code"
               : "Verify & log in"}
           </AuthSubmitButton>
+
+          {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
+              would silently discard the code the user is already holding. */}
+          {(method === "password" || step === 1) && (
+            <div className="mt-4 text-center">
+              <AuthTextButton
+                onClick={() =>
+                  switchMethod(method === "password" ? "otp" : "password")
+                }
+                disabled={loading}
+              >
+                {method === "password"
+                  ? "Log in with an email code instead"
+                  : "Log in with a password instead"}
+              </AuthTextButton>
+            </div>
+          )}
         </div>
 
         <AuthHelperText>
-          {step === 1 ? (
+          {method === "password" ? (
+            <>
+              Forgot your password? Log in with an email code,<br className="hidden lg:inline" />
+              {" "}then set a new one in Account Settings.
+            </>
+          ) : step === 1 ? (
             <>
               Log in using the email you used for your initial<br className="hidden lg:inline" />
               {" "}app registration.

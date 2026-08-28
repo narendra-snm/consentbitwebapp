@@ -39,6 +39,7 @@ export default function TestSignupForm() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +183,20 @@ export default function TestSignupForm() {
         setError("Please enter a valid email address.");
         return;
       }
+      // Mirrors validatePasswordPolicy() in the worker, which is the authority — this
+      // only spares the user a round-trip for the obvious cases.
+      if (!password) {
+        setError("Please choose a password.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters.");
+        return;
+      }
+      if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        setError("Password must contain at least one letter and one number.");
+        return;
+      }
     } else if (code.replace(/\s/g, "").length < 6) {
       setError("Please enter the 6-digit verification code.");
       return;
@@ -199,11 +214,19 @@ export default function TestSignupForm() {
     let navigating = false;
     try {
       if (effectiveStep === 1) {
-        await requestVerificationCode({ name, email, purpose: "signup" });
+        await requestVerificationCode({
+          name,
+          email,
+          purpose: "signup",
+          password,
+        });
         setSecondsLeft(CODE_TTL_SECONDS);
         setVerifyFailed(false);
         setStep(2);
         persistPending();
+        // Drop the plaintext from component state now that the worker holds the hash.
+        // A resend re-uses that pending hash server-side, so nothing needs it again.
+        setPassword("");
         // Persist the step in the URL so the code screen survives a reload.
         router.replace(
           `/signup?step=verify&email=${encodeURIComponent(
@@ -290,6 +313,18 @@ export default function TestSignupForm() {
               placeholder="you@company.com"
               disabled={loading}
               autoComplete="email"
+            />
+            <AuthField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(v) => {
+                setPassword(v);
+                setError(null);
+              }}
+              disabled={loading}
+              autoComplete="new-password"
+              hint="At least 8 characters, including a letter and a number."
             />
           </>
         ) : (
