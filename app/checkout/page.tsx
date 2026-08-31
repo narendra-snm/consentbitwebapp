@@ -463,7 +463,11 @@ function CheckoutForm({
     setCouponLoading(true);
     try {
       const res = await fetch(
-        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`
+          // Email hint: this page has no session cookie yet (guest checkout), and
+          // per-customer promo codes need to know who is asking. Advisory only —
+          // the worker re-checks against the account that actually pays.
+          + (email ? `&email=${encodeURIComponent(email)}` : ''),
         { credentials: 'include' },
       );
       const data = (await parseApiResponse(res)) as {

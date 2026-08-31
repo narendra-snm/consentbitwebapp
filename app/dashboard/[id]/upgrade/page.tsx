@@ -310,7 +310,7 @@ export default function PricingTable() {
     setPromoLoading(true);
     try {
       const res = await fetch(
-        `https://manager.consentbit.com/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
         { credentials: 'include' },
       );
       const text = await res.text();

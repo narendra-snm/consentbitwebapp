@@ -32,6 +32,27 @@ interface PricingPlan {
   buttonTextColor?: string;
 }
 
+type AppliedCoupon = {
+  promotionCodeId: string;
+  code: string;
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string;
+};
+
+/** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
+function decodeEnvelope(parsed: unknown): unknown {
+  if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
+    try {
+      const binary = atob((parsed as { d: string }).d);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through */ }
+  }
+  return parsed;
+}
+
 const plans: PricingPlan[] = [
   {
     id: "free",
@@ -101,6 +122,10 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [mounted, setMounted] = useState(false);
   const checkoutTab = useRef<Window | null>(null);
   useLayoutEffect(() => {
@@ -160,6 +185,58 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     checkoutTab.current = null;
     setCheckoutPending(false);
     setSubmitting(false);
+  }
+
+  /**
+   * Validate a promo code server-side before checkout. The worker resolves the caller
+   * from the `sid` session cookie, so per-customer restricted codes are only accepted
+   * for the account they belong to — this cannot be spoofed from here.
+   */
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) {
+      setAppliedCoupon(null);
+      setCouponError("Enter a promo code.");
+      return;
+    }
+    setCouponError(null);
+    setCouponLoading(true);
+    try {
+      const res = await fetch(
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: "include" },
+      );
+      const text = await res.text();
+      type CouponResponse = {
+        valid?: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+      };
+      let data: CouponResponse | null = null;
+      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
+      if (!data || !data.valid || !data.promotionCodeId) {
+        setAppliedCoupon(null);
+        setCouponError(data?.error || "Invalid or expired promo code.");
+        return;
+      }
+      setAppliedCoupon({
+        promotionCodeId: data.promotionCodeId,
+        code: data.code || code,
+        percentOff: data.percentOff ?? null,
+        amountOff: data.amountOff ?? null,
+        currency: data.currency || "usd",
+      });
+      setCouponError(null);
+    } catch {
+      setAppliedCoupon(null);
+      setCouponError("Could not validate the promo code. Please try again.");
+    } finally {
+      setCouponLoading(false);
+    }
   }
 
   function normalizeDomain(raw: string): string {
@@ -322,6 +399,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           siteDomain: domain,
           successUrl,
           cancelUrl,
+          // Server re-validates this against the logged-in account before applying it.
+          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
         });
         sessionStorage.setItem('cb_stripe_redirect_modal', '1');
         window.location.href = data.url;
@@ -490,6 +569,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                 YEARLY (20% OFF)
               </button>
             </div>
+
           </div>
 
           {/* Pricing Cards Grid */}
@@ -635,6 +715,81 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                 </div>
               );
             })}
+          </div>
+
+          {/* Promo code — validated server-side against the logged-in account */}
+          <div className="mt-8 px-[28px] flex flex-col items-start w-full">
+            <label
+              className="mb-2 font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px] block"
+              style={{ fontVariationSettings: "'opsz' 14" }}
+            >
+              Promo code
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-auto">
+                <input
+                  type="text"
+                  value={couponInput}
+                  disabled={!!appliedCoupon}
+                  onChange={(e) => {
+                    setCouponInput(e.target.value);
+                    setCouponError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !appliedCoupon) {
+                      e.preventDefault();
+                      void applyCoupon();
+                    }
+                  }}
+                  placeholder="Promo code"
+                  className={`h-[44px] w-full sm:w-[220px] max-w-full bg-white border rounded-lg pl-[14px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:bg-[#f1f5f9] disabled:text-[#6b7280] disabled:cursor-not-allowed ${
+                    appliedCoupon ? "pr-[38px] border-[#15803d]" : "pr-[14px]"
+                  } ${couponError ? "border-[#b91c1c]" : appliedCoupon ? "border-[#15803d]" : "border-[#e5e5e5]"}`}
+                  style={{ fontVariationSettings: "'opsz' 14" }}
+                />
+                {/* Close — clears the applied promo code and re-enables the field */}
+                {appliedCoupon && (
+                  <button
+                    type="button"
+                    aria-label="Remove promo code"
+                    title="Remove promo code"
+                    onClick={() => {
+                      setAppliedCoupon(null);
+                      setCouponInput("");
+                      setCouponError(null);
+                    }}
+                    className="absolute right-[10px] top-1/2 -translate-y-1/2 h-[20px] w-[20px] flex items-center justify-center rounded-full bg-[#e5e5e5] text-[#161616] text-[12px] leading-none cursor-pointer hover:bg-[#d4d4d4]"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void applyCoupon()}
+                disabled={couponLoading || !!appliedCoupon}
+                className="h-[44px] w-full sm:w-auto px-4 rounded-[8px] bg-[#007aff] text-[14px] text-white cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {couponLoading ? "Checking…" : appliedCoupon ? "Applied" : "Apply"}
+              </button>
+            </div>
+            {appliedCoupon && (
+              <p className="mt-1.5 text-xs text-[#15803d] break-words max-w-full">
+                {appliedCoupon.code} applied
+                {appliedCoupon.percentOff != null
+                  ? ` — ${appliedCoupon.percentOff}% off`
+                  : appliedCoupon.amountOff != null
+                    ? ` — ${(appliedCoupon.amountOff / 100).toFixed(2)} ${appliedCoupon.currency.toUpperCase()} off`
+                    : ""}
+                . Discount shown at checkout.
+              </p>
+            )}
+            {couponError && (
+              <p className="mt-1.5 text-xs text-[#b91c1c] flex items-start gap-1 break-words max-w-full">
+                <span className="leading-[1.4]">⚠</span>
+                <span>{couponError}</span>
+              </p>
+            )}
           </div>
 
           {/* Submit Error */}
