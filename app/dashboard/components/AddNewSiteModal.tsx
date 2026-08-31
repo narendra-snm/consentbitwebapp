@@ -717,16 +717,21 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
             })}
           </div>
 
-          {/* Promo code — validated server-side against the logged-in account */}
-          <div className="mt-8 px-[28px] flex flex-col items-start w-full">
+          {/* Promo code — validated server-side against the logged-in account.
+              Layout note: flex-wrap (not sm: variants) so the button sits beside the
+              input whenever there is room and wraps under it when there isn't — no
+              breakpoint to get wrong. State colours use inline style rather than
+              conditional arbitrary classes so they never depend on class scanning. */}
+          <div className="mt-8 px-[28px]">
             <label
-              className="mb-2 font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px] block"
+              className="mb-2 block font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Promo code
             </label>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              <div className="relative w-full sm:w-auto">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-[220px] max-w-full">
                 <input
                   type="text"
                   value={couponInput}
@@ -742,13 +747,18 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     }
                   }}
                   placeholder="Promo code"
-                  className={`h-[44px] w-full sm:w-[220px] max-w-full bg-white border rounded-lg pl-[14px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:bg-[#f1f5f9] disabled:text-[#6b7280] disabled:cursor-not-allowed ${
-                    appliedCoupon ? "pr-[38px] border-[#15803d]" : "pr-[14px]"
-                  } ${couponError ? "border-[#b91c1c]" : appliedCoupon ? "border-[#15803d]" : "border-[#e5e5e5]"}`}
-                  style={{ fontVariationSettings: "'opsz' 14" }}
+                  className="h-[44px] w-full border rounded-lg font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:cursor-not-allowed"
+                  style={{
+                    fontVariationSettings: "'opsz' 14",
+                    paddingLeft: 14,
+                    paddingRight: appliedCoupon || couponInput ? 38 : 14,
+                    borderColor: couponError ? "#b91c1c" : appliedCoupon ? "#15803d" : "#e5e5e5",
+                    backgroundColor: appliedCoupon ? "#f8fafc" : "#ffffff",
+                    color: appliedCoupon ? "#6b7280" : "#161616",
+                  }}
                 />
-                {/* Close — clears the applied promo code and re-enables the field */}
-                {appliedCoupon && (
+                {/* Clears the code (applied or rejected), re-enables Apply, and hides itself */}
+                {(appliedCoupon || couponInput) && (
                   <button
                     type="button"
                     aria-label="Remove promo code"
@@ -758,23 +768,27 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                       setCouponInput("");
                       setCouponError(null);
                     }}
-                    className="absolute right-[10px] top-1/2 -translate-y-1/2 h-[20px] w-[20px] flex items-center justify-center rounded-full bg-[#e5e5e5] text-[#161616] text-[12px] leading-none cursor-pointer hover:bg-[#d4d4d4]"
+                    className="absolute right-[10px] top-1/2 flex h-[20px] w-[20px] -translate-y-1/2 items-center justify-center rounded-full text-[14px] leading-none"
+                    style={{ backgroundColor: "#e5e5e5", color: "#161616" }}
                   >
                     ×
                   </button>
                 )}
               </div>
+
               <button
                 type="button"
                 onClick={() => void applyCoupon()}
                 disabled={couponLoading || !!appliedCoupon}
-                className="h-[44px] w-full sm:w-auto px-4 rounded-[8px] bg-[#007aff] text-[14px] text-white cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                className="h-[44px] shrink-0 rounded-[8px] px-5 text-[14px] text-white disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: "#007aff" }}
               >
                 {couponLoading ? "Checking…" : appliedCoupon ? "Applied" : "Apply"}
               </button>
             </div>
+
             {appliedCoupon && (
-              <p className="mt-1.5 text-xs text-[#15803d] break-words max-w-full">
+              <p className="mt-1.5 max-w-full text-xs break-words" style={{ color: "#15803d" }}>
                 {appliedCoupon.code} applied
                 {appliedCoupon.percentOff != null
                   ? ` — ${appliedCoupon.percentOff}% off`
@@ -785,7 +799,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
               </p>
             )}
             {couponError && (
-              <p className="mt-1.5 text-xs text-[#b91c1c] flex items-start gap-1 break-words max-w-full">
+              <p className="mt-1.5 flex max-w-full items-start gap-1 text-xs break-words" style={{ color: "#b91c1c" }}>
                 <span className="leading-[1.4]">⚠</span>
                 <span>{couponError}</span>
               </p>
