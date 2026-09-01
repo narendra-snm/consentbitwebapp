@@ -51,7 +51,13 @@ export class PasswordNotSetError extends Error {
  */
 export async function login(email: string, password: string) {
   const emailNorm = email.trim().toLowerCase();
-  const res = await fetch('/api/auth/login', {
+
+  // Plaintext over HTTPS, hashed server-side with PBKDF2. TLS protects it in transit and
+  // the salted hash protects it at rest; hashing in the browser would only make that hash
+  // the credential. The worker also accepts an RSA-encrypted `passwordEnc` field, which
+  // this client deliberately does not use — it removed plaintext from the request body
+  // but bought no real protection, at the cost of a key fetch on every page load.
+  const res = await fetch('/api/auth/password-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -169,6 +175,78 @@ export async function signup(payload: SignupPayload) {
   });
 }
 
+/**
+ * Signup WITHOUT email verification — creates the account in one request and returns
+ * with the session cookie already set, so the caller can go straight to /dashboard.
+ *
+ * The plaintext password travels over HTTPS and is hashed server-side with PBKDF2
+ * (100k iterations, per-user salt). It is never hashed here: a client-side hash would
+ * become the credential itself, replayable by anyone who could read it.
+ *
+ * TRADE-OFF: unlike signup(), nothing proves the address belongs to the person
+ * registering it. Use signup() when that matters.
+ */
+export async function signupWithPassword(payload: SignupPayload) {
+  const res = await fetch('/api/auth/password-signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      name: payload.name.trim(),
+      email: payload.email.trim().toLowerCase(),
+      // Plaintext over HTTPS — see the note in login().
+      password: payload.password,
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+    }),
+  });
+
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Signup failed: ${res.status}`);
+  }
+
+  try {
+    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    sessionStorage.removeItem('cbSessionCache');
+  } catch {
+    // sessionStorage unavailable (private mode) — non-fatal.
+  }
+  return data;
+}
+
+
+/**
+ * Confirm an emailed verification token. No session required — the token is the proof,
+ * so this also works if the link is opened in a different browser.
+ */
+export async function confirmEmailVerification(token: string) {
+  const res = await fetch('/api/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Verification failed: ${res.status}`);
+  }
+  return data as { success: true; email?: string; alreadyVerified?: boolean };
+}
+
+/** Ask for a fresh confirmation link. Requires a session — it emails the logged-in user. */
+export async function resendEmailVerification() {
+  const res = await fetch('/api/auth/verify-email/resend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: '{}',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not send a new link: ${res.status}`);
+  }
+  return data as { success: true; sent?: boolean; alreadyVerified?: boolean };
+}
+
 //signup ends here
 
 //set / change password starts here
@@ -180,6 +258,28 @@ export async function signup(payload: SignupPayload) {
  * worker enforces this, so a stolen session cannot silently take over an account.
  * This doubles as the password-reset path: log in with an email code, then set a new one.
  */
+/**
+ * Check the signed-in user's current password without changing it.
+ *
+ * Lets the profile panel hold back the new-password fields until the current one is
+ * confirmed. Returns `valid` rather than throwing: a wrong password is an expected
+ * answer here, not a failed request. setPassword() re-verifies on save, so this is a
+ * UX gate and never the thing that authorises the change.
+ */
+export async function verifyCurrentPassword(currentPassword: string) {
+  const res = await fetch('/api/auth/verify-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ currentPassword }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not verify password: ${res.status}`);
+  }
+  return data as { success: true; valid: boolean; passwordNotSet?: boolean };
+}
+
 export async function setPassword(payload: {
   newPassword: string;
   currentPassword?: string;

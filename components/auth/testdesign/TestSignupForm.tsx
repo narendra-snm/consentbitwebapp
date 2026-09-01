@@ -40,6 +40,10 @@ export default function TestSignupForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Signup is password-only. The "otp" branches below are kept rather than deleted so
+  // the one-time-code signup can be restored by putting the method-switch button back —
+  // nothing else has to change. With no switch, this can never become "otp".
+  const [method] = useState<"password" | "otp">("password");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
@@ -183,29 +187,22 @@ export default function TestSignupForm() {
         setError("Please enter a valid email address.");
         return;
       }
-      /* DISABLED — password signup is switched off until the worker supports it.
-         authRequestCode.js has NO password handling at all and authVerifyCode.js is
-         explicitly "fully passwordless", so the password was accepted here and then
-         silently discarded: the account was created without one and the user could
-         never log in with it. Blocking on a policy the backend never applies would
-         only stop people signing up. Restore with the field below once the worker
-         accepts password/confirmPassword on /api/auth/request-code.
-
       // Mirrors validatePasswordPolicy() in the worker, which is the authority — this
       // only spares the user a round-trip for the obvious cases.
-      if (!password) {
-        setError("Please choose a password.");
-        return;
+      if (method === "password") {
+        if (!password) {
+          setError("Please choose a password.");
+          return;
+        }
+        if (password.length < 8) {
+          setError("Password must be at least 8 characters.");
+          return;
+        }
+        if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+          setError("Password must contain at least one letter and one number.");
+          return;
+        }
       }
-      if (password.length < 8) {
-        setError("Password must be at least 8 characters.");
-        return;
-      }
-      if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-        setError("Password must contain at least one letter and one number.");
-        return;
-      }
-      */
     } else if (code.replace(/\s/g, "").length < 6) {
       setError("Please enter the 6-digit verification code.");
       return;
@@ -227,7 +224,9 @@ export default function TestSignupForm() {
           name,
           email,
           purpose: "signup",
-          // password,  // DISABLED — the worker ignores it (see the note above).
+          // Omitted on the one-time-code flow so the worker creates a passwordless
+          // account, exactly as it did before.
+          ...(method === "password" ? { password } : {}),
         });
         setSecondsLeft(CODE_TTL_SECONDS);
         setVerifyFailed(false);
@@ -292,7 +291,9 @@ export default function TestSignupForm() {
       title={effectiveStep === 1 ? "Create your account" : "Verify your email"}
       subtitle={
         effectiveStep === 1
-          ? "Enter your basic information to get started."
+          ? method === "password"
+            ? "Enter your details and choose a password."
+            : "Enter your details — we'll email you a one-time code."
           : `We sent a 6-digit code to ${email}.`
       }
     >
@@ -323,22 +324,20 @@ export default function TestSignupForm() {
               disabled={loading}
               autoComplete="email"
             />
-            {/* DISABLED — see the note in the submit handler. Showing this field while
-                the worker discards the value would promise a password the account never
-                gets. Signup is name + email → emailed code until the backend lands.
-            <AuthField
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(v) => {
-                setPassword(v);
-                setError(null);
-              }}
-              disabled={loading}
-              autoComplete="new-password"
-              hint="At least 8 characters, including a letter and a number."
-            />
-            */}
+            {method === "password" && (
+              <AuthField
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(v) => {
+                  setPassword(v);
+                  setError(null);
+                }}
+                disabled={loading}
+                autoComplete="new-password"
+                hint="At least 8 characters, including a letter and a number."
+              />
+            )}
           </>
         ) : (
           <div className="mb-[10px]" ref={otpWrapRef}>
@@ -394,6 +393,8 @@ export default function TestSignupForm() {
             </div>
           )}
           <AuthSubmitButton disabled={loading}>
+            {/* Step 1 sends a code either way — the account is not created until it is
+                verified — so the label says so regardless of method. */}
             {loading
               ? effectiveStep === 1
                 ? "Sending code…"
@@ -402,6 +403,7 @@ export default function TestSignupForm() {
               ? "Send code"
               : "Verify & sign up"}
           </AuthSubmitButton>
+
         </div>
 
         <AuthHelperText>

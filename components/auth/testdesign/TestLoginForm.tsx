@@ -342,17 +342,8 @@ export default function TestLoginForm() {
               : "Verify & log in"}
           </AuthSubmitButton>
 
-          {/* DISABLED — password login is switched off until the worker supports it.
-              `consent-webapp-manager` has no /api/auth/set-password, still expects the
-              retired client-side SHA-256 `passwordHash`, and never returns the
-              `passwordNotSet` flag this form relies on to fall back to a code. With the
-              backend passwordless, every password login 401s on "Invalid credentials".
-              `method` stays "otp" because nothing can flip it, so the whole password
-              branch below is unreachable rather than deleted. Restore this block (and the
-              signup password field) once the worker ships those endpoints.
-
           {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
-              would silently discard the code the user is already holding. * /}
+              would silently discard the code the user is already holding. */}
           {(method === "password" || step === 1) && (
             <div className="mt-4 text-center">
               <AuthTextButton
@@ -367,7 +358,6 @@ export default function TestLoginForm() {
               </AuthTextButton>
             </div>
           )}
-          */}
         </div>
 
         <AuthHelperText>
