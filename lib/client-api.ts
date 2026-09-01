@@ -254,6 +254,28 @@ export async function resendEmailVerification() {
  * worker enforces this, so a stolen session cannot silently take over an account.
  * This doubles as the password-reset path: log in with an email code, then set a new one.
  */
+/**
+ * Check the signed-in user's current password without changing it.
+ *
+ * Lets the profile panel hold back the new-password fields until the current one is
+ * confirmed. Returns `valid` rather than throwing: a wrong password is an expected
+ * answer here, not a failed request. setPassword() re-verifies on save, so this is a
+ * UX gate and never the thing that authorises the change.
+ */
+export async function verifyCurrentPassword(currentPassword: string) {
+  const res = await fetch('/api/auth/verify-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ currentPassword }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not verify password: ${res.status}`);
+  }
+  return data as { success: true; valid: boolean; passwordNotSet?: boolean };
+}
+
 export async function setPassword(payload: {
   newPassword: string;
   currentPassword?: string;

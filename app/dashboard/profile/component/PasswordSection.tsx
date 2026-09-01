@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMe, setPassword as setPasswordRequest } from "@/lib/client-api";
+import { getMe, setPassword as setPasswordRequest, verifyCurrentPassword } from "@/lib/client-api";
 
 const INPUT_CLASS =
   "w-full min-h-[48px] px-3 pr-16 border border-[#E5E5E5] rounded-md text-[#111827] bg-white outline-none focus:border-[#6366F1] transition-colors";
@@ -62,6 +62,12 @@ export default function PasswordSection() {
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  // Changing a password is two stages: confirm the current one, THEN choose a new one.
+  // Asking for a new password first means typing it out only to be told the old one was
+  // wrong. Accounts with no password skip this — there is nothing to confirm.
+  const [currentVerified, setCurrentVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -83,12 +89,42 @@ export default function PasswordSection() {
     };
   }, []);
 
-  const dirty = current.length > 0 || next.length > 0;
+  const dirty = current.length > 0 || next.length > 0 || confirm.length > 0;
 
   function reset() {
     setCurrent("");
     setNext("");
+    setConfirm("");
+    setCurrentVerified(false);
     setError(null);
+  }
+
+  /** Stage one: confirm the current password before revealing the new-password fields. */
+  async function handleVerifyCurrent() {
+    setError(null);
+    setSuccess(null);
+    if (!current) {
+      setError("Enter your current password.");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await verifyCurrentPassword(current);
+      if (res.valid) {
+        setCurrentVerified(true);
+      } else if (res.passwordNotSet) {
+        // The account has no password after all — drop straight to the set-first-password
+        // form rather than insisting on a current one that cannot exist.
+        setHasPassword(false);
+        setCurrentVerified(true);
+      } else {
+        setError("Current password is incorrect.");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not verify your password.");
+    } finally {
+      setVerifying(false);
+    }
   }
 
   async function handleSave() {
@@ -108,11 +144,16 @@ export default function PasswordSection() {
       setError("Password must contain at least one letter and one number.");
       return;
     }
+    if (next !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
 
     setSaving(true);
     try {
       const res = await setPasswordRequest({
         newPassword: next,
+        confirmPassword: confirm,
         ...(hasPassword ? { currentPassword: current } : {}),
       });
       setHasPassword(true);
@@ -155,41 +196,72 @@ export default function PasswordSection() {
             }}
             placeholder="Current password"
             autoComplete="current-password"
-            disabled={saving}
+            // Locked once confirmed: editing it afterwards would leave the verified flag
+            // pointing at a password the user has since changed in the box.
+            disabled={saving || verifying || currentVerified}
           />
         )}
-        <PasswordInput
-          value={next}
-          onChange={(v) => {
-            setNext(v);
-            setError(null);
-          }}
-          placeholder="New password"
-          autoComplete="new-password"
-          disabled={saving}
-        />
+        {/* Revealed only once the current password is confirmed — or immediately when
+            there is no current password to confirm. */}
+        {(!hasPassword || currentVerified) && (
+          <>
+            <PasswordInput
+              value={next}
+              onChange={(v) => {
+                setNext(v);
+                setError(null);
+              }}
+              placeholder="New password"
+              autoComplete="new-password"
+              disabled={saving}
+            />
+            <PasswordInput
+              value={confirm}
+              onChange={(v) => {
+                setConfirm(v);
+                setError(null);
+              }}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              disabled={saving}
+            />
+          </>
+        )}
       </div>
 
-      <p className="text-[#9CA3AF] text-xs mt-2">
-        At least 8 characters, including a letter and a number.
-      </p>
+      {(!hasPassword || currentVerified) && (
+        <p className="text-[#9CA3AF] text-xs mt-2">
+          At least 8 characters, including a letter and a number.
+        </p>
+      )}
 
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {success && <p className="text-green-600 text-xs mt-1">{success}</p>}
 
       {dirty && (
         <div className="flex gap-2 mt-3">
+          {hasPassword && !currentVerified ? (
+            <button
+              type="button"
+              disabled={verifying}
+              onClick={handleVerifyCurrent}
+              className="px-4 py-2 bg-[#6366F1] text-white text-sm rounded-md hover:bg-[#4F46E5] disabled:opacity-50 transition-colors"
+            >
+              {verifying ? "Checking…" : "Continue"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSave}
+              className="px-4 py-2 bg-[#6366F1] text-white text-sm rounded-md hover:bg-[#4F46E5] disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving…" : hasPassword ? "Update Password" : "Set Password"}
+            </button>
+          )}
           <button
             type="button"
-            disabled={saving}
-            onClick={handleSave}
-            className="px-4 py-2 bg-[#6366F1] text-white text-sm rounded-md hover:bg-[#4F46E5] disabled:opacity-50 transition-colors"
-          >
-            {saving ? "Saving…" : hasPassword ? "Update Password" : "Set Password"}
-          </button>
-          <button
-            type="button"
-            disabled={saving}
+            disabled={saving || verifying}
             onClick={reset}
             className="px-4 py-2 border border-[#E5E5E5] text-[#6B7280] text-sm rounded-md hover:bg-[#F9FAFB] disabled:opacity-50 transition-colors"
           >

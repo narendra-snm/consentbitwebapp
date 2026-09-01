@@ -390,16 +390,14 @@ export default function TestSignupForm() {
             </div>
           )}
           <AuthSubmitButton disabled={loading}>
+            {/* Step 1 sends a code either way — the account is not created until it is
+                verified — so the label says so regardless of method. */}
             {loading
               ? effectiveStep === 1
-                ? method === "password"
-                  ? "Creating account…"
-                  : "Sending code…"
+                ? "Sending code…"
                 : "Verifying…"
               : effectiveStep === 1
-              ? method === "password"
-                ? "Create account"
-                : "Send code"
+              ? "Send code"
               : "Verify & sign up"}
           </AuthSubmitButton>
 
