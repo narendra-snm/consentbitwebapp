@@ -40,9 +40,10 @@ export default function TestSignupForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // How the account is created. "password" creates it outright (no emailed code);
-  // "otp" keeps the original two-step flow for people who would rather not set one.
-  const [method, setMethod] = useState<"password" | "otp">("password");
+  // Signup is password-only. The "otp" branches below are kept rather than deleted so
+  // the one-time-code signup can be restored by putting the method-switch button back —
+  // nothing else has to change. With no switch, this can never become "otp".
+  const [method] = useState<"password" | "otp">("password");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
@@ -167,13 +168,6 @@ export default function TestSignupForm() {
     setSecondsLeft(0);
     // Drop ?step=verify so effectiveStep can fall back to step 1.
     if (urlWantsVerify) router.replace("/signup");
-  }
-
-  /** Swap signup method, dropping anything the other mode will not use. */
-  function switchMethod(next: "password" | "otp") {
-    setMethod(next);
-    if (next === "otp") setPassword("");
-    setError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -409,20 +403,6 @@ export default function TestSignupForm() {
               : "Verify & sign up"}
           </AuthSubmitButton>
 
-          {/* Method switch. Step 1 only — jumping away once a code is in flight would
-              silently discard the code the user is already holding. */}
-          {effectiveStep === 1 && (
-            <div className="mt-4 text-center">
-              <AuthTextButton
-                onClick={() => switchMethod(method === "password" ? "otp" : "password")}
-                disabled={loading}
-              >
-                {method === "password"
-                  ? "Sign up with a one-time code instead"
-                  : "Sign up with a password instead"}
-              </AuthTextButton>
-            </div>
-          )}
         </div>
 
         <AuthHelperText>
