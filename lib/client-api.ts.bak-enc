@@ -1,5 +1,4 @@
 
-
 /**
  * Decode a base64 transport envelope produced by the worker's security middleware.
  * Response shape: { d: "<base64 UTF-8 JSON>" }
@@ -45,23 +44,20 @@ export class PasswordNotSetError extends Error {
 /**
  * Password login.
  *
- * The password travels as plaintext over HTTPS and is hashed server-side with PBKDF2.
- * TLS protects it in transit; the salted hash protects it at rest.
- * It is deliberately NOT hashed in the browser: the previous client-side SHA-256 scheme
- * made the stored value directly replayable — anyone who could read the database could
- * authenticate as any user.
- * The worker still accepts an RSA-encrypted `passwordEnc` field; this client no longer
- * uses it, since it bought no real protection over TLS and cost a public-key fetch on
- * every page load.
+ * The password is sent as plaintext over HTTPS and hashed server-side with PBKDF2.
+ * It is deliberately NOT hashed in the browser: TLS already protects it in transit, and
+ * the previous client-side SHA-256 scheme made the stored value directly replayable —
+ * anyone who could read the database could authenticate as any user.
  */
 export async function login(email: string, password: string) {
   const emailNorm = email.trim().toLowerCase();
-  const res = await fetch('/api/auth/password-login', {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ email: emailNorm, password }),
   });
+
   const data = await parseApiResponse(res);
   if (!res.ok || !data?.success) {
     const message = data?.error || `Login failed: ${res.status}`;
@@ -173,76 +169,6 @@ export async function signup(payload: SignupPayload) {
   });
 }
 
-/**
- * Signup WITHOUT a verification code — creates the account in one request and returns
- * with the session cookie already set, so the caller can go straight to /dashboard.
- *
- * Uses the same encrypted-field + stale-key-retry path as login(). The plaintext never
- * leaves the browser when a key is available; the worker hashes with PBKDF2 either way.
- *
- * TRADE-OFF vs signup(): nothing here proves the address belongs to the person
- * registering it. A confirmation link is emailed afterwards, and paid checkout stays
- * blocked until it is clicked.
- */
-export async function signupWithPassword(payload: SignupPayload) {
-  const res = await fetch('/api/auth/password-signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      name: payload.name.trim(),
-      email: payload.email.trim().toLowerCase(),
-      password: payload.password,
-      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
-    }),
-  });
-  const data = await parseApiResponse(res);
-
-  if (!res.ok || !data?.success) {
-    throw new Error(data?.error || `Signup failed: ${res.status}`);
-  }
-
-  try {
-    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
-    sessionStorage.removeItem('cbSessionCache');
-  } catch {
-    // sessionStorage unavailable (private mode) — non-fatal.
-  }
-  return data;
-}
-
-/**
- * Confirm an emailed verification token. No session required — the token is the proof,
- * so this also works if the link is opened in a different browser.
- */
-export async function confirmEmailVerification(token: string) {
-  const res = await fetch('/api/auth/verify-email', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
-  const data = await parseApiResponse(res);
-  if (!res.ok || !data?.success) {
-    throw new Error(data?.error || `Verification failed: ${res.status}`);
-  }
-  return data as { success: true; email?: string; alreadyVerified?: boolean };
-}
-
-/** Ask for a fresh confirmation link. Requires a session — it emails the logged-in user. */
-export async function resendEmailVerification() {
-  const res = await fetch('/api/auth/verify-email/resend', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: '{}',
-  });
-  const data = await parseApiResponse(res);
-  if (!res.ok || !data?.success) {
-    throw new Error(data?.error || `Could not send a new link: ${res.status}`);
-  }
-  return data as { success: true; sent?: boolean; alreadyVerified?: boolean };
-}
-
 //signup ends here
 
 //set / change password starts here
@@ -271,6 +197,7 @@ export async function setPassword(payload: {
       ...(payload.currentPassword ? { currentPassword: payload.currentPassword } : {}),
     }),
   });
+
   const data = await parseApiResponse(res);
   if (!res.ok || !data?.success) {
     throw new Error(data?.error || `Could not update password: ${res.status}`);

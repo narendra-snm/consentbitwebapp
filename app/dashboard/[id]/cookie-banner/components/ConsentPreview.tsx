@@ -7,7 +7,7 @@ import { useAppContext } from "@/app/context/AppProvider";
 import floatingBtnLogo from '@/public/asset/logo.webp';
 import { normalizePrivacyPolicyUrl } from '@/lib/normalizePrivacyPolicyUrl';
 import type { BannerLayoutValue } from './bannerAppearance';
-import { pxBorderRadiusToRem, weightLabelToNumeric } from './bannerAppearance';
+import { pxBorderRadiusToRem, resolveFontFamily, weightLabelToNumeric } from './bannerAppearance';
 import {CookieConsentBanner} from "./Iab"
 import PoweredByFooter from "./PoweredByFooter";
 /** Strip legacy "More info." suffix from saved preference copy */
@@ -22,6 +22,11 @@ const LIMITS = {
   // Keep this generous so defaults + user edits aren't truncated in preview.
   message: 600,
   button: 20,
+  // The save-preferences button. MUST stay in step with the runtime: cdnM.js caps every
+  // button label at 20 characters (`E` in its minified limit table) and truncates
+  // mid-word, so a larger value here would make the preview promise text the live banner
+  // never renders. Every shipped translation is kept at or under 20 for the same reason.
+  saveButton: 20,
   policyLabel: 30,
 } as const;
 
@@ -153,8 +158,9 @@ export default function ConsentPreview({
   // Site homepage iframe preview intentionally disabled — some sites block embedding (CSP/XFO)
   // and it distracts from banner layout. Keep banner on a neutral canvas instead.
   void siteDomain;
-  // `fontFamily` is intentionally not read — the banner renders in the system UI font.
-  const { colors, alignment, bannerLayout, weight } =
+  // `fontFamily` is intentionally not read — the Font card decides between the banner's
+  // injected stack and inheriting, and there is no family to pick.
+  const { colors, alignment, bannerLayout, weight, fontEnabled } =
     useAppContext();
 
   const isFreeForced = Boolean(previewBannerType);
@@ -254,18 +260,19 @@ export default function ConsentPreview({
   }, [colors.bannerBg]);
 
   /**
-   * Type tab: weight only. The live banner renders in the visitor's system UI font and names
-   * no family (see `fontFamilyCss` in consent-manager/src/handlers/cdnNm.js), so the preview
-   * must use the identical stack or it shows a font the published banner will never use.
-   * `bannerFontFamily` is still stored on publish — re-read `fontFamily` from useAppContext()
-   * here if the font picker is re-enabled, and revert the loader in the same change.
+   * Type tab: weight + the Font card. The live banner names no family unless the card is
+   * ticked (see `fontFamilyCss` in consent-manager/src/handlers/cdnM.js), so the preview
+   * resolves the same way — ticked pins the injected stack, unticked inherits, which here
+   * means the dashboard's own font rather than the visitor's site.
+   * `bannerFontFamily` is still stored on publish — re-read `fontFamily` from
+   * useAppContext() here if the font picker is re-enabled, and revert the loader too.
    */
   const bannerTypographyStyle = useMemo(() => {
     return {
-      fontFamily: `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
+      fontFamily: resolveFontFamily(Boolean(fontEnabled)),
       fontWeight: Number(weightLabelToNumeric(weight)),
     } as const;
-  }, [weight]);
+  }, [weight, fontEnabled]);
 
   const layoutPos =
     initialLayout?.position ?? bannerLayout?.position ?? "box";
@@ -332,7 +339,7 @@ export default function ConsentPreview({
       preferencesLabel: safeField('preferencesLabel', c.preferencesLabel, LIMITS.button),
       doNotSellLabel: c.doNotSellLabel ? clampLen(c.doNotSellLabel, 60) : c.doNotSellLabel,
       cookiePolicyLabel: clampLen(c.cookiePolicyLabel, LIMITS.policyLabel),
-      saveMyPreferencesLabel: safeField('saveMyPreferencesLabel', c.saveMyPreferencesLabel, LIMITS.button),
+      saveMyPreferencesLabel: safeField('saveMyPreferencesLabel', c.saveMyPreferencesLabel, LIMITS.saveButton),
       ccpaOptOutTitle: clampLen(c.ccpaOptOutTitle, LIMITS.title),
       ccpaOptOutMessage: clampLen(c.ccpaOptOutMessage, LIMITS.message),
     };

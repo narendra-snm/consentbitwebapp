@@ -32,7 +32,27 @@ export type TypeSettings = {
   font: string;
   weight: string;
   alignment: 'left' | 'center' | 'right';
+  /**
+   * Type tab → "Font" card. `true` = the banner injects its own font stack
+   * (SYSTEM_FONT_STACK below); `false` (default) = inject no family, so the banner
+   * inherits the host site's typography. Persisted as translations.config.bannerFontMode
+   * ('default' | 'inherit') with bannerFontEnabled ('1' | '0') as the fallback key —
+   * exactly the pair cdnM.js reads.
+   */
+  fontEnabled: boolean;
 };
+
+/**
+ * The stack cdnM.js injects when the Font card is ticked. Kept here so the editor,
+ * the preview and the publish payload all agree on what "Default font style" means.
+ */
+export const SYSTEM_FONT_STACK =
+  "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+/** CSS font-family for a given Font-card state. Unticked inherits the host page. */
+export function resolveFontFamily(enabled: boolean): string {
+  return enabled ? SYSTEM_FONT_STACK : 'inherit';
+}
 
 export type AppearanceState = {
   layout: BannerLayoutValue;
@@ -63,6 +83,9 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     font: 'Inter',
     weight: 'Bold',
     alignment: 'left',
+    // Unticked by default: cdnM.js also defaults to font-family:inherit, so a banner that
+    // never touches this card renders identically before and after the card ships.
+    fontEnabled: false,
   },
 };
 
@@ -206,10 +229,23 @@ export function appearanceFromCustomization(
   colors.savePreferencesButtonBg = colors.preferencesButtonBg;
   colors.savePreferencesButtonText = colors.preferencesButtonText;
 
+  // Font card. bannerFontMode is the key the CDN actually reads, so it wins when both
+  // are present; bannerFontEnabled is the fallback for configs saved without it. A config
+  // carrying neither keeps the default (inherit), which is what those banners render today.
+  const fontModeRaw = _cfgOrEn(cfg.bannerFontMode, en.bannerFontMode);
+  const fontEnabledRaw = _cfgOrEn(cfg.bannerFontEnabled, en.bannerFontEnabled);
+  const fontEnabled =
+    fontModeRaw != null && fontModeRaw !== ''
+      ? String(fontModeRaw).toLowerCase() === 'default'
+      : fontEnabledRaw != null && fontEnabledRaw !== ''
+        ? String(fontEnabledRaw) === '1' || String(fontEnabledRaw).toLowerCase() === 'true'
+        : DEFAULT_APPEARANCE.type.fontEnabled;
+
   const type: TypeSettings = {
     font: _cfgOrEn(cfg.bannerFontFamily, en.bannerFontFamily) || DEFAULT_APPEARANCE.type.font,
     weight: numericWeightToLabel(_cfgOrEn(cfg.bannerFontWeight, en.bannerFontWeight)),
     alignment: normalizeTextAlign(_cfgOrEn(cfg.bannerTextAlign, en.bannerTextAlign)),
+    fontEnabled,
   };
 
   return { layout, colors, type };

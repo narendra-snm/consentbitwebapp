@@ -5,7 +5,9 @@ import Accordion from "./ui/Accordion";
 
 // Keep parity with CDN/embed + Cookie Notice editor limits to avoid "preview looks broken" states.
 // CCPA opt-out introduction copy is longer; allow more characters so defaults aren't truncated.
-const LIMITS = { title: 30, message: 600, button: 20 } as const;
+// `saveButton` mirrors the runtime cap in cdnM.js (`E` = 20), which truncates button
+// labels mid-word. Keep the two in step or the editor accepts text the banner will cut.
+const LIMITS = { title: 30, message: 600, button: 20, saveButton: 20 } as const;
 
 function clampLen(value: string, max: number): string {
   const s = value ?? "";
@@ -52,7 +54,7 @@ export default function PreferenceBannerAccordion({
       ...prev,
       title: clampLen(value.title ?? prev.title, LIMITS.title),
       overview: clampLen(value.message ?? prev.overview, LIMITS.message),
-      savePreferences: clampLen(value.saveButtonLabel ?? prev.savePreferences, LIMITS.button),
+      savePreferences: clampLen(value.saveButtonLabel ?? prev.savePreferences, LIMITS.saveButton),
       cancel: clampLen(value.cancelLabel ?? prev.cancel, LIMITS.button),
     }));
   }, [value?.title, value?.message, value?.saveButtonLabel, value?.cancelLabel]);
@@ -138,9 +140,9 @@ export default function PreferenceBannerAccordion({
             <input
               type="text"
               value={settings.savePreferences}
-              maxLength={LIMITS.button}
+              maxLength={LIMITS.saveButton}
               onChange={(e) => {
-                const v = clampLen(e.target.value, LIMITS.button);
+                const v = clampLen(e.target.value, LIMITS.saveButton);
                 update("savePreferences", v);
                 onChange?.({
                   title: settings.title,

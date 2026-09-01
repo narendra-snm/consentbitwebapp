@@ -340,9 +340,14 @@ export default function ProfileDisplay({
           </div>
         )}
 
+        {/* DISABLED — the worker has no /api/auth/set-password route, so every save
+            from this panel fails. Hidden alongside the login/signup password fields
+            until that endpoint ships; the component and its API route are left in place.
+
         {/* Password — set a first one, or change an existing one. Reads its own
-            hasPassword flag from /api/auth/me, so no extra props to thread through. */}
+            hasPassword flag from /api/auth/me, so no extra props to thread through. * /}
         <PasswordSection />
+        */}
 
       </div>
 

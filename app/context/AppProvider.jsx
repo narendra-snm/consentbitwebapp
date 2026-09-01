@@ -28,6 +28,11 @@ export const AppProvider = ({ children }) => {
   /** Matches `appearance.type.font` (Type tab). */
   const [fontFamily, setFontFamily] = useState("Inter");
   const [weight, setWeight] = useState("Bold");
+  /**
+   * Matches `appearance.type.fontEnabled` (Type tab → "Font" card). Unticked by default,
+   * mirroring cdnM.js, which injects no font-family unless the banner opts in.
+   */
+  const [fontEnabled, setFontEnabled] = useState(false);
   const [alignment, setAlignment] = useState("left");
   const [bannerLayout, setBannerLayout] = useState(defaultBannerLayout);
 
@@ -40,6 +45,8 @@ export const AppProvider = ({ children }) => {
         setFontFamily,
         weight,
         setWeight,
+        fontEnabled,
+        setFontEnabled,
         alignment,
         setAlignment,
         bannerLayout,

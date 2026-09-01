@@ -173,6 +173,7 @@ export default function page({ siteId }: { siteId: string }) {
     setFontFamily: setPreviewFontFamily,
     setWeight: setPreviewWeight,
     setAlignment: setPreviewAlignment,
+    setFontEnabled: setPreviewFontEnabled,
     setBannerLayout: setPreviewBannerLayout,
   } = useAppContext();
 
@@ -182,6 +183,7 @@ export default function page({ siteId }: { siteId: string }) {
     setPreviewFontFamily(appearance.type.font);
     setPreviewWeight(appearance.type.weight);
     setPreviewAlignment(appearance.type.alignment);
+    setPreviewFontEnabled(appearance.type.fontEnabled);
     setPreviewBannerLayout({
       position: appearance.layout.position,
       alignment: appearance.layout.alignment,
@@ -194,6 +196,7 @@ export default function page({ siteId }: { siteId: string }) {
     setPreviewFontFamily,
     setPreviewWeight,
     setPreviewAlignment,
+    setPreviewFontEnabled,
     setPreviewBannerLayout,
   ]);
 
@@ -812,6 +815,11 @@ export default function page({ siteId }: { siteId: string }) {
           floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
           floatingButtonPosition: floatingButton.position,
           bannerFontFamily: appearance.type.font,
+          // Font card. Additive keys inside the translations blob — no column or handler
+          // knows about them. cdnM.js reads bannerFontMode with bannerFontEnabled as the
+          // fallback: 'default' injects the banner's stack, 'inherit' injects none.
+          bannerFontEnabled: appearance.type.fontEnabled ? "1" : "0",
+          bannerFontMode: appearance.type.fontEnabled ? "default" : "inherit",
           bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
           bannerTextAlign: appearance.type.alignment,
           bannerLayoutVisual: appearance.layout.position,
@@ -884,6 +892,10 @@ export default function page({ siteId }: { siteId: string }) {
             ...((customizationBase && customizationBase.translations && customizationBase.translations.config) || {}),
             bannerLayoutVisual: appearance.layout.position,
             bannerFontFamily: appearance.type.font,
+            // Font card — see the note on the optimistic payload above. config is the
+            // block cdnM.js checks first, so this is the copy that actually takes effect.
+            bannerFontEnabled: appearance.type.fontEnabled ? "1" : "0",
+            bannerFontMode: appearance.type.fontEnabled ? "default" : "inherit",
             bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
             bannerTextAlign: appearance.type.alignment,
             bannerEntranceAnimation: appearance.layout.animation,
@@ -921,6 +933,8 @@ export default function page({ siteId }: { siteId: string }) {
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
             bannerFontFamily: appearance.type.font,
+            bannerFontEnabled: appearance.type.fontEnabled ? "1" : "0",
+            bannerFontMode: appearance.type.fontEnabled ? "default" : "inherit",
             bannerFontWeight: weightLabelToNumeric(appearance.type.weight),
             bannerTextAlign: appearance.type.alignment,
             bannerLayoutVisual: appearance.layout.position,
@@ -1297,7 +1311,9 @@ export default function page({ siteId }: { siteId: string }) {
   </div>
 </div>
 
-{/* ConsentBit Branding — removing the preference-banner footer is Growth-only. */}
+{/* DISABLED — ConsentBit Branding (Growth 'Remove branding' option) hidden for now. The hideBranding state, its save payload field and the preview wiring are all left in place, so re-enabling is just deleting this comment wrapper.
+
+{/* ConsentBit Branding — removing the preference-banner footer is Growth-only. * /}
 <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
   <p className="font-semibold text-base text-black mb-4">ConsentBit Branding</p>
 
@@ -1344,6 +1360,7 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   )}
 </div>
+*/}
           </div>
         )}
          {active === "Content" && (
