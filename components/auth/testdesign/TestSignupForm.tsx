@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { requestVerificationCode, verifyVerificationCode, signupWithPassword } from "@/lib/client-api";
+import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
 import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import { analytics } from "@/lib/analytics";
 import AuthShell from "./AuthShell";
@@ -43,9 +43,6 @@ export default function TestSignupForm() {
   // How the account is created. "password" creates it outright (no emailed code);
   // "otp" keeps the original two-step flow for people who would rather not set one.
   const [method, setMethod] = useState<"password" | "otp">("password");
-  // No verification code on the password path, so a typo here would set a password the
-  // user cannot guess — recoverable only via email-code login. Worth the second field.
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
@@ -175,10 +172,7 @@ export default function TestSignupForm() {
   /** Swap signup method, dropping anything the other mode will not use. */
   function switchMethod(next: "password" | "otp") {
     setMethod(next);
-    if (next === "otp") {
-      setPassword("");
-      setConfirmPassword("");
-    }
+    if (next === "otp") setPassword("");
     setError(null);
   }
 
@@ -214,10 +208,6 @@ export default function TestSignupForm() {
           setError("Password must contain at least one letter and one number.");
           return;
         }
-        if (password !== confirmPassword) {
-          setError("Passwords do not match.");
-          return;
-        }
       }
     } else if (code.replace(/\s/g, "").length < 6) {
       setError("Please enter the 6-digit verification code.");
@@ -235,19 +225,7 @@ export default function TestSignupForm() {
     // update, after which the form stays mounted and must become interactive again.
     let navigating = false;
     try {
-      if (effectiveStep === 1 && method === "password") {
-        // No verification code: the worker creates the account and sets the session
-        // cookie in one request, so this lands straight on the dashboard.
-        await signupWithPassword({ name, email, password, confirmPassword });
-        clearScanId();
-        analytics.userAccountCreated(email.trim().toLowerCase(), name.trim());
-        analytics.identify(email.trim().toLowerCase(), name.trim());
-        setPassword("");
-        setConfirmPassword("");
-        navigating = true;
-        // replace, not push — Back should not return to the signup screen.
-        router.replace("/dashboard");
-      } else if (effectiveStep === 1) {
+      if (effectiveStep === 1) {
         await requestVerificationCode({
           name,
           email,
@@ -361,19 +339,6 @@ export default function TestSignupForm() {
                 disabled={loading}
                 autoComplete="new-password"
                 hint="At least 8 characters, including a letter and a number."
-              />
-            )}
-            {method === "password" && (
-              <AuthField
-                label="Confirm password"
-                type="password"
-                value={confirmPassword}
-                onChange={(v) => {
-                  setConfirmPassword(v);
-                  setError(null);
-                }}
-                disabled={loading}
-                autoComplete="new-password"
               />
             )}
           </>
