@@ -13,12 +13,22 @@ function PasswordInput({
   placeholder,
   autoComplete,
   disabled,
+  suppressAutofill,
 }: {
   value: string;
   onChange: (next: string) => void;
   placeholder: string;
   autoComplete: string;
   disabled?: boolean;
+  /**
+   * Stop the browser and password managers pre-filling this field.
+   *
+   * Chrome ignores autocomplete="off" on password inputs, so the only reliable signal is
+   * "new-password" — it tells Chrome there is nothing saved worth filling here. The
+   * data-* attributes are the equivalents for 1Password and LastPass, which ignore the
+   * autocomplete attribute entirely.
+   */
+  suppressAutofill?: boolean;
 }) {
   const [revealed, setRevealed] = useState(false);
   return (
@@ -30,7 +40,10 @@ function PasswordInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        autoComplete={autoComplete}
+        autoComplete={suppressAutofill ? "new-password" : autoComplete}
+        {...(suppressAutofill
+          ? { "data-1p-ignore": "true", "data-lpignore": "true", "data-bwignore": "true" }
+          : {})}
         disabled={disabled}
         className={INPUT_CLASS}
       />
@@ -88,6 +101,15 @@ export default function PasswordSection() {
       cancelled = true;
     };
   }, []);
+
+  // "Password updated." is transient confirmation, not state — leaving it on screen
+  // makes a later visit look like something just changed. Re-runs whenever the message
+  // changes, so a second update gets its own full 5s rather than the remainder.
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(null), 5000);
+    return () => clearTimeout(t);
+  }, [success]);
 
   const dirty = current.length > 0 || next.length > 0 || confirm.length > 0;
 
@@ -148,6 +170,10 @@ export default function PasswordSection() {
       setError("Passwords do not match.");
       return;
     }
+    if (hasPassword && next === current) {
+      setError("New password must be different from your current password.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -196,6 +222,9 @@ export default function PasswordSection() {
             }}
             placeholder="Current password"
             autoComplete="current-password"
+            // Typing it must be deliberate: a pre-filled box would let anyone with the
+            // session walk straight past the check this field exists to enforce.
+            suppressAutofill
             // Locked once confirmed: editing it afterwards would leave the verified flag
             // pointing at a password the user has since changed in the box.
             disabled={saving || verifying || currentVerified}
