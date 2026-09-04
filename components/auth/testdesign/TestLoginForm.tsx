@@ -328,36 +328,44 @@ export default function TestLoginForm() {
               <AuthError message={error} />
             </div>
           )}
-          <AuthSubmitButton disabled={loading}>
-            {method === "password"
-              ? loading
-                ? "Logging in…"
-                : "Log in"
-              : loading
-              ? step === 1
-                ? "Sending code…"
-                : "Verifying…"
-              : step === 1
-              ? "Send code"
-              : "Verify & log in"}
-          </AuthSubmitButton>
+          {/* Submit and the method switch share a row from sm up. Below that the
+              button goes full-bleed (w-full on AuthSubmitButton), so the column
+              direction keeps the link from being squeezed against it. */}
+          {/* justify-between pushes the link to the row's right edge, which is the
+              same edge as the email/password fields above it — the gap is only a
+              minimum for narrow viewports. */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-10">
+            <AuthSubmitButton disabled={loading}>
+              {method === "password"
+                ? loading
+                  ? "Logging in…"
+                  : "Log in"
+                : loading
+                ? step === 1
+                  ? "Sending code…"
+                  : "Verifying…"
+                : step === 1
+                ? "Send code"
+                : "Verify & log in"}
+            </AuthSubmitButton>
 
-          {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
-              would silently discard the code the user is already holding. */}
-          {(method === "password" || step === 1) && (
-            <div className="mt-4 text-center">
-              <AuthTextButton
-                onClick={() =>
-                  switchMethod(method === "password" ? "otp" : "password")
-                }
-                disabled={loading}
-              >
-                {method === "password"
-                  ? "Log in with an email code instead"
-                  : "Log in with a password instead"}
-              </AuthTextButton>
-            </div>
-          )}
+            {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
+                would silently discard the code the user is already holding. */}
+            {(method === "password" || step === 1) && (
+              <div className="text-center sm:text-right">
+                <AuthTextButton
+                  onClick={() =>
+                    switchMethod(method === "password" ? "otp" : "password")
+                  }
+                  disabled={loading}
+                >
+                  {method === "password"
+                    ? "Log in with an email code"
+                    : "Log in with a password"}
+                </AuthTextButton>
+              </div>
+            )}
+          </div>
         </div>
 
         <AuthHelperText>

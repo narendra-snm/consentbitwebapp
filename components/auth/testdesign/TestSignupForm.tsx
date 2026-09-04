@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { requestVerificationCode, verifyVerificationCode } from "@/lib/client-api";
+import {
+  requestVerificationCode,
+  signupWithPassword,
+  verifyVerificationCode,
+} from "@/lib/client-api";
 import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import { analytics } from "@/lib/analytics";
 import AuthShell from "./AuthShell";
@@ -219,22 +223,32 @@ export default function TestSignupForm() {
     // update, after which the form stays mounted and must become interactive again.
     let navigating = false;
     try {
-      if (effectiveStep === 1) {
+      if (effectiveStep === 1 && method === "password") {
+        // Password signup creates the account and sets the session in one request,
+        // so there is no code to send and no step 2 on this path. The worker still
+        // emails a verification link afterwards — the account is usable immediately
+        // and the proof arrives out of band.
+        await signupWithPassword({ name, email, password });
+        // Drop the plaintext from component state now the worker holds the hash.
+        setPassword("");
+        // Funnel order matches the OTP path: auth_email_submitted then user_account_created.
+        analytics.authEmailSubmitted(email.trim().toLowerCase());
+        analytics.userAccountCreated(email.trim().toLowerCase(), name.trim());
+        analytics.identify(email.trim().toLowerCase(), name.trim());
+        navigating = true;
+        // replace, not push — a signed-up user pressing Back should not land
+        // back on the signup screen.
+        router.replace("/dashboard");
+      } else if (effectiveStep === 1) {
         await requestVerificationCode({
           name,
           email,
           purpose: "signup",
-          // Omitted on the one-time-code flow so the worker creates a passwordless
-          // account, exactly as it did before.
-          ...(method === "password" ? { password } : {}),
         });
         setSecondsLeft(CODE_TTL_SECONDS);
         setVerifyFailed(false);
         setStep(2);
         persistPending();
-        // Drop the plaintext from component state now that the worker holds the hash.
-        // A resend re-uses that pending hash server-side, so nothing needs it again.
-        setPassword("");
         // Persist the step in the URL so the code screen survives a reload.
         router.replace(
           `/signup?step=verify&email=${encodeURIComponent(
@@ -267,7 +281,7 @@ export default function TestSignupForm() {
       const msg =
         err instanceof Error
           ? err.message
-          : effectiveStep === 1
+          : effectiveStep === 1 && method !== "password"
           ? "Failed to send code. Please try again."
           : "Signup failed. Please try again.";
 
@@ -393,14 +407,18 @@ export default function TestSignupForm() {
             </div>
           )}
           <AuthSubmitButton disabled={loading}>
-            {/* Step 1 sends a code either way — the account is not created until it is
-                verified — so the label says so regardless of method. */}
+            {/* Password signup creates the account outright, so step 1 says so. The
+                otp branch still sends a code first and keeps the old wording. */}
             {loading
               ? effectiveStep === 1
-                ? "Sending code…"
+                ? method === "password"
+                  ? "Creating account…"
+                  : "Sending code…"
                 : "Verifying…"
               : effectiveStep === 1
-              ? "Send code"
+              ? method === "password"
+                ? "Create account"
+                : "Send code"
               : "Verify & sign up"}
           </AuthSubmitButton>
 
