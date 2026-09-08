@@ -70,6 +70,10 @@ const BASE_URL = "./";
 const IS_GAC = ${isGoogleAC};
 window.__cbIsGAC = IS_GAC;
 
+// Google Additional Consent (AC) toggle — baked from the isGAC build argument.
+const IS_GAC = ${isGoogleAC};
+window.__cbIsGAC = IS_GAC;
+
 function loadScriptOnce(src, onload) {
   const existing = document.querySelector('script[src="' + src + '"]');
   if (existing) {

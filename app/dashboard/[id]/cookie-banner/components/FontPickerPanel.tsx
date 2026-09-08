@@ -60,6 +60,7 @@ const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
   const font = controlled ? value.font : localFont;
   const weight = controlled ? value.weight : ctx.weight;
   const alignment = controlled ? value.alignment : ctx.alignment;
+  const fontEnabled = controlled ? value.fontEnabled : Boolean(ctx.fontEnabled);
 
   const patch = (next: Partial<TypeSettings>) => {
     if (controlled && value && onChange) {
@@ -72,6 +73,7 @@ const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
     }
     if (next.weight != null) ctx.setWeight(next.weight);
     if (next.alignment != null) ctx.setAlignment(next.alignment);
+    if (next.fontEnabled != null) ctx.setFontEnabled(next.fontEnabled);
   };
 
   return (
@@ -96,6 +98,32 @@ const FontPickerPanel: React.FC<Props> = ({ value, onChange }) => {
               </svg>
             </div>
           </div> */}
+        </div>
+
+        {/* Font — opt in to the banner's own injected font stack. Unticked (the default)
+            injects no font-family at all, so the banner inherits the host site's
+            typography. The checkbox IS the setting; there is no family to pick. */}
+        <div>
+          <div className="mb-2">
+            <Tooltip text="Choose whether the banner uses its own font or inherits your site's.">
+              <label className="cursor-default">Font</label>
+            </Tooltip>
+          </div>
+          <label className="flex items-start gap-2.5 cursor-pointer bg-white border border-gray-300 rounded-lg px-3 py-3">
+            <input
+              type="checkbox"
+              className="mt-[2px] h-4 w-4 shrink-0 accent-[#007AFF]"
+              checked={fontEnabled}
+              onChange={(e) => patch({ fontEnabled: e.target.checked })}
+            />
+            <span className="text-xs tracking-tight text-black">
+              Default font style
+              <span className="block text-[11px] text-[#6b7280] mt-1 leading-relaxed">
+                Uses the font the ConsentBit banner ships with. Leave it off and the banner
+                inherits your website&rsquo;s font.
+              </span>
+            </span>
+          </label>
         </div>
 
         {/* Weight */}

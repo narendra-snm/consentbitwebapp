@@ -9,8 +9,23 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; /
 import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
+/* NEW WORKFLOW (prorated in-place tier change) — Stripe Elements card entry, kept for later.
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+// Same publishable-key source and Elements setup as app/checkout/page.tsx.
+const _pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = _pk ? loadStripe(_pk) : null;
+const STRIPE_FIELD_STYLE = {
+  style: {
+    base: { fontSize: "14px", fontFamily: "Arial, Helvetica, sans-serif", color: "#111827", "::placeholder": { color: "#9ca3af" } },
+    invalid: { color: "#dc2626" },
+  },
+};
+*/
 
 type Plan = "basic" | "essential" | "growth" | "free" | null;
 
@@ -144,8 +159,24 @@ export default function PricingTable() {
   }, [activeOrganizationId, siteId, currentTier]);
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
-  
+
   const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
+
+  // Step 11 — fire thank_you_page_viewed once when the success/confirmation view mounts
+  // (covers both the Stripe return and the in-place upgrade receipt).
+  const thankYouFiredRef = useRef(false);
+  useEffect(() => {
+    if (!paymentProcessing || thankYouFiredRef.current) return;
+    thankYouFiredRef.current = true;
+    analytics.thankYouPageViewed({
+      site_id: siteId ? String(siteId) : undefined,
+      plan_tier: paymentDetails.plan_id || paymentDetails.plan_type || undefined,
+      billing_cycle:
+        paymentDetails.interval === "yearly"
+          ? "annual"
+          : paymentDetails.interval || undefined,
+    });
+  }, [paymentProcessing, siteId, paymentDetails]);
 
   // After Stripe redirects back to this page with ?upgraded=1, poll until plan updates then go to dashboard.
   useEffect(() => {
@@ -268,6 +299,38 @@ export default function PricingTable() {
     return () => clearInterval(interval);
   }, [returnedFromStripe]);
 
+  /* NEW WORKFLOW (prorated in-place tier change) — live "due now" fetch, kept for later.
+  // When an existing paid customer selects a plan (or flips the interval / applies a coupon),
+  // fetch the real prorated amount due now so the Total box reflects their current-plan credit.
+  useEffect(() => {
+    if (!selected || selected === "free" || currentTier === "free" || !activeOrganizationId) {
+      setSelProration(null);
+      setSelProrationLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSelProrationLoading(true);
+    setSelProration(null);
+    (async () => {
+      try {
+        const p = await previewChangeTier({
+          organizationId: activeOrganizationId,
+          siteId: siteId || null,
+          planId: selected as "basic" | "essential" | "growth",
+          interval: billing === "yearly" ? "yearly" : "monthly",
+          promotionCodeId: appliedPromo?.promotionCodeId ?? null,
+        });
+        if (!cancelled) setSelProration({ amountDueCents: p.amountDueCents ?? null, currency: p.currency || "usd", direction: p.direction });
+      } catch {
+        if (!cancelled) setSelProration(null);
+      } finally {
+        if (!cancelled) setSelProrationLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected, billing, currentTier, activeOrganizationId, siteId, appliedPromo?.promotionCodeId]);
+  */
+
   if (!mounted) return <div className="fixed inset-0 z-[9999] bg-white" />;
 
 
@@ -284,7 +347,6 @@ export default function PricingTable() {
 
   const calculateTotal = () => {
     if (!selected) return 0;
-
     const mp = prices[selected];
     let total = billing === "yearly" ? mp * 12 * 0.8 : mp;
 
@@ -354,6 +416,15 @@ export default function PricingTable() {
 
   const total = calculateTotal();
 
+  /* NEW WORKFLOW (prorated in-place tier change) — Total-box "due now" derivation, kept for later.
+  // Show the prorated "due now" figure (instead of the plan sticker price) once an
+  // existing paid customer has selected a plan.
+  const showProrated = currentTier !== "free" && !!selected && selected !== "free";
+  const proratedStr = selProration?.amountDueCents != null
+    ? new Intl.NumberFormat(undefined, { style: "currency", currency: (selProration.currency || "usd").toUpperCase() }).format(selProration.amountDueCents / 100)
+    : null;
+  */
+
   async function checkoutWithPlan(plan: "basic" | "essential" | "growth" | "free") {
     if (sessionLoading) {
       alert("Please wait — loading your account.");
@@ -382,7 +453,7 @@ export default function PricingTable() {
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const finalUrl = `${origin}/dashboard/${siteId}/upgrade?upgraded=1`;
-      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
+      const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
       const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
       const cancelUrl  = origin ? `${origin}/dashboard/${siteId}/upgrade?canceled=1` : undefined;
       const intervalVal = billing === "yearly" ? "yearly" : "monthly";
@@ -519,6 +590,13 @@ export default function PricingTable() {
         disabled={checkoutLoading}
         onClick={() => {
           setSelected(plan);
+          // Step 8 — plan card selected in the pricing menu.
+          analytics.planSelected(
+            plan,
+            billing === "yearly" ? "annual" : "monthly",
+            getPrice(plan),
+            siteId ? String(siteId) : undefined
+          );
           setTimeout(() => {
             proceedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 50);
@@ -978,6 +1056,7 @@ function redirectToDashboard() {
             )}
             {selected && <div className="mb-4" />}
 
+            {/* ── Promo input (always visible) ── */}
             <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
 
               <input
@@ -1018,14 +1097,14 @@ function redirectToDashboard() {
               </div>
             )}
 
-            {promoError && (
+            {promoError && !appliedCoupon && (
               <div className="relative z-10 mt-3 flex items-center gap-1.5 text-sm text-[#ef4444]">
                 <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="7.5" cy="7.5" r="6.5" stroke="#ef4444" strokeWidth="1.5"/>
                   <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
                   <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
                 </svg>
-                Invalid promo code. Please try again.
+                Invalid or expired promo code.
               </div>
             )}
 
@@ -1039,6 +1118,9 @@ function redirectToDashboard() {
 
               <div>
 
+                {/* OLD WORKFLOW — plain plan-price total (no proration calculation).
+                    The NEW WORKFLOW showed a live "Due now (prorated)" figure here; see the
+                    commented showProrated/proratedStr/selProration code above to re-enable. */}
                 <div className="text-gray-500">Total</div>
 
                 <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
@@ -1124,3 +1206,133 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
     </div>
   );
 }
+
+/* NEW WORKFLOW (prorated in-place tier change) — card-entry step, kept for later.
+// Card-entry step for a prorated upgrade (option 3): collects a new card via Stripe Elements,
+// charges the prorated amount to it, and handles 3D Secure — mirrors app/checkout/page.tsx.
+function TierCardForm({
+  amountLabel,
+  organizationId,
+  siteId,
+  planId,
+  interval,
+  promotionCodeId,
+  onSuccess,
+  onBack,
+}: {
+  amountLabel: string;
+  organizationId: string;
+  siteId: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId: string | null;
+  onSuccess: (result: ChangeTierResult) => void | Promise<void>;
+  onBack: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!stripe || !elements) { setErr("Payment not ready. Please wait a moment and try again."); return; }
+    const cardEl = elements.getElement(CardNumberElement);
+    if (!cardEl) { setErr("Enter your card details."); return; }
+    setErr("");
+    setSubmitting(true);
+    try {
+      const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
+        type: "card",
+        card: cardEl,
+        billing_details: { name: name.trim() || undefined },
+      });
+      if (pmErr || !paymentMethod) { setErr(pmErr?.message || "Card error. Please check your details."); setSubmitting(false); return; }
+
+      const result = await changeTier({
+        organizationId,
+        siteId,
+        planId,
+        interval,
+        promotionCodeId,
+        paymentMethodId: paymentMethod.id,
+      });
+
+      // 3D Secure required → complete it, then success.
+      if (result.requiresAction && result.clientSecret) {
+        const { error: confErr } = await stripe.confirmCardPayment(result.clientSecret);
+        if (confErr) { setErr(confErr.message || "Card authentication failed. Please try another card."); setSubmitting(false); return; }
+      }
+
+      await onSuccess(result);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Payment failed. Please try again.");
+      setSubmitting(false);
+    }
+  }
+
+  const fieldCls = "rounded-lg border border-gray-300 px-3 py-2.5 transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20";
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-[13px] text-[#374151]">
+        {amountLabel
+          ? <>You&apos;ll be charged <span className="font-semibold text-[#0a091f]">{amountLabel}</span> now — the prorated amount.</>
+          : "Enter your card to complete the upgrade."}
+      </p>
+
+      <div>
+        <label className="mb-1 block text-[13px] text-gray-700">Card number</label>
+        <div className={fieldCls}><CardNumberElement options={STRIPE_FIELD_STYLE} /></div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-[13px] text-gray-700">Expiry</label>
+          <div className={fieldCls}><CardExpiryElement options={STRIPE_FIELD_STYLE} /></div>
+        </div>
+        <div>
+          <label className="mb-1 block text-[13px] text-gray-700">CVC</label>
+          <div className={fieldCls}><CardCvcElement options={STRIPE_FIELD_STYLE} /></div>
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[13px] text-gray-700">Name on card</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Jane Smith"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20"
+        />
+      </div>
+
+      {err && <div className="rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">{err}</div>}
+
+      <div className="flex gap-3 pt-1">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={submitting}
+          className="flex-1 h-[44px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+        >
+          Back
+        </button>
+        <button
+          type="submit"
+          disabled={submitting || !stripe}
+          className="flex-1 h-[44px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Processing…
+            </>
+          ) : amountLabel ? `Pay ${amountLabel}` : "Confirm & pay"}
+        </button>
+      </div>
+    </form>
+  );
+}
+*/

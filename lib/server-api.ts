@@ -4,7 +4,7 @@
  * that has your real DB + Stripe secrets (avoids "invalid API key" when a default Worker is stale).
  */
 const PRODUCTION_API_BASE =
-  process.env.PRODUCTION_API_BASE || "https://manager.consentbit.com";
+  process.env.PRODUCTION_API_BASE || "https://consent-webapp-manager.web-8fb.workers.dev";
 
 export function getProductionApiBase() {
   return PRODUCTION_API_BASE.replace(/\/+$/, "");
@@ -40,7 +40,7 @@ export async function serverFetch(
     headers: requestHeaders,
     signal: AbortSignal.timeout(20000), // 20 s — cold-start worker + D1 auth can exceed 8 s; avoids false "try again" timeouts
   };
-  
+
   if (body) {
     if (typeof body === 'string') {
       fetchOptions.body = body;
@@ -51,7 +51,7 @@ export async function serverFetch(
       }
     }
   }
-  
+
   return fetch(url, fetchOptions);
 }
 

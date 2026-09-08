@@ -337,10 +337,17 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     return scanHistory.length > 0 ? scanHistory[0] : null;
   }, [scanHistory]);
 
+  // A scan counts as "in progress" only if it's non-terminal AND recent. Without the
+  // recency cap, a stuck/killed row or a background scheduled-scan row left in 'pending'
+  // would pin the Scan button on "Scanning…" forever (only a refresh cleared it).
   const hasScanInProgress = useMemo(() => {
+    const cutoff = Date.now() - 90_000; // ignore rows older than 90s (a scan finishes in ~25s)
     return scanHistory.some((s) => {
       const status = String(s.scanStatus).toLowerCase();
-      return status === 'in_progress' || status === 'pending' || status === 'queued';
+      const running = status === 'in_progress' || status === 'pending' || status === 'queued';
+      if (!running) return false;
+      const t = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+      return t >= cutoff;
     });
   }, [scanHistory]);
 

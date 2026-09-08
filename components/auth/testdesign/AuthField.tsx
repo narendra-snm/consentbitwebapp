@@ -5,7 +5,7 @@ import { FONT_SANS, OPSZ } from "./fonts";
 
 type AuthFieldProps = {
   label: string;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email" | "password" | "password";
   value: string;
   onChange: (next: string) => void;
   placeholder?: string;
@@ -82,7 +82,7 @@ export default function AuthField({
           aria-describedby={hint ? `${id}-hint` : undefined}
           // Extra right padding on password fields so long values don't slide under
           // the reveal button.
-          className={`w-full bg-white border rounded-xl h-[57px] pl-5 ${
+          className={`w-full bg-white border rounded-xl h-[52px] pl-5 ${
             isPassword ? "pr-14" : "pr-5"
           } text-[#202022] text-[16px] leading-normal outline-none transition-colors placeholder:text-[#757575] focus:border-[#0777e6] focus:ring-2 focus:ring-[#0777e6]/25 disabled:bg-[#f7f8fa] disabled:text-[#757575] ${
             invalid ? "border-[#b03240]" : "border-[#e1e3e7]"

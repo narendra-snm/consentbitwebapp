@@ -32,6 +32,8 @@ const defaultStyleConfig = {
   // Google Additional Consent (AC) layer — when true, the Vendors tab gains a
   // "Google Partners" sub-tab listing Google-certified additional ad partners.
   isGAC: false,
+  // Growth-plan entitlement: hides the "Powered by ConsentBit" strip on the preference view.
+  hideBranding: false,
 };
 
 function entranceAnimStyle(anim, opts = {}) {
@@ -1053,7 +1055,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, t, lang,
           </div>
 
           {/* Powered by ConsentBit */}
-          <PoweredByFooter radius={radii.br} />
+          {!s.hideBranding && <PoweredByFooter radius={radii.br} />}
         </div>
       </div>
       <style>{`@keyframes cbIabPopIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
