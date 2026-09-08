@@ -26,22 +26,42 @@ import {
   weightLabelToNumeric,
 } from "./bannerAppearance";
 import { TRANSLATIONS, LANGUAGE_OPTIONS } from "./translations";
-import { makeDefaultCategories, makeDefaultContentSettings } from "./bannerContentDefaults";
-import TemplateBuilderModal from "./TemplateBuilderModal";
-import TemplatesPanel from "./TemplatesPanel";
-import {
-  applyTemplateContent,
-  buildTemplatePayload,
-  mergeTemplateIntoCustomization,
-} from "./bannerTemplates";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { analytics } from "@/lib/analytics";
 
-// makeDefaultContentSettings / makeDefaultCategories moved to ./bannerContentDefaults so
-// the template builder can re-translate its draft from the same source.
+function makeDefaultContentSettings(langCode = 'en') {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+  return {
+    title: T.title,
+    acceptAll: T.acceptAll,
+    preferencesLabel: T.customise,
+    preferenceTitle: T.cookiePreferences,
+    preferenceMessage: T.managePreferences,
+    closeButton: true,
+    rejectButton: true,
+    customizeButton: true,
+    cookiePolicyLink: true,
+    cookiePolicyLabel: T.privacyPolicy,
+    privacyPolicyUrl: "",
+    gdpr: {
+      message: T.description,
+      rejectAll: T.rejectAll,
+      saveMyPreferencesLabel: T.saveMyPreferences,
+    },
+    ccpa: {
+      message: T.ccpaDescription || T.description,
+      doNotSellLabel: T.doNotSell,
+      optOutTitle: T.optOutPreference,
+      optOutMessage: T.ccpaOptOutPreferenceIntro,
+      saveMyPreferencesLabel: T.saveMyPreferences,
+      cancelLabel: T.cancel,
+    },
+    categories: makeDefaultCategories(langCode),
+  };
+}
 
 /**
  * Fields of `contentSettings` that are settings rather than copy. A language switch
@@ -56,6 +76,16 @@ const NON_LINGUISTIC_CONTENT_KEYS = [
   "cookiePolicyLink",
 ] as const;
 
+function makeDefaultCategories(langCode = 'en'): CookieCategoryContent {
+  const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
+  return {
+    necessary: { name: T.essential, description: T.essentialDescription },
+    analytics: { name: T.analytics, description: T.analyticsDescription },
+    marketing: { name: T.marketing, description: T.marketingDescription },
+    preferences: { name: T.preferences, description: T.preferencesDescription },
+    alwaysActiveLabel: T.alwaysActive,
+  };
+}
 
 const ResetIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -97,33 +127,6 @@ export default function page({ siteId }: { siteId: string }) {
   const [publishSuccess, setPublishSuccess] = useState(false);
   const dismissPublishSuccess = useCallback(() => setPublishSuccess(false), []);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  /** "Save as banner template" dialog + its success toast in the preview header. */
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
-  /** Bumped after a save so an open Templates panel reloads its list in place. */
-  const [templatesRefreshKey, setTemplatesRefreshKey] = useState(0);
-  /**
-   * The builder drives the real `appearance` state so the preview inside it renders
-   * through the same AppProvider context the editor uses. This holds the value from
-   * before it opened, restored on close so designing a template never leaves stray edits
-   * on the site being viewed.
-   */
-  const appearanceBeforeBuilderRef = useRef<typeof appearance | null>(null);
-  /** Non-null while the builder is editing a saved template rather than creating one. */
-  const [editingTemplate, setEditingTemplate] = useState<any | null>(null);
-  const openTemplateBuilder = (template?: any) => {
-    appearanceBeforeBuilderRef.current = appearance;
-    setEditingTemplate(template ?? null);
-    setShowSaveTemplate(true);
-  };
-  const closeTemplateBuilder = () => {
-    setShowSaveTemplate(false);
-    setEditingTemplate(null);
-    if (appearanceBeforeBuilderRef.current) {
-      setAppearance(appearanceBeforeBuilderRef.current);
-      appearanceBeforeBuilderRef.current = null;
-    }
-  };
   /** Hoisted above `applyPersistSuccessState` so it can be a dep without a TDZ error. */
   const [iabEnabled, setIabEnabled] = useState(false);
   const [iabHydrated, setIabHydrated] = useState(false);
@@ -1082,17 +1085,8 @@ export default function page({ siteId }: { siteId: string }) {
   }, [active, isFreePlan]);
   const sitePlanId = sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId;
   const resolvedPlanId = sitePlanId || effectivePlanId || "";
-  // Templates is Growth-only and the sidebar disables it, but a plan can change while the
-  // tab is open — bounce back to General rather than leaving a panel up that can't save.
-  useEffect(() => {
-    if (active !== "Templates") return;
-    if (!resolvedPlanId) return; // plan not resolved yet — don't bounce on first paint
-    if (String(resolvedPlanId).toLowerCase() !== "growth") setActive("General");
-  }, [active, resolvedPlanId]);
   /** Removing ConsentBit branding is a Growth-plan feature. */
   const canRemoveBranding = String(resolvedPlanId).toLowerCase() === "growth";
-  /** Banner templates are Growth-only too, re-checked in handlers/bannerTemplates.js. */
-  const canUseTemplates = String(resolvedPlanId).toLowerCase() === "growth";
   /** What the CDN will actually serve: the flag only takes effect on Growth. */
   const brandingHiddenInPreview = canRemoveBranding && hideBranding;
   // A downgrade leaves hideBranding=1 on the row while the worker has already gone back
@@ -1317,8 +1311,9 @@ export default function page({ siteId }: { siteId: string }) {
   </div>
 </div>
 
+{/* DISABLED — ConsentBit Branding (Growth 'Remove branding' option) hidden for now. The hideBranding state, its save payload field and the preview wiring are all left in place, so re-enabling is just deleting this comment wrapper.
 
-{/* ConsentBit Branding — removing the preference-banner footer is Growth-only. */}
+{/* ConsentBit Branding — removing the preference-banner footer is Growth-only. * /}
 <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
   <p className="font-semibold text-base text-black mb-4">ConsentBit Branding</p>
 
@@ -1365,6 +1360,7 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   )}
 </div>
+*/}
           </div>
         )}
          {active === "Content" && (
@@ -1646,41 +1642,6 @@ export default function page({ siteId }: { siteId: string }) {
             onChange={(type) => setAppearance((a) => ({ ...a, type }))}
           />
         )}
-        {active === "Templates" && (
-          <TemplatesPanel
-            organizationId={activeOrganizationId ? String(activeOrganizationId) : null}
-            currentSiteId={site?.id ? String(site.id) : null}
-            sites={sites as any}
-            onCreateTemplate={() => openTemplateBuilder()}
-            onEditTemplate={(t) => openTemplateBuilder(t)}
-            refreshKey={templatesRefreshKey}
-            onApplyToCurrentSite={(payload) => {
-              // Local state only — nothing is written until Publish. The merge is
-              // key-by-key, so per-site values a template never carries (the IAB flags,
-              // the privacy policy URL) survive rather than being reset.
-              setCustomizationBase((prev: any) => {
-                const merged = mergeTemplateIntoCustomization(prev, payload);
-                // Re-derive appearance from the merged row using the same mapper the
-                // initial load uses, so the Colors/Layout tabs and the preview agree with
-                // what a reload would show.
-                setAppearance(appearanceFromCustomization(merged));
-                return merged;
-              });
-
-              // Content travels with the template now, so the Content tab and preview copy
-              // have to follow it — otherwise the banner would show the old wording under
-              // the new colors until a reload.
-              const en = payload?.translations?.en;
-              if (en) {
-                setContentSettings((prev: any) => applyTemplateContent(en, prev));
-                if (typeof en.languageSelected === "string" && en.languageSelected) {
-                  setSelectedLangCode(en.languageSelected);
-                }
-              }
-              setPreviewRevision((r) => r + 1);
-            }}
-          />
-        )}
       </div>
       {/* Skeleton shown while customization loads from the API */}
       {customizationLoading && (
@@ -1710,14 +1671,12 @@ export default function page({ siteId }: { siteId: string }) {
         hideBranding={brandingHiddenInPreview}
         content={contentForPreview}
         floatingButton={floatingButton}
-        onSaveTemplate={() => openTemplateBuilder()}
-        // Growth-only, and hidden outright below it rather than shown disabled.
-        // `mounted` gates it because the server render has no session, so plan is empty
-        // there — without it the button would flash in and out on hydration.
-        saveTemplateVisible={mounted && canUseTemplates}
-        saveTemplateDisabled={!site?.id || savingContent}
-        saveTemplateBusy={false}
-        saveTemplateSuccess={templateSaveSuccess}
+        onSaveChanges={handleSaveChanges}
+        saveDisabled={
+          !site?.id || savingContent || !hasUnsavedChanges
+        }
+        saveBusy={savingContent && persistKind === "save"}
+        saveSuccess={saveSuccess}
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
         publishDisabled={!mounted || !site?.id || savingContent}
@@ -1756,28 +1715,6 @@ export default function page({ siteId }: { siteId: string }) {
         siteId={siteId}
         cdnScriptId={site?.cdnScriptId ? String(site.cdnScriptId) : undefined}
         onClose={() => setShowInstallModal(false)}
-      />
-
-      <TemplateBuilderModal
-        open={showSaveTemplate}
-        onClose={closeTemplateBuilder}
-        organizationId={activeOrganizationId ? String(activeOrganizationId) : null}
-        appearance={appearance}
-        onAppearanceChange={setAppearance}
-        // Live editor state, not the loaded row — the row only catches up on publish, so
-        // seeding from it would open the builder on the last *published* wording rather
-        // than what the user is looking at.
-        initialContent={contentSettings as any}
-        langCode={selectedLangCode}
-        customizationBase={customizationBase}
-        consentType={consentType}
-        siteDomain={site?.domain}
-        editTemplate={editingTemplate}
-        onSaved={() => {
-          setTemplateSaveSuccess(true);
-          setTemplatesRefreshKey((k) => k + 1);
-          window.setTimeout(() => setTemplateSaveSuccess(false), 3000);
-        }}
       />
 
       {/* Switching language replaces every string, so edited copy gets an explicit

@@ -30,12 +30,17 @@ export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLega
 
   const planKey = mounted ? String(effectivePlanId ?? "").toLowerCase() : "";
   const isFree = planKey === "free" && !isLegacy;
+  // Banner templates are a Growth-only entitlement — a stricter gate than the paid tabs
+  // below, which merely require any paid plan. Re-checked on the server in
+  // handlers/bannerTemplates.js, since this endpoint is callable directly.
+  const canUseTemplates = planKey === "growth";
   const menuItems = [
     { name: "General", icon: "general", tip: "Configure consent regulation (GDPR / CCPA) and region settings." },
     { name: "Content", icon: "content", tip: "Edit banner title, description, button labels and cookie policy link." },
     { name: "Layout", icon: "layout", tip: "Set banner position, shape, border radius and animation style." },
     { name: "Colors", icon: "colors", tip: "Customise background, text and button colors." },
     { name: "Type", icon: "type", tip: "Choose font family, weight and text alignment for the banner." },
+    { name: "Templates", icon: "templates", tip: "Save this banner's colors and layout as a reusable template, or apply a saved one." },
   ];
 
   return (
@@ -49,10 +54,24 @@ export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLega
             item.name === "Layout" ||
             item.name === "Colors" ||
             item.name === "Type");
-        const disabled = (iabEnabled && item.name === "Content") || lockedForFree;
+        // Templates has its own, stricter gate: Growth only, on every plan below it.
+        const lockedForPlan = item.name === "Templates" && mounted && !canUseTemplates;
+        const disabled =
+          (iabEnabled && item.name === "Content") || lockedForFree || lockedForPlan;
 
         return (
-          <Tooltip key={item.name} text={disabled ? (lockedForFree ? "Upgrade your plan to unlock this tab." : "Not available in this mode.") : item.tip}>
+          <Tooltip
+            key={item.name}
+            text={
+              disabled
+                ? lockedForPlan
+                  ? "Banner templates are available on the Growth plan."
+                  : lockedForFree
+                  ? "Upgrade your plan to unlock this tab."
+                  : "Not available in this mode."
+                : item.tip
+            }
+          >
           <button
             onClick={() => setActive(item.name)}
             disabled={disabled}
@@ -122,6 +141,16 @@ export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLega
 <path d="M13.6802 10.3401H20.6902C21.4202 10.3401 22.0102 10.9301 22.0102 11.6601V12.4601" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
 <path d="M16.0801 21.4301V10.8701" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
 <path d="M13.9399 21.4299H18.2199" stroke="#292D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+</svg>
+
+
+              )}
+                {item.icon === "templates" && (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M4 5.5C4 4.67157 4.67157 4 5.5 4H18.5C19.3284 4 20 4.67157 20 5.5V8.5C20 9.32843 19.3284 10 18.5 10H5.5C4.67157 10 4 9.32843 4 8.5V5.5Z" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinejoin="round"/>
+<path d="M4 15.5C4 14.6716 4.67157 14 5.5 14H10.5C11.3284 14 12 14.6716 12 15.5V18.5C12 19.3284 11.3284 20 10.5 20H5.5C4.67157 20 4 19.3284 4 18.5V15.5Z" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinejoin="round"/>
+<path d="M16 14V20" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round"/>
+<path d="M20 14V20" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round"/>
 </svg>
 
 

@@ -73,10 +73,12 @@ export default function ConsentPreview({
   content,
   langCode,
   floatingButton = { enabled: true, position: 'left' as const },
-  onSaveChanges,
-  saveDisabled = true,
-  saveBusy = false,
-  saveSuccess = false,
+  onSaveTemplate,
+  hideActions = false,
+  saveTemplateVisible = false,
+  saveTemplateDisabled = true,
+  saveTemplateBusy = false,
+  saveTemplateSuccess = false,
   onPublishChanges,
   publishBusy = false,
   publishDisabled = false,
@@ -105,14 +107,29 @@ export default function ConsentPreview({
   floatingButton?: { enabled: boolean; position: 'left' | 'right' };
   /** When set, forces the preview to show this view (e.g. "gdpr-preferences" when preference accordion is open). */
   forceModalView?: 'main' | 'gdpr-preferences' | 'ccpa-optout';
-  /** Persist recent editor changes to the server (draft save; use when you have unpublished edits). */
-  onSaveChanges?: () => void | Promise<void>;
-  /** When true, Save is not clickable (no pending edits or request in flight). */
-  saveDisabled?: boolean;
-  saveSuccess?: boolean;
+  /**
+   * Open the "Save as banner template" dialog. Growth-only entitlement — the button is
+   * hidden entirely below that plan rather than shown disabled, since there is nothing
+   * useful to click.
+   *
+   * This replaced a draft-save button that called the same persist function as Publish
+   * Changes, so no save capability was lost by repurposing it.
+   */
+  onSaveTemplate?: () => void;
+  /**
+   * Suppress the Save-as-template / Publish toolbar. Used when the preview is embedded
+   * somewhere those actions make no sense — the template builder, where the only save is
+   * the builder's own and a Publish button would push the draft to the live site.
+   */
+  hideActions?: boolean;
+  /** Growth-plan entitlement: render the button at all. Hidden, not disabled, below it. */
+  saveTemplateVisible?: boolean;
+  /** When true, Save as template is not clickable (no site, or a request in flight). */
+  saveTemplateDisabled?: boolean;
+  saveTemplateSuccess?: boolean;
   /** Push live to the embed (same API as save; shows success dialog). Available even when nothing changed (re-publish). */
   onPublishChanges?: () => void | Promise<void>;
-  saveBusy?: boolean;
+  saveTemplateBusy?: boolean;
   publishBusy?: boolean;
   /** When true, Publish is not clickable (e.g. no site or save/publish request in flight). */
   publishDisabled?: boolean;
@@ -313,13 +330,13 @@ export default function ConsentPreview({
   const [prefAnalytics, setPrefAnalytics] = useState(false);
   const [prefUserCategory, setPrefUserCategory] = useState(false);
 
-  // Small "Changes saved" toast anchored to the Save button.
+  // Small "Template saved" toast, anchored to the save-as-template button.
   const [showSaveToast, setShowSaveToast] = useState(false);
   useEffect(() => {
-    // `saveSuccess` is controlled by the parent and may reset before our desired toast duration.
+    // `saveTemplateSuccess` is controlled by the parent and may reset before our desired toast duration.
     // Trigger the toast on success; auto-hide is handled by the separate effect below.
-    if (saveSuccess) setShowSaveToast(true);
-  }, [saveSuccess]);
+    if (saveTemplateSuccess) setShowSaveToast(true);
+  }, [saveTemplateSuccess]);
   useEffect(() => {
     if (!showSaveToast) return;
     const t = window.setTimeout(() => setShowSaveToast(false), 3000);
@@ -503,14 +520,19 @@ export default function ConsentPreview({
         )}
 
         {/* Right Side Buttons */}
+        {!hideActions && (
         <div className="flex items-center gap-3 overflow-visible">
+          {/* Growth-only, and hidden rather than disabled below it — a labelled button
+              that is permanently greyed out just prompts "why can't I click this?", and
+              the Templates tab already carries the upgrade explanation. */}
+          {saveTemplateVisible && (
           <div className="relative overflow-visible">
             {showSaveToast ? (
               <div
                 role="status"
                 className="absolute right-0 bottom-full mb-2 flex items-center justify-between gap-3 rounded-md bg-[#007aff] px-4 py-2 text-xs text-white shadow-md min-w-[220px]"
               >
-                <span className="whitespace-nowrap">Changes saved</span>
+                <span className="whitespace-nowrap">Template saved</span>
                 <button
                   type="button"
                   className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-white/15"
@@ -524,49 +546,38 @@ export default function ConsentPreview({
 
             <button
               type="button"
-              disabled={saveDisabled || saveBusy}
-              onClick={() => void onSaveChanges?.()}
-              aria-label={saveBusy ? 'Saving…' : 'Save changes'}
-              className="relative w-9 h-9 flex items-center justify-center border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
+              disabled={saveTemplateDisabled || saveTemplateBusy}
+              onClick={() => onSaveTemplate?.()}
+              aria-label={saveTemplateBusy ? 'Saving template…' : 'Save as banner template'}
+              title="Save as banner template"
+              className="relative h-9 px-3 flex items-center justify-center gap-2 border border-[#e5e5e5] rounded-lg bg-[#f9f9fa] text-sm text-[#374151] whitespace-nowrap hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#f9f9fa]"
             >
-            {saveBusy ? (
+            {saveTemplateBusy ? (
               <svg className="h-5 w-5 animate-spin text-[#007aff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             ) : (
+              // The bordered-box rects that used to wrap this glyph are gone — the
+              // button itself now draws that border, and keeping both double-framed it.
               <svg
-                width="36"
-                height="36"
+                width="18"
+                height="18"
                 viewBox="0 0 36 36"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden
               >
-                <rect
-                  x="0.5"
-                  y="0.5"
-                  width="35"
-                  height="35"
-                  rx="7.5"
-                  fill="#F9F9FA"
-                />
-                <rect
-                  x="0.5"
-                  y="0.5"
-                  width="35"
-                  height="35"
-                  rx="7.5"
-                  stroke="#E5E5E5"
-                />
                 <path
                   d="M12.75 24.75H23.25C23.6478 24.75 24.0294 24.592 24.3107 24.3107C24.592 24.0294 24.75 23.6478 24.75 23.25V15C24.7506 14.9013 24.7317 14.8035 24.6943 14.7121C24.657 14.6207 24.602 14.5376 24.5325 14.4675L21.5325 11.4675C21.4624 11.398 21.3793 11.343 21.2879 11.3057C21.1966 11.2684 21.0987 11.2494 21 11.25H12.75C12.3522 11.25 11.9706 11.408 11.6893 11.6894C11.408 11.9707 11.25 12.3522 11.25 12.75V23.25C11.25 23.6478 11.408 24.0294 11.6893 24.3107C11.9706 24.592 12.3522 24.75 12.75 24.75ZM20.25 23.25H15.75V19.5H20.25V23.25ZM18.75 14.25H17.25V12.75H18.75V14.25ZM12.75 12.75H14.25V15.75H20.25V12.75H20.6925L23.25 15.3075V23.25H21.75V19.5C21.75 19.1022 21.592 18.7207 21.3107 18.4394C21.0294 18.158 20.6478 18 20.25 18H15.75C15.3522 18 14.9706 18.158 14.6893 18.4394C14.408 18.7207 14.25 19.1022 14.25 19.5V23.25H12.75V12.75Z"
                   fill="#4B5563"
                 />
               </svg>
             )}
+            <span>{saveTemplateBusy ? 'Saving…' : 'Save as template'}</span>
             </button>
           </div>
+          )}
 
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
@@ -605,6 +616,7 @@ export default function ConsentPreview({
             </button>
           )}
         </div>
+        )}
       </div>
 
       {/* Browser Preview */}

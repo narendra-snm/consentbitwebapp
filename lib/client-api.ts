@@ -18,7 +18,7 @@ function decodeEnvelope(parsed: any): any {
 }
 
 /** Parse a fetch response safely — reads body once, handles HTML error pages from Cloudflare/Workers. */
-async function parseApiResponse(res: Response): Promise<any> {
+export async function parseApiResponse(res: Response): Promise<any> {
   const text = await res.text();
   let parsed: any;
   try { parsed = JSON.parse(text); } catch {
