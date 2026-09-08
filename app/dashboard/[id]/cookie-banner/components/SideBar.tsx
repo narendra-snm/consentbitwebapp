@@ -17,12 +17,11 @@ interface SidebarProps {
 
   active: string;
   setActive: (active: string) => void;
-  iabEnabled: boolean;
   effectivePlanId?: string;
   isLegacy?: boolean;
 }
 
-export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLegacy }: SidebarProps) {
+export function Sidebar({ active, setActive, effectivePlanId, isLegacy }: SidebarProps) {
   // Defer plan check until after mount to avoid server/client hydration mismatch.
   // Server doesn't have session data, so effectivePlanId is always empty there.
   const [mounted, setMounted] = useState(false);
@@ -49,7 +48,10 @@ export function Sidebar({ active, setActive, iabEnabled, effectivePlanId, isLega
             item.name === "Layout" ||
             item.name === "Colors" ||
             item.name === "Type");
-        const disabled = (iabEnabled && item.name === "Content") || lockedForFree;
+        // IAB keeps Content available — the tab narrows to the language picker,
+        // which is the one piece of copy an IAB banner exposes (the rest of its
+        // text is fixed by the framework and the GVL).
+        const disabled = lockedForFree;
 
         return (
           <Tooltip key={item.name} text={disabled ? (lockedForFree ? "Upgrade your plan to unlock this tab." : "Not available in this mode.") : item.tip}>

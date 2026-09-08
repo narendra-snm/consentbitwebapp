@@ -1090,9 +1090,13 @@ export default function ConsentPreview({
             </div>
           )}</>}
 {iabEnabled && <CookieConsentBanner
-  key={`iab-${device}-${initialLayout?.position || 'banner'}-${initialLayout?.alignment || 'bottom-left'}-${floatingButton?.enabled ? 'fb-on' : 'fb-off'}-${floatingButton?.position || 'left'}`}
+  // `lang` is in the key so a language switch remounts the banner: the accordions
+  // and the open/closed modal hold their own state, and carrying that across a
+  // full copy swap leaves the preview half in the previous language.
+  key={`iab-${device}-${lang}-${initialLayout?.position || 'banner'}-${initialLayout?.alignment || 'bottom-left'}-${floatingButton?.enabled ? 'fb-on' : 'fb-off'}-${floatingButton?.position || 'left'}`}
   alignment={initialLayout?.alignment}
   device={device}
+  lang={lang}
   config={{
   bannerBg:colors.bannerBg || "#FFFFFF",
   textColor:colors.textColor || "#000000",

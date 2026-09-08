@@ -1,6 +1,15 @@
 "use client";
 import { useState } from "react";
 import PoweredByFooter from "./PoweredByFooter";
+import { iabT, resolveIabLang } from "./iabTranslations";
+import { useIabPurposeSections } from "./iabGvlPurposes";
+
+/**
+ * CMP id shown in the modal's storage-disclosure text. Matches the runtime TCF
+ * manager's config (iabrefrence/Tcfmanager.js), so the preview quotes the same
+ * registered id the live banner encodes into the TC string.
+ */
+const CMP_ID = 502;
 
 // ─── Default Style Config ────────────────────────────────────────────────────
 const defaultStyleConfig = {
@@ -41,13 +50,16 @@ function entranceAnimStyle(anim, opts = {}) {
 }
 
 // ─── Cookie Categories Data ──────────────────────────────────────────────────
+// Names and descriptions are i18n keys resolved at render, matching the runtime
+// banner — it stores keys here too rather than text, so a language switch does
+// not have to rebuild the category list. The `cookies` audit rows below are not
+// rendered by the preview and are left as-is.
 const cookieCategories = [
   {
     id: "necessary",
-    name: "Necessary",
+    nameKey: "cat.necessary",
     alwaysActive: true,
-    description:
-      "Necessary cookies are required to enable the basic features of this site, such as providing secure log-in or adjusting your consent preferences. These cookies do not store any personally identifiable data.",
+    descKey: "cat.necessaryDesc",
     cookies: [
       {
         name: "_cfuvid",
@@ -65,18 +77,16 @@ const cookieCategories = [
   },
   {
     id: "functional",
-    name: "Functional",
+    nameKey: "cat.functional",
     alwaysActive: false,
-    description:
-      "Functional cookies help perform certain functionalities like sharing the content of the website on social media platforms, collecting feedback, and other third-party features.",
+    descKey: "cat.functionalDesc",
     cookies: [],
   },
   {
     id: "analytics",
-    name: "Analytics",
+    nameKey: "cat.analytics",
     alwaysActive: false,
-    description:
-      "Analytical cookies are used to understand how visitors interact with the website. These cookies help provide information on metrics such as the number of visitors, bounce rate, traffic source, etc.",
+    descKey: "cat.analyticsDesc",
     cookies: [
       {
         name: "_hjSessionUser_*",
@@ -94,10 +104,9 @@ const cookieCategories = [
   },
   {
     id: "performance",
-    name: "Performance",
+    nameKey: "cat.performance",
     alwaysActive: false,
-    description:
-      "Performance cookies are used to understand and analyse the key performance indexes of the website which helps in delivering a better user experience for the visitors.",
+    descKey: "cat.performanceDesc",
     cookies: [
       {
         name: "SRM_B",
@@ -108,10 +117,9 @@ const cookieCategories = [
   },
   {
     id: "advertisement",
-    name: "Advertisement",
+    nameKey: "cat.advertisement",
     alwaysActive: false,
-    description:
-      "Advertisement cookies are used to provide visitors with customised advertisements based on the pages you visited previously and to analyse the effectiveness of the ad campaigns.",
+    descKey: "cat.advertisementDesc",
     cookies: [
       {
         name: "MUID",
@@ -130,92 +138,13 @@ const cookieCategories = [
 ];
 
 // ─── Purposes Data ───────────────────────────────────────────────────────────
-const purposesData = [
-  {
-    id: "purposes",
-    title: "Purposes (11)",
-    hasToggle: true,
-    items: [
-      {
-        id: "purpose1",
-        title: "Store and/or access information on a device",
-        description:
-          "Cookies, device or similar online identifiers together with other information can be stored or read on your device to recognise it each time it connects to an app or to a website.",
-        vendorCount: 777,
-        hasConsent: true,
-        hasLegitimate: false,
-      },
-      {
-        id: "purpose2",
-        title: "Use limited data to select advertising",
-        description:
-          "Advertising presented to you on this service can be based on limited data, such as the website or app you are using, your non-precise location, your device type.",
-        vendorCount: 734,
-        hasConsent: true,
-        hasLegitimate: true,
-      },
-      {
-        id: "purpose3",
-        title: "Create profiles for personalised advertising",
-        description:
-          "Information about your activity on this service can be stored and combined with other information about you to build advertising profiles.",
-        vendorCount: 594,
-        hasConsent: true,
-        hasLegitimate: false,
-      },
-      {
-        id: "purpose4",
-        title: "Measure advertising performance",
-        description:
-          "Information regarding which advertising is presented to you and how you interact with it can be used to determine how well an advert has worked.",
-        vendorCount: 847,
-        hasConsent: true,
-        hasLegitimate: true,
-      },
-    ],
-  },
-  {
-    id: "special_purposes",
-    title: "Special Purposes (3)",
-    hasToggle: false,
-    items: [
-      {
-        id: "specialPurpose1",
-        title: "Ensure security, prevent and detect fraud, and fix errors",
-        description:
-          "Your data can be used to monitor for and prevent unusual and possibly fraudulent activity and ensure systems and processes work properly and securely.",
-        vendorCount: 595,
-        hasConsent: false,
-        hasLegitimate: false,
-      },
-      {
-        id: "specialPurpose2",
-        title: "Deliver and present advertising and content",
-        description:
-          "Certain information is used to ensure the technical compatibility of the content or advertising, and to facilitate the transmission of the content or ad to your device.",
-        vendorCount: 594,
-        hasConsent: false,
-        hasLegitimate: false,
-      },
-    ],
-  },
-  {
-    id: "features",
-    title: "Features (3)",
-    hasToggle: false,
-    items: [
-      {
-        id: "feature1",
-        title: "Match and combine data from other data sources",
-        description:
-          "Information about your activity on this service may be matched and combined with other information relating to you and originating from various sources.",
-        vendorCount: 436,
-        hasConsent: false,
-        hasLegitimate: false,
-      },
-    ],
-  },
-];
+// Purposes, special purposes, features and special features are IAB's own
+// declarations, not ours. They come from the Global Vendor List in the selected
+// language via useIabPurposeSections() — see iabGvlPurposes.ts — so the preview
+// shows the same wording the live banner does.
+
+/** Curried string lookup, so components take a plain `t(key, vars)` prop. */
+const makeT = (lang) => (key, vars) => iabT(lang, key, vars);
 
 // ─── Google Additional Consent (AC) — sample ATP partners ────────────────────
 // Preview-only sample of Google-certified additional advertising partners (ATP).
@@ -321,7 +250,7 @@ function ChevronRight({ open, size = 6 }) {
 }
 
 // ─── Cookie Accordion (cb-accordion) ────────────────────────────────────────
-function CookieAccordion({ category, s, radii }) {
+function CookieAccordion({ category, s, radii, t }) {
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(category.alwaysActive);
   return (
@@ -373,7 +302,7 @@ function CookieAccordion({ category, s, radii }) {
                 textAlign: s.textAlign,
               }}
             >
-              {category.name}
+              {t(category.nameKey)}
             </span>
             <div onClick={(e) => e.stopPropagation()}>
               {category.alwaysActive ? (
@@ -387,7 +316,7 @@ function CookieAccordion({ category, s, radii }) {
                     fontWeight: 500,
                   }}
                 >
-                  Always Active
+                  {t("cat.alwaysActive")}
                 </span>
               ) : (
                 <Switch checked={enabled} onChange={setEnabled} accent={s.SecButtonColor} />
@@ -416,7 +345,7 @@ function CookieAccordion({ category, s, radii }) {
             fontWeight: s.fontWeight,
           }}
         >
-          {category.description}
+          {t(category.descKey)}
         </div>
       </div>
     </div>
@@ -424,7 +353,7 @@ function CookieAccordion({ category, s, radii }) {
 }
 
 // ─── Purpose Child Item (cb-child-accordion) ────────────────────────────────
-function PurposeChildItem({ item, s, radii, isMobile = false }) {
+function PurposeChildItem({ item, s, radii, t, isMobile = false }) {
   const [open, setOpen] = useState(false);
   const [consent, setConsent] = useState(false);
   const [legitimate, setLegitimate] = useState(!!item.hasLegitimate);
@@ -503,7 +432,7 @@ function PurposeChildItem({ item, s, radii, isMobile = false }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Legitimate
+                  {t("section.legitimateInterest")}
                 </span>
                 <Switch checked={legitimate} onChange={setLegitimate} accent={s.SecButtonColor} size="sm" />
               </div>
@@ -519,7 +448,7 @@ function PurposeChildItem({ item, s, radii, isMobile = false }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Consent
+                  {t("label.consent")}
                 </span>
                 <Switch checked={consent} onChange={setConsent} accent={s.SecButtonColor} size="sm" />
               </div>
@@ -554,17 +483,22 @@ function PurposeChildItem({ item, s, radii, isMobile = false }) {
           >
             {item.description}
           </p>
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "12px",
-              color: s.textColor,
-              opacity: 0.6,
-              fontWeight: 500,
-            }}
-          >
-            Vendors: <strong style={{ color: s.headingColor, fontWeight: 600 }}>{item.vendorCount}</strong>
-          </div>
+          {/* Only shown where the user actually has a choice. Special purposes and
+              features are disclosure-only, and the runtime's count line for those
+              is English-only — omitting it beats an untranslated line here. */}
+          {item.hasConsent && (
+            <div
+              style={{
+                marginTop: "12px",
+                fontSize: "12px",
+                color: s.textColor,
+                opacity: 0.6,
+                fontWeight: 500,
+              }}
+            >
+              {t("vendor.consentCount", { count: item.vendorCount })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -572,7 +506,7 @@ function PurposeChildItem({ item, s, radii, isMobile = false }) {
 }
 
 // ─── Purpose Section (parent accordion) ─────────────────────────────────────
-function PurposeSection({ section, s, radii, isMobile = false }) {
+function PurposeSection({ section, s, radii, t, isMobile = false }) {
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(false);
   return (
@@ -635,7 +569,7 @@ function PurposeSection({ section, s, radii, isMobile = false }) {
       >
         <div>
           {section.items.map((item) => (
-            <PurposeChildItem key={item.id} item={item} s={s} radii={radii} isMobile={isMobile} />
+            <PurposeChildItem key={item.id} item={item} s={s} radii={radii} t={t} isMobile={isMobile} />
           ))}
         </div>
       </div>
@@ -646,7 +580,7 @@ function PurposeSection({ section, s, radii, isMobile = false }) {
 // ─── Google Partner Item (GAC ATP card) ─────────────────────────────────────
 // Mirrors the runtime ATP card: name, "AC ID", a Consent switch, and an
 // optional Privacy policy link. Only rendered when Google AC is enabled.
-function GooglePartnerItem({ provider, s, radii }) {
+function GooglePartnerItem({ provider, s, radii, t }) {
   const [consent, setConsent] = useState(false);
   return (
     <div
@@ -670,11 +604,11 @@ function GooglePartnerItem({ provider, s, radii }) {
             {provider.name}
           </div>
           <div style={{ fontSize: "12px", color: s.textColor, fontFamily: "monospace" }}>
-            AC ID: {provider.id}
+            AC {t("vendor.idPrefix")} {provider.id}
           </div>
         </div>
         <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "13px", fontWeight: 500, color: s.textColor }}>Consent</span>
+          <span style={{ fontSize: "13px", fontWeight: 500, color: s.textColor }}>{t("label.consent")}</span>
           <Switch checked={consent} onChange={setConsent} accent={s.SecButtonColor} size="sm" />
         </div>
       </div>
@@ -686,7 +620,7 @@ function GooglePartnerItem({ provider, s, radii }) {
             rel="noopener noreferrer"
             style={{ color: "#007AFF", textDecoration: "none", fontWeight: 500 }}
           >
-            Privacy policy
+            {t("link.privacyPolicy")}
           </a>
         </div>
       )}
@@ -695,15 +629,17 @@ function GooglePartnerItem({ provider, s, radii }) {
 }
 
 // ─── Preference Modal ───────────────────────────────────────────────────────
-function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device = "desktop" }) {
+function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, t, lang, device = "desktop" }) {
   const isMobile = device === "mobile";
   const [activeTab, setActiveTab] = useState("cookie");
   // GAC: which vendor sub-tab is shown (IAB vendor list vs Google Partners list).
   const [vendorSubTab, setVendorSubTab] = useState("iab");
+  // Called before the `open` guard below — hooks cannot sit after an early return.
+  const purposeSections = useIabPurposeSections(lang);
   const tabs = [
-    { id: "cookie", label: "Cookie Categories" },
-    { id: "purpose", label: "Purposes & Features" },
-    { id: "vendor", label: "Vendors" },
+    { id: "cookie", label: t("tab.cookie") },
+    { id: "purpose", label: t("tab.purpose") },
+    { id: "vendor", label: t("tab.vendor") },
   ];
   if (!open) return null;
   return (
@@ -748,12 +684,12 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
           }}
         >
           <span style={{ fontSize: "18px", fontWeight: 600, color: s.headingColor }}>
-            Customise Consent Preferences
+            {t("modal.title")}
           </span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("btn.close")}
             style={{
               background: "none",
               border: "none",
@@ -793,13 +729,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
               paddingTop: "16px",
             }}
           >
-            <p style={{ margin: "0 0 12px 0" }}>
-              Customise your consent preferences for Cookie Categories and advertising tracking
-              preferences for Purposes &amp; Features and Vendors below. You can give granular consent
-              for each Third Party Vendor. Most vendors require explicit consent for personal data
-              processing, while some rely on legitimate interest. However, you have the right to
-              object to their use of legitimate interest.
-            </p>
+            <p style={{ margin: "0 0 12px 0" }}>{t("modal.intro")}</p>
             <details
               style={{
                 fontSize: "12px",
@@ -814,36 +744,17 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
               <summary
                 style={{ cursor: "pointer", fontWeight: 600, color: s.headingColor }}
               >
-                How this Consent Management Platform stores your choices
+                {t("modal.disclosureSummary")}
               </summary>
-              <p style={{ marginTop: "6px", marginBottom: 0 }}>
-                To remember the choices you make here, this CMP (cmpId 200) stores a TCF v2.2
-                consent string in the{" "}
-                <code
-                  style={{
-                    background: "#fff",
-                    padding: "1px 5px",
-                    borderRadius: "3px",
-                    fontSize: "11px",
-                    border: "1px solid #e0e0e0",
-                  }}
-                >
-                  euconsent-v2
-                </code>{" "}
-                cookie and in your browser's{" "}
-                <code
-                  style={{
-                    background: "#fff",
-                    padding: "1px 5px",
-                    borderRadius: "3px",
-                    fontSize: "11px",
-                    border: "1px solid #e0e0e0",
-                  }}
-                >
-                  localStorage
-                </code>{" "}
-                for up to 365 days.
-              </p>
+              {/* The copy wraps <code> spans around the cookie and storage key names,
+                  so it is inserted as markup. Our own literal, never user input. */}
+              <p
+                className="cbIabRichText"
+                style={{ marginTop: "6px", marginBottom: 0 }}
+                dangerouslySetInnerHTML={{
+                  __html: t("modal.disclosureBodyHtml", { cmpId: CMP_ID }),
+                }}
+              />
             </details>
           </div>
 
@@ -900,7 +811,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                   textAlign: s.textAlign,
                 }}
               >
-                Cookie Categories
+                {t("tab.cookie")}
               </p>
               <div
                 style={{
@@ -911,19 +822,13 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                   textAlign: s.textAlign,
                 }}
               >
-                <p style={{ margin: "0 0 12px 0" }}>
-                  We use cookies to help you navigate efficiently and perform certain functions. You
-                  will find detailed information about all cookies under each consent category below.
-                </p>
-                <p style={{ margin: 0 }}>
-                  The cookies that are categorised as "Necessary" are stored on your browser as they
-                  are essential for enabling the basic functionalities of the site.
-                </p>
+                <p style={{ margin: "0 0 12px 0" }}>{t("cookie.intro1")}</p>
+                <p style={{ margin: 0 }}>{t("cookie.intro2")}</p>
               </div>
               <div style={{ height: "1px", background: "#ebebeb", margin: "20px 0" }} />
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {cookieCategories.map((cat) => (
-                  <CookieAccordion key={cat.id} category={cat} s={s} radii={radii} />
+                  <CookieAccordion key={cat.id} category={cat} s={s} radii={radii} t={t} />
                 ))}
               </div>
             </div>
@@ -940,11 +845,11 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                   textAlign: s.textAlign,
                 }}
               >
-                Purposes &amp; Features
+                {t("tab.purpose")}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {purposesData.map((section) => (
-                  <PurposeSection key={section.id} section={section} s={s} radii={radii} isMobile={isMobile} />
+                {purposeSections.map((section) => (
+                  <PurposeSection key={section.id} section={section} s={s} radii={radii} t={t} isMobile={isMobile} />
                 ))}
               </div>
             </div>
@@ -961,10 +866,13 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                   textAlign: s.textAlign,
                 }}
               >
-                Vendors
+                {t("tab.vendor")}
               </p>
 
-              {/* GAC: sub-tab switcher — IAB Vendors | Google Partners */}
+              {/* GAC: sub-tab switcher — IAB Vendors | Google Partners.
+                  Left in English deliberately: the runtime builds these two pill
+                  labels from literals too, so translating only here would make the
+                  preview disagree with the live banner. */}
               {s.isGAC && (
                 <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
                   {[
@@ -1001,7 +909,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
               <div style={{ position: "relative", marginBottom: "20px" }}>
                 <input
                   type="text"
-                  placeholder="Search vendors by name or ID..."
+                  placeholder={t("vendor.searchPlaceholder")}
                   readOnly
                   style={{
                     width: "100%",
@@ -1043,12 +951,11 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                       textAlign: s.textAlign,
                     }}
                   >
-                    These Google-certified partners are not on the IAB vendor list. Choose whether they
-                    may use your data.
+                    {t("atp.note")}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                     {sampleAtpProviders.map((p) => (
-                      <GooglePartnerItem key={p.id} provider={p} s={s} radii={radii} />
+                      <GooglePartnerItem key={p.id} provider={p} s={s} radii={radii} t={t} />
                     ))}
                   </div>
                 </div>
@@ -1063,7 +970,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                     opacity: 0.5,
                   }}
                 >
-                  Vendor list loads at runtime.
+                  {t("vendor.loading")}
                 </p>
               )}
             </div>
@@ -1105,7 +1012,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                 width: isMobile ? "100%" : undefined,
               }}
             >
-              Reject All
+              {t("btn.rejectAll")}
             </button>
             <button
               type="button"
@@ -1123,7 +1030,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                 width: isMobile ? "100%" : undefined,
               }}
             >
-              Accept All
+              {t("btn.acceptAll")}
             </button>
             <button
               type="button"
@@ -1141,7 +1048,7 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
                 width: isMobile ? "100%" : undefined,
               }}
             >
-              Save My Preferences
+              {t("btn.savePreferences")}
             </button>
           </div>
 
@@ -1154,11 +1061,47 @@ function PreferenceModal({ open, onClose, onAccept, onReject, s, radii, device =
   );
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Fill one of the empty spans the notice copy leaves for a generated list.
+ * The runtime does the same thing in updateDynamicCounts(); keeping the spans in
+ * the translated string is what lets each language put the list where its own
+ * grammar needs it.
+ */
+function fillSpan(html, id, text) {
+  return html.replace(
+    new RegExp(`(<span id="${id}"[^>]*>)\\s*(</span>)`),
+    `$1${escapeHtml(text)}$2`,
+  );
+}
+
 // ─── Banner Notice Description (shared by all banner layouts) ───────────────
-function NoticeDescription({ s, onCustomiseAriaId }) {
+function NoticeDescription({ s, t, purposeSections, onCustomiseAriaId }) {
   void onCustomiseAriaId;
+
+  const namesOf = (sectionId) =>
+    (purposeSections.find((section) => section.id === sectionId)?.items || [])
+      .map((item) => item.title)
+      .filter(Boolean)
+      .join(", ");
+
+  let purposesLine = t("banner.purposesLineHtml");
+  purposesLine = fillSpan(purposesLine, "consentBitPurposesText", namesOf("purposes"));
+  purposesLine = fillSpan(
+    purposesLine,
+    "consentBitSpecialFeaturesText",
+    namesOf("special-features"),
+  );
+
   return (
     <div
+      className="cbIabRichText"
       style={{
         flex: 1,
         color: s.textColor,
@@ -1166,57 +1109,32 @@ function NoticeDescription({ s, onCustomiseAriaId }) {
         fontSize: "14px",
         fontWeight: s.fontWeight,
         textAlign: s.textAlign,
+        // Consumed by the .cbIabRichText rules so markup inside the translated
+        // copy can pick up the configured heading colour.
+        "--cb-heading": s.headingColor,
+      }}
+      // The vendors link inside the copy is inert in a preview.
+      onClick={(e) => {
+        if (e.target.closest("a")) e.preventDefault();
       }}
     >
-      <p style={{ margin: "0 0 12px 0" }}>
-        With your permission, we and{" "}
-        <a
-          href="#"
-          onClick={(e) => e.preventDefault()}
-          style={{
-            color: "#007AFF",
-            textDecoration: "underline",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          third-party vendors
-        </a>{" "}
-        store and/or access information on your device (such as cookies and device identifiers) and
-        process your personal data (including unique identifiers, IP address, browsing activity and
-        approximate location) for the purposes below. Some processing relies on legitimate interest,
-        which you can object to. Choices apply to this website only and can be updated any time via
-        the cookie icon at the bottom-left.
-      </p>
+      {/* Both strings wrap markup — a vendor link, <strong> labels, and the spans
+          filled above — so they are inserted as HTML. Our own literals; the only
+          interpolated values are IAB purpose names, escaped in fillSpan(). */}
       <p
-        style={{
-          margin: "8px 0 0 0",
-          fontSize: "14px",
-          lineHeight: 1.5,
-          opacity: 0.85,
-        }}
-      >
-        <strong style={{ color: s.headingColor, fontWeight: 600 }}>
-          Our partners collect your information for the following purposes:
-        </strong>{" "}
-        Store and/or access information on a device, Use limited data to select advertising, Create
-        profiles for personalised advertising, Use profiles to select personalised advertising,
-        Create profiles to personalise content, Use profiles to select personalised content, Measure
-        advertising performance, Measure content performance, Understand audiences through statistics
-        or combinations of data from different sources, Develop and improve services, Use limited data
-        to select content.
-        <br />
-        <strong style={{ color: s.headingColor, fontWeight: 600 }}>
-          They also use the following special features:
-        </strong>{" "}
-        Use precise geolocation data, Actively scan device characteristics for identification.
-      </p>
+        style={{ margin: "0 0 12px 0" }}
+        dangerouslySetInnerHTML={{ __html: t("banner.bodyHtml") }}
+      />
+      <p
+        style={{ margin: "8px 0 0 0", fontSize: "14px", lineHeight: 1.5, opacity: 0.85 }}
+        dangerouslySetInnerHTML={{ __html: purposesLine }}
+      />
     </div>
   );
 }
 
 // ─── Banner Bar (cb-consent-bar) ────────────────────────────────────────────
-function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device = "desktop" }) {
+function BannerBar({ s, radii, layout, t, purposeSections, onCustomise, onReject, onAccept, device = "desktop" }) {
   const isFullBanner = layout === "banner";
   const isMobile = device === "mobile";
   // On mobile, full-banner stacks like the box layout.
@@ -1267,7 +1185,7 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
             textAlign: s.textAlign,
           }}
         >
-          Your privacy matters to us
+          {t("banner.title")}
         </p>
         <div
           style={{
@@ -1278,7 +1196,7 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
             flex: 1,
           }}
         >
-          <NoticeDescription s={s} />
+          <NoticeDescription s={s} t={t} purposeSections={purposeSections} />
           <div
             style={{
               display: "flex",
@@ -1301,7 +1219,7 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
                 color: s.SecButtonTextColor,
               }}
             >
-              Customise
+              {t("btn.customise")}
             </button>
             <button
               type="button"
@@ -1313,7 +1231,7 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
                 color: s.buttonTextColor,
               }}
             >
-              Reject All
+              {t("btn.rejectAll")}
             </button>
             <button
               type="button"
@@ -1325,7 +1243,7 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
                 color: s.buttonTextColor,
               }}
             >
-              Accept All
+              {t("btn.acceptAll")}
             </button>
           </div>
         </div>
@@ -1335,9 +1253,21 @@ function BannerBar({ s, radii, layout, onCustomise, onReject, onAccept, device =
 }
 
 // ─── Main Cookie Consent Component ───────────────────────────────────────────
-export function CookieConsentBanner({ config = {}, device = "desktop", alignment = "bottom-left" }) {
+export function CookieConsentBanner({
+  config = {},
+  device = "desktop",
+  alignment = "bottom-left",
+  lang = "en",
+}) {
   const s = { ...defaultStyleConfig, ...config };
   const radii = getRadii(s);
+  // Narrowed once here so every child sees the same language the strings resolve
+  // against, even when the editor hands us a code we have no table for.
+  const resolvedLang = resolveIabLang(lang);
+  const t = makeT(resolvedLang);
+  // The notice lists the purposes by name, so the banner needs this too — not
+  // just the modal.
+  const purposeSections = useIabPurposeSections(resolvedLang);
   const [visible, setVisible] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -1398,6 +1328,8 @@ export function CookieConsentBanner({ config = {}, device = "desktop", alignment
               <BannerBar
                 s={s}
                 radii={radii}
+                t={t}
+                purposeSections={purposeSections}
                 layout="box"
                 device={device}
                 onCustomise={handleCustomise}
@@ -1428,6 +1360,8 @@ export function CookieConsentBanner({ config = {}, device = "desktop", alignment
               <BannerBar
                 s={s}
                 radii={radii}
+                t={t}
+                purposeSections={purposeSections}
                 layout="popup"
                 device={device}
                 onCustomise={handleCustomise}
@@ -1454,6 +1388,8 @@ export function CookieConsentBanner({ config = {}, device = "desktop", alignment
               <BannerBar
                 s={s}
                 radii={radii}
+                t={t}
+                purposeSections={purposeSections}
                 layout="banner"
                 device={device}
                 onCustomise={handleCustomise}
@@ -1475,10 +1411,18 @@ export function CookieConsentBanner({ config = {}, device = "desktop", alignment
         onReject={handleReject}
         s={s}
         radii={radii}
+        t={t}
+        lang={resolvedLang}
         device={device}
       />
 
       <style>{`
+        /* Styling for the markup carried inside the translated copy (the vendors
+           link, <strong> labels, <code> storage keys). These strings are inserted
+           as HTML, so the elements cannot take inline styles of their own. */
+        .cbIabRichText a{color:#007AFF;text-decoration:underline;cursor:pointer;font-weight:600}
+        .cbIabRichText strong{color:var(--cb-heading,inherit);font-weight:600}
+        .cbIabRichText code{background:#fff;padding:1px 5px;border-radius:3px;font-size:11px;border:1px solid #e0e0e0}
         @keyframes cbIabFadeIn{from{opacity:0}to{opacity:1}}
         @keyframes cbIabSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes cbIabSlideDown{from{transform:translateY(-24px);opacity:0}to{transform:translateY(0);opacity:1}}

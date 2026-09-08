@@ -632,6 +632,15 @@ export default function page({ siteId }: { siteId: string }) {
   const handleLanguageChange = useCallback(
     (code: string) => {
       if (code === selectedLangCode) return;
+      // An IAB banner has no editable copy — its text comes from the IAB string
+      // table and the GVL — so the language is the only thing that changes.
+      // Deliberately NOT routed through applyLanguage(): that rewrites the
+      // GDPR/CCPA copy in `contentSettings`, which is not on screen in IAB mode
+      // and must not be silently retranslated and then persisted on Publish.
+      if (iabEnabled) {
+        setSelectedLangCode(code);
+        return;
+      }
       // Nothing of the user's would be lost, so skip the prompt.
       if (contentIsPristineForLang) {
         applyLanguage(code);
@@ -639,7 +648,7 @@ export default function page({ siteId }: { siteId: string }) {
       }
       setPendingLangCode(code);
     },
-    [applyLanguage, contentIsPristineForLang, selectedLangCode],
+    [applyLanguage, contentIsPristineForLang, iabEnabled, selectedLangCode],
   );
 
   const confirmLanguageChange = useCallback(() => {
@@ -1045,7 +1054,6 @@ export default function page({ siteId }: { siteId: string }) {
       <Sidebar
         active={active}
         setActive={setActive}
-        iabEnabled={iabEnabled}
         effectivePlanId={resolvedPlanId}
         isLegacy={isLegacySite}
       />
@@ -1265,7 +1273,11 @@ export default function page({ siteId }: { siteId: string }) {
                 // selected would leave the user with no way back to the original.
                 onClick={() => {
                   setSelectedLangCode("en");
-                  setContentSettings(makeDefaultContentSettings("en"));
+                  // In IAB mode the GDPR/CCPA copy is neither shown nor editable,
+                  // so Reset means "back to English" and nothing else — rewriting
+                  // contentSettings here would discard edits the user made under a
+                  // different template.
+                  if (!iabEnabled) setContentSettings(makeDefaultContentSettings("en"));
                 }}
                 className="flex items-center gap-1.5 rounded-md border border-[#e5e5e5] bg-white px-3 py-1.5 text-xs text-[#374151] hover:bg-gray-50 hover:border-gray-300 transition"
               >
@@ -1311,6 +1323,13 @@ export default function page({ siteId }: { siteId: string }) {
               </div>
             </div>
 
+            {/* Everything below edits GDPR/CCPA copy. An IAB banner's wording is
+                fixed by the framework — our IAB string table plus IAB's own Global
+                Vendor List — so there is nothing here to type. The tab narrows to
+                Reset and the language picker above, and the rest is hidden rather
+                than disabled: a column of dead inputs reads as a bug. */}
+            {!iabEnabled && (
+            <>
             {/* Cookie Notice / Preference Banner tabs */}
             <div className="w-full max-w-[409px] mx-auto">
               <div className="flex gap-1 p-1 bg-[#f1f1f3] rounded-lg">
@@ -1494,6 +1513,8 @@ export default function page({ siteId }: { siteId: string }) {
             />
 
             <BannerLinkSection />
+            </>
+            )}
 
 </>
         )}
