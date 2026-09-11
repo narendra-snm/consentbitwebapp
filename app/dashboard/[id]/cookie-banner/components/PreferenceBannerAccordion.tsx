@@ -72,7 +72,7 @@ export default function PreferenceBannerAccordion({
           {/* Title */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Title
@@ -92,7 +92,7 @@ export default function PreferenceBannerAccordion({
                   cancelLabel: variant === "ccpa" ? settings.cancel : undefined,
                 });
               }}
-              className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+              className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none text-sm text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -100,7 +100,7 @@ export default function PreferenceBannerAccordion({
           {/* Main copy */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               {overviewLabel}
@@ -121,7 +121,7 @@ export default function PreferenceBannerAccordion({
                   cancelLabel: variant === "ccpa" ? settings.cancel : undefined,
                 });
               }}
-              className="w-full p-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
+              className="w-full p-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -129,7 +129,7 @@ export default function PreferenceBannerAccordion({
           {/* Save button label */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               {variant === "ccpa"
@@ -151,7 +151,7 @@ export default function PreferenceBannerAccordion({
                   cancelLabel: variant === "ccpa" ? settings.cancel : undefined,
                 });
               }}
-              className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
+              className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -160,7 +160,7 @@ export default function PreferenceBannerAccordion({
           {variant === "ccpa" && (
             <div className="space-y-2">
               <label
-                className="block font-['DM_Sans'] text-base text-black leading-5"
+                className="block text-sm text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 &quot;Cancel&quot; button
@@ -180,7 +180,7 @@ export default function PreferenceBannerAccordion({
                     cancelLabel: v,
                   });
                 }}
-                className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
+                className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
             </div>

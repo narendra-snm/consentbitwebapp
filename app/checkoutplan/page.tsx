@@ -642,7 +642,7 @@ function CheckoutForm({
           return;
         }
 
-        const res2 = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+        const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

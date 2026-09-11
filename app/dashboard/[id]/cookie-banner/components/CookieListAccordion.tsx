@@ -34,7 +34,7 @@ export default function CookieListAccordion({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label
-                className="block font-['DM_Sans'] text-base text-black leading-5"
+                className="block text-sm text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 Show cookie list on banner
@@ -52,7 +52,7 @@ export default function CookieListAccordion({
           {/* Embed Code */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Embed code
@@ -66,7 +66,7 @@ export default function CookieListAccordion({
               rows={3}
               value={settings.embedCode}
               onChange={(e) => update("embedCode", e.target.value)}
-              className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal"
+              className="w-full p-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none text-sm text-[#111827] resize-none leading-normal"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -74,7 +74,7 @@ export default function CookieListAccordion({
           {/* Cookie Label */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Cookie
@@ -84,7 +84,7 @@ export default function CookieListAccordion({
               type="text"
               value={settings.cookieLabel}
               onChange={(e) => update("cookieLabel", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -92,7 +92,7 @@ export default function CookieListAccordion({
           {/* Duration */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Duration
@@ -102,7 +102,7 @@ export default function CookieListAccordion({
               type="text"
               value={settings.duration}
               onChange={(e) => update("duration", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -110,7 +110,7 @@ export default function CookieListAccordion({
           {/* Description */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               Description
@@ -120,7 +120,7 @@ export default function CookieListAccordion({
               type="text"
               value={settings.description}
               onChange={(e) => update("description", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -128,7 +128,7 @@ export default function CookieListAccordion({
           {/* Always Active */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               "Always Active" label
@@ -138,7 +138,7 @@ export default function CookieListAccordion({
               type="text"
               value={settings.alwaysActive}
               onChange={(e) => update("alwaysActive", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -146,7 +146,7 @@ export default function CookieListAccordion({
           {/* No Cookies */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               "No cookies to display" label
@@ -156,7 +156,7 @@ export default function CookieListAccordion({
               type="text"
               value={settings.noCookies}
               onChange={(e) => update("noCookies", e.target.value)}
-              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg font-['DM_Sans'] text-base text-[#111827]"
+              className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>

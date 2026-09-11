@@ -3404,7 +3404,7 @@ function injectFloatingTrigger() {
 
   const img = document.createElement('img');
   img.alt = '';
-  img.src = 'https://consent-webapp-manager.web-8fb.workers.dev/embed/floating-logo.svg';
+  img.src = 'https://manager.consentbit.com/embed/floating-logo.svg';
   img.width = 28;
   img.height = 28;
   img.draggable = false;

@@ -380,7 +380,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           return;
         }
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://consent-webapp-manager.web-8fb.workers.dev";
+        const workerBase = process.env.NEXT_PUBLIC_WORKER_URL || "https://manager.consentbit.com";
         const finalUrl = `${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}&returnTo=${encodeURIComponent(returnTo)}`;
         const successUrl = `${workerBase}/api/checkout-success-redirect?redirect=${encodeURIComponent(finalUrl)}`;
         const cancelUrl = `${origin}${returnTo}`;
@@ -488,7 +488,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     if (e.target.value.trim()) setUrlError(validateDomain(e.target.value));
                   }}
                   placeholder="acme.com"
-                  className={`w-full h-[48px] bg-white border rounded-lg px-[18px] font-['DM_Sans:Regular',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] ${
+                  className={`w-full h-[48px] bg-white border rounded-lg px-[18px] font-['DM_Sans',sans-serif] font-normal text-[#161616] text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] ${
                     urlError ? "border-[#b91c1c]" : "border-[#e5e5e5]"
                   }`}
                   style={{ fontVariationSettings: "'opsz' 14" }}
@@ -522,7 +522,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
             </div>
             <div className="flex items-center">
               <p
-                className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] opacity-60 text-[#161616] text-[14px] tracking-[-0.28px]"
+                className="font-['DM_Sans',sans-serif] font-normal leading-[normal] opacity-60 text-[#161616] text-[14px] tracking-[-0.28px]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 Add a new website to your organization by entering your website URL. You can configure banner settings in the Cookie Banner tab.
@@ -692,7 +692,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                         style={{ backgroundColor: plan.buttonColor, }}
                       >
                         <p
-                          className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[15px] text-white whitespace-nowrap"
+                          className="font-['DM_Sans',sans-serif] font-normal leading-[20px] text-[15px] text-white whitespace-nowrap"
                           style={{ fontVariationSettings: "'opsz' 14", color: plan.buttonTextColor || "#FFFFFF" }}
                         >
                           {plan.buttonText}
@@ -704,7 +704,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     {plan.additionalNote && (
                       <div className="absolute xl:-bottom-[30px] -bottom-[60px]  left-0 right-0  px-[12px]">
                         <p
-                          className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[normal] text-[#4B5563] text-[13px] tracking-[-0.22px] text-left"
+                          className="font-['DM_Sans',sans-serif] font-normal leading-[normal] text-[#4B5563] text-[13px] tracking-[-0.22px] text-left"
                           style={{ fontVariationSettings: "'opsz' 9" }}
                         >
                           {plan.additionalNote}
@@ -747,7 +747,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     }
                   }}
                   placeholder="Promo code"
-                  className="h-[44px] w-full border rounded-lg font-['DM_Sans:Regular',sans-serif] font-normal text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:cursor-not-allowed"
+                  className="h-[44px] w-full border rounded-lg font-['DM_Sans',sans-serif] font-normal text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:cursor-not-allowed"
                   style={{
                     fontVariationSettings: "'opsz' 14",
                     paddingLeft: 14,

@@ -14,6 +14,7 @@ import { PostHogProvider } from "@/components/providers/PostHogProvider"
 const dmSans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-dm-sans",
+  display: "swap",
 });
 
 // Display face for the auth screens' headings.
@@ -26,6 +27,7 @@ const funnelDisplay = Funnel_Display({
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-manrope",
+  display: "swap",
 });
 const geistSans = Geist({
   variable: "--font-geist-sans",

@@ -64,7 +64,7 @@ export default function CookieCategoriesAccordion({
           {/* "Always Active" label — applies to the Strictly Necessary row */}
           <div className="space-y-2">
             <label
-              className="block font-['DM_Sans'] text-base text-black leading-5"
+              className="block text-sm text-[#111827]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             >
               &quot;Always Active&quot; label
@@ -74,7 +74,7 @@ export default function CookieCategoriesAccordion({
               value={value.alwaysActiveLabel}
               maxLength={LABEL_LIMIT}
               onChange={(e) => setAlwaysActiveLabel(e.target.value)}
-              className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
+              className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
               style={{ fontVariationSettings: "'opsz' 14" }}
             />
           </div>
@@ -91,7 +91,7 @@ export default function CookieCategoriesAccordion({
               {/* Category name */}
               <div className="space-y-2">
                 <label
-                  className="block font-['DM_Sans'] text-base text-black leading-5"
+                  className="block text-sm text-[#111827]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   Name
@@ -101,7 +101,7 @@ export default function CookieCategoriesAccordion({
                   value={value[key].name}
                   maxLength={NAME_LIMIT}
                   onChange={(e) => setName(key, e.target.value)}
-                  className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+                  className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none text-sm text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -109,7 +109,7 @@ export default function CookieCategoriesAccordion({
               {/* Category description */}
               <div className="space-y-2">
                 <label
-                  className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                  className="block text-sm text-[#111827]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   Description
@@ -119,7 +119,7 @@ export default function CookieCategoriesAccordion({
                   value={value[key].description}
                   maxLength={DESC_LIMIT}
                   onChange={(e) => setDescription(key, e.target.value)}
-                  className="w-full p-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
+                  className="w-full p-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>

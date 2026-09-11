@@ -642,7 +642,7 @@ function CheckoutForm({
 
       // Phase 1 — create subscription
       console.log('[Checkout] phase 1 → POST /api/custom-checkout', { paymentMethodId: paymentMethod?.id });
-      const res = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+      const res = await fetch('https://manager.consentbit.com/api/custom-checkout', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -699,7 +699,7 @@ function CheckoutForm({
         }
 
         console.log('[Checkout] phase 2 → POST /api/custom-checkout (confirm)');
-        const res2 = await fetch('https://consent-webapp-manager.web-8fb.workers.dev/api/custom-checkout', {
+        const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

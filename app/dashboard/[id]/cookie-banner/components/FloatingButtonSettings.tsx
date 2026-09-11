@@ -32,7 +32,7 @@ export function FloatingButtonSettings({
         {/* Floating Button Toggle */}
         <div className="flex items-center justify-between">
           <label
-            className="font-['DM_Sans'] font-semibold text-base text-black leading-5"
+            className="font-semibold text-base text-black"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
             Floating button
@@ -49,7 +49,7 @@ export function FloatingButtonSettings({
         {/* Position */}
         <div className="space-y-3">
           <label
-            className="block font-['DM_Sans'] text-base text-[#111827]"
+            className="block text-sm text-[#111827]"
             style={{ fontVariationSettings: "'opsz' 14" }}
           >
             Position
@@ -68,7 +68,7 @@ export function FloatingButtonSettings({
                   onChange={() => onChange({ ...value, position: "left" })}
                   className="w-5 h-5 accent-[#007aff]"
                 />
-                <span className="font-['DM_Sans'] text-[15px] text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
+                <span className="text-sm text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
                   Bottom left
                 </span>
               </label>
@@ -88,7 +88,7 @@ export function FloatingButtonSettings({
                   onChange={() => onChange({ ...value, position: "right" })}
                   className="w-5 h-5 accent-[#007aff]"
                 />
-                <span className="font-['DM_Sans'] text-[15px] text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
+                <span className="text-sm text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
                   Bottom right
                 </span>
               </label>

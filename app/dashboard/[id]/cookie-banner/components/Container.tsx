@@ -1294,7 +1294,7 @@ export default function page({ siteId }: { siteId: string }) {
             <div className="space-y-2 mb-6">
               <label
                 htmlFor="banner-language"
-                className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                className="block text-sm text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 Select Language
@@ -1306,7 +1306,7 @@ export default function page({ siteId }: { siteId: string }) {
                   onChange={(e) => handleLanguageChange(e.target.value)}
                   // pr-10 rather than px-4: the chevron sits in that gap, so a long
                   // language name can't run underneath it.
-                  className="w-full h-12 pl-4 pr-10 appearance-none cursor-pointer bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+                  className="w-full h-12 pl-4 pr-10 appearance-none cursor-pointer bg-white border-[3px] rounded-lg focus:outline-none text-sm text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   {LANGUAGE_OPTIONS.map((l) => (

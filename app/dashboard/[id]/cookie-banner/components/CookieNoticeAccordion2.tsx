@@ -104,7 +104,7 @@ export function CookieNoticeAccordion2({
        <div className=" pb-6 space-y-6">
             {/* Title Section */}
             <div className="space-y-2">
-              <label className="block font-['DM_Sans'] font-normal text-base text-black leading-5" style={{ fontVariationSettings: "'opsz' 14" }}>
+              <label className="block text-sm text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
                 Title
               </label>
               <input
@@ -112,7 +112,7 @@ export function CookieNoticeAccordion2({
                 value={settings.title}
                 maxLength={LIMITS.title}
                 onChange={(e) => update({ title: clampLen(e.target.value, LIMITS.title) })}
-                className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
+                className="w-full h-12 px-4 bg-white border-[3px] rounded-lg focus:outline-none text-sm text-[#111827] border-[rgba(0,122,255,0.1)] focus:border-[#007aff]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
             </div>
@@ -122,7 +122,7 @@ export function CookieNoticeAccordion2({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label
-                    className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                    className="block text-sm text-[#111827]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
                     Message
@@ -142,7 +142,7 @@ export function CookieNoticeAccordion2({
                     maxLength={LIMITS.message}
                     onChange={(e) => update({ message: clampLen(e.target.value, LIMITS.message) })}
                     rows={5}
-                    className="w-full p-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-[15px] text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
+                    className="w-full p-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] resize-none leading-normal border-[#e5e5e5] focus:border-[#007aff]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   />
                   <button className="absolute bottom-3 right-3 text-gray-400">
@@ -218,7 +218,7 @@ export function CookieNoticeAccordion2({
             {bannerType === "gdpr" ? (
               <div className="space-y-2">
                 <label
-                  className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                  className="block text-sm text-[#111827]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   Accept All
@@ -228,7 +228,7 @@ export function CookieNoticeAccordion2({
                   value={settings.acceptAll}
                   maxLength={LIMITS.button}
                   onChange={(e) => update({ acceptAll: clampLen(e.target.value, LIMITS.button) })}
-                  className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
+                  className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -241,7 +241,7 @@ export function CookieNoticeAccordion2({
             {bannerType === "gdpr" ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block font-['DM_Sans'] font-normal text-base text-black leading-5" style={{ fontVariationSettings: "'opsz' 14" }}>
+                  <label className="block text-sm text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
                     "Reject All" button
                   </label>
                   <Tooltip text="Show or hide the Reject All button on the banner.">
@@ -256,7 +256,7 @@ export function CookieNoticeAccordion2({
                   value={settings.rejectAll ?? ''}
                   maxLength={LIMITS.button}
                   onChange={(e) => update({ rejectAll: clampLen(e.target.value, LIMITS.button) })}
-                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
+                  className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -264,7 +264,7 @@ export function CookieNoticeAccordion2({
               <div className="space-y-2">
                 <div className="flex items-center justify-between mb-6">
                   <label
-                    className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                    className="block text-sm text-[#111827]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
                     Do Not Share link
@@ -277,7 +277,7 @@ export function CookieNoticeAccordion2({
                   </Tooltip>
                 </div>
                 <label
-                  className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                  className="block text-sm text-[#111827]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   Link text
@@ -287,7 +287,7 @@ export function CookieNoticeAccordion2({
                   value={settings.doNotSellLabel || ''}
                   maxLength={60}
                   onChange={(e) => update({ doNotSellLabel: clampLen(e.target.value, 60) })}
-                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
+                  className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -298,7 +298,7 @@ export function CookieNoticeAccordion2({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label
-                    className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                    className="block text-sm text-[#111827]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
                     &quot;Preference&quot; button
@@ -315,7 +315,7 @@ export function CookieNoticeAccordion2({
                   value={settings.customizeLabel}
                   maxLength={LIMITS.button}
                   onChange={(e) => update({ customizeLabel: clampLen(e.target.value, LIMITS.button) })}
-                  className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
+                  className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
               </div>
@@ -325,7 +325,7 @@ export function CookieNoticeAccordion2({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label
-                  className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                  className="block text-sm text-[#111827]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 >
                   {bannerType === "ccpa"
@@ -344,14 +344,14 @@ export function CookieNoticeAccordion2({
                 value={settings.cookiePolicyLabel}
                 maxLength={LIMITS.policyLabel}
                 onChange={(e) => update({ cookiePolicyLabel: clampLen(e.target.value, LIMITS.policyLabel) })}
-                className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
+                className="w-full h-12 px-4 bg-white border rounded-lg focus:outline-none text-sm text-[#111827] border-[#e5e5e5] focus:border-[#007aff]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
             </div>
 
             <div className="space-y-2">
               <label
-                className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
+                className="block text-sm text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
                 {bannerType === "ccpa" ? "Privacy policy URL" : "URL"}
@@ -361,13 +361,13 @@ export function CookieNoticeAccordion2({
                 value={settings.url}
                 onChange={(e) => update({ url: e.target.value })}
                 placeholder="https://"
-                className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
+                className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none text-sm text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="block font-['DM_Sans'] font-normal text-base text-black leading-5" style={{ fontVariationSettings: "'opsz' 14" }}>
+                <label className="block text-sm text-[#111827]" style={{ fontVariationSettings: "'opsz' 14" }}>
                   Close button
                 </label>
                 <Tooltip text="Show or hide the close (×) button on the banner.">

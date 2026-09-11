@@ -93,7 +93,7 @@ export function BannerLinkSection() {
         {/* Header */}
         <div className="flex items-center gap-2 px-[18px] py-4">
           <Link2 className="w-4 h-4 text-[#007AFF] shrink-0" />
-          <h3 className="font-['DM_Sans'] font-semibold text-base text-black leading-5">
+          <h3 className="font-semibold text-base text-black">
             Banner Link
           </h3>
           <div className="relative group ml-1">
