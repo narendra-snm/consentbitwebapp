@@ -35,6 +35,7 @@ export function Sidebar({ active, setActive, effectivePlanId, isLegacy }: Sideba
     { name: "Layout", icon: "layout", tip: "Set banner position, shape, border radius and animation style." },
     { name: "Colors", icon: "colors", tip: "Customise background, text and button colors." },
     { name: "Type", icon: "type", tip: "Choose font family, weight and text alignment for the banner." },
+    { name: "Law test", icon: "lawtest", tip: "Generate a test URL to check this banner for any jurisdiction." },
   ];
 
   return (
@@ -127,6 +128,15 @@ export function Sidebar({ active, setActive, effectivePlanId, isLegacy }: Sideba
 </svg>
 
 
+              )}
+
+                {item.icon === "lawtest" && (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 2V6" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M6 2H18" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M9.5 6L5.2 15.4C4.3 17.4 5.7 19.7 7.9 19.7H16.1C18.3 19.7 19.7 17.4 18.8 15.4L14.5 6" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+<path d="M5.6 14.5C7.3 13.6 9.2 13.6 10.9 14.5C12.6 15.4 14.5 15.4 16.2 14.5" stroke={isActive ? "#007AFF" : "#292D32"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+</svg>
               )}
             </div>
 

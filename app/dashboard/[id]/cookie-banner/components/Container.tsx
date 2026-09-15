@@ -5,6 +5,7 @@ import ConsentPreview from "./ConsentPreview";
 import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
+import LawTestPanel from "./LawTestPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
 import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
@@ -1550,6 +1551,14 @@ export default function page({ siteId }: { siteId: string }) {
           <FontPickerPanel
             value={appearance.type}
             onChange={(type) => setAppearance((a) => ({ ...a, type }))}
+          />
+        )}
+        {active === "Law test" && (
+          <LawTestPanel
+            scriptUrl={site?.scriptUrl}
+            siteId={site?.id}
+            cdnScriptId={(site as any)?.cdnScriptId}
+            regionMode={(site as any)?.region_mode}
           />
         )}
       </div>
