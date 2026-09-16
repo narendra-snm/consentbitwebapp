@@ -359,6 +359,9 @@ export default function DashboardTabs() {
 
   const activeSite = sites?.find((s: any) => String(s?.id) === String(activeSiteId));
   const isLegacySite = !!(activeSite as any)?.isLegacy;
+  // Plans are the account owner's call; team members don't get the Upgrade tab.
+  const isTeamMemberSite =
+    (activeSite as any)?.teamRole === "admin" || (activeSite as any)?.teamRole === "editor";
   const LEGACY_DISABLED_TABS = new Set<string>();
 
   useEffect(() => {
@@ -387,7 +390,7 @@ export default function DashboardTabs() {
   return (
     <div className="w-full flex justify-center mt-4.5">
       <div className="flex items-center bg-[#F1F5F9] rounded-xl p-1">
-        {tabs.map((tab) => {
+        {tabs.filter((tab) => !(isTeamMemberSite && tab.slug === "upgrade")).map((tab) => {
           const Icon = tab.icon;
           const href = tab.slug ? `${basePath}/${tab.slug}` : basePath;
           const isDisabled = isLegacySite && LEGACY_DISABLED_TABS.has(tab.slug);

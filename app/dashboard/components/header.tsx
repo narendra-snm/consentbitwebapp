@@ -123,6 +123,9 @@ export default function Header() {
     return sites[0] || null;
   }, [sites, pathname, activeSiteId]);
 
+  const isTeamMemberSite =
+    (activeSite as any)?.teamRole === "admin" || (activeSite as any)?.teamRole === "editor";
+
   /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */
   const planUi = useMemo(() => {
     const resolvedPlanKey = resolvePlanTierForSiteContext({
@@ -454,7 +457,8 @@ const handleSelectSite = (site: any) => {
           )}
         </div>
 
-        {showPlanSkeleton ? (
+        {/* Team members (Admin/Editor on another account's site) can't change its plan. */}
+        {isTeamMemberSite ? null : showPlanSkeleton ? (
           <div
             className="min-h-[42px] min-w-[112px] rounded-lg bg-[#c4c8e8] animate-pulse"
             aria-hidden

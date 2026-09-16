@@ -384,6 +384,128 @@ export async function authorizeOwnershipTransfer(token: string) {
 }
 //transfer ownership ends here
 
+//team members starts here
+export type TeamRole = 'admin' | 'editor';
+
+export type TeamSite = {
+  id: string;
+  name: string | null;
+  domain: string | null;
+  planId: string | null;
+  /** null = unlimited */
+  cap: number | null;
+  used: number;
+};
+
+export type TeamMember = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: TeamRole;
+  status: 'pending' | 'active';
+  siteIds: string[];
+  createdAt: string;
+  acceptedAt: string | null;
+  inviteExpired: boolean;
+  hasOtherSites?: boolean;
+  isSelf: boolean;
+  canEdit: boolean;
+  canRemove: boolean;
+};
+
+export type TeamOverview = {
+  success: true;
+  organizationId: string;
+  organizationName: string | null;
+  viewerRole: 'owner' | 'admin';
+  owner: { email: string; name: string | null } | null;
+  organizations: { organizationId: string; name: string | null; role: 'owner' | 'admin' }[];
+  sites: TeamSite[];
+  members: TeamMember[];
+};
+
+export type TeamInviteInfo = {
+  email: string;
+  role: TeamRole;
+  status: 'pending' | 'active';
+  ownerEmail: string | null;
+  inviterEmail: string | null;
+  inviterName: string | null;
+  sites: { name: string | null; domain: string | null }[];
+};
+
+/** Error carrying the worker's `code` so the UI can branch (e.g. TEAM_LIMIT_REACHED). */
+export class TeamApiError extends Error {
+  code: string | null;
+  status: number;
+  data: any;
+  constructor(message: string, status: number, data: any) {
+    super(message);
+    this.name = 'TeamApiError';
+    this.code = data?.code ?? null;
+    this.status = status;
+    this.data = data;
+  }
+}
+
+async function teamRequest(path: string, init?: { method?: 'GET' | 'POST'; body?: unknown }) {
+  const method = init?.method ?? 'GET';
+  const res = await fetch(path, {
+    method,
+    credentials: 'include',
+    cache: 'no-store',
+    headers: method === 'POST'
+      ? { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      : undefined,
+    body: method === 'POST' ? JSON.stringify(init?.body ?? {}) : undefined,
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || data?.success === false) {
+    throw new TeamApiError(data?.error || `Request failed (${res.status})`, res.status, data);
+  }
+  return data;
+}
+
+const appOrigin = () => (typeof window !== 'undefined' ? window.location.origin : '');
+
+export async function getTeam(organizationId?: string | null): Promise<TeamOverview> {
+  const qs = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : '';
+  return teamRequest(`/api/team${qs}`);
+}
+
+export async function inviteTeamMember(payload: {
+  organizationId?: string | null;
+  email: string;
+  role: TeamRole;
+  siteIds: string[];
+}): Promise<{ success: true; member: Partial<TeamMember>; inviteLink?: string }> {
+  return teamRequest('/api/team/invite', {
+    method: 'POST',
+    body: { ...payload, email: payload.email.trim().toLowerCase(), appOrigin: appOrigin() },
+  });
+}
+
+export async function updateTeamMember(payload: { memberId: string; role?: TeamRole; siteIds?: string[] }) {
+  return teamRequest('/api/team/update', { method: 'POST', body: payload });
+}
+
+export async function removeTeamMember(memberId: string): Promise<{ success: true; removed: 'member' | 'sites' }> {
+  return teamRequest('/api/team/remove', { method: 'POST', body: { memberId } });
+}
+
+export async function resendTeamInvite(memberId: string): Promise<{ success: true; inviteLink?: string }> {
+  return teamRequest('/api/team/resend', { method: 'POST', body: { memberId, appOrigin: appOrigin() } });
+}
+
+export async function getTeamInviteInfo(token: string): Promise<{ success: true; invite: TeamInviteInfo }> {
+  return teamRequest(`/api/team/invite-info?token=${encodeURIComponent(token)}`);
+}
+
+export async function acceptTeamInvite(token: string): Promise<{ success: true; organizationId: string; role: TeamRole; siteIds: string[] }> {
+  return teamRequest('/api/team/accept', { method: 'POST', body: { token } });
+}
+//team members ends here
+
 //first setup starts here
 export async function firstSetup(payload: {
   websiteUrl: string; // Website URL/Domain (e.g., valuable-tenets-951054.framer.app)

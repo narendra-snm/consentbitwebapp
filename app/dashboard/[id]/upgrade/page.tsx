@@ -8,6 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
 import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
+import { isLapsedInContext, readSubscriptionStatus } from "@/lib/subscription-state";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
@@ -104,7 +105,20 @@ export default function PricingTable() {
     [sites, siteId],
   );
 
-  const currentTier = useMemo(() => {
+  /**
+   * LAPSED = the site still carries its old planId, but the Stripe subscription behind
+   * it is terminal (cancelled after dunning). Stripe cannot resume such a subscription,
+   * so these customers must go through checkout to create a NEW one.
+   * See consent-manager/docs/SUBSCRIPTION_SYNC_WORKFLOW.md §3b.
+   */
+  const lapsed = useMemo(
+    () => isLapsedInContext(activeSite, Array.isArray(sites) ? sites : []),
+    [activeSite, sites],
+  );
+  const lapsedStatus = useMemo(() => readSubscriptionStatus(activeSite), [activeSite]);
+
+  /** Tier the customer *had*. Used for display only — never for routing. */
+  const previousTier = useMemo(() => {
     const raw = resolvePlanTierForSiteContext({
       activeSite,
       sites: Array.isArray(sites) ? sites : [],
@@ -112,6 +126,16 @@ export default function PricingTable() {
     });
     return (raw || "free") as "free" | "basic" | "essential" | "growth";
   }, [activeSite, sites, effectivePlanId]);
+
+  /**
+   * Tier used for every routing decision. A lapsed account resolves to "free" so the
+   * checkout path runs; otherwise `changeTier` would POST to a cancelled Stripe
+   * subscription and fail with a raw Stripe error, leaving the customer unable to pay.
+   */
+  const currentTier = useMemo(
+    () => (lapsed ? "free" : previousTier),
+    [lapsed, previousTier],
+  );
 
   // Current billing interval of the active subscription (monthly/yearly). Needed so the grid
   // can tell "Basic monthly" apart from "Basic yearly" — otherwise both show as "Current Plan".
@@ -912,6 +936,27 @@ function redirectToDashboard() {
       )}
 
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
+
+        {/* LAPSED NOTICE — the subscription behind this site is terminal in Stripe, so it
+            cannot be resumed. Picking a plan below starts a NEW subscription; the site keeps
+            its existing script tag, so nothing needs changing on the customer's website. */}
+        {lapsed && (
+          <div className="mx-9 mt-6 rounded-[14px] border border-[#f59e0b]/30 bg-[#fffbeb] px-5 py-4">
+            <div className="text-[15px] font-semibold text-[#92400e]">
+              {previousTier !== "free"
+                ? `Your ${previousTier.charAt(0).toUpperCase() + previousTier.slice(1)} plan has ended`
+                : "Your subscription has ended"}
+            </div>
+            <div className="mt-1 text-[13px] leading-relaxed text-[#92400e]/80">
+              {lapsedStatus === "unpaid"
+                ? "We couldn't collect payment, so the subscription was closed. "
+                : "This subscription was closed and can't be restarted. "}
+              Choose a plan below to reactivate — your cookie banner, settings and
+              installed script stay exactly as they are, so there's nothing to re-install
+              on your site.
+            </div>
+          </div>
+        )}
 
         {/* HEADER */}
         <div className="flex gap-8 items-center  px-9 py-3.5 pt-7 mt-2 ">

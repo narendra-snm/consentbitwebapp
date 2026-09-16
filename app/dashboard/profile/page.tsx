@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
+import TeamPage from "./component/TeamPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
@@ -25,7 +26,7 @@ const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
 };
 
-type TabType = "general" | "billing" | "organizations" | "usage";
+type TabType = "general" | "billing" | "organizations" | "usage" | "team";
 
 type Organization = {
   siteId?: string;
@@ -177,7 +178,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return;
     try {
       const raw = window.sessionStorage.getItem(profileTabKey);
-      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage") {
+      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team") {
         setActiveTab(raw);
       }
     } catch {
@@ -196,6 +197,27 @@ export default function SettingsPage() {
     }
   }, [activeTab, hydrated, profileTabKey]);
   const isActive = (tab: TabType) => activeTab === tab;
+
+  // Team access. A site's teamRole comes from dashboard-init: 'owner' for the user's own
+  // sites, 'admin' / 'editor' for sites shared with them by another account.
+  const ownsAccount = Array.isArray(orgsFromSession) && orgsFromSession.length > 0;
+  const isTeamAdmin = useMemo(
+    () => (Array.isArray(sites) ? sites : []).some((s: any) => s?.teamRole === "admin"),
+    [sites],
+  );
+  const canManageTeam = ownsAccount || isTeamAdmin;
+  // Billing, plans and usage belong to the account owner; a team-only user has none.
+  const showOwnerTabs = ownsAccount;
+  const tabAllowed = useCallback(
+    (tab: TabType) =>
+      tab === "general" || (tab === "team" ? canManageTeam : showOwnerTabs),
+    [canManageTeam, showOwnerTabs],
+  );
+  useEffect(() => {
+    if (loading) return;
+    if (!tabAllowed(activeTab)) setActiveTab("general");
+  }, [activeTab, loading, tabAllowed]);
+
   const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
   const [manageDomain, setManageDomain] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
@@ -252,7 +274,10 @@ export default function SettingsPage() {
   }, [orgsFromSession, user?.id]);
 
   const organizations = useMemo<Organization[]>(() => {
-    const rows = Array.isArray(sites) ? sites : [];
+    // Sites shared with this user by another account are not theirs to bill or manage here.
+    const rows = (Array.isArray(sites) ? sites : []).filter(
+      (site: any) => !site?.teamRole || site.teamRole === "owner",
+    );
     return rows.map((site: any) => {
       const rawPlan =
         site?.planId ??
@@ -544,6 +569,7 @@ export default function SettingsPage() {
             <p className={`font-medium text-[16px] tracking-[-0.48px] ${isActive("general") ? "text-[#007aff]" : "text-[#111827]"}`}>General</p>
           </button>
 
+          {showOwnerTabs && (<>
           {/* Billing Tab */}
           <button onClick={() => setActiveTab("billing")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("billing") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("billing") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
@@ -572,8 +598,26 @@ export default function SettingsPage() {
             </div>
             <p className={`text-[16px] tracking-[-0.48px] ${isActive("organizations") ? "text-[#007aff]" : "text-[#111827]"}`}>Organizations</p>
           </button>
+          </>)}
+
+          {/* Team Tab — account owner, or an Admin on someone else's account */}
+          {canManageTeam && (
+          <button onClick={() => setActiveTab("team")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("team") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
+            {isActive("team") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
+            <div className="size-[24px]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9.16 10.87C9.06 10.86 8.94 10.86 8.83 10.87C6.45 10.79 4.56 8.84 4.56 6.44C4.56 3.99 6.54 2 9 2C11.45 2 13.44 3.99 13.44 6.44C13.43 8.84 11.54 10.79 9.16 10.87Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M16.41 4C18.35 4 19.91 5.57 19.91 7.5C19.91 9.39 18.41 10.93 16.54 11C16.46 10.99 16.37 10.99 16.28 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4.16 14.56C1.74 16.18 1.74 18.82 4.16 20.43C6.91 22.27 11.42 22.27 14.17 20.43C16.59 18.81 16.59 16.17 14.17 14.56C11.43 12.73 6.92 12.73 4.16 14.56Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M18.34 20C19.06 19.85 19.74 19.56 20.3 19.13C21.86 17.96 21.86 16.03 20.3 14.86C19.75 14.44 19.08 14.16 18.37 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className={`text-[16px] tracking-[-0.48px] ${isActive("team") ? "text-[#007aff]" : "text-[#111827]"}`}>Team</p>
+          </button>
+          )}
 
           {/* Usage Overview Tab */}
+          {showOwnerTabs && (
           <button onClick={() => setActiveTab("usage")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("usage") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("usage") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
             <div className="size-[24px]">
@@ -583,6 +627,7 @@ export default function SettingsPage() {
             </div>
             <p className={`text-[16px] text-left tracking-[-0.48px] ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
           </button>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -757,6 +802,8 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+
+          {activeTab === "team" && canManageTeam && <TeamPage />}
 
           {activeTab === "general" && (
             <div className="text-center">

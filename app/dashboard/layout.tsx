@@ -9,6 +9,7 @@ import SetPasswordPrompt from "./components/SetPasswordPrompt";
 import Footer from "@/components/auth/Footer";
 import Header from "./components/header";
 import DashboardTabs from "./components/DashboardTabs";
+import PendingTeamInviteRedirect from "./components/PendingTeamInviteRedirect";
 
 // Never cache this layout — it contains authenticated user data.
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <PostSetupOverlay />
       </Suspense>
       <SetPasswordPrompt />
+      <PendingTeamInviteRedirect />
     </DashboardSessionProvider>
   );
 }
