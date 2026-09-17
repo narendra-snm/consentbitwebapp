@@ -12,6 +12,15 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 
+// Worker that runs the Stripe charge. This page previously hardcoded
+// `https://manager.consentbit.com` (production, LIVE Stripe keys) while the rest
+// of this build — including the /api/checkout-token proxy that reads the token
+// back — talks to the Test worker. The two workers have SEPARATE CHECKOUT_TOKENS
+// KV namespaces and opposite Stripe key modes, so a checkout started on Test was
+// charged for real. Same convention as app/dashboard/[id]/upgrade/page.tsx.
+const WORKER_BASE =
+  process.env.NEXT_PUBLIC_WORKER_URL || 'https://consent-webapp-manager.web-8fb.workers.dev';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PlanId = 'basic' | 'essential' | 'growth';
@@ -485,7 +494,7 @@ function CheckoutForm({
       // this account, retry as an upgrade (confirmUpgrade) — the backend creates the
       // new plan and cancels the old subscription so there's no double-billing.
       const postCheckout = async (confirmUpgrade: boolean) => {
-        const r = await fetch('https://manager.consentbit.com/api/custom-checkout', {
+        const r = await fetch(`${WORKER_BASE}/api/custom-checkout`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -532,7 +541,7 @@ function CheckoutForm({
           return;
         }
 
-        const res2 = await fetch('https://manager.consentbit.com/api/custom-checkout', {
+        const res2 = await fetch(`${WORKER_BASE}/api/custom-checkout`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

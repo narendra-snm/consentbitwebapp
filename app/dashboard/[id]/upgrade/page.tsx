@@ -8,7 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
 import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
-import { isLapsedInContext, readSubscriptionStatus } from "@/lib/subscription-state";
+import { isLapsedInContext, readSubscriptionStatus, activeUntil } from "@/lib/subscription-state";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
@@ -96,7 +96,7 @@ export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
   const router = useRouter();
-  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId, sites } =
+  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId, effectivePlanStatus, sites } =
     useDashboardSession();
 
   /** Same rules as the dashboard header: per-site plan from dashboard-init, with org fallback only when appropriate. */
@@ -111,13 +111,11 @@ export default function PricingTable() {
    * so these customers must go through checkout to create a NEW one.
    * See consent-manager/docs/SUBSCRIPTION_SYNC_WORKFLOW.md §3b.
    */
-  const lapsed = useMemo(
-    () => isLapsedInContext(activeSite, Array.isArray(sites) ? sites : []),
-    [activeSite, sites],
-  );
-  const lapsedStatus = useMemo(() => readSubscriptionStatus(activeSite), [activeSite]);
-
-  /** Tier the customer *had*. Used for display only — never for routing. */
+  /**
+   * Tier the customer *had* for this site. Used for display only — never for routing.
+   * Computed first: whether the site is lapsed depends on whether this tier was its own
+   * or inherited from the org.
+   */
   const previousTier = useMemo(() => {
     const raw = resolvePlanTierForSiteContext({
       activeSite,
@@ -126,6 +124,19 @@ export default function PricingTable() {
     });
     return (raw || "free") as "free" | "basic" | "essential" | "growth";
   }, [activeSite, sites, effectivePlanId]);
+
+  // Per-site: this site's own subscription decides; the org is consulted only when the
+  // tier was inherited. Another site's active subscription never affects this one.
+  const lapsed = useMemo(
+    () => isLapsedInContext(activeSite, previousTier, effectivePlanStatus),
+    [activeSite, previousTier, effectivePlanStatus],
+  );
+  const lapsedStatus = useMemo(
+    () => readSubscriptionStatus(activeSite) ?? effectivePlanStatus ?? null,
+    [activeSite, effectivePlanStatus],
+  );
+  /** Cancelled but still inside the paid period → the plan (and banner) run until this date. */
+  const planActiveUntil = useMemo(() => activeUntil(activeSite), [activeSite]);
 
   /**
    * Tier used for every routing decision. A lapsed account resolves to "free" so the
@@ -943,17 +954,26 @@ function redirectToDashboard() {
         {lapsed && (
           <div className="mx-9 mt-6 rounded-[14px] border border-[#f59e0b]/30 bg-[#fffbeb] px-5 py-4">
             <div className="text-[15px] font-semibold text-[#92400e]">
-              {previousTier !== "free"
-                ? `Your ${previousTier.charAt(0).toUpperCase() + previousTier.slice(1)} plan has ended`
-                : "Your subscription has ended"}
+              {(() => {
+                const planName = previousTier !== "free"
+                  ? `Your ${previousTier.charAt(0).toUpperCase() + previousTier.slice(1)} plan`
+                  : "Your subscription";
+                // Cancelled but still inside the paid period: it hasn't ended yet, and the
+                // banner keeps serving until this date — don't tell the customer otherwise.
+                return planActiveUntil
+                  ? `${planName} was cancelled and stays active until ${planActiveUntil.toLocaleDateString()}`
+                  : `${planName} has ended`;
+              })()}
             </div>
             <div className="mt-1 text-[13px] leading-relaxed text-[#92400e]/80">
-              {lapsedStatus === "unpaid"
-                ? "We couldn't collect payment, so the subscription was closed. "
-                : "This subscription was closed and can't be restarted. "}
-              Choose a plan below to reactivate — your cookie banner, settings and
-              installed script stay exactly as they are, so there's nothing to re-install
-              on your site.
+              {planActiveUntil
+                ? "Your cookie banner keeps working until then. To continue after that date, choose a plan below. "
+                : lapsedStatus === "unpaid"
+                  ? "We couldn't collect payment, so the subscription was closed. "
+                  : "This subscription was closed and can't be restarted. "}
+              {planActiveUntil
+                ? "Your settings and installed script carry over, so there's nothing to re-install."
+                : "Choose a plan below to reactivate — your cookie banner, settings and installed script stay exactly as they are, so there's nothing to re-install on your site."}
             </div>
           </div>
         )}

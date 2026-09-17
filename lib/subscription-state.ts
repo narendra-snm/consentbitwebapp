@@ -57,6 +57,29 @@ export function isLapsed(site: unknown): boolean {
   return TERMINAL_STATUSES.has(status);
 }
 
+/**
+ * For a cancelled subscription still inside its paid period, the date it stops.
+ * Otherwise null.
+ *
+ * Mirrors the rule used by both the dashboard (`getSubscriptionsBySiteIds`, which keeps a
+ * cancelled subscription's plan until `currentPeriodEnd`) and the banner gate (cdnM.js,
+ * which serves until the same date). `deleted` never qualifies — it is blocked outright.
+ *
+ * This affects the *message* only. Routing still goes to checkout, because Stripe will not
+ * let a cancelled subscription be changed in place even while its period runs.
+ */
+export function activeUntil(site: unknown): Date | null {
+  if (!site || typeof site !== "object") return null;
+  const status = readSubscriptionStatus(site);
+  if (status !== "canceled" && status !== "cancelled") return null;
+  const s = site as Record<string, unknown>;
+  const raw = s.subscriptionCurrentPeriodEnd ?? s.subscription_current_period_end ?? s.currentPeriodEnd;
+  if (raw == null) return null;
+  // Rows mix ISO strings and SQLite datetimes ("2026-09-25 21:12:39") — normalise first.
+  const ms = Date.parse(String(raw).replace(" ", "T"));
+  return Number.isFinite(ms) && ms > Date.now() ? new Date(ms) : null;
+}
+
 /** True when a raw status string is one Stripe can never recover from. */
 export function isTerminalStatus(status: string | null | undefined): boolean {
   if (!status) return false;
@@ -64,36 +87,46 @@ export function isTerminalStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * True when this site should be treated as lapsed, accounting for the org-level fallback.
+ * True when this site should be treated as lapsed.
  *
- * `resolvePlanTierForSiteContext` falls back to the org's `effectivePlanId` whenever the
- * site row itself looks free and no other site in the org is paid. But
- * `getEffectivePlanForOrganization` returns *any* subscription when none is active, so a
- * lapsed org still reports a paid `effectivePlanId` from its cancelled subscription —
- * which makes a dead account look paid and routes it into the in-place tier change.
+ * Checked **per site**. Subscriptions are per-site licences, so a customer can have one
+ * site cancelled and another active; neither may affect the other.
  *
- * This is derived from `sites` rather than a separate org field because dashboard-init
- * already includes a row per subscription — including "unassigned" rows for subscriptions
- * with no site — and each now carries its status. So `sites` is a complete view of the
- * org's subscriptions without any extra plumbing.
+ *  1. The site has its own subscription → its own status decides, full stop. An active
+ *     subscription on another site can never rescue a cancelled one, and a cancelled site
+ *     can never drag down an active one.
  *
- * The org is only consulted when the site has no subscription of its own, so a site with a
- * live subscription is never dragged down by an unrelated cancelled one.
+ *  2. The site has no subscription of its own → only relevant if its tier was *inherited*.
+ *     `resolvePlanTierForSiteContext` falls back to the org's `effectivePlanId` in that case,
+ *     and `getEffectivePlanForOrganization` returns ANY subscription when none is active —
+ *     so a site can inherit "basic" from a cancelled subscription. That happens notably when
+ *     the subscription's `siteId` points at a deleted site: it appears in no row of `sites`,
+ *     yet still drives `effectivePlanId`. So ask about the subscription behind the
+ *     inheritance directly, via `effectivePlanStatus`.
+ *
+ *  3. The site has no subscription and inherited nothing (`previousTier` is free) → not
+ *     lapsed. It never had a plan, so it must not be told one "has ended".
+ *
+ * An earlier version derived case 2 from the statuses in `sites`. That was wrong twice:
+ * it flagged never-subscribed sites as lapsed whenever another site in the org was
+ * cancelled, and it could not see subscriptions with a dangling `siteId` at all.
+ *
+ * Unknown status anywhere reads as "not lapsed", preserving prior behaviour on missing data.
  */
-export function isLapsedInContext(site: unknown, sites: unknown[]): boolean {
+export function isLapsedInContext(
+  site: unknown,
+  previousTier: string,
+  effectivePlanStatus: string | null | undefined,
+): boolean {
+  // 1. Own subscription decides.
   if (isLapsed(site)) return true;
-
-  // The site has its own subscription — it decides, and it is not terminal.
   if (readSubscriptionStatus(site)) return false;
 
-  const statuses = (sites ?? [])
-    .map(readSubscriptionStatus)
-    .filter((s): s is string => Boolean(s));
+  // 3. Nothing inherited — never had a plan, nothing to have lapsed.
+  if (!previousTier || previousTier === "free") return false;
 
-  // Any entitled subscription anywhere in the org means the org is not lapsed.
-  if (statuses.some((s) => ENTITLED_STATUSES.has(s))) return false;
-
-  return statuses.some((s) => TERMINAL_STATUSES.has(s));
+  // 2. Tier inherited from the org: lapsed only if the subscription behind it is dead.
+  return isTerminalStatus(effectivePlanStatus);
 }
 
 /**
