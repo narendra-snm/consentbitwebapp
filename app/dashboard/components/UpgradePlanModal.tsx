@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
-import { isTeamSite } from '@/lib/team-role';
+import { isMemberSite } from '@/lib/team-role';
 import { useDashboardSession } from '../DashboardSessionProvider';
 
 type PlanTier = 'free' | 'basic' | 'essential' | 'growth';
@@ -45,8 +45,8 @@ export function UpgradePlanModal({
 }) {
   const current = (currentPlanId || 'free').toLowerCase() as PlanTier;
   const { sites } = useDashboardSession();
-  // Plans are the account owner's call — a team Admin/Member sees the limit but no checkout.
-  const teamSite = isTeamSite((sites || []).find((s: any) => String(s?.id) === String(siteId)));
+  // A team Member sees the limit but no checkout; Admins upgrade on the owner's behalf.
+  const teamSite = isMemberSite((sites || []).find((s: any) => String(s?.id) === String(siteId)));
   const nextPlan = teamSite ? null : NEXT_PLAN[current] ?? null;
   const [loading, setLoading] = useState(false);
 

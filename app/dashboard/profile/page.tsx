@@ -18,6 +18,7 @@ import {
 } from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
 import { analytics } from "@/lib/analytics";
+import { siteTeamRole } from "@/lib/team-role";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
 // Keep usage cache short so metered pageviews/scans feel "live" without manual refresh.
@@ -122,16 +123,16 @@ export default function SettingsPage() {
 
   // Team access. A site's teamRole comes from dashboard-init: 'owner' for the user's own
   // sites, 'admin' / 'member' for sites shared with them by another account.
-  // A team-only Member gets General (name, password) only: no billing, plans,
-  // organizations/transfer, usage or team management.
+  // A team-only Member gets General (name, password) only. An Admin acts for the
+  // owner: Billing, Organizations, Usage and Team — everything except Transfer
+  // Ownership, which stays with the owner.
   const ownsAccount = Array.isArray(orgsFromSession) && orgsFromSession.length > 0;
   const isTeamAdmin = useMemo(
-    () => (Array.isArray(sites) ? sites : []).some((s: any) => s?.teamRole === "admin"),
+    () => (Array.isArray(sites) ? sites : []).some((s: any) => siteTeamRole(s) === "admin"),
     [sites],
   );
   const canManageTeam = ownsAccount || isTeamAdmin;
-  // Billing, plans and usage belong to the account owner; a team-only user has none.
-  const showOwnerTabs = ownsAccount;
+  const showOwnerTabs = ownsAccount || isTeamAdmin;
   const tabAllowed = useCallback(
     (tab: TabType) =>
       tab === "general" || (tab === "team" ? canManageTeam : showOwnerTabs),
@@ -198,9 +199,10 @@ export default function SettingsPage() {
   }, [orgsFromSession, user?.id]);
 
   const organizations = useMemo<Organization[]>(() => {
-    // Sites shared with this user by another account are not theirs to bill or manage here.
+    // Own sites plus sites the user is Admin of. Member-only sites aren't theirs to
+    // bill or manage.
     const rows = (Array.isArray(sites) ? sites : []).filter(
-      (site: any) => !site?.teamRole || site.teamRole === "owner",
+      (site: any) => siteTeamRole(site) !== "member",
     );
     return rows.map((site: any) => {
       const rawPlan =
@@ -246,6 +248,18 @@ export default function SettingsPage() {
       rows.find((site: any) => String(site?.id) === String(activeSiteId)) || rows[0] || null;
     return selectedSite?.id ? String(selectedSite.id) : null;
   }, [activeSiteId, sites]);
+  // Billing and usage are per account. On a site the user is Admin of, that's the
+  // owner's account (the site's org), not the user's own.
+  const billingOrgId = useMemo(() => {
+    const rows = Array.isArray(sites) ? sites : [];
+    const site: any = rows.find((s: any) => String(s?.id) === String(resolvedSiteId)) || null;
+    if (siteTeamRole(site) === "admin") {
+      const org = site?.organizationId ?? site?.organizationid;
+      if (org) return String(org);
+    }
+    return activeOrganizationId;
+  }, [activeOrganizationId, resolvedSiteId, sites]);
+  const actingAsAdmin = billingOrgId !== activeOrganizationId || !ownsAccount;
   const domainCount = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
     return rows.length;
@@ -417,21 +431,21 @@ export default function SettingsPage() {
   // Refetch when org, selected site (header dropdown), or tab changes — previously we only prefetched
   // once and only loaded when usage was null, so switching sites never updated the numbers.
   useEffect(() => {
-    if (!activeOrganizationId) return;
+    if (!billingOrgId) return;
     const shouldBeLive = activeTab === "usage" || activeTab === "billing";
-    void fetchUsage(activeOrganizationId, resolvedSiteId, {
+    void fetchUsage(billingOrgId, resolvedSiteId, {
       silent: !shouldBeLive,
       force: shouldBeLive,
     });
-  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
+  }, [billingOrgId, resolvedSiteId, activeTab, fetchUsage]);
 
   // When the user comes back to the tab/window, refresh usage so it reflects latest meter values.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!activeOrganizationId) return;
+    if (!billingOrgId) return;
     if (activeTab !== "usage" && activeTab !== "billing") return;
     const onFocus = () => {
-      void fetchUsage(activeOrganizationId, resolvedSiteId, { silent: true, force: true });
+      void fetchUsage(billingOrgId, resolvedSiteId, { silent: true, force: true });
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -439,7 +453,7 @@ export default function SettingsPage() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
+  }, [billingOrgId, resolvedSiteId, activeTab, fetchUsage]);
 
   // Keep first server+client paint identical to avoid hydration mismatch while session cache hydrates.
   if (!hydrated || loading) {
@@ -559,7 +573,7 @@ export default function SettingsPage() {
           {activeTab === "organizations" && (
             <>
               <p className=" font-semibold leading-[20px] text-[16px] text-black tracking-[-1px] mb-[8px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-                Account Owner :
+                {actingAsAdmin ? "Team Admin :" : "Account Owner :"}
               </p>
               <div className="bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 pr-2 py-1.5 flex items-center justify-between mb-[40px]">
                 <div>
@@ -570,7 +584,8 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                {/* Transfer the account to a new owner — opens the modal below */}
+                {/* Transfer the account to a new owner — opens the modal below. Owner only. */}
+                {!actingAsAdmin && (
                 <div className="shrink-0 pr-1.5">
                   <button
                     type="button"
@@ -580,6 +595,7 @@ export default function SettingsPage() {
                     Transfer Ownership
                   </button>
                 </div>
+                )}
               </div>
 
               {/* Organizations Table */}
@@ -750,7 +766,8 @@ export default function SettingsPage() {
               <BillingPage
                 currentPlan={currentPlan}
                 domainCount={usage?.sitesLimit ?? domainCount}
-                organizationId={activeOrganizationId}
+                organizationId={billingOrgId}
+                isOwner={!actingAsAdmin}
                 activeSiteId={resolvedSiteId}
                 scansCount={usage?.scansUsed ?? 0}
                 pageViews={usage?.pageviewsUsed ?? 0}
@@ -778,9 +795,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-[#b91c1c]">{usageError}</p>
                   <button
                     onClick={() => {
-                      if (!activeOrganizationId) return;
+                      if (!billingOrgId) return;
                       setUsageError(null);
-                      void fetchUsage(activeOrganizationId, resolvedSiteId);
+                      void fetchUsage(billingOrgId, resolvedSiteId);
                     }}
                     className="self-start bg-[#007AFF] text-white text-sm font-medium px-4 py-2 rounded-[6px]"
                   >

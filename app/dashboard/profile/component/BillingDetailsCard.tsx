@@ -36,6 +36,8 @@ export default function BillingDetailsCard({
           Billing Details
         </h2>
 
+        {/* No handler (team Admin) → no portal: it covers the owner's whole account. */}
+        {onVisitStripePortal && (
         <button
           type="button"
           onClick={onVisitStripePortal}
@@ -48,6 +50,7 @@ export default function BillingDetailsCard({
             Visit Stripe portal to edit billing details →
           </p>
         </button>
+        )}
       </div>
 
       <div className="h-[1px] bg-black opacity-10 mb-[21px]" />

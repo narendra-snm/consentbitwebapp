@@ -21,7 +21,7 @@ import { getBillingUsage } from "@/lib/client-api";
 import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
-import { isTeamSite, isMemberSite } from "@/lib/team-role";
+import { isMemberSite, accountOrgIdFor } from "@/lib/team-role";
 
 /** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
 const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain", "post-setup"]);
@@ -124,10 +124,12 @@ export default function Header() {
     return sites[0] || null;
   }, [sites, pathname, activeSiteId]);
 
-  // Admin/Member on another account's site: no plan changes. Member additionally gets
-  // no Add-site and no notifications (those are all upgrade prompts).
-  const isTeamMemberSite = isTeamSite(activeSite);
+  // Member on another account's site: no plan changes, no Add-site, no notifications
+  // (those are all upgrade prompts). Admins act for the owner and see everything here.
+  const isTeamMemberSite = isMemberSite(activeSite);
   const isMemberRole = isMemberSite(activeSite);
+  // Usage and upgrades on an Admin site act on the owner's account.
+  const accountOrgId = accountOrgIdFor(activeSite, activeOrganizationId ?? null);
 
   /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */
   const planUi = useMemo(() => {
@@ -181,13 +183,13 @@ export default function Header() {
   const { resolvedPlanKey, showPlanSkeleton, planDisplay } = planUi;
   // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
-    if (!activeOrganizationId) return;
+    if (!accountOrgId) return;
     // Reset stale flags before fetching so upgrading clears old alerts immediately.
     setPageviewOverLimit(false);
     setPageviewUsage(null);
     setScanOverLimit(false);
     setScanUsage(null);
-    getBillingUsage(activeOrganizationId, activeSiteId ?? undefined)
+    getBillingUsage(accountOrgId, activeSiteId ?? undefined)
       .then((data) => {
         if (data.pageviewsLimit > 0 && data.pageviewsUsed >= data.pageviewsLimit) {
           setPageviewOverLimit(true);
@@ -199,7 +201,7 @@ export default function Header() {
         }
       })
       .catch(() => {/* non-critical */});
-  }, [activeOrganizationId, activeSiteId, resolvedPlanKey]);
+  }, [accountOrgId, activeSiteId, resolvedPlanKey]);
 
   const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
     ...(pageviewOverLimit && pageviewUsage ? [{
@@ -324,7 +326,7 @@ const handleSelectSite = (site: any) => {
 </svg>
           </button>
 
-          {!isMemberRole && (
+          {!isTeamMemberSite && (
           <button onClick={() =>{
             setAddSiteOpen(true)
             setDomainOpen(false)
@@ -396,7 +398,7 @@ const handleSelectSite = (site: any) => {
 <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
 </svg>
 </button>
-                {!isMemberRole && (
+                {!isTeamMemberSite && (
                 <button className="text-[#007AFF] cursor-pointer" onClick={() =>{
             setAddSiteOpen(true)
             setDomainOpen(false)
@@ -563,7 +565,7 @@ const handleSelectSite = (site: any) => {
       {showUpgradeModal && (
         <UpgradePlanModal
           currentPlanId={resolvedPlanKey}
-          organizationId={activeOrganizationId ?? null}
+          organizationId={accountOrgId}
           siteId={activeSiteId}
           reason={upgradeReason}
           usage={upgradeReason === 'scan' ? scanUsage : pageviewUsage}

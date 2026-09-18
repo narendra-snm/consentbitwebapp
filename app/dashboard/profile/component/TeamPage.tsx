@@ -30,7 +30,7 @@ const ROLE_OPTIONS: { value: TeamRole; label: string; description: string }[] = 
     value: "admin",
     label: "Admin",
     description:
-      "Can edit site name and URL, invite, remove and change the role of members, receives the site's email notifications, and has all Member permissions",
+      "Acts for the account owner on the sites you give them: billing, plan upgrades, adding sites, site name and URL, inviting and removing members, and the owner's email notifications. Can't transfer ownership",
   },
   {
     value: "member",
@@ -152,7 +152,10 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
     );
   };
 
-  const allSelectable = team.sites.filter((s) => !siteIsFull(s)).map((s) => s.id);
+  // Only Essential/Growth sites can have team members, so Free/Basic sites are left
+  // out of the picker entirely.
+  const pickable = team.sites.filter((s) => s.teamEnabled);
+  const allSelectable = pickable.filter((s) => !siteIsFull(s)).map((s) => s.id);
   const allSelected = allSelectable.length > 0 && allSelectable.every((id) => siteIds.includes(id));
 
   const canSubmit = !saving && !!role && siteIds.length > 0 && (mode === "edit" || emailValid);
@@ -224,7 +227,7 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
             <label className="block text-[13px] font-medium text-[#374151]">
               Sites <span className="text-red-600">*</span>
             </label>
-            {team.sites.length > 1 && (
+            {pickable.length > 1 && (
               <button
                 type="button"
                 disabled={saving || allSelectable.length === 0}
@@ -235,13 +238,13 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
               </button>
             )}
           </div>
-          {team.sites.length === 0 ? (
+          {pickable.length === 0 ? (
             <p className="text-[12px] text-[#6b7280] border border-[#e5e5e5] rounded-[8px] px-3 py-3">
-              There are no sites to share yet. Add a site first.
+              No Essential or Growth sites yet. Team members are available on those plans.
             </p>
           ) : (
             <div className="border border-[#e5e5e5] rounded-[8px] max-h-[200px] overflow-y-auto divide-y divide-[#f1f1f1]">
-              {team.sites.map((site) => {
+              {pickable.map((site) => {
                 const full = siteIsFull(site);
                 const checked = siteIds.includes(site.id);
                 return (

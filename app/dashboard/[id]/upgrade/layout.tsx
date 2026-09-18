@@ -3,10 +3,10 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
-import { isTeamSite } from "@/lib/team-role";
+import { isMemberSite } from "@/lib/team-role";
 
-// Plans and billing are the account owner's. Upgrade links are hidden for team
-// Admins/Members, but several screens link here directly, so the route itself stops
+// Plans belong to the account owner and their team Admins. Upgrade links are hidden
+// for Members, but several screens link here directly, so the route itself stops
 // them before any checkout can start.
 export default function UpgradeLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
@@ -15,7 +15,7 @@ export default function UpgradeLayout({ children }: { children: React.ReactNode 
   const siteId = String((params as { id?: string })?.id ?? "");
   const site = (sites || []).find((s: any) => String(s?.id) === siteId);
 
-  if (!isTeamSite(site)) return <>{children}</>;
+  if (!isMemberSite(site)) return <>{children}</>;
 
   return (
     <div className="max-w-[560px] mx-auto mt-16 px-4">

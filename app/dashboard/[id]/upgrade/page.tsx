@@ -10,6 +10,7 @@ import { createCheckoutSession, getBillingSummary, switchBillingInterval, previe
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { isLapsedInContext, readSubscriptionStatus, activeUntil } from "@/lib/subscription-state";
 import { useDashboardSession } from "../../DashboardSessionProvider";
+import { accountOrgIdFor, siteTeamRole } from "@/lib/team-role";
 import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
@@ -96,7 +97,7 @@ export default function PricingTable() {
   const params = useParams();
   const siteId = params?.id != null ? String(params.id) : "";
   const router = useRouter();
-  const { activeOrganizationId, loading: sessionLoading, refresh, effectivePlanId, effectivePlanStatus, sites } =
+  const { activeOrganizationId: sessionOrganizationId, loading: sessionLoading, refresh, effectivePlanId, effectivePlanStatus, sites } =
     useDashboardSession();
 
   /** Same rules as the dashboard header: per-site plan from dashboard-init, with org fallback only when appropriate. */
@@ -104,6 +105,10 @@ export default function PricingTable() {
     () => (Array.isArray(sites) ? sites : []).find((s: { id?: string }) => String(s?.id) === siteId) ?? null,
     [sites, siteId],
   );
+  // On a site this user is team Admin of, every billing call here acts on the owner's
+  // account (the site's org). Owners get the session org exactly as before.
+  const isAdminSite = siteTeamRole(activeSite) === "admin";
+  const activeOrganizationId = accountOrgIdFor(activeSite, sessionOrganizationId);
 
   /**
    * LAPSED = the site still carries its old planId, but the Stripe subscription behind
@@ -674,7 +679,8 @@ export default function PricingTable() {
     setSwitching(true);
     setSwitchError(null);
     try {
-      await switchBillingInterval(activeOrganizationId, switchTarget);
+      // Admins can only switch their own site's subscription, so name it.
+      await switchBillingInterval(activeOrganizationId, switchTarget, isAdminSite ? siteId || null : undefined);
       setCurrentInterval(switchTarget);
       await refresh({ showLoading: false });
       setShowSwitchConfirm(false);

@@ -511,6 +511,8 @@ export async function acceptTeamInvite(token: string): Promise<{ success: true; 
 //first setup starts here
 export async function firstSetup(payload: {
   websiteUrl: string; // Website URL/Domain (e.g., valuable-tenets-951054.framer.app)
+  /** Only when a team Admin adds a site for the owner's account (the worker checks it). */
+  organizationId?: string;
 }) {
   // Ensure we're using a relative path to the Next.js API route
   const apiUrl = '/api/onboarding/first-setup';

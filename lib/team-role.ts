@@ -20,3 +20,15 @@ export function isTeamSite(site: unknown): boolean {
 export function isMemberSite(site: unknown): boolean {
   return siteTeamRole(site) === "member";
 }
+
+/**
+ * The account (organization) billing and site actions should target. On a site the
+ * user is Admin of, that's the owner's account (the site's org); everywhere else it's
+ * the session's own `fallback`, unchanged.
+ */
+export function accountOrgIdFor(site: unknown, fallback: string | null): string | null {
+  if (siteTeamRole(site) !== "admin") return fallback;
+  const s = site as { organizationId?: unknown; organizationid?: unknown } | null;
+  const org = s?.organizationId ?? s?.organizationid;
+  return org ? String(org) : fallback;
+}
