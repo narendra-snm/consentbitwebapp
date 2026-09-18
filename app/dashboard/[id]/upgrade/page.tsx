@@ -624,6 +624,21 @@ export default function PricingTable() {
   }) => {
     const isSelected = selected === plan;
 
+    // Basic has no team feature: a team Admin can't move the site there (it would
+    // suspend them and the rest of the team). The server refuses it too.
+    if (isAdminSite && plan === "basic") {
+      return (
+        <button
+          type="button"
+          disabled
+          title="Only the account owner can move a site to Basic. Team members lose access on this plan."
+          className="px-6 py-2 rounded-lg bg-gray-300 text-[#4b5563] text-sm font-medium cursor-not-allowed"
+        >
+          Owner only
+        </button>
+      );
+    }
+
     return (
       <button
         type="button"

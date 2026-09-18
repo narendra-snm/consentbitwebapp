@@ -410,6 +410,10 @@ export type TeamMember = {
   acceptedAt: string | null;
   inviteExpired: boolean;
   hasOtherSites?: boolean;
+  /** Sites of this person that dropped to Basic/Free — access there is suspended. */
+  suspendedSiteIds?: string[];
+  /** Every site of this person is on Basic/Free, so they have no access right now. */
+  suspended?: boolean;
   isSelf: boolean;
   canEdit: boolean;
   canRemove: boolean;

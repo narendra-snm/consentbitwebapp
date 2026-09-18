@@ -947,7 +947,8 @@ export default function BillingPage({
                     : "at period end"}
                 </span>
               </div>
-            ) : currentPlan !== "Free" ? (
+            ) : currentPlan !== "Free" && isOwner ? (
+              // Cancelling drops the site to Free and suspends its team — owner only.
               <button
                 type="button"
                 onClick={() => { setCancelError(null); setShowCancelModal(true); }}

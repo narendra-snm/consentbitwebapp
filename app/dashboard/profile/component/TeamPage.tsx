@@ -71,6 +71,23 @@ function siteHasNoSeats(site: TeamSite) {
   return !site.teamEnabled || (roleIsFull(site, "admin") && roleIsFull(site, "member"));
 }
 
+const STATUS_STYLE = {
+  active: { dot: "bg-[#22c55e]", text: "text-[#111827]", label: "Active" },
+  pending: { dot: "bg-[#f59e0b]", text: "text-[#b45309]", label: "Pending" },
+  expired: { dot: "bg-[#ef4444]", text: "text-[#dc2626]", label: "Expired" },
+  suspended: { dot: "bg-[#9ca3af]", text: "text-[#6b7280]", label: "Suspended" },
+} as const;
+
+function StatusDot({ status }: { status: keyof typeof STATUS_STYLE }) {
+  const st = STATUS_STYLE[status];
+  return (
+    <p className={`flex items-center gap-2 text-[15px] ${st.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot}`} />
+      {st.label}
+    </p>
+  );
+}
+
 function siteDisplay(site: TeamSite | undefined, fallbackId: string) {
   return site?.domain || site?.name || fallbackId;
 }
@@ -574,8 +591,8 @@ export default function TeamPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <p className="font-semibold leading-[20px] text-[16px] text-black tracking-[-0.5px]">Team Members</p>
-          <p className="text-[13px] text-[#6b7280] mt-1">
+          <p className="font-semibold leading-[22px] text-[16px] text-[#111827]">Team Members</p>
+          <p className="text-[14px] text-[#4b5563] mt-1">
             Invite people to help manage your sites. Members only see the sites you give them.
           </p>
         </div>
@@ -590,7 +607,7 @@ export default function TeamPage() {
                 ? "Every site has reached its member limit"
                 : undefined
           }
-          className="h-[40px] px-4 rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors shrink-0"
+          className="h-[36px] px-3.5 rounded-[6px] bg-[#007aff] text-white text-[14px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors shrink-0"
         >
           + Invite new user
         </button>
@@ -622,28 +639,28 @@ export default function TeamPage() {
       )}
 
       {/* Account owner card */}
-      <div className="bg-white border border-[#ebebeb] rounded-[10px] px-5 py-5">
-        <div className="flex items-center gap-2 mb-1">
-          <p className="text-[12px] uppercase tracking-[0.3px] text-[#6b7280]">Account Owner</p>
+      <div className="bg-white border border-[#e5e7eb] rounded-[10px] overflow-hidden">
+        <div className="px-4 py-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280]">Account Owner</p>
+          <p className="text-[15px] font-semibold text-[#111827] mt-1">{team.owner?.email || "—"}</p>
         </div>
-        <p className="text-[15px] font-semibold text-[#111827] mb-4">{team.owner?.email || "—"}</p>
 
         {/* Organization block */}
-        <div className="border border-[#ebebeb] rounded-[10px] overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4 bg-[#f7f9fc]">
+        <div>
+          <div className="flex items-center gap-3 px-4 py-3 bg-[#f1f4f8] border-t border-[#e5e7eb]">
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
               className="flex items-center gap-3 text-left min-w-0"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
-                <path d="M9 6l6 6-6 6" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={`shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}>
+                <path d="M6 9l6 6 6-6" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="text-[14px] font-medium text-[#111827] truncate">{team.organizationName || "Organization"}</span>
+              <span className="text-[15px] text-[#111827] truncate">{team.organizationName || "Organization"}</span>
             </button>
             {!isOwnerView && (
-              <span className="text-[11px] px-2 py-0.5 rounded-[4px] bg-[#e6f1fd] text-[#007aff] shrink-0">You are Admin</span>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff] shrink-0">You are Admin</span>
             )}
             {team.organizations.length > 1 && (
               <select
@@ -664,51 +681,60 @@ export default function TeamPage() {
           {expanded && (
             <div className="overflow-x-auto">
               <div className="min-w-[760px]">
-                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-5 py-3 border-t border-b border-black/10">
+                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-3 border-b border-[#eef0f3]">
                   {["Email address", "Role", "Sites", "Status", ""].map((h) => (
-                    <p key={h} className="text-[13px] font-medium text-[#111827]">{h}</p>
+                    <p key={h} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#374151]">{h}</p>
                   ))}
                 </div>
 
                 {/* Owner row */}
-                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-5 py-4 items-center">
-                  <p className="text-[13px] text-[#374151] truncate">{team.owner?.email || "—"}</p>
-                  <span className="justify-self-start text-[11px] px-2 py-0.5 rounded-[50px] bg-[#69B4FF73] text-[#007aff] font-medium">
+                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-4 items-center">
+                  <p className="text-[15px] text-[#111827] truncate">{team.owner?.email || "—"}</p>
+                  <span className="justify-self-start text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff]">
                     Account Owner
                   </span>
-                  <p className="text-[13px] text-[#6b7280]">All sites</p>
-                  <p className="text-[13px] text-[#374151]">Active</p>
+                  <p className="text-[15px] text-[#4b5563]">All sites</p>
+                  <StatusDot status="active" />
                   <div />
                 </div>
 
                 {team.members.map((m) => (
-                  <div key={m.id} className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-5 py-4 items-center border-t border-black/5">
+                  <div key={m.id} className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-4 items-center border-t border-[#eef0f3]">
                     <div className="min-w-0">
-                      <p className="text-[13px] text-[#374151] truncate">{m.email}</p>
-                      {m.name && <p className="text-[11px] text-[#9ca3af] truncate">{m.name}</p>}
+                      <p className="text-[15px] text-[#111827] truncate">{m.email}</p>
+                      {m.name && <p className="text-[12px] text-[#9ca3af] truncate">{m.name}</p>}
                     </div>
                     <span
-                      className={`justify-self-start text-[11px] px-2 py-0.5 rounded-[50px] font-medium ${
-                        m.role === "admin" ? "bg-[#e6f1fd] text-[#007aff]" : "bg-[#f1f5f9] text-[#4b5563]"
+                      className={`justify-self-start text-[11px] px-2.5 py-1 rounded-full ${
+                        m.role === "admin" ? "bg-[#e6f1fd] text-[#007aff]" : "bg-[#f3f4f6] text-[#4b5563]"
                       }`}
                     >
                       {roleLabel(m.role)}
                     </span>
                     <div className="flex flex-wrap gap-1.5 min-w-0">
                       {m.siteIds.slice(0, 3).map((id) => (
-                        <span key={id} className="text-[11px] px-2 py-0.5 rounded-[4px] bg-[#f3f4f6] text-[#374151] truncate max-w-[160px]">
+                        <span
+                          key={id}
+                          title={m.suspendedSiteIds?.includes(id) ? "Suspended: this site is on Basic/Free, which has no team members" : undefined}
+                          className={`text-[12px] px-2 py-0.5 rounded-[6px] truncate max-w-[170px] ${
+                            m.suspendedSiteIds?.includes(id) ? "bg-[#f9fafb] text-[#9ca3af] line-through" : "bg-[#f3f4f6] text-[#374151]"
+                          }`}
+                        >
                           {siteDisplay(siteById.get(id), id)}
                         </span>
                       ))}
                       {m.siteIds.length > 3 && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-[4px] bg-[#f3f4f6] text-[#6b7280]">
+                        <span className="text-[12px] px-2 py-0.5 rounded-[6px] bg-[#f3f4f6] text-[#6b7280]">
                           +{m.siteIds.length - 3} more
                         </span>
                       )}
                     </div>
-                    <p className={`text-[13px] ${m.status === "active" ? "text-[#374151]" : m.inviteExpired ? "text-red-600" : "text-[#b45309]"}`}>
-                      {m.status === "active" ? "Active" : m.inviteExpired ? "Expired" : "Pending"}
-                    </p>
+                    <div className="min-w-0">
+                      <StatusDot status={m.suspended ? "suspended" : m.status === "active" ? "active" : m.inviteExpired ? "expired" : "pending"} />
+                      {m.suspended && (
+                        <p className="text-[11px] text-[#9ca3af] mt-0.5">Site is on Basic/Free</p>
+                      )}
+                    </div>
                     <div className="flex items-center justify-end gap-2">
                       {m.isSelf ? (
                         <span className="text-[12px] text-[#9ca3af]">You</span>
@@ -749,7 +775,7 @@ export default function TeamPage() {
                 ))}
 
                 {team.members.length === 0 && (
-                  <p className="px-5 py-5 text-[13px] text-[#6b7280] border-t border-black/5">
+                  <p className="px-4 py-4 text-[15px] text-[#4b5563] border-t border-[#eef0f3]">
                     No team members yet. Invite someone to help manage your sites.
                   </p>
                 )}
@@ -761,16 +787,18 @@ export default function TeamPage() {
 
       {/* Member limits per site */}
       {team.sites.length > 0 && (
-        <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] px-5 py-4 mt-5">
-          <p className="text-[14px] font-medium text-[#111827] mb-1">Member limits</p>
-          <p className="text-[12px] text-[#6b7280] mb-3">
+        <div className="bg-white border border-[#e5e7eb] rounded-[10px] mt-6 overflow-hidden">
+          <div className="px-4 py-4 border-b border-[#eef0f3]">
+          <p className="text-[15px] font-semibold text-[#111827]">Member limits</p>
+          <p className="text-[14px] text-[#4b5563] mt-1">
             Seats per site, on top of the account owner: Essential 1 Admin + 4 Members, Growth 1 Admin + unlimited
             Members. Free and Basic don&apos;t include team members. Pending invitations count.
           </p>
-          <div className="divide-y divide-black/5">
+          </div>
+          <div className="divide-y divide-[#eef0f3]">
             {team.sites.map((s) => (
-              <div key={s.id} className="flex items-center justify-between py-2">
-                <p className="text-[13px] text-[#374151] truncate pr-4">{s.domain || s.name}</p>
+              <div key={s.id} className="flex items-center justify-between px-4 py-3">
+                <p className="text-[15px] text-[#111827] truncate pr-4">{s.domain || s.name}</p>
                 <div className="flex items-center gap-3 shrink-0">
                   <p className={`text-[12px] ${s.teamEnabled && siteHasNoSeats(s) ? "text-[#b45309]" : "text-[#6b7280]"}`}>
                     {planLabel(s.planId)} · {seatsLabel(s)}

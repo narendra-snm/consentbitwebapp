@@ -479,11 +479,11 @@ export default function SettingsPage() {
         <div className="flex items-center gap-[19px]">
           <button
             onClick={() => router.push("/dashboard")}
-            className="bg-[#4b5563] h-[36px] min-w-[174px] rounded-[6px] border border-[#4b5563] flex items-center justify-center"
+            className="bg-white h-[36px] px-3.5 rounded-[6px] border border-[#e5e7eb] hover:bg-[#f9fafb] flex items-center justify-center transition-colors"
           >
-            <p className="font-['DM_Sans:Medium',sans-serif] font-medium text-xs text-white whitespace-pre flex items-center gap-1" style={{ fontVariationSettings: "'opsz' 14" }}>
+            <p className="font-['DM_Sans:Medium',sans-serif] font-medium text-[14px] text-[#111827] whitespace-pre flex items-center gap-1.5" style={{ fontVariationSettings: "'opsz' 14" }}>
               <svg width="9" height="8" viewBox="0 0 9 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.97496 7.95174L-0.000887752 3.97589L3.97496 3.29018e-05L4.74201 0.758556L2.07866 3.42191H8.769V4.52986H2.07866L4.74201 7.18895L3.97496 7.95174Z" fill="white" />
+                <path d="M3.97496 7.95174L-0.000887752 3.97589L3.97496 3.29018e-05L4.74201 0.758556L2.07866 3.42191H8.769V4.52986H2.07866L4.74201 7.18895L3.97496 7.95174Z" fill="#111827" />
               </svg>
               Go back to dashboard
             </p>
@@ -494,24 +494,22 @@ export default function SettingsPage() {
       {/* Main Content */}
       <div className="grid grid-cols-[206px_1fr] min-h-[calc(100vh-166px)]">
         {/* Sidebar */}
-        <div className="border-r border-black/10 pt-[20px]">
+        <div className="border-r border-black/10 pt-[20px] px-3 space-y-1">
           {/* General Tab */}
-          <button onClick={() => setActiveTab("general")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("general") ? "bg-[#e6f1fd]" : ""}`}>
-            {isActive("general") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
-            <div className="size-[24px]">
+          <button onClick={() => setActiveTab("general")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("general") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
               <svg fill="none" viewBox="0 0 24 24">
                 <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke={isActive("general") ? "#007AFF" : "#111827"} strokeWidth="1.5" />
                 <path d={svgPaths.p243d2300} stroke={isActive("general") ? "#007AFF" : "#111827"} strokeWidth="1.5" />
               </svg>
             </div>
-            <p className={`font-medium text-[16px] tracking-[-0.48px] ${isActive("general") ? "text-[#007aff]" : "text-[#111827]"}`}>General</p>
+            <p className={`font-medium text-[15px] text-left ${isActive("general") ? "text-[#007aff]" : "text-[#111827]"}`}>General</p>
           </button>
 
           {showOwnerTabs && (<>
           {/* Billing Tab */}
-          <button onClick={() => setActiveTab("billing")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("billing") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
-            {isActive("billing") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
-            <div className="size-[24px]">
+          <button onClick={() => setActiveTab("billing")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("billing") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12.37 8.88086H17.62" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M6.38 8.88086L7.13 9.63086L9.38 7.38086" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -520,13 +518,12 @@ export default function SettingsPage() {
                 <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className={`text-[16px] tracking-[-0.48px] ${isActive("billing") ? "text-[#007aff]" : "text-[#111827]"}`}>Billing</p>
+            <p className={`text-[15px] text-left ${isActive("billing") ? "text-[#007aff]" : "text-[#111827]"}`}>Billing</p>
           </button>
 
           {/* Organizations Tab */}
-          <button onClick={() => setActiveTab("organizations")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("organizations") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
-            {isActive("organizations") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
-            <div className="size-[24px]">
+          <button onClick={() => setActiveTab("organizations")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("organizations") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M5 22H7C9 22 10 21 10 19V17C10 15 9 14 7 14H5C3 14 2 15 2 17V19C2 21 3 22 5 22Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
@@ -534,15 +531,14 @@ export default function SettingsPage() {
                 <path d="M18 22C20.2091 22 22 20.2091 22 18C22 15.7909 20.2091 14 18 14C15.7909 14 14 15.7909 14 18C14 20.2091 15.7909 22 18 22Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className={`text-[16px] tracking-[-0.48px] ${isActive("organizations") ? "text-[#007aff]" : "text-[#111827]"}`}>Organizations</p>
+            <p className={`text-[15px] text-left ${isActive("organizations") ? "text-[#007aff]" : "text-[#111827]"}`}>Organizations</p>
           </button>
           </>)}
 
           {/* Team Tab — account owner, or an Admin on someone else's account */}
           {canManageTeam && (
-          <button onClick={() => setActiveTab("team")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("team") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
-            {isActive("team") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
-            <div className="size-[24px]">
+          <button onClick={() => setActiveTab("team")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("team") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9.16 10.87C9.06 10.86 8.94 10.86 8.83 10.87C6.45 10.79 4.56 8.84 4.56 6.44C4.56 3.99 6.54 2 9 2C11.45 2 13.44 3.99 13.44 6.44C13.43 8.84 11.54 10.79 9.16 10.87Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M16.41 4C18.35 4 19.91 5.57 19.91 7.5C19.91 9.39 18.41 10.93 16.54 11C16.46 10.99 16.37 10.99 16.28 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -550,20 +546,19 @@ export default function SettingsPage() {
                 <path d="M18.34 20C19.06 19.85 19.74 19.56 20.3 19.13C21.86 17.96 21.86 16.03 20.3 14.86C19.75 14.44 19.08 14.16 18.37 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className={`text-[16px] tracking-[-0.48px] ${isActive("team") ? "text-[#007aff]" : "text-[#111827]"}`}>Team</p>
+            <p className={`text-[15px] text-left ${isActive("team") ? "text-[#007aff]" : "text-[#111827]"}`}>Team</p>
           </button>
           )}
 
           {/* Usage Overview Tab */}
           {showOwnerTabs && (
-          <button onClick={() => setActiveTab("usage")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("usage") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
-            {isActive("usage") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
-            <div className="size-[24px]">
+          <button onClick={() => setActiveTab("usage")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("usage") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M11 0.25C16.9273 0.25 21.75 5.07267 21.75 11C21.75 16.9273 16.9273 21.75 11 21.75C5.07267 21.75 0.25 16.9273 0.25 11C0.25 5.07267 5.07267 0.25 11 0.25ZM9.86914 2.02832C5.41332 2.58827 1.9502 6.39266 1.9502 11C1.9502 15.9902 6.00983 20.0498 11 20.0498C12.3113 20.0485 13.6067 19.7606 14.7949 19.2061L15.0508 19.0869L14.9014 18.8467L10.2793 11.4512L10.2783 11.4502C10.282 11.456 10.2818 11.4586 10.2764 11.4443C10.2749 11.4405 10.2695 11.4248 10.2656 11.415C10.2609 11.403 10.2546 11.3872 10.2461 11.3701L10.2441 11.3672L10.2051 11.2783C10.1823 11.2181 10.1658 11.1556 10.1572 11.0918L10.1504 10.9951V1.99219L9.86914 2.02832ZM12.7734 12.2324L16.3447 17.9482L16.4951 18.1885L16.7148 18.0098C18.5154 16.5416 19.6816 14.4359 19.9717 12.1309L20.0078 11.8496H12.5342L12.7734 12.2324ZM11.8496 10.1504H20.0078L19.9717 9.86816C19.7178 7.87751 18.8106 6.0274 17.3916 4.6084C15.9726 3.18939 14.1225 2.28216 12.1318 2.02832L11.8496 1.99219V10.1504Z" fill="currentColor" stroke="white" strokeWidth="0.5" />
               </svg>
             </div>
-            <p className={`text-[16px] text-left tracking-[-0.48px] ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
+            <p className={`text-[15px] text-left ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
           </button>
           )}
         </div>
