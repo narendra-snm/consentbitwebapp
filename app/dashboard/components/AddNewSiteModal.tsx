@@ -5,6 +5,7 @@ import { checkDomainAvailability, createCheckoutSession, firstSetup } from "@/li
 import { analytics } from "@/lib/analytics";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import LoadingScreen from "@/components/animations//LoadingScreen";
+import { accountOrgIdFor, siteTeamRole } from "@/lib/team-role";
 
 
 const svgPaths = {
@@ -109,7 +110,12 @@ const plans: PricingPlan[] = [
 
 export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
-  const { refresh, activeOrganizationId, sites } = useDashboardSession();
+  const { refresh, activeOrganizationId: sessionOrganizationId, sites, activeSiteId } = useDashboardSession();
+  // Opened from a site this user is team Admin of → the new site goes into the owner's
+  // account. Owners keep the session org exactly as before.
+  const contextSite = (Array.isArray(sites) ? sites : []).find((s: any) => String(s?.id) === String(activeSiteId)) ?? null;
+  const activeOrganizationId = accountOrgIdFor(contextSite, sessionOrganizationId);
+  const adminOrganizationId = siteTeamRole(contextSite) === "admin" ? activeOrganizationId : null;
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [domainCheck, setDomainCheck] = useState<{
     status: "idle" | "checking" | "available" | "unavailable";
@@ -354,7 +360,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           ? `${window.location.pathname}${window.location.search}${window.location.hash || ""}`
           : "/dashboard";
       if (planId === "free") {
-        const result = await firstSetup({ websiteUrl: domain });
+        const result = await firstSetup({ websiteUrl: domain, ...(adminOrganizationId ? { organizationId: adminOrganizationId } : {}) });
         const newSiteId = String(result?.siteId || result?.site?.id || "").trim();
         // domain_added is now fired centrally inside firstSetup() so all onboarding
         // paths are covered; no need to fire it again here (would double-count).

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import { isMemberSite } from "@/lib/team-role";
 
 /** Second path segment after /dashboard that is not a site id */
 const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain", "post-setup"]);
@@ -359,6 +360,8 @@ export default function DashboardTabs() {
 
   const activeSite = sites?.find((s: any) => String(s?.id) === String(activeSiteId));
   const isLegacySite = !!(activeSite as any)?.isLegacy;
+  // Team Members don't get the Upgrade tab; Admins upgrade on the owner's behalf.
+  const isTeamMemberSite = isMemberSite(activeSite);
   const LEGACY_DISABLED_TABS = new Set<string>();
 
   useEffect(() => {
@@ -387,7 +390,7 @@ export default function DashboardTabs() {
   return (
     <div className="w-full flex justify-center mt-4.5">
       <div className="flex items-center bg-[#F1F5F9] rounded-xl p-1">
-        {tabs.map((tab) => {
+        {tabs.filter((tab) => !(isTeamMemberSite && tab.slug === "upgrade")).map((tab) => {
           const Icon = tab.icon;
           const href = tab.slug ? `${basePath}/${tab.slug}` : basePath;
           const isDisabled = isLegacySite && LEGACY_DISABLED_TABS.has(tab.slug);

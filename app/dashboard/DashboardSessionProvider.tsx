@@ -320,6 +320,28 @@ export function DashboardSessionProvider({
     void refresh({ showLoading: !silent });
   }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Re-sync when the tab comes back into view. Team changes happen in other tabs and
+  // other accounts (an invite accepted from the email link opens a new tab; an owner
+  // shares or removes a site), and an already-open dashboard never re-fetched, so the
+  // site list stayed stale until a manual reload. Throttled; silent (no spinner).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    let last = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!stateRef.current?.authenticated) return;
+      if (Date.now() - last < 15_000) return;
+      last = Date.now();
+      void refresh({ showLoading: false });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refresh]);
+
   // After returning from Stripe, the webhook/session update can lag.
   // Poll dashboard-init briefly so the header plan updates without a manual reload.
   useEffect(() => {

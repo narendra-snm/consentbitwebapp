@@ -12,6 +12,8 @@ type Props = {
   billingEmailSaving?: boolean;
   billingEmailError?: string | null;
   billingEmailSuccess?: boolean;
+  /** false for team-only users: billing belongs to the account owner. */
+  showBillingEmail?: boolean;
 };
 
 export default function ProfileDisplay({
@@ -23,6 +25,7 @@ export default function ProfileDisplay({
   billingEmailSaving,
   billingEmailError,
   billingEmailSuccess,
+  showBillingEmail = true,
 }: Props) {
   const initialName = String(name || "").trim();
   const displayEmail = String(email || "").trim() || "Not available";
@@ -151,6 +154,7 @@ export default function ProfileDisplay({
         </div>
 
         {/* Billing Email */}
+        {showBillingEmail && (
         <div>
           <p className="text-[#4B5563] mb-1">Billing Email</p>
           <p className="text-[#9CA3AF] text-xs mb-2">
@@ -189,6 +193,7 @@ export default function ProfileDisplay({
             </div>
           )}
         </div>
+        )}
 
         {/* Password — set a first one, or change an existing one. Reads its own
             hasPassword flag from /api/auth/me, so no extra props to thread through. */}
@@ -207,7 +212,7 @@ export default function ProfileDisplay({
           {previewName}
         </p>
         <p className="mt-3">{displayEmail}</p>
-        {billingEmailInput && billingEmailInput !== displayEmail && (
+        {showBillingEmail && billingEmailInput && billingEmailInput !== displayEmail && (
           <p className="mt-2 text-xs text-[#9CA3AF]">
             Billing emails → {billingEmailInput}
           </p>

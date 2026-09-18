@@ -21,6 +21,7 @@ import { getBillingUsage } from "@/lib/client-api";
 import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { UpgradePlanModal } from "./UpgradePlanModal";
+import { isMemberSite, accountOrgIdFor } from "@/lib/team-role";
 
 /** Must stay in sync with `DashboardSessionProvider` RESERVED_DASHBOARD_SEGMENTS + pickActiveSiteIdFromPath. */
 const DASHBOARD_PATH_RESERVED = new Set(["profile", "all-domain", "post-setup"]);
@@ -123,6 +124,13 @@ export default function Header() {
     return sites[0] || null;
   }, [sites, pathname, activeSiteId]);
 
+  // Member on another account's site: no plan changes, no Add-site, no notifications
+  // (those are all upgrade prompts). Admins act for the owner and see everything here.
+  const isTeamMemberSite = isMemberSite(activeSite);
+  const isMemberRole = isMemberSite(activeSite);
+  // Usage and upgrades on an Admin site act on the owner's account.
+  const accountOrgId = accountOrgIdFor(activeSite, activeOrganizationId ?? null);
+
   /** Plan label, CTA, skeleton — single memo so nothing references an undefined variable. */
   const planUi = useMemo(() => {
     const resolvedPlanKey = resolvePlanTierForSiteContext({
@@ -175,13 +183,13 @@ export default function Header() {
   const { resolvedPlanKey, showPlanSkeleton, planDisplay } = planUi;
   // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
-    if (!activeOrganizationId) return;
+    if (!accountOrgId) return;
     // Reset stale flags before fetching so upgrading clears old alerts immediately.
     setPageviewOverLimit(false);
     setPageviewUsage(null);
     setScanOverLimit(false);
     setScanUsage(null);
-    getBillingUsage(activeOrganizationId, activeSiteId ?? undefined)
+    getBillingUsage(accountOrgId, activeSiteId ?? undefined)
       .then((data) => {
         if (data.pageviewsLimit > 0 && data.pageviewsUsed >= data.pageviewsLimit) {
           setPageviewOverLimit(true);
@@ -193,7 +201,7 @@ export default function Header() {
         }
       })
       .catch(() => {/* non-critical */});
-  }, [activeOrganizationId, activeSiteId, resolvedPlanKey]);
+  }, [accountOrgId, activeSiteId, resolvedPlanKey]);
 
   const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
     ...(pageviewOverLimit && pageviewUsage ? [{
@@ -318,7 +326,8 @@ const handleSelectSite = (site: any) => {
 </svg>
           </button>
 
-          <button onClick={() =>{ 
+          {!isTeamMemberSite && (
+          <button onClick={() =>{
             setAddSiteOpen(true)
             setDomainOpen(false)
 
@@ -340,6 +349,7 @@ const handleSelectSite = (site: any) => {
   <path d="M12 5v14" />
 </svg>
           </button>
+          )}
 
           {domainOpen && (
             <div className="absolute top-[110%] left-0 w-[300px] bg-white rounded-xl shadow-[0_12px_40px_rgba(15,23,42,0.16)] overflow-hidden z-50">
@@ -388,13 +398,15 @@ const handleSelectSite = (site: any) => {
 <path d="M9.37879e-05 4.99166V3.88766H6.69609L3.34809 0.767663L4.10409 -0.000336647L8.40009 4.09166V4.75166L4.10409 8.85566L3.34809 8.08766L6.67209 4.99166H9.37879e-05Z" fill="currentColor"/>
 </svg>
 </button>
-                <button className="text-[#007AFF] cursor-pointer" onClick={() =>{ 
+                {!isTeamMemberSite && (
+                <button className="text-[#007AFF] cursor-pointer" onClick={() =>{
             setAddSiteOpen(true)
             setDomainOpen(false)
 
           }}>
                   Add New +
                 </button>
+                )}
               </div>
             </div>
           )}
@@ -437,6 +449,10 @@ const handleSelectSite = (site: any) => {
           </span>
           {showPlanSkeleton ? (
             <div className="mx-1 my-2 min-h-[28px] min-w-[72px] rounded bg-[#cfe8fc] animate-pulse" aria-hidden />
+          ) : isTeamMemberSite ? (
+            <span className="px-3 py-1 bg-[#E6F1FD] capitalize" suppressHydrationWarning>
+              {planDisplay.label}
+            </span>
           ) : (
             <button
               type="button"
@@ -454,7 +470,8 @@ const handleSelectSite = (site: any) => {
           )}
         </div>
 
-        {showPlanSkeleton ? (
+        {/* Team members (Admin/Editor on another account's site) can't change its plan. */}
+        {isTeamMemberSite ? null : showPlanSkeleton ? (
           <div
             className="min-h-[42px] min-w-[112px] rounded-lg bg-[#c4c8e8] animate-pulse"
             aria-hidden
@@ -488,7 +505,8 @@ const handleSelectSite = (site: any) => {
           Logout
         </button>
 
-        {/* NOTIFICATION */}
+        {/* NOTIFICATION — hidden for Members: every entry is an upgrade prompt */}
+        {!isMemberRole && (
         <div ref={notifRef} className="relative">
           <Tooltip text="View alerts for pageview or scan limit warnings." align="right">
             <div className="relative mt-1 cursor-pointer" role="button" aria-label="Notifications" onClick={() => setNotifOpen(!notifOpen)}>
@@ -538,6 +556,7 @@ const handleSelectSite = (site: any) => {
             </div>
           )}
         </div>
+        )}
 
         {/* AVATAR */}
         <img src="/images/Icon.svg" role="button" aria-label="Profile" className="mt-1 rounded-full cursor-pointer" onClick={() => router.push("/dashboard/profile")} />
@@ -546,7 +565,7 @@ const handleSelectSite = (site: any) => {
       {showUpgradeModal && (
         <UpgradePlanModal
           currentPlanId={resolvedPlanKey}
-          organizationId={activeOrganizationId ?? null}
+          organizationId={accountOrgId}
           siteId={activeSiteId}
           reason={upgradeReason}
           usage={upgradeReason === 'scan' ? scanUsage : pageviewUsage}

@@ -56,6 +56,8 @@ type Props = {
   userName?: string;
   userEmail?: string;
   sites?: { id: string; domain: string; name?: string }[];
+  /** false for a team Admin: no Stripe portal (it shows the owner's whole account). */
+  isOwner?: boolean;
 };
 
 // Simple in-memory cache to avoid refetch on each tab switch.
@@ -77,6 +79,7 @@ export default function BillingPage({
   userName = "",
   userEmail = "",
   sites = [],
+  isOwner = true,
 }: Props) {
   const router = useRouter();
   const { updateSiteInState, refresh, sites: sessionSites, setActiveSiteId } = useDashboardSession();
@@ -470,7 +473,7 @@ export default function BillingPage({
   const refreshSummary = async () => {
     if (!organizationId) return;
     try {
-      const data = await getBillingSummary(organizationId);
+      const data = await getBillingSummary(organizationId, activeSiteId);
       setSummary(data);
       summaryCache.set(organizationId, { data, ts: Date.now() });
     } catch { /* ignore */ }
@@ -963,7 +966,7 @@ export default function BillingPage({
           email={userEmail}
           country={summary?.billingCountry || "Not available"}
           address={summary?.billingAddress || "Not available"}
-          onVisitStripePortal={handleVisitPortal}
+          onVisitStripePortal={isOwner ? handleVisitPortal : undefined}
         />
 
         {/* Payment Method — inline Stripe card form */}

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
+import TeamPage from "./component/TeamPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
@@ -13,9 +14,11 @@ import {
   isDuplicateDomainForOthers,
   validateManageDomain,
   deriveSiteNameFromDomain,
+  renameSiteDomain,
 } from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
 import { analytics } from "@/lib/analytics";
+import { siteTeamRole } from "@/lib/team-role";
 
 const usageMemoryCache = new Map<string, { data: BillingUsage; ts: number }>();
 // Keep usage cache short so metered pageviews/scans feel "live" without manual refresh.
@@ -25,7 +28,7 @@ const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
 };
 
-type TabType = "general" | "billing" | "organizations" | "usage";
+type TabType = "general" | "billing" | "organizations" | "usage" | "team";
 
 type Organization = {
   siteId?: string;
@@ -75,85 +78,6 @@ function toPlanLabel(raw: unknown): PlanTier {
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
-// Calls POST /api/sites/rename-domain — returns a normalized result.
-// Goes through the Next.js proxy route so the sid cookie is forwarded server-side
-// (same pattern as /api/sites/check-domain).
-async function renameSiteDomain({
-  websiteUrl,
-  excludeSiteId,
-}: {
-  websiteUrl: string;
-  excludeSiteId?: string;
-}) {
-  const res = await fetch(`/api/sites/rename-domain`, {
-    method: 'POST',
-    credentials: 'include',                   // send the sid cookie to our own origin
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',   // ← CSRF guard requires this
-    },
-    body: JSON.stringify({ websiteUrl, excludeSiteId }),
-  });
-
-  console.log('[renameSiteDomain] request', { websiteUrl, excludeSiteId });
-
-  const rawText = await res.text();
-  let parsed: any = null;
-  try { parsed = rawText ? JSON.parse(rawText) : null; } catch { /* non-JSON */ }
-
-  // Worker wraps payloads in { d: "<base64 UTF-8 JSON>" } — decode like lib/client-api.ts does.
-  let data: any = parsed;
-  if (parsed && typeof parsed.d === 'string') {
-    try {
-      const binary = atob(parsed.d);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      data = JSON.parse(new TextDecoder().decode(bytes));
-    } catch { /* fall through to raw parsed value */ }
-  }
-
-  console.log('[renameSiteDomain] response', {
-    status: res.status,
-    ok: res.ok,
-    rawText,
-    envelope: parsed,
-    data,
-  });
-
-  if (!res.ok) {
-    const err: any = new Error(data?.error || `Request failed (${res.status})`);
-    err.status = res.status;
-    err.code = data?.code || null;
-    console.log('[renameSiteDomain] error', { status: err.status, code: err.code, message: err.message });
-    throw err;
-  }
-
-  if (!data?.success) {
-    const conflict = {
-      ok: false as const,
-      conflict: true as const,
-      code: data?.code || 'UNKNOWN_CONFLICT',
-      message: data?.message || 'This domain cannot be used.',
-      domain: data?.domain || null,
-    };
-    console.log('[renameSiteDomain] conflict', conflict);
-    return conflict;
-  }
-
-  const success = {
-    ok: true as const,
-    conflict: false as const,
-    domain: data.domain,
-    platform: data.platform || '',
-    platformSiteId: data.platformSiteId || '',
-    detected: !!data.detected,
-    code: data.code,
-    isOldScript: data.isOldScript || false,
-  };
-  console.log('[renameSiteDomain] success', success);
-  return success;
-}
-
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -177,7 +101,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return;
     try {
       const raw = window.sessionStorage.getItem(profileTabKey);
-      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage") {
+      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team") {
         setActiveTab(raw);
       }
     } catch {
@@ -196,6 +120,29 @@ export default function SettingsPage() {
     }
   }, [activeTab, hydrated, profileTabKey]);
   const isActive = (tab: TabType) => activeTab === tab;
+
+  // Team access. A site's teamRole comes from dashboard-init: 'owner' for the user's own
+  // sites, 'admin' / 'member' for sites shared with them by another account.
+  // A team-only Member gets General (name, password) only. An Admin acts for the
+  // owner: Billing, Organizations, Usage and Team — everything except Transfer
+  // Ownership, which stays with the owner.
+  const ownsAccount = Array.isArray(orgsFromSession) && orgsFromSession.length > 0;
+  const isTeamAdmin = useMemo(
+    () => (Array.isArray(sites) ? sites : []).some((s: any) => siteTeamRole(s) === "admin"),
+    [sites],
+  );
+  const canManageTeam = ownsAccount || isTeamAdmin;
+  const showOwnerTabs = ownsAccount || isTeamAdmin;
+  const tabAllowed = useCallback(
+    (tab: TabType) =>
+      tab === "general" || (tab === "team" ? canManageTeam : showOwnerTabs),
+    [canManageTeam, showOwnerTabs],
+  );
+  useEffect(() => {
+    if (loading) return;
+    if (!tabAllowed(activeTab)) setActiveTab("general");
+  }, [activeTab, loading, tabAllowed]);
+
   const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
   const [manageDomain, setManageDomain] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
@@ -252,7 +199,11 @@ export default function SettingsPage() {
   }, [orgsFromSession, user?.id]);
 
   const organizations = useMemo<Organization[]>(() => {
-    const rows = Array.isArray(sites) ? sites : [];
+    // Own sites plus sites the user is Admin of. Member-only sites aren't theirs to
+    // bill or manage.
+    const rows = (Array.isArray(sites) ? sites : []).filter(
+      (site: any) => siteTeamRole(site) !== "member",
+    );
     return rows.map((site: any) => {
       const rawPlan =
         site?.planId ??
@@ -297,6 +248,18 @@ export default function SettingsPage() {
       rows.find((site: any) => String(site?.id) === String(activeSiteId)) || rows[0] || null;
     return selectedSite?.id ? String(selectedSite.id) : null;
   }, [activeSiteId, sites]);
+  // Billing and usage are per account. On a site the user is Admin of, that's the
+  // owner's account (the site's org), not the user's own.
+  const billingOrgId = useMemo(() => {
+    const rows = Array.isArray(sites) ? sites : [];
+    const site: any = rows.find((s: any) => String(s?.id) === String(resolvedSiteId)) || null;
+    if (siteTeamRole(site) === "admin") {
+      const org = site?.organizationId ?? site?.organizationid;
+      if (org) return String(org);
+    }
+    return activeOrganizationId;
+  }, [activeOrganizationId, resolvedSiteId, sites]);
+  const actingAsAdmin = billingOrgId !== activeOrganizationId || !ownsAccount;
   const domainCount = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
     return rows.length;
@@ -468,21 +431,21 @@ export default function SettingsPage() {
   // Refetch when org, selected site (header dropdown), or tab changes — previously we only prefetched
   // once and only loaded when usage was null, so switching sites never updated the numbers.
   useEffect(() => {
-    if (!activeOrganizationId) return;
+    if (!billingOrgId) return;
     const shouldBeLive = activeTab === "usage" || activeTab === "billing";
-    void fetchUsage(activeOrganizationId, resolvedSiteId, {
+    void fetchUsage(billingOrgId, resolvedSiteId, {
       silent: !shouldBeLive,
       force: shouldBeLive,
     });
-  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
+  }, [billingOrgId, resolvedSiteId, activeTab, fetchUsage]);
 
   // When the user comes back to the tab/window, refresh usage so it reflects latest meter values.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!activeOrganizationId) return;
+    if (!billingOrgId) return;
     if (activeTab !== "usage" && activeTab !== "billing") return;
     const onFocus = () => {
-      void fetchUsage(activeOrganizationId, resolvedSiteId, { silent: true, force: true });
+      void fetchUsage(billingOrgId, resolvedSiteId, { silent: true, force: true });
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -490,7 +453,7 @@ export default function SettingsPage() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [activeOrganizationId, resolvedSiteId, activeTab, fetchUsage]);
+  }, [billingOrgId, resolvedSiteId, activeTab, fetchUsage]);
 
   // Keep first server+client paint identical to avoid hydration mismatch while session cache hydrates.
   if (!hydrated || loading) {
@@ -544,6 +507,7 @@ export default function SettingsPage() {
             <p className={`font-medium text-[16px] tracking-[-0.48px] ${isActive("general") ? "text-[#007aff]" : "text-[#111827]"}`}>General</p>
           </button>
 
+          {showOwnerTabs && (<>
           {/* Billing Tab */}
           <button onClick={() => setActiveTab("billing")} className={`w-full h-[64px] flex items-center px-[53px] gap-[15px] relative ${isActive("billing") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("billing") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
@@ -572,8 +536,26 @@ export default function SettingsPage() {
             </div>
             <p className={`text-[16px] tracking-[-0.48px] ${isActive("organizations") ? "text-[#007aff]" : "text-[#111827]"}`}>Organizations</p>
           </button>
+          </>)}
+
+          {/* Team Tab — account owner, or an Admin on someone else's account */}
+          {canManageTeam && (
+          <button onClick={() => setActiveTab("team")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("team") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
+            {isActive("team") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
+            <div className="size-[24px]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9.16 10.87C9.06 10.86 8.94 10.86 8.83 10.87C6.45 10.79 4.56 8.84 4.56 6.44C4.56 3.99 6.54 2 9 2C11.45 2 13.44 3.99 13.44 6.44C13.43 8.84 11.54 10.79 9.16 10.87Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M16.41 4C18.35 4 19.91 5.57 19.91 7.5C19.91 9.39 18.41 10.93 16.54 11C16.46 10.99 16.37 10.99 16.28 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4.16 14.56C1.74 16.18 1.74 18.82 4.16 20.43C6.91 22.27 11.42 22.27 14.17 20.43C16.59 18.81 16.59 16.17 14.17 14.56C11.43 12.73 6.92 12.73 4.16 14.56Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M18.34 20C19.06 19.85 19.74 19.56 20.3 19.13C21.86 17.96 21.86 16.03 20.3 14.86C19.75 14.44 19.08 14.16 18.37 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className={`text-[16px] tracking-[-0.48px] ${isActive("team") ? "text-[#007aff]" : "text-[#111827]"}`}>Team</p>
+          </button>
+          )}
 
           {/* Usage Overview Tab */}
+          {showOwnerTabs && (
           <button onClick={() => setActiveTab("usage")} className={`w-full h-[64px] flex items-center pl-[53px] pr-4.5 gap-[15px] relative ${isActive("usage") ? "bg-[#e6f1fd] text-[#007aff]" : ""}`}>
             {isActive("usage") && <div className="absolute right-0 top-0 h-full w-[3px] bg-[#007AFF]" />}
             <div className="size-[24px]">
@@ -583,6 +565,7 @@ export default function SettingsPage() {
             </div>
             <p className={`text-[16px] text-left tracking-[-0.48px] ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
           </button>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -590,7 +573,7 @@ export default function SettingsPage() {
           {activeTab === "organizations" && (
             <>
               <p className=" font-semibold leading-[20px] text-[16px] text-black tracking-[-1px] mb-[8px]" style={{ fontVariationSettings: "'opsz' 14" }}>
-                Account Owner :
+                {actingAsAdmin ? "Team Admin :" : "Account Owner :"}
               </p>
               <div className="bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 pr-2 py-1.5 flex items-center justify-between mb-[40px]">
                 <div>
@@ -601,7 +584,8 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                {/* Transfer the account to a new owner — opens the modal below */}
+                {/* Transfer the account to a new owner — opens the modal below. Owner only. */}
+                {!actingAsAdmin && (
                 <div className="shrink-0 pr-1.5">
                   <button
                     type="button"
@@ -611,6 +595,7 @@ export default function SettingsPage() {
                     Transfer Ownership
                   </button>
                 </div>
+                )}
               </div>
 
               {/* Organizations Table */}
@@ -758,6 +743,8 @@ export default function SettingsPage() {
             </>
           )}
 
+          {activeTab === "team" && canManageTeam && <TeamPage />}
+
           {activeTab === "general" && (
             <div className="text-center">
               <ProfileForm
@@ -769,6 +756,7 @@ export default function SettingsPage() {
                 billingEmailSaving={billingEmailSaving}
                 billingEmailError={billingEmailError}
                 billingEmailSuccess={billingEmailSuccess}
+                showBillingEmail={ownsAccount}
               />
             </div>
           )}
@@ -778,7 +766,8 @@ export default function SettingsPage() {
               <BillingPage
                 currentPlan={currentPlan}
                 domainCount={usage?.sitesLimit ?? domainCount}
-                organizationId={activeOrganizationId}
+                organizationId={billingOrgId}
+                isOwner={!actingAsAdmin}
                 activeSiteId={resolvedSiteId}
                 scansCount={usage?.scansUsed ?? 0}
                 pageViews={usage?.pageviewsUsed ?? 0}
@@ -806,9 +795,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-[#b91c1c]">{usageError}</p>
                   <button
                     onClick={() => {
-                      if (!activeOrganizationId) return;
+                      if (!billingOrgId) return;
                       setUsageError(null);
-                      void fetchUsage(activeOrganizationId, resolvedSiteId);
+                      void fetchUsage(billingOrgId, resolvedSiteId);
                     }}
                     className="self-start bg-[#007AFF] text-white text-sm font-medium px-4 py-2 rounded-[6px]"
                   >

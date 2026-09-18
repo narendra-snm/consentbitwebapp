@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createCheckoutSession } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
+import { isMemberSite } from '@/lib/team-role';
+import { useDashboardSession } from '../DashboardSessionProvider';
 
 type PlanTier = 'free' | 'basic' | 'essential' | 'growth';
 
@@ -42,7 +44,10 @@ export function UpgradePlanModal({
   onClose: () => void;
 }) {
   const current = (currentPlanId || 'free').toLowerCase() as PlanTier;
-  const nextPlan = NEXT_PLAN[current] ?? null;
+  const { sites } = useDashboardSession();
+  // A team Member sees the limit but no checkout; Admins upgrade on the owner's behalf.
+  const teamSite = isMemberSite((sites || []).find((s: any) => String(s?.id) === String(siteId)));
+  const nextPlan = teamSite ? null : NEXT_PLAN[current] ?? null;
   const [loading, setLoading] = useState(false);
 
   // Reset loading state if user returns via browser back button (bfcache restore).
@@ -115,7 +120,9 @@ export function UpgradePlanModal({
           {usageText ? ` (${usageText})` : ''}.{' '}
           {nextPlan
             ? `Upgrade to ${PLAN_LABELS[nextPlan]} to continue using the service.`
-            : 'Your quota will reset at the start of next month.'}
+            : teamSite
+              ? 'Ask the account owner to upgrade, or wait for the quota to reset at the start of next month.'
+              : 'Your quota will reset at the start of next month.'}
         </p>
 
         {nextPlan && PLAN_FEATURES[nextPlan] && (
