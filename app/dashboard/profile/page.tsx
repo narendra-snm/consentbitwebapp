@@ -495,6 +495,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-[206px_1fr] min-h-[calc(100vh-166px)]">
         {/* Sidebar */}
         <div className="border-r border-black/10 pt-[20px] px-3 space-y-1">
+          <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280]">Profile settings</p>
           {/* General Tab */}
           <button onClick={() => setActiveTab("general")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("general") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
             <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
