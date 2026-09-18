@@ -992,7 +992,12 @@ export default function TeamPage() {
             {team.sites.map((s) => {
               const left = siteSeatsLeft(s);
               return (
-                <div key={s.id} className="grid grid-cols-[1.6fr_110px_1.3fr_auto] gap-x-4 items-center px-4 py-3">
+                <div
+                  key={s.id}
+                  // Fixed tracks (not `auto`): each row is its own grid, so content-sized columns
+                  // drifted from row to row ("4 left" vs "Not available").
+                  className={`grid ${isOwnerView ? "grid-cols-[minmax(0,1.6fr)_110px_minmax(0,1.3fr)_110px]" : "grid-cols-[minmax(0,1.6fr)_110px_minmax(0,1.3fr)_190px]"} gap-x-4 items-center px-4 py-3`}
+                >
                   <p className="text-[15px] text-[#111827] truncate">{s.domain || s.name}</p>
                   <span className="justify-self-start text-[12px] px-2.5 py-0.5 rounded-full bg-[#f3f4f6] text-[#4b5563]">
                     {planLabel(s.planId)}
