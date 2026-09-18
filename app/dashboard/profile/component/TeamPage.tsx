@@ -136,6 +136,7 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
   const [siteIds, setSiteIds] = useState<string[]>(member?.siteIds ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const emailValid = EMAIL_REGEX.test(email.trim());
   const original = useMemo(() => new Set(member?.siteIds ?? []), [member]);
@@ -196,171 +197,250 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
     }
   };
 
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? pickable.filter((s) => `${s.domain || ""} ${s.name || ""}`.toLowerCase().includes(q))
+    : pickable;
+
+  /** Right-hand seat text for a site, for the chosen role (or both roles before one is picked). */
+  const seatsLeft = (site: TeamSite) => {
+    const left = (r: TeamRole) => {
+      const cap = site.caps[r];
+      return cap === null ? Infinity : Math.max(0, cap - site.used[r]);
+    };
+    const n = role ? left(role) : left("admin") + left("member");
+    if (n === Infinity) return "Unlimited";
+    if (n === 0) return "Full";
+    return `${n} seat${n === 1 ? "" : "s"} left`;
+  };
+
+  const hint = saving
+    ? ""
+    : mode === "invite" && !emailValid
+      ? "Enter an email address to continue."
+      : !role
+        ? "Choose a role to continue."
+        : siteIds.length === 0
+          ? "Select at least one site."
+          : `${mode === "invite" ? "Invites" : "Gives"} ${mode === "invite" ? email.trim() : member?.email} ${
+              role === "admin" ? "Admin" : "Member"
+            } access to ${siteIds.length} site${siteIds.length === 1 ? "" : "s"}.`;
+
   return (
-    <Modal onClose={onClose} disabled={saving}>
-      <p className="font-semibold text-[18px] text-[#111827] mb-1">
-        {mode === "invite" ? "Invite new user" : "Edit member access"}
-      </p>
-      <p className="text-[13px] text-[#6b7280] mb-4">
-        {mode === "invite"
-          ? "The invited user will only have access to the sites you select."
-          : `Change what ${member?.email} can see and do.`}
-      </p>
-
-      {mode === "invite" && (
-        <div className="flex items-center gap-2.5 bg-[#e6f1fd] border border-[#cadbee] rounded-[8px] px-3.5 py-2.5 mb-5">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-            <circle cx="12" cy="12" r="9" stroke="#007AFF" strokeWidth="1.8" />
-            <path d="M12 11v5M12 8h.01" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          <p className="text-[13px] text-[#111827]">The user will receive an email with instructions to join your team.</p>
-        </div>
-      )}
-
-      <div className="space-y-4 mb-5">
-        {mode === "invite" && team.organizations.length > 1 && onOrganizationChange && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-[12px] shadow-xl max-w-[640px] w-full relative max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-4">
           <div>
-            <label className="block text-[13px] font-medium text-[#374151] mb-1.5">
-              Organization <span className="text-red-600">*</span>
-            </label>
-            <select
-              value={organizationId}
-              onChange={(e) => onOrganizationChange(e.target.value)}
-              disabled={saving}
-              className="w-full h-[42px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#007aff]"
-            >
-              {team.organizations.map((o) => (
-                <option key={o.organizationId} value={o.organizationId}>
-                  {o.name || "Organization"} {o.role === "admin" ? "(Admin)" : ""}
-                </option>
-              ))}
-            </select>
+            <p className="font-semibold text-[18px] text-[#111827]">
+              {mode === "invite" ? "Invite new user" : "Edit member access"}
+            </p>
+            <p className="text-[15px] text-[#4b5563] mt-1">
+              {mode === "invite"
+                ? "They get an email with instructions to join, and access only to the sites you select."
+                : `Change what ${member?.email} can see and do.`}
+            </p>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close"
+            className="text-[#6b7280] hover:text-[#111827] text-[22px] leading-none shrink-0"
+          >
+            ×
+          </button>
+        </div>
 
-        {/* Sites */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-[13px] font-medium text-[#374151]">
-              Sites <span className="text-red-600">*</span>
-            </label>
-            {pickable.length > 1 && (
-              <button
-                type="button"
-                disabled={saving || allSelectable.length === 0}
-                onClick={() => setSiteIds(allSelected ? [] : allSelectable)}
-                className="text-[12px] text-[#007aff] hover:underline disabled:opacity-40"
+        {/* Body */}
+        <div className="px-6 pb-5 space-y-5 overflow-y-auto">
+          {mode === "invite" && team.organizations.length > 1 && onOrganizationChange && (
+            <div>
+              <label className="block text-[15px] text-[#111827] mb-2">
+                Organization <span className="text-red-600">*</span>
+              </label>
+              <select
+                value={organizationId}
+                onChange={(e) => onOrganizationChange(e.target.value)}
+                disabled={saving}
+                className="w-full h-[44px] border border-[#d1d5db] rounded-[8px] px-3 text-[15px] text-[#111827] bg-white focus:outline-none focus:border-[#007aff] focus:ring-1 focus:ring-[#007aff]"
               >
-                {allSelected ? "Clear all" : "Select all"}
-              </button>
+                {team.organizations.map((o) => (
+                  <option key={o.organizationId} value={o.organizationId}>
+                    {o.name || "Organization"} {o.role === "admin" ? "(Admin)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Email */}
+          <div>
+            <label className="block text-[15px] text-[#111827] mb-2">
+              Email address <span className="text-red-600">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              autoFocus={mode === "invite"}
+              onChange={(e) => { setEmail(e.target.value); setError(null); }}
+              disabled={saving || mode === "edit"}
+              placeholder="email@address.com"
+              className="w-full h-[44px] border border-[#d1d5db] rounded-[8px] px-3 text-[15px] text-[#111827] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#007aff] focus:ring-1 focus:ring-[#007aff] disabled:bg-[#f9fafb] disabled:text-[#6b7280]"
+            />
+            {mode === "invite" && email.trim() && !emailValid && (
+              <p className="text-[12px] text-red-600 mt-1.5">Enter a valid email address.</p>
             )}
           </div>
-          {pickable.length === 0 ? (
-            <p className="text-[12px] text-[#6b7280] border border-[#e5e5e5] rounded-[8px] px-3 py-3">
-              No Essential or Growth sites yet. Team members are available on those plans.
-            </p>
-          ) : (
-            <div className="border border-[#e5e5e5] rounded-[8px] max-h-[200px] overflow-y-auto divide-y divide-[#f1f1f1]">
-              {pickable.map((site) => {
-                const full = siteIsFull(site);
-                const checked = siteIds.includes(site.id);
+
+          {/* Role — two cards */}
+          <div>
+            <label className="block text-[15px] text-[#111827] mb-2">
+              Role <span className="text-red-600">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {ROLE_OPTIONS.map((opt) => {
+                const on = role === opt.value;
                 return (
                   <label
-                    key={site.id}
-                    className={`flex items-center gap-3 px-3 py-2.5 ${full ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-[#f9fbff]"}`}
+                    key={opt.value}
+                    className={`flex items-start gap-3 rounded-[10px] border px-4 py-3.5 transition-colors ${
+                      roleLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                    } ${on ? "border-[#007aff] bg-[#f5f9ff]" : "border-[#e5e7eb] hover:border-[#cbd5e1]"}`}
                   >
                     <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={saving || full}
-                      onChange={() => toggleSite(site.id)}
-                      className="accent-[#007aff] size-4 shrink-0"
+                      type="radio"
+                      name="team-role"
+                      value={opt.value}
+                      checked={on}
+                      onChange={() => chooseRole(opt.value)}
+                      disabled={saving || roleLocked}
+                      className="mt-[3px] accent-[#007aff] size-[18px] shrink-0"
                     />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] text-black truncate">{site.domain || site.name}</p>
-                      <p className="text-[11px] text-[#6b7280]">
-                        {planLabel(site.planId)} plan · {seatsLabel(site)}
-                        {full && site.teamEnabled ? (role ? ` · no ${role === "admin" ? "Admin" : "Member"} seat left` : " · limit reached") : ""}
-                      </p>
-                    </div>
+                    <span>
+                      <span className="block text-[15px] text-[#111827]">{opt.label}</span>
+                      <span className="block text-[13px] leading-[1.45] text-[#4b5563] mt-0.5">{opt.description}</span>
+                    </span>
                   </label>
                 );
               })}
             </div>
-          )}
-          {member?.hasOtherSites && (
-            <p className="text-[11px] text-[#6b7280] mt-1.5">
-              This member also has access to sites you don&apos;t manage. Those stay unchanged, and only the account owner can change their role.
-            </p>
-          )}
-        </div>
+          </div>
 
-        {/* Email */}
-        <div>
-          <label className="block text-[13px] font-medium text-[#374151] mb-1.5">
-            Email address <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setError(null); }}
-            disabled={saving || mode === "edit"}
-            placeholder="email@address.com"
-            className="w-full h-[42px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:bg-[#f9fafb] disabled:text-[#6b7280]"
-          />
-          {mode === "invite" && email.trim() && !emailValid && (
-            <p className="text-[11px] text-red-600 mt-1.5">Enter a valid email address.</p>
-          )}
-        </div>
-
-        {/* Role */}
-        <div>
-          <label className="block text-[13px] font-medium text-[#374151] mb-1.5">
-            Role <span className="text-red-600">*</span>
-          </label>
-          <div className="space-y-2.5">
-            {ROLE_OPTIONS.map((opt) => (
-              <label key={opt.value} className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="team-role"
-                  value={opt.value}
-                  checked={role === opt.value}
-                  onChange={() => chooseRole(opt.value)}
-                  disabled={saving || roleLocked}
-                  className="mt-[3px] accent-[#007aff] size-4 shrink-0"
-                />
-                <span>
-                  <span className="block text-[14px] text-[#111827]">{opt.label}</span>
-                  <span className="block text-[12px] text-[#6b7280]">{opt.description}</span>
-                </span>
+          {/* Sites */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[15px] text-[#111827]">
+                Sites <span className="text-red-600">*</span>
               </label>
-            ))}
+              <div className="flex items-center gap-4">
+                <span className="text-[12px] text-[#4b5563]">{siteIds.length} selected</span>
+                {pickable.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={saving || allSelectable.length === 0}
+                    onClick={() => setSiteIds(allSelected ? [] : allSelectable)}
+                    className="text-[14px] text-[#007aff] hover:underline disabled:opacity-40"
+                  >
+                    {allSelected ? "Clear all" : "Select all"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {pickable.length === 0 ? (
+              <p className="text-[13px] text-[#6b7280] border border-[#e5e7eb] rounded-[10px] px-4 py-4">
+                No Essential or Growth sites yet. Team members are available on those plans.
+              </p>
+            ) : (
+              <div className="border border-[#e5e7eb] rounded-[10px] overflow-hidden">
+                {pickable.length > 4 && (
+                  <div className="p-3 border-b border-[#eef0f3]">
+                    <div className="relative">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="absolute left-3 top-1/2 -translate-y-1/2">
+                        <circle cx="11" cy="11" r="7" stroke="#6b7280" strokeWidth="2" />
+                        <path d="M20 20l-3.5-3.5" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search sites"
+                        className="w-full h-[40px] border border-[#e5e7eb] rounded-[8px] pl-9 pr-3 text-[14px] text-[#111827] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#007aff]"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="max-h-[240px] overflow-y-auto divide-y divide-[#eef0f3]">
+                  {visible.length === 0 && (
+                    <p className="px-4 py-4 text-[13px] text-[#6b7280]">No sites match “{query}”.</p>
+                  )}
+                  {visible.map((site) => {
+                    const full = siteIsFull(site);
+                    const checked = siteIds.includes(site.id);
+                    return (
+                      <label
+                        key={site.id}
+                        className={`flex items-center gap-3 px-4 py-3 ${
+                          full ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-[#f9fafb]"
+                        } ${checked ? "bg-[#f5f9ff]" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={saving || full}
+                          onChange={() => toggleSite(site.id)}
+                          className="accent-[#007aff] size-[18px] shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[15px] text-[#111827] truncate">{site.domain || site.name}</p>
+                          <p className="text-[12px] text-[#6b7280] mt-0.5">
+                            {planLabel(site.planId)} plan · {seatsLabel(site)}
+                          </p>
+                        </div>
+                        <span className={`text-[12px] shrink-0 ${full ? "text-[#b45309]" : "text-[#4b5563]"}`}>
+                          {full && role ? `No ${role === "admin" ? "Admin" : "Member"} seat` : seatsLeft(site)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {member?.hasOtherSites && (
+              <p className="text-[12px] text-[#6b7280] mt-2">
+                This member also has access to sites you don&apos;t manage. Those stay unchanged, and only the account owner can change their role.
+              </p>
+            )}
+          </div>
+
+          {error && <p className="text-[13px] text-red-600">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#eef0f3] flex items-center justify-between gap-4">
+          <p className="text-[13px] text-[#4b5563] min-w-0 truncate">{hint}</p>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="h-[40px] px-5 rounded-[8px] border border-[#d1d5db] bg-white text-[#111827] text-[15px] hover:bg-[#f9fafb] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              className="h-[40px] px-5 rounded-[8px] bg-[#007aff] text-white text-[15px] font-medium hover:bg-[#0069d9] disabled:bg-[#9cc8ff] disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? (mode === "invite" ? "Inviting…" : "Saving…") : mode === "invite" ? "Invite user" : "Save changes"}
+            </button>
           </div>
         </div>
       </div>
-
-      {error && <p className="text-[12px] text-red-600 mb-3">{error}</p>}
-
-      <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={saving}
-          className="h-[38px] px-5 rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb] disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!canSubmit}
-          className="h-[38px] px-5 rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? (mode === "invite" ? "Inviting…" : "Saving…") : mode === "invite" ? "Invite user" : "Save changes"}
-        </button>
-      </div>
-    </Modal>
+    </div>
   );
 }
 
@@ -461,6 +541,7 @@ function ManageSiteModal({ site, onClose, onDone }: { site: TeamSite; onClose: (
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function TeamPage() {
+  const { refresh: refreshSession } = useDashboardSession();
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -485,15 +566,21 @@ export default function TeamPage() {
       setTeam(data);
       setOrganizationId(data.organizationId);
     } catch (err) {
+      const suspended = err instanceof TeamApiError && err.code === "TEAM_SUSPENDED";
       setLoadError(
-        err instanceof TeamApiError && err.status === 403
-          ? "Only the account owner or an Admin can manage team members."
-          : err instanceof Error ? err.message : "Could not load team members.",
+        suspended
+          ? err.message
+          : err instanceof TeamApiError && err.status === 403
+            ? "Only the account owner or an Admin can manage team members."
+            : err instanceof Error ? err.message : "Could not load team members.",
       );
+      // The session still lists the suspended site, which is why these tabs showed at
+      // all — re-sync so Billing/Organizations/Usage/Team drop away.
+      if (suspended) void refreshSession({ showLoading: false });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshSession]);
 
   useEffect(() => { void load(null); }, [load]);
 
@@ -585,21 +672,54 @@ export default function TeamPage() {
   const isOwnerView = team.viewerRole === "owner";
   const noTeamPlan = team.sites.length > 0 && team.sites.every((s) => !s.teamEnabled);
   const sitesFull = team.sites.length > 0 && team.sites.every(siteHasNoSeats);
+  const canInvite = team.sites.length > 0 && !sitesFull;
+  const openInvite = () => { setNotice(null); setActionError(null); setInviteOpen(true); };
+
+  // Summary numbers (the owner counts as an active person).
+  const activeCount = 1 + team.members.filter((m) => m.status === "active" && !m.suspended).length;
+  const pendingCount = team.members.filter((m) => m.status === "pending" && !m.inviteExpired).length;
+  const shareableCount = team.sites.filter((s) => s.teamEnabled).length;
+  const peopleCount = 1 + team.members.length;
+  const two = (n: number) => String(n).padStart(2, "0");
+
+  // "x of y seats used" across the sites that have a team feature.
+  const enabledSites = team.sites.filter((s) => s.teamEnabled);
+  const seatsUsed = enabledSites.reduce((n, s) => n + s.used.admin + s.used.member, 0);
+  const seatsUnlimited = enabledSites.some((s) => s.caps.admin === null || s.caps.member === null);
+  const seatsTotal = enabledSites.reduce((n, s) => n + (s.caps.admin ?? 0) + (s.caps.member ?? 0), 0);
+
+  const fmtDate = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  };
+  const initial = (email: string | null | undefined) => String(email || "?").trim().charAt(0).toUpperCase();
+
+  /** "N left" / "No limit" for a site across both roles. */
+  const siteSeatsLeft = (s: TeamSite) => {
+    if (!s.teamEnabled) return "Not available";
+    if (s.caps.admin === null || s.caps.member === null) return "No limit";
+    const left = Math.max(0, (s.caps.admin ?? 0) - s.used.admin) + Math.max(0, (s.caps.member ?? 0) - s.used.member);
+    return left === 0 ? "Full" : `${left} left`;
+  };
+
+  const GRID = "grid grid-cols-[1.7fr_0.8fr_1.5fr_0.8fr_180px] gap-x-4";
 
   return (
     <div className="text-left">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-start justify-between gap-6 mb-5">
         <div>
-          <p className="font-semibold leading-[22px] text-[16px] text-[#111827]">Team Members</p>
-          <p className="text-[14px] text-[#4b5563] mt-1">
-            Invite people to help manage your sites. Members only see the sites you give them.
+          <p className="font-semibold leading-[22px] text-[16px] text-[#111827]">Team</p>
+          <p className="text-[15px] leading-[1.35] text-[#4b5563] mt-1 max-w-[620px]">
+            Invite people to help manage your sites. Members only see the sites you give them, and only the
+            permissions their role allows.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => { setNotice(null); setActionError(null); setInviteOpen(true); }}
-          disabled={team.sites.length === 0 || sitesFull}
+          onClick={openInvite}
+          disabled={!canInvite}
           title={
             noTeamPlan
               ? "Team members are available on the Essential and Growth plans"
@@ -607,7 +727,7 @@ export default function TeamPage() {
                 ? "Every site has reached its member limit"
                 : undefined
           }
-          className="h-[36px] px-3.5 rounded-[6px] bg-[#007aff] text-white text-[14px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors shrink-0"
+          className="h-[36px] px-3.5 rounded-[6px] bg-[#007aff] text-white text-[15px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors shrink-0"
         >
           + Invite new user
         </button>
@@ -638,71 +758,136 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Account owner card */}
+      {/* Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#e8f1fd] rounded-[10px] px-4 py-4 mb-6">
+        {[
+          {
+            value: activeCount,
+            label: "Active members",
+            icon: (
+              <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6 9c0-3.3 2.7-6 6-6s6 2.7 6 6m1-9a3 3 0 1 0 0-6m2 15c0-2.4-1.3-4.5-3.3-5.5" stroke="#007aff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            ),
+          },
+          {
+            value: pendingCount,
+            label: "Pending invitations",
+            icon: (
+              <>
+                <rect x="3" y="5" width="18" height="14" rx="2" stroke="#007aff" strokeWidth="1.6" />
+                <path d="M3.5 6.5 12 13l8.5-6.5" stroke="#007aff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </>
+            ),
+          },
+          {
+            value: shareableCount,
+            label: "Sites you can share",
+            icon: (
+              <>
+                <circle cx="12" cy="12" r="9" stroke="#007aff" strokeWidth="1.6" />
+                <path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z" stroke="#007aff" strokeWidth="1.6" />
+              </>
+            ),
+          },
+        ].map((stat) => (
+          <div key={stat.label}>
+            <div className="size-[40px] rounded-[8px] bg-white flex items-center justify-center mb-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">{stat.icon}</svg>
+            </div>
+            <p className="text-[24px] leading-none font-semibold text-[#111827]">{two(stat.value)}</p>
+            <p className="text-[14px] text-[#4b5563] mt-1.5">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Members */}
       <div className="bg-white border border-[#e5e7eb] rounded-[10px] overflow-hidden">
-        <div className="px-4 py-4">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b7280]">Account Owner</p>
-          <p className="text-[15px] font-semibold text-[#111827] mt-1">{team.owner?.email || "—"}</p>
+        <div className="flex items-center gap-2.5 px-4 py-4">
+          <p className="text-[15px] font-semibold text-[#111827]">Members</p>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f3f4f6] text-[#4b5563]">
+            {peopleCount} {peopleCount === 1 ? "person" : "people"}
+          </span>
         </div>
 
-        {/* Organization block */}
-        <div>
-          <div className="flex items-center gap-3 px-4 py-3 bg-[#f1f4f8] border-t border-[#e5e7eb]">
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              className="flex items-center gap-3 text-left min-w-0"
+        <div className="flex items-center gap-3 px-4 py-3 bg-[#f1f4f8] border-t border-[#e5e7eb]">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            className="flex items-center gap-3 text-left min-w-0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={`shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}>
+              <path d="M6 9l6 6 6-6" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[15px] text-[#111827] truncate">{team.organizationName || "Organization"}</span>
+          </button>
+          {!isOwnerView && (
+            <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff] shrink-0">You are Admin</span>
+          )}
+          {team.organizations.length > 1 && (
+            <select
+              value={organizationId ?? ""}
+              onChange={(e) => void load(e.target.value)}
+              aria-label="Organization"
+              className="h-[32px] border border-[#e5e5e5] rounded-[6px] px-2 text-[12px] bg-white"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={`shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}>
-                <path d="M6 9l6 6 6-6" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="text-[15px] text-[#111827] truncate">{team.organizationName || "Organization"}</span>
-            </button>
-            {!isOwnerView && (
-              <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff] shrink-0">You are Admin</span>
-            )}
-            {team.organizations.length > 1 && (
-              <select
-                value={organizationId ?? ""}
-                onChange={(e) => void load(e.target.value)}
-                aria-label="Organization"
-                className="ml-auto h-[32px] border border-[#e5e5e5] rounded-[6px] px-2 text-[12px] bg-white"
-              >
-                {team.organizations.map((o) => (
-                  <option key={o.organizationId} value={o.organizationId}>
-                    {o.name || "Organization"}{o.role === "admin" ? " (Admin)" : ""}
-                  </option>
+              {team.organizations.map((o) => (
+                <option key={o.organizationId} value={o.organizationId}>
+                  {o.name || "Organization"}{o.role === "admin" ? " (Admin)" : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          {enabledSites.length > 0 && (
+            <span className="ml-auto text-[12px] text-[#4b5563] shrink-0">
+              {seatsUsed} of {seatsUnlimited ? "unlimited" : seatsTotal} seats used
+            </span>
+          )}
+        </div>
+
+        {expanded && (
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
+              <div className={`${GRID} px-4 py-3 border-b border-[#eef0f3]`}>
+                {["Member", "Role", "Sites", "Status", ""].map((h) => (
+                  <p key={h} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#374151]">{h}</p>
                 ))}
-              </select>
-            )}
-          </div>
+              </div>
 
-          {expanded && (
-            <div className="overflow-x-auto">
-              <div className="min-w-[760px]">
-                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-3 border-b border-[#eef0f3]">
-                  {["Email address", "Role", "Sites", "Status", ""].map((h) => (
-                    <p key={h} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#374151]">{h}</p>
-                  ))}
-                </div>
-
-                {/* Owner row */}
-                <div className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-4 items-center">
-                  <p className="text-[15px] text-[#111827] truncate">{team.owner?.email || "—"}</p>
-                  <span className="justify-self-start text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff]">
-                    Account Owner
+              {/* Owner row */}
+              <div className={`${GRID} px-4 py-4 items-center`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="size-[32px] rounded-[8px] bg-[#e6f1fd] text-[#007aff] text-[13px] font-semibold flex items-center justify-center shrink-0">
+                    {initial(team.owner?.email)}
                   </span>
-                  <p className="text-[15px] text-[#4b5563]">All sites</p>
-                  <StatusDot status="active" />
-                  <div />
+                  <div className="min-w-0">
+                    <p className="text-[15px] text-[#111827] truncate">{team.owner?.email || "—"}</p>
+                    <p className="text-[12px] text-[#6b7280] truncate">{team.owner?.name || "Account owner"}</p>
+                  </div>
                 </div>
+                <span className="justify-self-start text-[11px] px-2.5 py-1 rounded-full bg-[#e6f1fd] text-[#007aff]">
+                  Account Owner
+                </span>
+                <p className="text-[15px] text-[#4b5563]">All sites</p>
+                <StatusDot status="active" />
+                <div />
+              </div>
 
-                {team.members.map((m) => (
-                  <div key={m.id} className="grid grid-cols-[1.6fr_0.8fr_1.6fr_0.7fr_190px] gap-x-4 px-4 py-4 items-center border-t border-[#eef0f3]">
-                    <div className="min-w-0">
-                      <p className="text-[15px] text-[#111827] truncate">{m.email}</p>
-                      {m.name && <p className="text-[12px] text-[#9ca3af] truncate">{m.name}</p>}
+              {team.members.map((m) => {
+                const since = m.status === "active" ? fmtDate(m.acceptedAt || m.createdAt) : fmtDate(m.createdAt);
+                return (
+                  <div key={m.id} className={`${GRID} px-4 py-4 items-center border-t border-[#eef0f3]`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`size-[32px] rounded-[8px] text-[13px] font-semibold flex items-center justify-center shrink-0 ${
+                        m.role === "admin" ? "bg-[#e6f1fd] text-[#007aff]" : "bg-[#f3f4f6] text-[#4b5563]"
+                      }`}>
+                        {initial(m.email)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[15px] text-[#111827] truncate">{m.email}</p>
+                        <p className="text-[12px] text-[#6b7280] truncate">
+                          {[m.name, since ? `${m.status === "active" ? "Added" : "Invited"} ${since}` : null].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
                     </div>
                     <span
                       className={`justify-self-start text-[11px] px-2.5 py-1 rounded-full ${
@@ -731,9 +916,7 @@ export default function TeamPage() {
                     </div>
                     <div className="min-w-0">
                       <StatusDot status={m.suspended ? "suspended" : m.status === "active" ? "active" : m.inviteExpired ? "expired" : "pending"} />
-                      {m.suspended && (
-                        <p className="text-[11px] text-[#9ca3af] mt-0.5">Site is on Basic/Free</p>
-                      )}
+                      {m.suspended && <p className="text-[11px] text-[#9ca3af] mt-0.5">Site is on Basic/Free</p>}
                     </div>
                     <div className="flex items-center justify-end gap-2">
                       {m.isSelf ? (
@@ -754,7 +937,7 @@ export default function TeamPage() {
                             <button
                               type="button"
                               onClick={() => { setNotice(null); setActionError(null); setEditing(m); }}
-                              className="h-[32px] px-3 rounded-[6px] border border-[#007aff] text-[#007aff] text-[12px]"
+                              className="h-[32px] px-3 rounded-[6px] border border-[#007aff] text-[#007aff] text-[12px] hover:bg-[#f5f9ff]"
                             >
                               Edit
                             </button>
@@ -772,50 +955,67 @@ export default function TeamPage() {
                       )}
                     </div>
                   </div>
-                ))}
-
-                {team.members.length === 0 && (
-                  <p className="px-4 py-4 text-[15px] text-[#4b5563] border-t border-[#eef0f3]">
-                    No team members yet. Invite someone to help manage your sites.
-                  </p>
-                )}
-              </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Invite prompt row */}
+        {canInvite && (
+          <div className="flex items-center justify-between gap-4 px-4 py-4 bg-[#e8f1fd] border-t border-[#dbe8fb]">
+            <button type="button" onClick={openInvite} className="text-[15px] text-[#007aff] hover:underline text-left">
+              {team.members.length === 0 ? "Invite someone to help manage your sites" : "Invite another person"}
+            </button>
+            <button
+              type="button"
+              onClick={openInvite}
+              aria-label="Invite new user"
+              className="size-[36px] rounded-[6px] bg-[#007aff] text-white text-[18px] leading-none flex items-center justify-center hover:bg-[#0069d9] shrink-0"
+            >
+              +
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Member limits per site */}
+      {/* Seats by site */}
       {team.sites.length > 0 && (
         <div className="bg-white border border-[#e5e7eb] rounded-[10px] mt-6 overflow-hidden">
-          <div className="px-4 py-4 border-b border-[#eef0f3]">
-          <p className="text-[15px] font-semibold text-[#111827]">Member limits</p>
-          <p className="text-[14px] text-[#4b5563] mt-1">
-            Seats per site, on top of the account owner: Essential 1 Admin + 4 Members, Growth 1 Admin + unlimited
-            Members. Free and Basic don&apos;t include team members. Pending invitations count.
-          </p>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-4 border-b border-[#eef0f3]">
+            <p className="text-[15px] font-semibold text-[#111827]">Seats by site</p>
+            <p className="text-[12px] text-[#6b7280]">
+              Essential 1 Admin + 4 Members · Growth 1 Admin + unlimited Members · Free and Basic: no team. Pending invitations count.
+            </p>
           </div>
           <div className="divide-y divide-[#eef0f3]">
-            {team.sites.map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-4 py-3">
-                <p className="text-[15px] text-[#111827] truncate pr-4">{s.domain || s.name}</p>
-                <div className="flex items-center gap-3 shrink-0">
-                  <p className={`text-[12px] ${s.teamEnabled && siteHasNoSeats(s) ? "text-[#b45309]" : "text-[#6b7280]"}`}>
-                    {planLabel(s.planId)} · {seatsLabel(s)}
+            {team.sites.map((s) => {
+              const left = siteSeatsLeft(s);
+              return (
+                <div key={s.id} className="grid grid-cols-[1.6fr_110px_1.3fr_auto] gap-x-4 items-center px-4 py-3">
+                  <p className="text-[15px] text-[#111827] truncate">{s.domain || s.name}</p>
+                  <span className="justify-self-start text-[12px] px-2.5 py-0.5 rounded-full bg-[#f3f4f6] text-[#4b5563]">
+                    {planLabel(s.planId)}
+                  </span>
+                  <p className="text-[13px] text-[#4b5563] truncate">
+                    {s.teamEnabled ? seatsLabel(s) : "Team not available on this plan"}
                   </p>
-                  {/* Owners change URLs in Profile → Organizations; Admins only have this. */}
-                  {!isOwnerView && (
-                    <button
-                      type="button"
-                      onClick={() => { setNotice(null); setActionError(null); setManagingSite(s); }}
-                      className="h-[30px] px-3 rounded-[6px] border border-[#007aff] text-[#007aff] text-[12px]"
-                    >
-                      Manage
-                    </button>
-                  )}
+                  <div className="flex items-center justify-end gap-3">
+                    <span className={`text-[12px] ${left === "Full" ? "text-[#b45309]" : "text-[#6b7280]"}`}>{left}</span>
+                    {/* Owners change URLs in Profile → Organizations; Admins only have this. */}
+                    {!isOwnerView && (
+                      <button
+                        type="button"
+                        onClick={() => { setNotice(null); setActionError(null); setManagingSite(s); }}
+                        className="h-[30px] px-3 rounded-[6px] border border-[#007aff] text-[#007aff] text-[12px]"
+                      >
+                        Manage
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
