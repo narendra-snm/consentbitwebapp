@@ -25,7 +25,7 @@ function clearDashboardCache() {
 }
 
 function roleLabel(role?: string) {
-  return role === "admin" ? "Admin" : "Editor";
+  return role === "admin" ? "Admin" : "Member";
 }
 
 function AcceptInner() {
@@ -94,7 +94,9 @@ function AcceptInner() {
       clearDashboardCache();
       setStatus("accepted");
       const first = res.siteIds?.[0];
-      router.replace(first ? `/dashboard/${first}` : "/dashboard");
+      // Full load, not a client transition: guarantees a fresh dashboard session
+      // with the newly shared sites instead of anything kept in memory.
+      window.location.replace(first ? `/dashboard/${first}` : "/dashboard");
     } catch (err: unknown) {
       clearPendingTeamInvite();
       setMessage(err instanceof Error ? err.message : "We couldn't accept this invitation.");

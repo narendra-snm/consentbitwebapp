@@ -13,6 +13,15 @@ import {
   type TeamRole,
   type TeamSite,
 } from "@/lib/client-api";
+import {
+  normalizeSiteLabel,
+  isDuplicateDomainForOthers,
+  validateManageDomain,
+  deriveSiteNameFromDomain,
+  renameSiteDomain,
+} from "@/lib/site-manage-helpers";
+import { useDashboardSession } from "../../DashboardSessionProvider";
+import InstallConsentModal from "../../components/InstallConsentModal";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -20,17 +29,19 @@ const ROLE_OPTIONS: { value: TeamRole; label: string; description: string }[] = 
   {
     value: "admin",
     label: "Admin",
-    description: "Can edit site name and URL, invite and remove members, and has all Editor permissions",
+    description:
+      "Can edit site name and URL, invite, remove and change the role of members, receives the site's email notifications, and has all Member permissions",
   },
   {
-    value: "editor",
-    label: "Editor",
-    description: "Can manage cookie banner, cookie scan, consent logs and consent settings",
+    value: "member",
+    label: "Member",
+    description:
+      "Can manage cookie banner, cookie scan, consent logs and consent settings. No billing, plans, new sites or account settings",
   },
 ];
 
 function roleLabel(role: string) {
-  return role === "admin" ? "Admin" : role === "editor" ? "Editor" : "Account Owner";
+  return role === "admin" ? "Admin" : role === "member" || role === "editor" ? "Member" : "Account Owner";
 }
 
 function planLabel(planId: string | null) {
@@ -38,8 +49,26 @@ function planLabel(planId: string | null) {
   return v.charAt(0).toUpperCase() + v.slice(1);
 }
 
+function roleSeats(site: TeamSite, role: TeamRole) {
+  const cap = site.caps[role];
+  const used = site.used[role];
+  const noun = role === "admin" ? "Admin" : "Members";
+  return cap === null ? `${noun} ${used} · unlimited` : `${noun} ${used}/${cap}`;
+}
+
 function seatsLabel(site: TeamSite) {
-  return site.cap === null ? `${site.used} members · unlimited` : `${site.used}/${site.cap} members`;
+  if (!site.teamEnabled) return "Team not available on this plan";
+  return `${roleSeats(site, "admin")} · ${roleSeats(site, "member")}`;
+}
+
+function roleIsFull(site: TeamSite, role: TeamRole) {
+  const cap = site.caps[role];
+  return cap !== null && site.used[role] >= cap;
+}
+
+/** No seat of any role left (or no team feature on this plan). */
+function siteHasNoSeats(site: TeamSite) {
+  return !site.teamEnabled || (roleIsFull(site, "admin") && roleIsFull(site, "member"));
 }
 
 function siteDisplay(site: TeamSite | undefined, fallbackId: string) {
@@ -81,7 +110,12 @@ type MemberFormProps = {
 
 function MemberForm({ mode, team, member, organizationId, onOrganizationChange, onClose, onDone }: MemberFormProps) {
   const [email, setEmail] = useState(member?.email ?? "");
-  const [role, setRole] = useState<TeamRole | "">(member?.role ?? "");
+  const originalRole: TeamRole | "" =
+    member?.role === "admin" ? "admin" : member ? "member" : "";
+  const [role, setRole] = useState<TeamRole | "">(originalRole);
+  // A role covers every site the person holds; an Admin can't change it when some of
+  // those sites are outside their slice (the server refuses too).
+  const roleLocked = mode === "edit" && !!member?.hasOtherSites;
   const [siteIds, setSiteIds] = useState<string[]>(member?.siteIds ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,12 +123,33 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
   const emailValid = EMAIL_REGEX.test(email.trim());
   const original = useMemo(() => new Set(member?.siteIds ?? []), [member]);
 
-  const siteIsFull = (site: TeamSite) =>
-    site.cap !== null && site.used >= site.cap && !original.has(site.id);
+  // A site is unavailable when its plan has no team feature, or the chosen role has
+  // no seat left there. The member's own seat (same site, same role) doesn't count.
+  const siteIsFull = (site: TeamSite) => {
+    if (!site.teamEnabled) return true;
+    if (!role) return siteHasNoSeats(site);
+    if (original.has(site.id) && role === originalRole) return false;
+    return roleIsFull(site, role);
+  };
 
   const toggleSite = (id: string) => {
     setError(null);
     setSiteIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
+
+  const chooseRole = (next: TeamRole) => {
+    setRole(next);
+    setError(null);
+    // Drop sites that have no seat for the new role.
+    setSiteIds((prev) =>
+      prev.filter((id) => {
+        const site = team.sites.find((s) => s.id === id);
+        if (!site) return true; // a site outside this viewer's slice — the server keeps it
+        if (!site.teamEnabled) return false;
+        if (original.has(id) && next === originalRole) return true;
+        return !roleIsFull(site, next);
+      }),
+    );
   };
 
   const allSelectable = team.sites.filter((s) => !siteIsFull(s)).map((s) => s.id);
@@ -205,7 +260,7 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
                       <p className="text-[13px] text-black truncate">{site.domain || site.name}</p>
                       <p className="text-[11px] text-[#6b7280]">
                         {planLabel(site.planId)} plan · {seatsLabel(site)}
-                        {full ? " · limit reached" : ""}
+                        {full && site.teamEnabled ? (role ? ` · no ${role === "admin" ? "Admin" : "Member"} seat left` : " · limit reached") : ""}
                       </p>
                     </div>
                   </label>
@@ -215,7 +270,7 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
           )}
           {member?.hasOtherSites && (
             <p className="text-[11px] text-[#6b7280] mt-1.5">
-              This member also has access to sites you don&apos;t manage. Those stay unchanged.
+              This member also has access to sites you don&apos;t manage. Those stay unchanged, and only the account owner can change their role.
             </p>
           )}
         </div>
@@ -251,8 +306,8 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
                   name="team-role"
                   value={opt.value}
                   checked={role === opt.value}
-                  onChange={() => { setRole(opt.value); setError(null); }}
-                  disabled={saving}
+                  onChange={() => chooseRole(opt.value)}
+                  disabled={saving || roleLocked}
                   className="mt-[3px] accent-[#007aff] size-4 shrink-0"
                 />
                 <span>
@@ -289,6 +344,100 @@ function MemberForm({ mode, team, member, organizationId, onOrganizationChange, 
   );
 }
 
+// ─── Manage site (Admin) ─────────────────────────────────────────────────────
+// Team Admins don't get Profile → Organizations (billing lives there), so they
+// change a site's URL here. Same call and error handling as the owner's Manage
+// modal; the site name follows the URL, as it does there.
+
+type InstallPayload = { scriptUrl: string; siteDomain: string; siteId: string; cdnScriptId?: string; isOldScript?: boolean };
+
+function renameErrorText(code: string | undefined, message: string | undefined) {
+  if (code === "DOMAIN_EXISTS_OTHER_ACCOUNT") return "This website URL is already registered to another ConsentBit account.";
+  if (code === "DOMAIN_EXISTS_SAME_ACCOUNT") return "This website URL is already used by another site in this account.";
+  if (code === "DUPLICATE_SITE_NAME") return "This site name is already used by another site in this account. Choose a different URL.";
+  if (code === "DOMAIN_REQUIRED" || code === "INVALID_DOMAIN") return message || "Enter a valid website URL.";
+  return message || "Failed to update site";
+}
+
+function ManageSiteModal({ site, onClose, onDone }: { site: TeamSite; onClose: () => void; onDone: (p: InstallPayload) => void }) {
+  const { sites, refresh, updateSiteInState } = useDashboardSession();
+  const [domain, setDomain] = useState(site.domain || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const value = domain.trim();
+    if (!value) return;
+    setError(null);
+    const domainErr = validateManageDomain(value);
+    if (domainErr) { setError(domainErr); return; }
+    if (isDuplicateDomainForOthers(sites, site.id, value)) {
+      setError("This website URL is already used by another site you manage.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await renameSiteDomain({ websiteUrl: value, excludeSiteId: site.id });
+      if (!result.ok) { setError(result.message || "This domain cannot be used."); return; }
+      const rawSite: any = (Array.isArray(sites) ? sites : []).find((s: any) => String(s.id) === site.id);
+      try { sessionStorage.removeItem("cbSessionCache"); } catch { /* ignore */ }
+      await refresh({ showLoading: false });
+      const finalDomain = result.domain || normalizeSiteLabel(value);
+      updateSiteInState({ id: site.id, name: deriveSiteNameFromDomain(value), domain: finalDomain });
+      const cdnScriptId = rawSite?.cdnScriptId ?? rawSite?.cdn_script_id;
+      onDone({
+        scriptUrl: rawSite?.embedScriptUrl ?? rawSite?.embed_script_url ?? "",
+        siteDomain: finalDomain,
+        siteId: site.id,
+        cdnScriptId: cdnScriptId ? String(cdnScriptId) : undefined,
+        isOldScript: !!result.isOldScript,
+      });
+    } catch (e: any) {
+      setError(renameErrorText(e?.code, e?.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} disabled={saving}>
+      <p className="font-semibold text-[16px] text-black mb-1">Change Site URL</p>
+      <p className="text-[12px] text-[#6b7280] mb-5">
+        Move this site to a new domain. Settings, plan and history stay unchanged.
+      </p>
+      <label className="block text-[12px] font-medium text-[#374151] mb-1">New Website URL</label>
+      <input
+        type="text"
+        value={domain}
+        onChange={(e) => { setDomain(e.target.value); setError(null); }}
+        disabled={saving}
+        placeholder="example.com"
+        className="w-full h-[42px] border border-[#e5e5e5] rounded-[8px] px-3 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+      />
+      <p className="text-[11px] text-[#9ca3af] mt-1.5 mb-4">The consent banner will be linked to this domain.</p>
+      {error && <p className="text-[12px] text-red-600 mb-3">{error}</p>}
+      <div className="flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          className="h-[38px] px-5 rounded-[8px] border border-[#e5e5e5] text-[#374151] text-[13px] font-medium hover:bg-[#f9fafb] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving || !domain.trim()}
+          className="h-[38px] px-5 rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed"
+        >
+          {saving ? "Saving…" : "Save New URL"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function TeamPage() {
@@ -304,6 +453,8 @@ export default function TeamPage() {
   const [removeBusy, setRemoveBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; link?: string } | null>(null);
+  const [managingSite, setManagingSite] = useState<TeamSite | null>(null);
+  const [installModal, setInstallModal] = useState<InstallPayload | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async (orgId?: string | null, opts?: { silent?: boolean }) => {
@@ -325,6 +476,25 @@ export default function TeamPage() {
   }, []);
 
   useEffect(() => { void load(null); }, [load]);
+
+  // Invites are accepted elsewhere (the invitee's own browser), so re-check when this
+  // tab comes back into view, and poll while an invitation is still pending so
+  // "Pending" flips to "Active" without a reload.
+  const hasPending = !!team?.members.some((m) => m.status === "pending");
+  useEffect(() => {
+    if (!organizationId) return;
+    const reload = () => {
+      if (document.visibilityState === "visible") void load(organizationId, { silent: true });
+    };
+    document.addEventListener("visibilitychange", reload);
+    window.addEventListener("focus", reload);
+    const timer = hasPending ? window.setInterval(reload, 20_000) : undefined;
+    return () => {
+      document.removeEventListener("visibilitychange", reload);
+      window.removeEventListener("focus", reload);
+      if (timer) window.clearInterval(timer);
+    };
+  }, [organizationId, hasPending, load]);
 
   const siteById = useMemo(() => {
     const m = new Map<string, TeamSite>();
@@ -393,7 +563,8 @@ export default function TeamPage() {
   }
 
   const isOwnerView = team.viewerRole === "owner";
-  const sitesFull = team.sites.length > 0 && team.sites.every((s) => s.cap !== null && s.used >= s.cap);
+  const noTeamPlan = team.sites.length > 0 && team.sites.every((s) => !s.teamEnabled);
+  const sitesFull = team.sites.length > 0 && team.sites.every(siteHasNoSeats);
 
   return (
     <div className="text-left">
@@ -409,7 +580,13 @@ export default function TeamPage() {
           type="button"
           onClick={() => { setNotice(null); setActionError(null); setInviteOpen(true); }}
           disabled={team.sites.length === 0 || sitesFull}
-          title={sitesFull ? "Every site has reached its member limit" : undefined}
+          title={
+            noTeamPlan
+              ? "Team members are available on the Essential and Growth plans"
+              : sitesFull
+                ? "Every site has reached its member limit"
+                : undefined
+          }
           className="h-[40px] px-4 rounded-[8px] bg-[#007aff] text-white text-[13px] font-medium hover:bg-[#0069d9] disabled:bg-[#cfd3dc] disabled:cursor-not-allowed transition-colors shrink-0"
         >
           + Invite new user
@@ -431,6 +608,15 @@ export default function TeamPage() {
         </div>
       )}
       {actionError && <p className="text-[12px] text-red-600 mb-3">{actionError}</p>}
+
+      {noTeamPlan && (
+        <div className="bg-[#fffbeb] border border-[#fde68a] rounded-[8px] px-3.5 py-2.5 mb-4">
+          <p className="text-[13px] text-[#92400e]">
+            Team members are available on the Essential and Growth plans.
+            {isOwnerView ? " Upgrade a site to invite people to it." : " Ask the account owner to upgrade."}
+          </p>
+        </div>
+      )}
 
       {/* Account owner card */}
       <div className="bg-white border border-[#ebebeb] rounded-[10px] px-5 py-5">
@@ -575,16 +761,28 @@ export default function TeamPage() {
         <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px] px-5 py-4 mt-5">
           <p className="text-[14px] font-medium text-[#111827] mb-1">Member limits</p>
           <p className="text-[12px] text-[#6b7280] mb-3">
-            Each site allows a number of members based on its plan: Free 1, Basic 2, Essential 5, Growth unlimited.
-            Pending invitations count.
+            Seats per site, on top of the account owner: Essential 1 Admin + 4 Members, Growth 1 Admin + unlimited
+            Members. Free and Basic don&apos;t include team members. Pending invitations count.
           </p>
           <div className="divide-y divide-black/5">
             {team.sites.map((s) => (
               <div key={s.id} className="flex items-center justify-between py-2">
                 <p className="text-[13px] text-[#374151] truncate pr-4">{s.domain || s.name}</p>
-                <p className={`text-[12px] shrink-0 ${s.cap !== null && s.used >= s.cap ? "text-[#b45309]" : "text-[#6b7280]"}`}>
-                  {planLabel(s.planId)} · {seatsLabel(s)}
-                </p>
+                <div className="flex items-center gap-3 shrink-0">
+                  <p className={`text-[12px] ${s.teamEnabled && siteHasNoSeats(s) ? "text-[#b45309]" : "text-[#6b7280]"}`}>
+                    {planLabel(s.planId)} · {seatsLabel(s)}
+                  </p>
+                  {/* Owners change URLs in Profile → Organizations; Admins only have this. */}
+                  {!isOwnerView && (
+                    <button
+                      type="button"
+                      onClick={() => { setNotice(null); setActionError(null); setManagingSite(s); }}
+                      className="h-[30px] px-3 rounded-[6px] border border-[#007aff] text-[#007aff] text-[12px]"
+                    >
+                      Manage
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -619,6 +817,35 @@ export default function TeamPage() {
             setEditing(null);
             await load(organizationId, { silent: true });
           }}
+        />
+      )}
+
+      {managingSite && (
+        <ManageSiteModal
+          site={managingSite}
+          onClose={() => setManagingSite(null)}
+          onDone={async (payload) => {
+            setManagingSite(null);
+            setNotice({
+              text: payload.isOldScript
+                ? `Site URL changed to ${payload.siteDomain}. This site still uses an older ConsentBit script: remove it from the site and install the new one shown next, or banners will be duplicated.`
+                : `Site URL changed to ${payload.siteDomain}.`,
+            });
+            setInstallModal(payload);
+            await load(organizationId, { silent: true });
+          }}
+        />
+      )}
+
+      {installModal && (
+        <InstallConsentModal
+          key={installModal.siteId}
+          open={true}
+          scriptUrl={installModal.scriptUrl}
+          siteDomain={installModal.siteDomain}
+          siteId={installModal.siteId}
+          cdnScriptId={installModal.cdnScriptId}
+          onClose={() => setInstallModal(null)}
         />
       )}
 

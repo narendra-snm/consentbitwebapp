@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import { isTeamSite } from "@/lib/team-role";
 
 /** Second path segment after /dashboard that is not a site id */
 const RESERVED_DASHBOARD_SEGMENTS = new Set(["profile", "all-domain", "post-setup"]);
@@ -360,8 +361,7 @@ export default function DashboardTabs() {
   const activeSite = sites?.find((s: any) => String(s?.id) === String(activeSiteId));
   const isLegacySite = !!(activeSite as any)?.isLegacy;
   // Plans are the account owner's call; team members don't get the Upgrade tab.
-  const isTeamMemberSite =
-    (activeSite as any)?.teamRole === "admin" || (activeSite as any)?.teamRole === "editor";
+  const isTeamMemberSite = isTeamSite(activeSite);
   const LEGACY_DISABLED_TABS = new Set<string>();
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import {
   isDuplicateDomainForOthers,
   validateManageDomain,
   deriveSiteNameFromDomain,
+  renameSiteDomain,
 } from "@/lib/site-manage-helpers";
 import InstallConsentModal from "../components/InstallConsentModal";
 import { analytics } from "@/lib/analytics";
@@ -76,85 +77,6 @@ function toPlanLabel(raw: unknown): PlanTier {
 // Shared grid column definition — single source of truth
 const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
 
-// Calls POST /api/sites/rename-domain — returns a normalized result.
-// Goes through the Next.js proxy route so the sid cookie is forwarded server-side
-// (same pattern as /api/sites/check-domain).
-async function renameSiteDomain({
-  websiteUrl,
-  excludeSiteId,
-}: {
-  websiteUrl: string;
-  excludeSiteId?: string;
-}) {
-  const res = await fetch(`/api/sites/rename-domain`, {
-    method: 'POST',
-    credentials: 'include',                   // send the sid cookie to our own origin
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',   // ← CSRF guard requires this
-    },
-    body: JSON.stringify({ websiteUrl, excludeSiteId }),
-  });
-
-  console.log('[renameSiteDomain] request', { websiteUrl, excludeSiteId });
-
-  const rawText = await res.text();
-  let parsed: any = null;
-  try { parsed = rawText ? JSON.parse(rawText) : null; } catch { /* non-JSON */ }
-
-  // Worker wraps payloads in { d: "<base64 UTF-8 JSON>" } — decode like lib/client-api.ts does.
-  let data: any = parsed;
-  if (parsed && typeof parsed.d === 'string') {
-    try {
-      const binary = atob(parsed.d);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      data = JSON.parse(new TextDecoder().decode(bytes));
-    } catch { /* fall through to raw parsed value */ }
-  }
-
-  console.log('[renameSiteDomain] response', {
-    status: res.status,
-    ok: res.ok,
-    rawText,
-    envelope: parsed,
-    data,
-  });
-
-  if (!res.ok) {
-    const err: any = new Error(data?.error || `Request failed (${res.status})`);
-    err.status = res.status;
-    err.code = data?.code || null;
-    console.log('[renameSiteDomain] error', { status: err.status, code: err.code, message: err.message });
-    throw err;
-  }
-
-  if (!data?.success) {
-    const conflict = {
-      ok: false as const,
-      conflict: true as const,
-      code: data?.code || 'UNKNOWN_CONFLICT',
-      message: data?.message || 'This domain cannot be used.',
-      domain: data?.domain || null,
-    };
-    console.log('[renameSiteDomain] conflict', conflict);
-    return conflict;
-  }
-
-  const success = {
-    ok: true as const,
-    conflict: false as const,
-    domain: data.domain,
-    platform: data.platform || '',
-    platformSiteId: data.platformSiteId || '',
-    detected: !!data.detected,
-    code: data.code,
-    isOldScript: data.isOldScript || false,
-  };
-  console.log('[renameSiteDomain] success', success);
-  return success;
-}
-
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -199,7 +121,9 @@ export default function SettingsPage() {
   const isActive = (tab: TabType) => activeTab === tab;
 
   // Team access. A site's teamRole comes from dashboard-init: 'owner' for the user's own
-  // sites, 'admin' / 'editor' for sites shared with them by another account.
+  // sites, 'admin' / 'member' for sites shared with them by another account.
+  // A team-only Member gets General (name, password) only: no billing, plans,
+  // organizations/transfer, usage or team management.
   const ownsAccount = Array.isArray(orgsFromSession) && orgsFromSession.length > 0;
   const isTeamAdmin = useMemo(
     () => (Array.isArray(sites) ? sites : []).some((s: any) => s?.teamRole === "admin"),
@@ -816,6 +740,7 @@ export default function SettingsPage() {
                 billingEmailSaving={billingEmailSaving}
                 billingEmailError={billingEmailError}
                 billingEmailSuccess={billingEmailSuccess}
+                showBillingEmail={ownsAccount}
               />
             </div>
           )}

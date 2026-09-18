@@ -385,16 +385,18 @@ export async function authorizeOwnershipTransfer(token: string) {
 //transfer ownership ends here
 
 //team members starts here
-export type TeamRole = 'admin' | 'editor';
+export type TeamRole = 'admin' | 'member';
 
 export type TeamSite = {
   id: string;
   name: string | null;
   domain: string | null;
   planId: string | null;
-  /** null = unlimited */
-  cap: number | null;
-  used: number;
+  /** false on plans without the team feature (Free, Basic) */
+  teamEnabled: boolean;
+  /** seats per role; null = unlimited */
+  caps: Record<TeamRole, number | null>;
+  used: Record<TeamRole, number>;
 };
 
 export type TeamMember = {
