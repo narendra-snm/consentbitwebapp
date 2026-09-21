@@ -508,7 +508,7 @@ export async function getTeamInviteInfo(token: string): Promise<{ success: true;
 }
 
 export async function acceptTeamInvite(token: string): Promise<{ success: true; organizationId: string; role: TeamRole; siteIds: string[] }> {
-  return teamRequest('/api/team/accept', { method: 'POST', body: { token } });
+  return teamRequest('/api/team/accept', { method: 'POST', body: { token, appOrigin: appOrigin() } });
 }
 //team members ends here
 
