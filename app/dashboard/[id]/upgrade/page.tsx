@@ -6,9 +6,9 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"; // useRef kept for proceedRef
-import { createCheckoutSession, getBillingSummary, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
+import { createCheckoutSession, getBillingSummary, resumeSubscription, switchBillingInterval, previewSwitchInterval, previewChangeTier, changeTier, type BillingSummary, type SwitchIntervalPreview, type ChangeTierPreview } from "@/lib/client-api";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
-import { isLapsedInContext, readSubscriptionStatus, activeUntil } from "@/lib/subscription-state";
+import { isLapsedInContext, readSubscriptionStatus, activeUntil, subscriptionHasEnded } from "@/lib/subscription-state";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import { accountOrgIdFor, siteTeamRole } from "@/lib/team-role";
 import { analytics } from "@/lib/analytics";
@@ -159,6 +159,16 @@ export default function PricingTable() {
   const [switching, setSwitching] = useState(false);
   const billingInitialized = useRef(false);
 
+  // Full billing summary for this site — the only place that carries cancelAtPeriodEnd
+  // and the Stripe subscription id, both of which the Resume action needs.
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  // Resume = undo a scheduled cancellation on the SAME subscription (no new checkout).
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  // A definite refusal, so the grid stops offering a button that can only fail again.
+  const [resumeOutcome, setResumeOutcome] = useState<"ended" | "notFound" | null>(null);
+
   // Switch-interval confirm dialog (shows the prorated balance before charging the card on file)
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const [switchTarget, setSwitchTarget] = useState<"monthly" | "yearly" | null>(null);
@@ -181,6 +191,7 @@ export default function PricingTable() {
     (async () => {
       try {
         const summary = await getBillingSummary(activeOrganizationId, siteId || null);
+        if (!cancelled) setBillingSummary(summary);
         const iv = String(summary?.interval || "").toLowerCase();
         if (!cancelled && (iv === "monthly" || iv === "yearly")) {
           setCurrentInterval(iv);
@@ -197,6 +208,91 @@ export default function PricingTable() {
     })();
     return () => { cancelled = true; };
   }, [activeOrganizationId, siteId, currentTier]);
+
+  /**
+   * PENDING CANCELLATION — scheduled, but the paid period is still running.
+   *
+   * Distinct from `lapsed`: cancelSubscription writes status 'active' + cancelAtPeriodEnd=1,
+   * so the site is not terminal and the grid still marks this tier as current. The way back
+   * is Resume on the SAME subscription, never a new checkout — subscribing during the paid
+   * period starts a SECOND subscription and bills the overlap twice (the checkout's
+   * double-billing guard only catches an *active* plan, not a cancelled one).
+   */
+  const siteRow = activeSite as Record<string, unknown> | null;
+  const cancelPending =
+    Boolean(billingSummary?.cancelAtPeriodEnd) ||
+    Boolean(billingSummary?.cancel_at_period_end) ||
+    Number(siteRow?.subscriptionCancelAtPeriodEnd) === 1 ||
+    Number(siteRow?.subscription_cancel_at_period_end) === 1;
+
+  /** Best available "runs until" date for the pending cancellation. */
+  const cancelUntil =
+    billingSummary?.nextBillingDate ||
+    billingSummary?.currentPeriodEnd ||
+    (siteRow?.subscriptionCurrentPeriodEnd as string | undefined) ||
+    (siteRow?.subscription_current_period_end as string | undefined) ||
+    null;
+
+  /**
+   * Ended, not merely ending. `cancelAtPeriodEnd` alone can't tell "ends on X" from
+   * "ended on X" — same rule as BillingPage and the worker, see lib/subscription-state.
+   * `|| resumeOutcome === "ended"` because Stripe can know the plan is over while our
+   * stored end date is still in the future.
+   */
+  const cancelPeriodEnded =
+    subscriptionHasEnded({
+      status: readSubscriptionStatus(activeSite),
+      cancelAtPeriodEnd: cancelPending,
+      currentPeriodEnd: cancelUntil,
+    }) || resumeOutcome === "ended";
+
+  /**
+   * Show Resume in place of "Current Plan". Owner only — the worker refuses a team Admin
+   * with OWNER_ONLY, same gate as cancel. A definite refusal (`resumeOutcome`) drops the
+   * button so it can't be retried into the same failure.
+   */
+  const canResume =
+    cancelPending && !cancelPeriodEnded && !lapsed && !isAdminSite && !resumeOutcome;
+
+  // Undo the scheduled cancellation. Same call and the same two definite failures
+  // (409 ended / 404 notFound) as the billing page's Resume button.
+  async function handleResume() {
+    if (resumeLoading) return;
+    const subId = billingSummary?.stripeSubscriptionId ?? billingSummary?.subscriptionId ?? null;
+    if (!subId) {
+      setResumeError("Could not identify your subscription. Please refresh and try again.");
+      return;
+    }
+    setResumeLoading(true);
+    setResumeError(null);
+    try {
+      const res = await resumeSubscription({ stripeSubscriptionId: subId });
+      if (res?.success) {
+        // Clear the cancellation locally, then re-read so every other view agrees.
+        setBillingSummary(prev =>
+          prev ? { ...prev, cancelAtPeriodEnd: false, cancel_at_period_end: false } : prev,
+        );
+        await refresh({ showLoading: false });
+        setShowResumeModal(false);
+      } else {
+        setResumeError(res?.error || "Couldn't resume the subscription.");
+        if (res?.ended) {
+          // The worker has just reconciled D1 with Stripe — re-read so the grid moves on
+          // to the checkout path instead of offering a resume that can never work.
+          setResumeOutcome("ended");
+          await refresh({ showLoading: false });
+          setShowResumeModal(false);
+        } else if (res?.notFound) {
+          setResumeOutcome("notFound");
+          setShowResumeModal(false);
+        }
+      }
+    } catch (e) {
+      setResumeError(e instanceof Error ? e.message : "Failed to resume subscription. Please try again.");
+    } finally {
+      setResumeLoading(false);
+    }
+  }
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
@@ -267,15 +363,52 @@ export default function PricingTable() {
     return () => { if (t) clearTimeout(t); };
   }, [refresh, siteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const CurrentPlanButton = () => (
-    <button
-      type="button"
-      disabled
-      className="bg-gray-400 text-[15px] text-white px-6 py-2 rounded-lg cursor-default  max-w-[200px]"
-    >
-      Current Plan
-    </button>
-  );
+  /**
+   * The cell for the tier this site is already on. Normally a disabled "Current Plan",
+   * but while a cancellation is scheduled and still running the only useful action is to
+   * undo it — so it becomes Resume Subscription instead.
+   */
+  const CurrentPlanButton = () =>
+    canResume ? (
+      // No max-width here: "Resume Subscription" is wider than "Switch plan", and a
+      // capped width wrapped it onto two lines, making this cell taller than every other
+      // button in the row. Classes below are kept identical to PlanButton's so the two
+      // read as the same control.
+      <div>
+        <button
+          type="button"
+          onClick={() => { setResumeError(null); setShowResumeModal(true); }}
+          disabled={resumeLoading}
+          title={
+            cancelUntil
+              ? `Cancels ${new Date(String(cancelUntil).replace(" ", "T")).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — resume to keep it running`
+              : "Resume this subscription"
+          }
+          className="whitespace-nowrap bg-[#007aff] px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {resumeLoading ? "Resuming…" : "Resume Subscription"}
+        </button>
+        {cancelUntil && (
+          // Muted, not red: this is the state the button acts on, not an error.
+          <p className="mt-1.5 text-[11px] text-[#6b7280] whitespace-nowrap">
+            Cancels{" "}
+            {new Date(String(cancelUntil).replace(" ", "T")).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+        )}
+      </div>
+    ) : (
+      <button
+        type="button"
+        disabled
+        className="bg-gray-400 text-[15px] text-white px-6 py-2 rounded-lg cursor-default  max-w-[200px]"
+      >
+        Current Plan
+      </button>
+    );
 
   const prices = {free: 0, basic: 9, essential: 20, growth: 56 };
 
@@ -800,6 +933,65 @@ function redirectToDashboard() {
 
   return (
     <div className="flex justify-center w-full border-t border-[#000000]/10">
+      {/* Resume confirm dialog — undo a scheduled cancellation on the same subscription */}
+      {showResumeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => { if (!resumeLoading) setShowResumeModal(false); }}
+          />
+          <div className="relative z-10 w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+            <div className="flex justify-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-[#ecfdf5] flex items-center justify-center">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M20 4v4h-4" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-[18px] font-bold text-black text-center mb-2">Resume Subscription?</h3>
+
+            <div className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-5">
+              {cancelUntil
+                ? `Your plan is set to end on ${new Date(String(cancelUntil).replace(" ", "T")).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. Resuming keeps it running on the same billing date and the same card — nothing is charged now.`
+                : "Resuming keeps your plan running on the same billing date and the same card — nothing is charged now."}
+            </div>
+
+            {resumeError && (
+              <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626] text-center">
+                {resumeError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { if (!resumeLoading) { setShowResumeModal(false); setResumeError(null); } }}
+                disabled={resumeLoading}
+                className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+              >
+                Keep Cancelling
+              </button>
+              <button
+                type="button"
+                onClick={handleResume}
+                disabled={resumeLoading}
+                className="flex-1 h-[42px] rounded-[10px] bg-[#16a34a] text-white text-[14px] font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
+              >
+                {resumeLoading ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Resuming...
+                  </>
+                ) : (
+                  "Yes, Resume"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Switch-interval confirm dialog */}
       {showSwitchConfirm && switchTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -999,6 +1191,15 @@ function redirectToDashboard() {
           </div>
         )}
 
+        {/* A resume that failed for good takes its button away with it, so the reason has
+            to live here instead — otherwise the grid silently goes back to "Current Plan". */}
+        {resumeError && !showResumeModal && (
+          <div className="mx-9 mt-6 rounded-[14px] border border-[#fecaca] bg-[#fef2f2] px-5 py-4 text-[13px] leading-relaxed text-[#dc2626]">
+            {resumeError}
+            {resumeOutcome === "notFound" && " Please contact support so we can look it up for you."}
+          </div>
+        )}
+
         {/* HEADER */}
         <div className="flex gap-8 items-center  px-9 py-3.5 pt-7 mt-2 ">
           <div className="text-xl font-semibold ">
@@ -1094,7 +1295,7 @@ function redirectToDashboard() {
 
           <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "basic" ? (
-              currentInterval && currentInterval !== billing ? (
+              !canResume && currentInterval && currentInterval !== billing ? (
                 <SwitchIntervalButton target={billing} />
               ) : (
                 <CurrentPlanButton />
@@ -1106,7 +1307,7 @@ function redirectToDashboard() {
 
           <div className="p-4 px-8 pb-8 bg-[#f0fff1] border-x border-[rgba(164,191,166,0.3)] border-b rounded-b-[20px] border-t border-t-[#000000]/10">
             {currentTier === "essential" ? (
-              currentInterval && currentInterval !== billing ? (
+              !canResume && currentInterval && currentInterval !== billing ? (
                 <SwitchIntervalButton target={billing} />
               ) : (
                 <CurrentPlanButton />
@@ -1118,7 +1319,7 @@ function redirectToDashboard() {
 
           <div className="p-4 pl-[50px] border-t border-[#000000]/10">
             {currentTier === "growth" ? (
-              currentInterval && currentInterval !== billing ? (
+              !canResume && currentInterval && currentInterval !== billing ? (
                 <SwitchIntervalButton target={billing} />
               ) : (
                 <CurrentPlanButton />

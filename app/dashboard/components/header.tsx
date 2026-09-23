@@ -20,6 +20,7 @@ import AddNewSiteModal from "./AddNewSiteModal";
 import { getBillingUsage } from "@/lib/client-api";
 import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
+import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
 import { UpgradePlanModal } from "./UpgradePlanModal";
 import { isMemberSite, accountOrgIdFor } from "@/lib/team-role";
 
@@ -168,7 +169,21 @@ export default function Header() {
               : k === "growth"
                 ? "Growth"
                 : k;
-    const isPaid = k === "basic" || k === "essential" || k === "growth";
+    // Once this site's paid period has lapsed there IS no current plan, so the pill is
+    // hidden entirely rather than showing a stale tier. `resolvedPlanKey` can't be
+    // trusted here: resolvePlanTierForSiteContext falls back to the org's
+    // effectivePlanId, which is drawn from any subscription on the account — so a site
+    // whose own subscription ended still resolves to "Essential", either from its own
+    // cancelled row or from a sibling site's live one.
+    //
+    // Deliberately keyed on the period END, not on the status: a site cancelled but
+    // still inside its paid period keeps its plan until the date, and must keep showing
+    // it. A site that never subscribed reads false and still shows "Free".
+    const subEnded = siteSubscriptionHasEnded(activeSite);
+
+    // `&& !subEnded`: there is nothing to "change" once the plan is gone — the action is
+    // to start a new subscription, same as for a site that never had one.
+    const isPaid = (k === "basic" || k === "essential" || k === "growth") && !subEnded;
     const planDisplay = {
       label,
       upgradeButtonText: isPaid ? "Change plan" : "Update to Pro",
@@ -177,10 +192,10 @@ export default function Header() {
         : "Upgrade to a paid plan to unlock more features.",
     };
 
-    return { resolvedPlanKey, showPlanSkeleton, planDisplay };
+    return { resolvedPlanKey, showPlanSkeleton, planDisplay, subEnded };
   }, [activeSite, effectivePlanId, hydrated, loading, authenticated, pathSiteId, sites]);
 
-  const { resolvedPlanKey, showPlanSkeleton, planDisplay } = planUi;
+  const { resolvedPlanKey, showPlanSkeleton, planDisplay, subEnded } = planUi;
   // Re-fetch billing usage whenever org, active site, or plan changes (covers post-upgrade refresh).
   useEffect(() => {
     if (!accountOrgId) return;
@@ -439,7 +454,13 @@ const handleSelectSite = (site: any) => {
 
       {/* RIGHT SECTION */}
       <div className="flex items-center gap-4">
-        {/* PLAN — skeleton until dashboard-init finishes (no false "Free" on reload) */}
+        {/* PLAN — skeleton until dashboard-init finishes (no false "Free" on reload).
+            Hidden once this site's subscription has ended: there is no current plan to
+            name, and the stale tier read as if the site were still paid for. The
+            "Update to Pro" button beside this stays, so the way back is still one click.
+            Kept behind `!showPlanSkeleton` so the pill doesn't flicker away on first
+            paint before the session data has loaded. */}
+        {!showPlanSkeleton && subEnded ? null : (
         <div
           className="flex items-center text-xs bg-[#E6F1FD] border border-[#E6F1FD] rounded-lg overflow-hidden"
           aria-busy={showPlanSkeleton}
@@ -469,6 +490,7 @@ const handleSelectSite = (site: any) => {
             </button>
           )}
         </div>
+        )}
 
         {/* Team members (Admin/Editor on another account's site) can't change its plan. */}
         {isTeamMemberSite ? null : showPlanSkeleton ? (

@@ -87,6 +87,67 @@ export function isTerminalStatus(status: string | null | undefined): boolean {
 }
 
 /**
+ * True when the paid period has actually LAPSED — the plan is over, not merely on its way out.
+ *
+ * `cancelAtPeriodEnd` alone cannot answer this. The worker forces it true whenever the
+ * status is 'canceled' (see handlers/webflowBilling.js's idempotent-cancel reconcile), so
+ * it can't tell "ends on <date>" from "ended on <date>"; and it is never set for the
+ * 'deleted' status that syncEvent.js writes. Hence: terminal status OR a scheduled
+ * cancellation, AND a period end already in the past.
+ *
+ * Both halves matter — an active subscription whose period date has just passed is
+ * mid-renewal, not ended, and a cancelled one still inside its paid period keeps its plan
+ * until the date. An unparseable/missing date reads as "not ended", which preserves the
+ * previous behaviour on missing data.
+ *
+ * Must stay in step with subscriptionHasEnded in the Designer app
+ * (Consentbit-Webflow-App-New -Design/src/lib/subscriptionState.js) and with
+ * TERMINAL_SUBSCRIPTION_STATUSES in consent-manager/src/utils/subscriptionStatus.js.
+ */
+export function subscriptionHasEnded(input: {
+  status?: string | null;
+  cancelAtPeriodEnd?: boolean | number | null;
+  currentPeriodEnd?: string | Date | null;
+} | null | undefined): boolean {
+  if (!input) return false;
+  const raw = input.currentPeriodEnd;
+  if (raw == null) return false;
+  // Rows mix ISO strings and SQLite datetimes ("2026-09-25 21:12:39") — normalise first.
+  const ms = raw instanceof Date ? raw.getTime() : Date.parse(String(raw).replace(" ", "T"));
+  if (!Number.isFinite(ms)) return false;
+  const scheduled = Boolean(input.cancelAtPeriodEnd) || Number(input.cancelAtPeriodEnd) === 1;
+  return (isTerminalStatus(input.status) || scheduled) && ms <= Date.now();
+}
+
+/**
+ * `subscriptionHasEnded` for a dashboard-init site row.
+ *
+ * Those rows carry the subscription under their own field names
+ * (`subscriptionStatus` / `subscriptionCurrentPeriodEnd` / `subscriptionCancelAtPeriodEnd`,
+ * see authDashboardInit.js), so callers don't have to remember the mapping — and can't
+ * drift apart by each remembering it differently.
+ *
+ * A site that never had a subscription reads false: no status and no end date means
+ * nothing has ended, so a genuinely Free site is not mistaken for a lapsed one.
+ */
+export function siteSubscriptionHasEnded(site: unknown): boolean {
+  if (!site || typeof site !== "object") return false;
+  const s = site as Record<string, unknown>;
+  return subscriptionHasEnded({
+    status: readSubscriptionStatus(site),
+    cancelAtPeriodEnd: (s.subscriptionCancelAtPeriodEnd ??
+      s.subscription_cancel_at_period_end ??
+      s.cancelAtPeriodEnd ??
+      s.cancel_at_period_end ??
+      null) as boolean | number | null,
+    currentPeriodEnd: (s.subscriptionCurrentPeriodEnd ??
+      s.subscription_current_period_end ??
+      s.currentPeriodEnd ??
+      null) as string | null,
+  });
+}
+
+/**
  * True when this site should be treated as lapsed.
  *
  * Checked **per site**. Subscriptions are per-site licences, so a customer can have one

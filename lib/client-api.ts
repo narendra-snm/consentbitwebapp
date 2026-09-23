@@ -899,6 +899,44 @@ export async function cancelSubscription(payload: {
 }
 // subscription cancel ends here
 
+/**
+ * Undo a scheduled cancellation — the same subscription keeps renewing (no new checkout,
+ * same billing date and saved card).
+ *
+ * Unlike the other calls here this one does NOT throw on a refusal: the two failure modes
+ * carry meaning the caller has to act on, and an Error would flatten them into a message.
+ *   409 { ended: true }    → Stripe has fully cancelled it; only a new checkout brings the
+ *                            plan back, so the UI offers "Subscribe now" instead.
+ *   404 { notFound: true } → the subscription isn't visible to billing; needs support, so
+ *                            the UI must stop offering a button that cannot work.
+ * Network/parse failures still throw.
+ */
+export async function resumeSubscription(payload: {
+  subscriptionId?: string | null;
+  stripeSubscriptionId?: string | null;
+}): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  ended?: boolean;
+  notFound?: boolean;
+  cancelAtPeriodEnd?: boolean;
+  status?: string;
+  currentPeriodEnd?: string | null;
+}> {
+  const res = await fetch("/api/subscriptions/resume", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok && !data.error) {
+    return { success: false, error: `Resume subscription failed: ${res.status}` };
+  }
+  return data as Awaited<ReturnType<typeof resumeSubscription>>;
+}
+
 export async function activateLicenseWebflow(payload: {
   licenseKey: string;
   domain: string;
