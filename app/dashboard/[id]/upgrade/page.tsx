@@ -789,7 +789,7 @@ export default function PricingTable() {
             proceedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 50);
         }}
-        className={`px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
+        className={`whitespace-nowrap px-6 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed
         ${
           isSelected
             ? "bg-green-500"
@@ -798,7 +798,12 @@ export default function PricingTable() {
             : "bg-[#007aff]"
         }`}
       >
-        {isSelected ? "Selected" : "Switch plan"}
+        {/* A lapsed site is starting a NEW subscription, not switching an existing one —
+            and it genuinely gets the 14-day trial again: isSiteTrialIneligible returns
+            false unless TRIAL_RESTRICT_RETURNING_SITES is "on", which it is not in either
+            environment (decided 2026-09-18). So the label is a promise checkout keeps.
+            If that var is ever switched on, this text must change with it. */}
+        {isSelected ? "Selected" : lapsed ? "14 days free trial" : "Switch plan"}
       </button>
     );
   };
@@ -1161,10 +1166,13 @@ function redirectToDashboard() {
 
       <div className="max-w-[1292px] w-full bg-white  overflow-hidden">
 
-        {/* LAPSED NOTICE — the subscription behind this site is terminal in Stripe, so it
-            cannot be resumed. Picking a plan below starts a NEW subscription; the site keeps
-            its existing script tag, so nothing needs changing on the customer's website. */}
-        {lapsed && (
+        {/* LAPSED NOTICE — shown ONLY while the plan is still running out
+            (`planActiveUntil`), i.e. a scheduled cancellation with time left: "stays active
+            until <date>" is information the customer acts on.
+            Once the plan has actually ended the notice is suppressed: the grid already says
+            it by showing no current plan and offering every tier, so the banner only
+            restated it in alarming language. */}
+        {lapsed && planActiveUntil && (
           <div className="mx-9 mt-6 rounded-[14px] border border-[#f59e0b]/30 bg-[#fffbeb] px-5 py-4">
             <div className="text-[15px] font-semibold text-[#92400e]">
               {(() => {
@@ -1288,7 +1296,12 @@ function redirectToDashboard() {
           <div className="p-4 border-t border-[#000000]/10"></div>
 
           <div className="p-4 border-t border-[#000000]/10">
-            {currentTier === "free" ? (
+            {/* `!lapsed`: a site whose subscription ended is routed as "free" so checkout
+                runs, but it is NOT on the Free plan — marking this column "Current Plan"
+                told a customer whose Growth plan had just ended that Free was what they
+                had. When the plan is gone, no column is current; every paid tier offers
+                Switch plan, which is the action they need. */}
+            {currentTier === "free" && !lapsed ? (
               <CurrentPlanButton />
             ) : null}
           </div>

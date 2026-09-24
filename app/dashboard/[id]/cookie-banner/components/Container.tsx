@@ -29,6 +29,7 @@ import {
 import { TRANSLATIONS, LANGUAGE_OPTIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
+import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { analytics } from "@/lib/analytics";
@@ -924,8 +925,18 @@ export default function page({ siteId }: { siteId: string }) {
     applyPersistSuccessState();
   };
 
+  // A site whose own plan has ended is read-only: its banner is no longer served, so
+  // there is nothing for an edit to take effect on. The worker enforces this and returns
+  // 402 SUBSCRIPTION_ENDED; checking here too means the customer is told why up front
+  // instead of losing their edits to a generic "something went wrong".
+  const subEnded = siteSubscriptionHasEnded(site);
+
   const handleSaveChanges = async () => {
     if (!site?.id || !hasUnsavedChanges) return;
+    if (subEnded) {
+      setPublishError("Your plan has ended, so the banner can no longer be edited. Choose a plan to start again.");
+      return;
+    }
     try {
       setPersistKind("save");
       setSavingContent(true);

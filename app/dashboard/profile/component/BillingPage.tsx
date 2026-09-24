@@ -1048,7 +1048,10 @@ export default function BillingPage({
           </div>
 
           {/* Billing interval toggle — only for active paid subs with a known interval */}
-          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && (
+          {/* `!periodHasEnded` as well as `!isCancelled`: a 'deleted'/'unpaid' subscription
+              has no cancelAtPeriodEnd, so it would otherwise still offer a monthly/yearly
+              switch — a Stripe call that can only fail on a plan that no longer exists. */}
+          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && !periodHasEnded && (
             <div className="pt-3 pb-3 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <p className="text-[14px] font-normal text-[#6b7280]">Billing Period</p>
@@ -1100,15 +1103,30 @@ export default function BillingPage({
                 {periodHasEnded ? "Subscribe Now" : upgradeCta}
               </button>
             )}
-            {isCancelled && periodHasEnded ? (
+            {/* `periodHasEnded` alone, NOT `isCancelled && periodHasEnded`: a 'deleted'
+                (or 'unpaid' / 'incomplete_expired') subscription never has
+                cancelAtPeriodEnd set, so requiring isCancelled sent it to the Cancel
+                branch below — offering "Cancel Subscription" on a plan that is already
+                gone, which Stripe rejects outright. */}
+            {periodHasEnded ? (
               // Over, not ending. There is nothing to resume — the only way back is a new
               // subscription, which the Upgrade button beside this already offers.
               <div className="flex-1 min-h-[36px] flex items-center justify-center gap-1.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-4">
                 <span className="w-2 h-2 rounded-full bg-[#9ca3af] flex-shrink-0" />
                 <span className="text-[13px] font-medium text-[#6b7280]">
-                  Ended {cancelDate
-                    ? new Date(cancelDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                    : ""}
+                  {/* The date is printed only when it is actually in the past. A
+                      subscription cancelled immediately keeps the period it died inside,
+                      so a not-yet-reconciled row can carry a FUTURE currentPeriodEnd —
+                      and "Ended May 22, 2027" is worse than no date at all. The state is
+                      correct either way; this only suppresses a date we can't stand
+                      behind. Reconciled rows (stripeWebhook.js, or ?fixEnded=true) carry
+                      the real end and do show it. */}
+                  Ended {(() => {
+                    const ms = cancelDate ? Date.parse(String(cancelDate).replace(" ", "T")) : NaN;
+                    return Number.isFinite(ms) && ms <= Date.now()
+                      ? new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "";
+                  })()}
                 </span>
               </div>
             ) : isCancelled ? (

@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboardSession } from '../../DashboardSessionProvider';
-import { cancelSubscription, activateLicenseWebflow } from '@/lib/client-api';
+import { cancelSubscription, resumeSubscription, activateLicenseWebflow } from '@/lib/client-api';
+import { isImmediatelyDeadStatus, readSubscriptionStatus } from '@/lib/subscription-state';
 import ErrorPopup from '../../components/ErrorPopup';
 import LoadingPopup2 from '../../[id]/scan/component/LoadingPopup';
 
@@ -178,6 +179,12 @@ export function DomainManagementDashboard() {
     return () => clearTimeout(t);
   }, [cancelSuccess]);
   const [confirmDomain, setConfirmDomain] = useState<Domain | null>(null);
+  // Resume = undo a scheduled cancellation on the SAME subscription (no new checkout).
+  // Only offered while the row reads "Cancelling" — once the period is over Stripe has
+  // fully cancelled it and only a new checkout can bring the plan back.
+  const [confirmResumeDomain, setConfirmResumeDomain] = useState<Domain | null>(null);
+  const [resumeSuccess, setResumeSuccess] = useState(false);
+  const [showResumeLoading, setShowResumeLoading] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignStep, setAssignStep] = useState<'input' | 'script'>('input');
   const [assignDomain, setAssignDomain] = useState('');
@@ -232,19 +239,28 @@ export function DomainManagementDashboard() {
         site?.subscriptionStatus === 'canceled' ||
         site?.subscription_status === 'canceled';
 
+      // 'deleted' / 'unpaid' / 'incomplete_expired' are over the moment they appear and
+      // keep whatever period date they died with, so they can't be judged by the date.
+      // Without this they matched none of the tests above — `cancelAtPeriodEnd` is never
+      // set for them either — and fell through to 'Active', showing a dead site as
+      // healthy while cdnM.js had already switched its banner off.
+      const immediatelyDead = isImmediatelyDeadStatus(readSubscriptionStatus(site));
+
       const subscriptionEnd = site?.subscriptionCurrentPeriodEnd ?? site?.subscription_current_period_end ??
         site?.currentPeriodEnd ?? site?.current_period_end ?? site?.nextRenewal ?? site?.next_renewal ?? null;
       const expTs = subscriptionEnd ? new Date(subscriptionEnd).getTime() : 0;
       const periodExpired = nowMs > 0 && expTs > 0 && expTs < nowMs;
 
       const status: DomainStatus =
-        (cancelAtPeriodEnd || explicitlyCancelled) && !periodExpired
-          ? 'Cancelling'
-          : (cancelAtPeriodEnd || explicitlyCancelled) && periodExpired
-            ? 'Expired'
-            : !verified
-              ? 'Inactive'
-              : 'Active';
+        immediatelyDead
+          ? 'Cancelled'
+          : (cancelAtPeriodEnd || explicitlyCancelled) && !periodExpired
+            ? 'Cancelling'
+            : (cancelAtPeriodEnd || explicitlyCancelled) && periodExpired
+              ? 'Expired'
+              : !verified
+                ? 'Inactive'
+                : 'Active';
 
       const rawInterval = site?.interval ?? site?.billing_interval ?? site?.subscriptionInterval ?? site?.subscription_interval ?? null;
       const rawPlan = site?.planId ?? site?.plan_id ?? site?.subscription_plan ?? site?.plan ?? 'free';
@@ -365,6 +381,52 @@ export function DomainManagementDashboard() {
     }
   };
 
+  const handleResumeSubscription = (domain: Domain) => {
+    setConfirmResumeDomain(domain);
+  };
+
+  const confirmResume = async () => {
+    if (!confirmResumeDomain) return;
+    const domain = confirmResumeDomain;
+    setConfirmResumeDomain(null);
+    setActionError(null);
+    setResumeSuccess(false);
+    setActionLoadingId(domain.id);
+    setShowResumeLoading(true);
+    try {
+      const res = await resumeSubscription({
+        subscriptionId: domain.subscriptionId,
+        stripeSubscriptionId: domain.stripeSubscriptionId,
+      });
+      if (!res?.success) {
+        // `ended` and `notFound` are refusals, not transport failures — resumeSubscription
+        // returns them rather than throwing, so surface the worker's message as-is. A
+        // refresh still follows for `ended`: the worker reconciles D1 against Stripe, so
+        // the row flips from "Cancelling" to "Cancelled" and stops offering Resume.
+        setActionError(res?.error || 'Failed to resume subscription');
+        if (res?.ended) await refresh({ showLoading: false });
+        return;
+      }
+      // Optimistically clear the cancellation — the mirror of confirmCancel's patch, so
+      // the status pill drops back to "Active" without waiting for the refresh.
+      updateSiteInState({
+        id: domain.id,
+        _optimisticCancelled: false,
+        cancelAtPeriodEnd: 0,
+        cancel_at_period_end: 0,
+        subscriptionCancelAtPeriodEnd: 0,
+        subscription_cancel_at_period_end: 0,
+      });
+      await refresh({ showLoading: false });
+      setResumeSuccess(true);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Failed to resume subscription');
+    } finally {
+      setActionLoadingId(null);
+      setShowResumeLoading(false);
+    }
+  };
+
   const closeAssignModal = () => {
     if (assignLoading || verifying) return;
     setShowAssignModal(false);
@@ -439,6 +501,12 @@ export function DomainManagementDashboard() {
         subtitle="Please wait while we process your request"
       />
 
+      <LoadingPopup2
+        show={showResumeLoading}
+        title="Resuming Subscription"
+        subtitle="Please wait while we process your request"
+      />
+
       {actionError && (
         <ErrorPopup message={actionError} onClose={() => setActionError(null)} />
       )}
@@ -462,6 +530,64 @@ export function DomainManagementDashboard() {
           </button>
         </div>
       )}
+      {resumeSuccess && (
+        <div
+          className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] flex items-center justify-between gap-4 rounded-xl px-5 py-3.5 shadow-lg w-full max-w-[600px]"
+          style={{ background: "linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)" }}
+          role="alert"
+        >
+          <div className="flex items-center gap-3">
+            <img src="/asset/Success-icon.png" alt="Success" width={28} height={28} className="shrink-0" />
+            <span className="text-white font-medium text-sm">Subscription resumed — it will keep renewing as normal</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setResumeSuccess(false)}
+            className="shrink-0 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium px-4 py-1.5 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {confirmResumeDomain && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmResumeDomain(null)} />
+          <div className="relative w-full max-w-[420px] rounded-2xl bg-white shadow-xl p-7" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-[#0a091f] mb-2" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              Resume Subscription
+            </h2>
+            <p className="text-sm text-[#4b5563] leading-relaxed mb-7" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+              The subscription for{' '}
+              <span className="font-semibold text-[#0a091f]">{confirmResumeDomain.url}</span>{' '}
+              will keep renewing as normal
+              {confirmResumeDomain.expirationDate && confirmResumeDomain.expirationDate !== 'Not available'
+                ? <> — your saved card will be charged on <span className="font-semibold text-[#0a091f]">{confirmResumeDomain.expirationDate}</span></>
+                : null}.
+              No new checkout, and nothing is charged today.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmResumeDomain(null)}
+                className="rounded-lg border border-[#e5e7eb] px-5 py-2.5 text-sm text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                style={{ fontFamily: 'DM Sans, sans-serif' }}
+              >
+                Not Now
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmResume()}
+                className="rounded-lg bg-[#007AFF] px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                style={{ fontFamily: 'DM Sans, sans-serif' }}
+              >
+                Yes, Resume
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDomain && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDomain(null)} />
@@ -472,7 +598,8 @@ export function DomainManagementDashboard() {
             <p className="text-sm text-[#4b5563] leading-relaxed mb-7" style={{ fontFamily: 'DM Sans, sans-serif' }}>
               Are you sure you want to cancel the subscription for{' '}
               <span className="font-semibold text-[#0a091f]">{confirmDomain.url}</span>?
-              This action cannot be undone.
+              The plan stays active until the end of the current billing period. You can
+              resume it from this menu any time before then.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -711,6 +838,7 @@ export function DomainManagementDashboard() {
             { label: 'All statuses', value: 'all' },
             { label: 'Active', value: 'Active' },
             { label: 'Cancelling', value: 'Cancelling' },
+            { label: 'Cancelled', value: 'Cancelled' },
             { label: 'Expired', value: 'Expired' },
             { label: 'Inactive', value: 'Inactive' },
           ]}
@@ -912,11 +1040,35 @@ export function DomainManagementDashboard() {
                       </span>
                     </button>
                   )}
-                  {!domain.isUnassigned && (
+                  {/* A row that is still "Cancelling" is inside its paid period, so the
+                      cancellation can still be undone on the SAME subscription — that is
+                      the only useful action here, and it replaces Cancel rather than
+                      sitting next to it greyed out. "Cancelled"/"Expired" fall through to
+                      the disabled Cancel item below: their period is over, Stripe can no
+                      longer resume them, and only a new checkout brings the plan back. */}
+                  {!domain.isUnassigned && domain.status === 'Cancelling' && (
                   <button
                     type="button"
-                    disabled={['Cancelling', 'Cancelled', 'Expired'].includes(domain.status) || actionLoadingId === domain.id}
-                    onClick={() => { if (['Cancelling', 'Cancelled', 'Expired'].includes(domain.status)) return; setOpenMenuId(null); void handleCancelSubscription(domain); }}
+                    disabled={actionLoadingId === domain.id}
+                    onClick={() => { setOpenMenuId(null); void handleResumeSubscription(domain); }}
+                    className="flex items-center gap-[8px] py-[6px] px-[8px] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#f0f7ff] disabled:hover:bg-transparent"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M20 12a8 8 0 11-2.34-5.66M20 4v4h-4" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span
+                      className="text-[#1d4ed8] text-[13px] tracking-[-0.5px] whitespace-nowrap"
+                      style={{ fontFamily: 'DM Sans, sans-serif', fontWeight: 400, fontVariationSettings: "'opsz' 14" }}
+                    >
+                      {actionLoadingId === domain.id ? 'Resuming…' : 'Resume Subscription'}
+                    </span>
+                  </button>
+                  )}
+                  {!domain.isUnassigned && domain.status !== 'Cancelling' && (
+                  <button
+                    type="button"
+                    disabled={['Cancelled', 'Expired'].includes(domain.status) || actionLoadingId === domain.id}
+                    onClick={() => { if (['Cancelled', 'Expired'].includes(domain.status)) return; setOpenMenuId(null); void handleCancelSubscription(domain); }}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#fff0f0] disabled:hover:bg-transparent"
                   >
                     <svg width="14" height="14" viewBox="0 0 8 8" fill="none">

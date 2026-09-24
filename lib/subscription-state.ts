@@ -31,6 +31,46 @@ export const TERMINAL_STATUSES = new Set([
  */
 export const ENTITLED_STATUSES = new Set(["active", "trialing", "past_due"]);
 
+/**
+ * Terminal statuses that carry no meaningful paid-through date — the plan is over the
+ * moment the status appears, whatever `currentPeriodEnd` still says.
+ *
+ * `canceled`/`cancelled` ARE here, which is not obvious. A *scheduled* cancellation never
+ * carries this status while it runs: `cancelSubscription.js` writes `status:'active'` with
+ * `cancelAtPeriodEnd:1`, and the row only becomes 'canceled' when Stripe fires
+ * `customer.subscription.deleted`. So 'canceled' always means Stripe has already ended it,
+ * and a future `currentPeriodEnd` under it is stale data, never entitlement — which is
+ * exactly what an immediate cancellation leaves behind (Stripe keeps the period the
+ * subscription died inside; see the `ended_at` handling in stripeWebhook.js).
+ *
+ * The rest are unambiguous: `deleted` is written by syncEvent.js when the plan is gone,
+ * `unpaid` is what Stripe leaves behind after dunning is exhausted, and
+ * `incomplete_expired` never started. The banner blocks those three outright
+ * (ALWAYS_BLOCKED_STATUSES in cdnM.js); this is what stops the dashboard from showing
+ * such a site as healthy while its banner is switched off.
+ *
+ * NOTE: the banner's own rule still serves a 'canceled' row until `currentPeriodEnd`
+ * (BLOCKED_AFTER_PERIOD_STATUSES in cdnM.js). On correct data that date is always in the
+ * past, so the two agree; on a stale row the banner is the more permissive of the two.
+ *
+ * `past_due` is intentionally excluded even though cdnM.js blocks it: the customer is
+ * inside dunning, Stripe can still recover the payment, and treating them as ended would
+ * lock a recoverable account out of its own billing screens. See ENTITLED_STATUSES.
+ */
+export const IMMEDIATELY_DEAD_STATUSES = new Set([
+  "canceled",
+  "cancelled",
+  "deleted",
+  "unpaid",
+  "incomplete_expired",
+]);
+
+/** True when the status means the plan is already over, with no date to wait for. */
+export function isImmediatelyDeadStatus(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return IMMEDIATELY_DEAD_STATUSES.has(String(status).trim().toLowerCase());
+}
+
 export type AccountState = "active" | "lapsed" | "free";
 
 /** Reads the per-site subscription status sent by dashboard-init (snake and camel). */
@@ -58,21 +98,33 @@ export function isLapsed(site: unknown): boolean {
 }
 
 /**
- * For a cancelled subscription still inside its paid period, the date it stops.
- * Otherwise null.
+ * For a cancellation that is still inside its paid period, the date it stops.
+ * Otherwise null. Drives the "your plan was cancelled and stays active until <date>"
+ * notice — a promise we must only make when it is true.
  *
- * Mirrors the rule used by both the dashboard (`getSubscriptionsBySiteIds`, which keeps a
- * cancelled subscription's plan until `currentPeriodEnd`) and the banner gate (cdnM.js,
- * which serves until the same date). `deleted` never qualifies — it is blocked outright.
+ * Keyed on `cancelAtPeriodEnd`, NOT on a 'canceled' status. That is the only signal that
+ * means "cancelled but still owed service": `cancelSubscription.js` sets it while leaving
+ * `status:'active'`. A 'canceled' status means Stripe has already ended the subscription,
+ * so there is nothing left to stay active — and because an immediate cancellation keeps
+ * the period it died inside, such a row can carry a future date that is stale rather than
+ * owed. Reading the status was what told a customer their plan ran until October when
+ * Stripe had ended it in September.
+ *
+ * `subscriptionHasEnded` is consulted first so any terminal status short-circuits to null
+ * regardless of the stored date.
  *
  * This affects the *message* only. Routing still goes to checkout, because Stripe will not
  * let a cancelled subscription be changed in place even while its period runs.
  */
 export function activeUntil(site: unknown): Date | null {
   if (!site || typeof site !== "object") return null;
-  const status = readSubscriptionStatus(site);
-  if (status !== "canceled" && status !== "cancelled") return null;
+  if (siteSubscriptionHasEnded(site)) return null;
   const s = site as Record<string, unknown>;
+  const scheduled = Boolean(
+    s.subscriptionCancelAtPeriodEnd ?? s.subscription_cancel_at_period_end ??
+    s.cancelAtPeriodEnd ?? s.cancel_at_period_end ?? false,
+  );
+  if (!scheduled) return null;
   const raw = s.subscriptionCurrentPeriodEnd ?? s.subscription_current_period_end ?? s.currentPeriodEnd;
   if (raw == null) return null;
   // Rows mix ISO strings and SQLite datetimes ("2026-09-25 21:12:39") — normalise first.
@@ -110,6 +162,11 @@ export function subscriptionHasEnded(input: {
   currentPeriodEnd?: string | Date | null;
 } | null | undefined): boolean {
   if (!input) return false;
+  // Dead the moment the status appears — no date to wait for. Checked BEFORE the date
+  // logic below, because these rows keep whatever `currentPeriodEnd` they had when they
+  // died: a subscription deleted immediately still carries a future date, which would
+  // otherwise read as "cancelled, still running until <date>".
+  if (isImmediatelyDeadStatus(input.status)) return true;
   const raw = input.currentPeriodEnd;
   if (raw == null) return false;
   // Rows mix ISO strings and SQLite datetimes ("2026-09-25 21:12:39") — normalise first.
