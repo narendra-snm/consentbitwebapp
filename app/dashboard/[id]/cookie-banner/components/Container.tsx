@@ -29,6 +29,7 @@ import { TRANSLATIONS, LANGUAGE_OPTIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import InstallConsentModal from "../../../components/InstallConsentModal";
+import ErrorPopup from "../../../components/ErrorPopup";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { analytics } from "@/lib/analytics";
 
@@ -133,11 +134,9 @@ export default function page({ siteId }: { siteId: string }) {
   /** Google Additional Consent (AC) — only meaningful when IAB is enabled. */
   const [googleAcEnabled, setGoogleAcEnabled] = useState(false);
 
-  useEffect(() => {
-    if (!publishError) return;
-    const t = setTimeout(() => setPublishError(null), 3000);
-    return () => clearTimeout(t);
-  }, [publishError]);
+  // Dismissal is ErrorPopup's job now. Keeping a 3s timer here as well would clear the
+  // message out from under it and cap every error at 3 seconds — too short to read
+  // something like "Your plan has ended, so the banner can no longer be edited."
 
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
@@ -825,6 +824,24 @@ export default function page({ siteId }: { siteId: string }) {
     refresh,
   ]);
 
+  /**
+   * Prefer what the server actually said.
+   *
+   * saveBannerCustomization() throws `new Error(data.error || ...)` (lib/client-api.ts),
+   * so a refusal arrives here carrying its own explanation — but both handlers used to
+   * discard it for "Something went wrong, please try again". For the one refusal a
+   * customer is most likely to hit, an ended plan (HTTP 402, SUBSCRIPTION_ENDED), that
+   * advice is actively wrong: retrying can never succeed, and the real message tells them
+   * exactly what to do instead. Fall back to the generic line only for a genuinely
+   * unexplained failure, e.g. the network dropping.
+   */
+  const messageFor = (e: unknown, action: "saving" | "publishing") => {
+    const msg = e instanceof Error ? e.message?.trim() : "";
+    // A bare "…failed: 500" is the client's own fallback, not something worth showing.
+    if (msg && !/failed:\s*\d+$/i.test(msg)) return msg;
+    return `Something went wrong while ${action}. Please try again.`;
+  };
+
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
     const snap = currentRegulationSnapshot;
@@ -934,7 +951,7 @@ export default function page({ siteId }: { siteId: string }) {
       await persistBannerCustomization();
       setSaveSuccess(true);
     } catch (e) {
-      setPublishError("Something went wrong while saving. Please try again.");
+      setPublishError(messageFor(e, "saving"));
     } finally {
       setSavingContent(false);
       setPersistKind(null);
@@ -959,7 +976,7 @@ export default function page({ siteId }: { siteId: string }) {
         analytics.bannerPublished(String(site.id), site.domain ?? undefined, phBannerType);
       } catch { /* analytics must never block publish */ }
     } catch (e) {
-      setPublishError("Something went wrong while publishing. Please try again.");
+      setPublishError(messageFor(e, "publishing"));
     } finally {
       setSavingContent(false);
       setPersistKind(null);
@@ -1051,6 +1068,19 @@ export default function page({ siteId }: { siteId: string }) {
 
   return (
     <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
+      {/* Save/publish failures use the dashboard's standard error toast, the same one the
+          scan page and domain list already use. They previously rendered in a 260px inline
+          box beside the Publish button, which was fine for a short line but wrapped a real
+          message like "Your plan has ended…" to three lines and crowded the Next button.
+          Top-centre, 600px, auto-dismissing — consistent with the rest of the dashboard. */}
+      {publishError && (
+        <ErrorPopup
+          message={publishError}
+          onClose={() => setPublishError(null)}
+          // Longer than the 3s default: these are sentences to act on, not confirmations.
+          duration={6000}
+        />
+      )}
       <Sidebar
         active={active}
         setActive={setActive}
@@ -1589,7 +1619,9 @@ export default function page({ siteId }: { siteId: string }) {
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
         publishDisabled={!mounted || !site?.id || savingContent}
-        publishError={publishError}
+        // publishError is deliberately NOT passed: it now renders as the dashboard's
+        // standard ErrorPopup above. Passing it as well would show the same message twice,
+        // once in the toast and once in ConsentPreview's own inline box.
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
         onNext={isWebflowSite ? undefined : () => setShowInstallModal(true)}
