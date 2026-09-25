@@ -827,6 +827,24 @@ export default function page({ siteId }: { siteId: string }) {
     refresh,
   ]);
 
+  /**
+   * Prefer what the server actually said.
+   *
+   * saveBannerCustomization() throws `new Error(data.error || ...)` (lib/client-api.ts),
+   * so a refusal arrives here carrying its own explanation — but both handlers used to
+   * discard it for "Something went wrong, please try again". For the one refusal a
+   * customer is most likely to hit, an ended plan (HTTP 402, SUBSCRIPTION_ENDED), that
+   * advice is actively wrong: retrying can never succeed, and the real message tells them
+   * exactly what to do instead. Fall back to the generic line only for a genuinely
+   * unexplained failure, e.g. the network dropping.
+   */
+  const messageFor = (e: unknown, action: "saving" | "publishing") => {
+    const msg = e instanceof Error ? e.message?.trim() : "";
+    // A bare "…failed: 500" is the client's own fallback, not something worth showing.
+    if (msg && !/failed:\s*\d+$/i.test(msg)) return msg;
+    return `Something went wrong while ${action}. Please try again.`;
+  };
+
   const persistBannerCustomization = async () => {
     if (!site?.id) return;
     const snap = currentRegulationSnapshot;
@@ -946,7 +964,7 @@ export default function page({ siteId }: { siteId: string }) {
       await persistBannerCustomization();
       setSaveSuccess(true);
     } catch (e) {
-      setPublishError("Something went wrong while saving. Please try again.");
+      setPublishError(messageFor(e, "saving"));
     } finally {
       setSavingContent(false);
       setPersistKind(null);
@@ -971,7 +989,7 @@ export default function page({ siteId }: { siteId: string }) {
         analytics.bannerPublished(String(site.id), site.domain ?? undefined, phBannerType);
       } catch { /* analytics must never block publish */ }
     } catch (e) {
-      setPublishError("Something went wrong while publishing. Please try again.");
+      setPublishError(messageFor(e, "publishing"));
     } finally {
       setSavingContent(false);
       setPersistKind(null);

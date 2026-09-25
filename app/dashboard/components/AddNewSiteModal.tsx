@@ -158,6 +158,29 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const hasExistingFreeSite = useMemo(() => {
     const rows = Array.isArray(sites) ? sites : [];
     return rows.some((site: any) => {
+      // A site whose plan cannot be resolved is NOT a free site.
+      //
+      // `planId` comes from the entitlement map, which deliberately drops a cancelled
+      // subscription once its paid period passes — so a site whose paid plan has ENDED
+      // arrives with no planId, identical to one that never had a plan. Defaulting that
+      // to "free" made every lapsed customer look like they already held their free site,
+      // and the free option was refused with "Free plan allows only one site."
+      //
+      // `subscriptionStatus` is the site's OWN latest subscription whatever its status
+      // (authDashboardInit reads it from getLatestSubscriptionsBySiteIds precisely so
+      // ended can be told apart from never-had-one). Any value at all means this site has
+      // had a subscription, so it is not the free one.
+      //
+      // NOTE: the Test worker must be deployed for this field to arrive — it was added to
+      // authDashboardInit on 2026-09-25 and the default env is behind. Until then this
+      // falls through to the old behaviour, which is no worse than before, not better.
+      const everHadSubscription = !!(
+        site?.subscriptionStatus ??
+        site?.subscription_status ??
+        null
+      );
+      if (everHadSubscription) return false;
+
       const raw =
         site?.planId ??
         site?.plan_id ??
