@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
 import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
 import InstallConsentModal from "../../../components/InstallConsentModal";
+import ErrorPopup from "../../../components/ErrorPopup";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { analytics } from "@/lib/analytics";
 
@@ -135,11 +136,9 @@ export default function page({ siteId }: { siteId: string }) {
   /** Google Additional Consent (AC) — only meaningful when IAB is enabled. */
   const [googleAcEnabled, setGoogleAcEnabled] = useState(false);
 
-  useEffect(() => {
-    if (!publishError) return;
-    const t = setTimeout(() => setPublishError(null), 3000);
-    return () => clearTimeout(t);
-  }, [publishError]);
+  // Dismissal is ErrorPopup's job now. Keeping a 3s timer here as well would clear the
+  // message out from under it and cap every error at 3 seconds — too short to read
+  // something like "Your plan has ended, so the banner can no longer be edited."
 
   /** Bump after successful publish so the preview remounts with latest `content` (avoids stale UI). */
   const [previewRevision, setPreviewRevision] = useState(0);
@@ -1081,6 +1080,17 @@ export default function page({ siteId }: { siteId: string }) {
 
   return (
     <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
+      {/* Save/publish failures use the dashboard's standard error toast, the same one the
+          scan page and domain list already use. Previously a 260px inline box beside the
+          Publish button, which wrapped a real message to three lines. */}
+      {publishError && (
+        <ErrorPopup
+          message={publishError}
+          onClose={() => setPublishError(null)}
+          // Longer than the 3s default: these are sentences to act on, not confirmations.
+          duration={6000}
+        />
+      )}
       <Sidebar
         active={active}
         setActive={setActive}
@@ -1627,7 +1637,9 @@ export default function page({ siteId }: { siteId: string }) {
         onPublishChanges={handlePublishChanges}
         publishBusy={savingContent && persistKind === "publish"}
         publishDisabled={!mounted || !site?.id || savingContent}
-        publishError={publishError}
+        // publishError is deliberately NOT passed: it now renders as the dashboard's
+        // standard ErrorPopup above. Passing it as well would show the same message twice,
+        // once in the toast and once in ConsentPreview's own inline box.
         publishSuccess={publishSuccess}
         onDismissPublishSuccess={dismissPublishSuccess}
         onNext={isWebflowSite ? undefined : () => setShowInstallModal(true)}
