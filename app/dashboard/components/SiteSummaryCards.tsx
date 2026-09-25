@@ -5,7 +5,6 @@ import Link from "next/link";
 import BouncyIcon from "./ui/BouncyIcon"
 import CookieAnimation from "./ui/CookieAnimation";
 import CircularArrow from "./ui/CircularArrow";
-import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
 
 
 export default function SiteSummaryCards({
@@ -28,21 +27,6 @@ export default function SiteSummaryCards({
   const displayName = site?.name || site?.domain || "—";
   const isVerified = site?.verified === 1 || site?.verified === true;
 
-  /**
-   * "Cookie banner status" was driven by `verified` alone — which only says the install
-   * code was detected once, not that the banner is still being served. A cancelled site
-   * whose paid period had passed therefore read "Active / Installation verified" while
-   * cdnM.js had stopped serving its banner days earlier.
-   *
-   * siteSubscriptionHasEnded is the shared rule (lib/subscription-state.ts) and is kept in
-   * step with the worker and the Designer app. Using it rather than a local check also
-   * picks up the cases a naive status+date test misses: a subscription deleted immediately
-   * keeps a FUTURE period end, and a scheduled cancellation is not dead until its date.
-   */
-  const planEnded = siteSubscriptionHasEnded(site);
-
-  // Serving requires both: the script installed AND a plan that still covers it.
-  const bannerLive = isVerified && !planEnded;
   const bannerType = (() => {
     const raw = String(site?.banner_type ?? site?.bannerType ?? "").trim().toLowerCase();
     if (raw === "iab") return "IAB";
@@ -101,10 +85,10 @@ export default function SiteSummaryCards({
 
         {/* Status Box */}
         <div
-          className={`${bannerLive ? "bg-[#ECFDF3]" : "bg-[#FFEFEF]"} col-span-2 rounded-lg py-3.75 px-3.5`}
+          className={`${isVerified ? "bg-[#ECFDF3]" : "bg-[#FFEFEF]"} col-span-2 rounded-lg py-3.75 px-3.5`}
         >
           <div className="flex gap-3">
-            <div className={`mt-1  ${bannerLive ? "text-emerald-600" : "text-[#AC2734]"}`}>
+            <div className={`mt-1  ${isVerified ? "text-emerald-600" : "text-[#AC2734]"}`}>
               <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect width="40" height="40" rx="8" fill="white"/>
                 <path d="M29.598 19.064C29.4777 18.9732 29.3384 18.9105 29.1906 18.8808C29.0428 18.851 28.8902 18.8548 28.744 18.892C28.5017 18.9597 28.2516 18.996 28 19C26.346 19 25 17.654 24.997 16.063C25.002 16.029 25.013 15.927 25.014 15.893C25.0205 15.7367 24.9902 15.581 24.9255 15.4385C24.8608 15.2961 24.7634 15.1708 24.6414 15.0729C24.5193 14.975 24.376 14.9072 24.2229 14.8749C24.0698 14.8426 23.9112 14.8467 23.76 14.887C23.5127 14.9575 23.2572 14.9955 23 15C21.346 15 20 13.654 20 12C20 11.783 20.031 11.556 20.099 11.284C20.1375 11.1287 20.1382 10.9665 20.101 10.8109C20.0638 10.6553 19.9899 10.511 19.8854 10.3899C19.7808 10.2688 19.6488 10.1746 19.5003 10.1151C19.3518 10.0556 19.1912 10.0326 19.032 10.048C16.5555 10.2788 14.255 11.4283 12.5835 13.2701C10.9119 15.1119 9.99028 17.5127 10 20C10 25.514 14.486 30 20 30C25.514 30 30 25.514 30 20C30 19.951 29.997 19.903 29.993 19.84C29.9897 19.6893 29.9524 19.5413 29.884 19.4069C29.8156 19.2726 29.7179 19.1554 29.598 19.064ZM20 28C15.589 28 12 24.411 12 20C11.9929 18.2233 12.5802 16.4952 13.6686 15.0908C14.7569 13.6865 16.2837 12.6865 18.006 12.25C18.0716 13.5307 18.6262 14.7375 19.5554 15.6213C20.4846 16.5051 21.7176 16.9986 23 17L23.101 16.999C23.3305 18.1172 23.9352 19.1235 24.8149 19.851C25.6947 20.5785 26.7966 20.9835 27.938 20.999C27.444 24.941 24.073 28 20 28Z" fill="currentColor"/>
@@ -117,8 +101,8 @@ export default function SiteSummaryCards({
             </div>
             <div>
               <p className="text-sm ">Cookie banner status</p>
-              <p className={`font-medium text-xl mt-1 flex items-center gap-1 ${bannerLive ? "text-emerald-600" : "text-[#AC2734]"}`}>
-                {bannerLive ? "Active" : "Inactive"} <CircularArrow/>
+              <p className={`font-medium text-xl mt-1 flex items-center gap-1 ${isVerified ? "text-emerald-600" : "text-[#AC2734]"}`}>
+                {isVerified ? "Active" : "Inactive"} <CircularArrow/>
               </p>
             </div>
           </div>
@@ -127,11 +111,7 @@ export default function SiteSummaryCards({
               <path d="M5.25 2.91667H6.41667V7H5.25V2.91667ZM5.25 7.58333H6.41667V8.75H5.25V7.58333Z" fill="black"/>
               <path d="M11.4958 3.08758L8.57908 0.170917C8.52501 0.116642 8.46073 0.0735995 8.38995 0.0442665C8.31917 0.0149334 8.24328 -0.000110512 8.16667 6.11143e-07H3.5C3.42338 -0.000110512 3.3475 0.0149334 3.27672 0.0442665C3.20594 0.0735995 3.14166 0.116642 3.08758 0.170917L0.170917 3.08758C0.116642 3.14166 0.0735995 3.20594 0.0442665 3.27672C0.0149334 3.3475 -0.000110512 3.42338 6.11143e-07 3.5V8.16667C6.11143e-07 8.32183 0.0612506 8.47 0.170917 8.57908L3.08758 11.4958C3.14166 11.55 3.20594 11.5931 3.27672 11.6224C3.3475 11.6517 3.42338 11.6668 3.5 11.6667H8.16667C8.32183 11.6667 8.47 11.6054 8.57908 11.4958L11.4958 8.57908C11.55 8.52501 11.5931 8.46073 11.6224 8.38995C11.6517 8.31917 11.6668 8.24328 11.6667 8.16667V3.5C11.6668 3.42338 11.6517 3.3475 11.6224 3.27672C11.5931 3.20594 11.55 3.14166 11.4958 3.08758ZM10.5 7.92517L7.92517 10.5H3.7415L1.16667 7.92517V3.7415L3.7415 1.16667H7.92517L10.5 3.7415V7.92517Z" fill="black"/>
             </svg>
-            {/* An ended plan needs its own line: the install code IS present, so telling
-                them to add it would send them chasing the wrong problem. */}
-            {planEnded ? (
-              <>Your plan has ended, so the<br /> banner is no longer served</>
-            ) : isVerified ? (
+            {isVerified ? (
               <>Installation verified</>
             ) : (
               <>
