@@ -20,6 +20,13 @@ type DashboardSessionState = {
   organizations: any[];
   sites: any[];
   effectivePlanId: string;
+  /**
+   * Status of the subscription behind `effectivePlanId` (from dashboard-init).
+   * `getEffectivePlanForOrganization` falls back to ANY subscription when none is active,
+   * so `effectivePlanId` can be "basic" from a cancelled one — this is how callers tell
+   * the difference. null when unknown (older worker build) → treat as not lapsed.
+   */
+  effectivePlanStatus: string | null;
   activeOrganizationId: string | null;
   activeSiteId: string | null;
 };
@@ -180,6 +187,9 @@ export function DashboardSessionProvider({
         organizations: orgs,
         sites,
         effectivePlanId: String(activeSitePlanId ?? seed.effectivePlanId ?? "").trim().toLowerCase() || "",
+        effectivePlanStatus: seed.effectivePlanStatus != null
+          ? String(seed.effectivePlanStatus).trim().toLowerCase() || null
+          : null,
         activeOrganizationId: activeOrgId,
         activeSiteId: activeSite?.id ? String(activeSite.id) : null,
       };
@@ -194,6 +204,7 @@ export function DashboardSessionProvider({
       organizations: [],
       sites: [],
       effectivePlanId: "",
+      effectivePlanStatus: null,
       activeOrganizationId: null,
       activeSiteId: null,
     };
@@ -224,7 +235,7 @@ export function DashboardSessionProvider({
         } catch { /* ignore */ }
         const unauthState: DashboardSessionState = {
           loading: false, authenticated: false, user: null,
-          organizations: [], sites: [], effectivePlanId: "",
+          organizations: [], sites: [], effectivePlanId: "", effectivePlanStatus: null,
           activeOrganizationId: null, activeSiteId: null,
         };
         setStateAndRef(unauthState);
@@ -299,6 +310,9 @@ export function DashboardSessionProvider({
         loading: false, authenticated: true,
         user: data?.user ?? null, organizations: orgs, sites,
         effectivePlanId: resolvedPlanId,
+        effectivePlanStatus: data?.effectivePlanStatus != null
+          ? String(data.effectivePlanStatus).trim().toLowerCase() || null
+          : null,
         activeOrganizationId: activeOrgId,
         activeSiteId: resolvedActiveSiteId ? String(resolvedActiveSiteId) : null,
       };

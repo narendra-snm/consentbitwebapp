@@ -7,6 +7,7 @@ import {
   getBillingSummary,
   createBillingPortalSession,
   cancelSubscription,
+  resumeSubscription,
   switchBillingInterval,
   previewSwitchInterval,
   renameSite,
@@ -24,6 +25,7 @@ import {
   validateManageDomain,
   deriveSiteNameFromDomain,
 } from "@/lib/site-manage-helpers";
+import { readSubscriptionStatus, subscriptionHasEnded } from "@/lib/subscription-state";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../DashboardSessionProvider";
 import BillingDetailsCard from "./BillingDetailsCard";
@@ -122,6 +124,16 @@ export default function BillingPage({
     return () => clearTimeout(t);
   }, [cancelError]);
 
+  // Resume = undo a scheduled cancellation on the SAME subscription (no new checkout).
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  // Definite outcome of a failed resume, so the card stops offering a button that just
+  // failed: 'ended' = Stripe confirms it's over (offer Subscribe now — no running plan left
+  // to double-charge); 'notFound' = billing can't find it (contact support, no buttons).
+  // Unlike cancelError this is NOT auto-dismissed — it changes what the card may offer.
+  const [resumeOutcome, setResumeOutcome] = useState<"ended" | "notFound" | null>(null);
+
   /** Site selected in header (or first site) — editable registered URL on the plan card */
   const [planSiteDomain, setPlanSiteDomain] = useState("");
   const [planSiteError, setPlanSiteError] = useState<string | null>(null);
@@ -173,6 +185,25 @@ export default function BillingPage({
     activeSiteData?.nextRenewal ||
     activeSiteData?.next_renewal ||
     null;
+
+  // Whether the paid period is actually OVER, as opposed to a cancellation still running
+  // out. `isCancelled` cannot tell the two apart: the worker forces cancelAtPeriodEnd true
+  // for a 'canceled' status, so a plan that ended months ago looks identical to one that
+  // ends next week. The distinction decides which way back we offer — Resume (same
+  // subscription) while it still runs, a fresh checkout only once it's over. Subscribing
+  // during the paid period would start a SECOND subscription and charge twice for the
+  // overlap; the checkout's double-billing guard only catches an active plan, not a
+  // cancelled one.
+  //
+  // `|| resumeOutcome === "ended"`: Stripe can know the plan is over while our stored end
+  // date is still in the future (a subscription cancelled immediately keeps its old date).
+  // Once a Resume attempt gets that answer, treat it as ended everywhere on this card.
+  const periodHasEnded =
+    subscriptionHasEnded({
+      status: readSubscriptionStatus(activeSiteData),
+      cancelAtPeriodEnd: isCancelled,
+      currentPeriodEnd: cancelDate as string | null,
+    }) || resumeOutcome === "ended";
 
   // Filter state
   const [filterYear, setFilterYear]     = useState<string>("all");
@@ -521,6 +552,65 @@ export default function BillingPage({
     }
   };
 
+  // Undo the scheduled cancellation. On success the "Cancels <date>" pill disappears
+  // (cancelAtPeriodEnd goes false in both the summary and session state) and the Cancel
+  // button comes back. Failures keep the cancelled state and show inside the card.
+  const handleResumeSubscription = async () => {
+    const subId = summary?.stripeSubscriptionId ?? summary?.subscriptionId ?? null;
+    if (!subId && !organizationId) {
+      setResumeError("Could not identify your subscription. Please refresh and try again.");
+      return;
+    }
+    setResumeLoading(true);
+    setResumeError(null);
+    try {
+      const res = await resumeSubscription(
+        subId ? { stripeSubscriptionId: subId } : ({ organizationId } as any)
+      );
+      if (res?.success) {
+        // 1. Optimistically clear the cancellation locally — same shape the cancel path writes.
+        setSummary((prev) => prev ? { ...prev, cancelAtPeriodEnd: false, cancel_at_period_end: false } : prev);
+        if (activeSiteId) {
+          updateSiteInState({
+            id: activeSiteId,
+            cancelAtPeriodEnd: false,
+            cancel_at_period_end: false,
+            subscriptionCancelAtPeriodEnd: 0,
+            subscription_cancel_at_period_end: 0,
+          });
+        }
+        // 2. Bust caches then re-fetch, so every table reads the resumed subscription.
+        summaryCache.delete(organizationId ?? "");
+        await Promise.all([
+          refreshSummary(),
+          refresh({ showLoading: false }),
+        ]);
+        setShowResumeModal(false);
+      } else {
+        setResumeError(res?.error || "Couldn't resume the subscription.");
+        // A definite answer hides the Resume button; anything else stays retryable.
+        if (res?.ended) {
+          setResumeOutcome("ended");
+          // The worker has just reconciled D1 with Stripe, so re-read it: the card then
+          // shows the real end date instead of the stale future one.
+          summaryCache.delete(organizationId ?? "");
+          await Promise.all([
+            refreshSummary(),
+            refresh({ showLoading: false }),
+          ]);
+          setShowResumeModal(false);
+        } else if (res?.notFound) {
+          setResumeOutcome("notFound");
+          setShowResumeModal(false);
+        }
+      }
+    } catch (e) {
+      setResumeError(e instanceof Error ? e.message : "Failed to resume subscription. Please try again.");
+    } finally {
+      setResumeLoading(false);
+    }
+  };
+
   const pm = summary?.paymentMethod ?? null;
 
   return (
@@ -596,6 +686,67 @@ export default function BillingPage({
               )}
             </button>
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* Resume Subscription Confirmation Modal */}
+    {showResumeModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !resumeLoading && setShowResumeModal(false)} />
+        <div className="relative w-[420px] bg-white rounded-[18px] shadow-xl p-7 mx-4">
+
+          <div className="flex justify-center mb-4">
+            <div className="w-14 h-14 rounded-full bg-[#ecfdf5] flex items-center justify-center">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <path d="M20 12a8 8 0 11-2.34-5.66M20 4v4h-4" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+
+          <h3 className="text-[18px] font-bold text-black text-center mb-2">Resume Subscription?</h3>
+          <p className="text-[13px] text-[#6b7280] text-center leading-relaxed mb-1">
+            Your <span className="font-semibold text-black">{currentPlan}</span> plan will keep renewing as normal. No new checkout, and nothing is charged today.
+          </p>
+          {cancelDate && (
+            <p className="text-[13px] text-[#6b7280] text-center mb-5">
+              Next charge:{" "}
+              <span className="font-semibold text-black">
+                {new Date(cancelDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              </span>
+            </p>
+          )}
+
+          {resumeError && (
+            <div className="mb-4 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]">
+              {resumeError}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { if (!resumeLoading) { setShowResumeModal(false); setResumeError(null); } }}
+              disabled={resumeLoading}
+              className="flex-1 h-[42px] rounded-[10px] border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50 transition-colors"
+            >
+              Not Now
+            </button>
+            <button
+              type="button"
+              onClick={handleResumeSubscription}
+              disabled={resumeLoading}
+              className="flex-1 h-[42px] rounded-[10px] bg-[#007AFF] text-white text-[14px] font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+            >
+              {resumeLoading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Resuming…
+                </>
+              ) : "Yes, Resume"}
+            </button>
+          </div>
+
         </div>
       </div>
     )}
@@ -897,7 +1048,10 @@ export default function BillingPage({
           </div>
 
           {/* Billing interval toggle — only for active paid subs with a known interval */}
-          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && (
+          {/* `!periodHasEnded` as well as `!isCancelled`: a 'deleted'/'unpaid' subscription
+              has no cancelAtPeriodEnd, so it would otherwise still offer a monthly/yearly
+              switch — a Stripe call that can only fail on a plan that no longer exists. */}
+          {currentPlan !== "Free" && summary?.stripeSubscriptionId && !isCancelled && !periodHasEnded && (
             <div className="pt-3 pb-3 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <p className="text-[14px] font-normal text-[#6b7280]">Billing Period</p>
@@ -930,23 +1084,81 @@ export default function BillingPage({
           )}
 
           <div className="pt-5 flex gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard")}
-              disabled={!canUpgrade}
-              className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {upgradeCta}
-            </button>
-            {isCancelled ? (
-              <div className="flex-1 min-h-[36px] flex items-center justify-center gap-1.5 bg-[#fff7ed] border border-[#fed7aa] rounded-lg px-4">
-                <span className="w-2 h-2 rounded-full bg-[#f97316] flex-shrink-0" />
-                <span className="text-[13px] font-medium text-[#c2410c]">
-                  Cancels {cancelDate
-                    ? new Date(cancelDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                    : "at period end"}
+            {/* Hidden while a cancellation is pending: the only action then is Resume.
+                Upgrading a cancelled-but-still-running subscription routes to checkout
+                (routingTierFor reads 'canceled' as terminal → free), which starts a SECOND
+                subscription on top of the period the customer has already paid for — the
+                double-billing the Resume flow exists to prevent. Once the period has
+                actually ended there is no overlap left, so the button comes back as the
+                way to start a new subscription. */}
+            {!(isCancelled && !periodHasEnded) && (
+              <button
+                type="button"
+                onClick={() => router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard")}
+                // A lapsed Growth customer has nothing to upgrade to, but must still be
+                // able to subscribe again — otherwise the card offers them no way back.
+                disabled={!canUpgrade && !periodHasEnded}
+                className="flex-1 min-h-[36px] bg-[#007AFF] hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {periodHasEnded ? "Subscribe Now" : upgradeCta}
+              </button>
+            )}
+            {/* `periodHasEnded` alone, NOT `isCancelled && periodHasEnded`: a 'deleted'
+                (or 'unpaid' / 'incomplete_expired') subscription never has
+                cancelAtPeriodEnd set, so requiring isCancelled sent it to the Cancel
+                branch below — offering "Cancel Subscription" on a plan that is already
+                gone, which Stripe rejects outright. */}
+            {periodHasEnded ? (
+              // Over, not ending. There is nothing to resume — the only way back is a new
+              // subscription, which the Upgrade button beside this already offers.
+              <div className="flex-1 min-h-[36px] flex items-center justify-center gap-1.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-4">
+                <span className="w-2 h-2 rounded-full bg-[#9ca3af] flex-shrink-0" />
+                <span className="text-[13px] font-medium text-[#6b7280]">
+                  {/* The date is printed only when it is actually in the past. A
+                      subscription cancelled immediately keeps the period it died inside,
+                      so a not-yet-reconciled row can carry a FUTURE currentPeriodEnd —
+                      and "Ended May 22, 2027" is worse than no date at all. The state is
+                      correct either way; this only suppresses a date we can't stand
+                      behind. Reconciled rows (stripeWebhook.js, or ?fixEnded=true) carry
+                      the real end and do show it. */}
+                  Ended {(() => {
+                    const ms = cancelDate ? Date.parse(String(cancelDate).replace(" ", "T")) : NaN;
+                    return Number.isFinite(ms) && ms <= Date.now()
+                      ? new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "";
+                  })()}
                 </span>
               </div>
+            ) : isCancelled ? (
+              // Still inside the paid period → undo the cancellation on the SAME
+              // subscription. Owner only, matching who was allowed to cancel it.
+              // The button is dropped once a resume attempt got a definite "no", so the
+              // card never offers an action that just failed next to its own error.
+              isOwner && !resumeOutcome ? (
+                <button
+                  type="button"
+                  onClick={() => { setResumeError(null); setShowResumeModal(true); }}
+                  disabled={resumeLoading}
+                  className="flex-1 min-h-[36px] flex items-center justify-center gap-1.5 bg-[#fff7ed] border border-[#fed7aa] hover:bg-[#ffedd5] rounded-lg px-4 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  title={cancelDate
+                    ? `Cancels ${new Date(cancelDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — resume to keep it running`
+                    : "Resume this subscription"}
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#f97316] flex-shrink-0" />
+                  <span className="text-[13px] font-medium text-[#c2410c]">
+                    {resumeLoading ? "Resuming…" : "Resume Subscription"}
+                  </span>
+                </button>
+              ) : (
+                <div className="flex-1 min-h-[36px] flex items-center justify-center gap-1.5 bg-[#fff7ed] border border-[#fed7aa] rounded-lg px-4">
+                  <span className="w-2 h-2 rounded-full bg-[#f97316] flex-shrink-0" />
+                  <span className="text-[13px] font-medium text-[#c2410c]">
+                    Cancels {cancelDate
+                      ? new Date(cancelDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "at period end"}
+                  </span>
+                </div>
+              )
             ) : currentPlan !== "Free" && isOwner ? (
               // Cancelling drops the site to Free and suspends its team — owner only.
               <button
@@ -959,6 +1171,14 @@ export default function BillingPage({
               </button>
             ) : null}
           </div>
+
+          {/* A failed resume stays visible: with resumeOutcome set there is no button left
+              to retry from, so this line is the only thing telling the customer why. */}
+          {resumeError && (
+            <div className="mt-3 rounded-[8px] bg-[#fef2f2] border border-[#fecaca] px-3 py-2.5 text-[12px] text-[#dc2626]" role="alert">
+              {resumeError}
+            </div>
+          )}
         </div>
 
         {/* Billing Details */}

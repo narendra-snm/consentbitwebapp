@@ -24,6 +24,7 @@ import LoadingPopup2 from './component/LoadingPopup';
 import ErrorPopup from '../../components/ErrorPopup';
 
 import { useDashboardSession } from '../../DashboardSessionProvider';
+import { siteSubscriptionHasEnded } from '@/lib/subscription-state';
 
 const CATEGORY_LABELS: Record<string, string> = {
   necessary: 'Necessary',
@@ -183,6 +184,22 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
     () => siteList.some((s: any) => String(s?.id) === String(siteId)),
     [siteList, siteId],
   );
+  /**
+   * Has THIS site's plan ended? The worker refuses both scanning and scheduling with a 402
+   * (handlers/scanSite.js, scanPending.js, scheduledScan.js), which is the real enforcement
+   * — but the UI used to fire optimistically first, so the customer saw "Scan Initiated"
+   * and then, a moment later, "your plan has ended". Same for Schedule Scan: the calendar
+   * opened and only the save was refused. Checking here means neither is offered at all.
+   *
+   * Shared rule from lib/subscription-state.ts, kept in step with the worker.
+   */
+  const planEnded = useMemo(
+    () => siteSubscriptionHasEnded(siteList.find((s: any) => String(s?.id) === String(siteId))),
+    [siteList, siteId],
+  );
+  const PLAN_ENDED_MESSAGE =
+    'Your plan has ended, so scans can no longer be run. Choose a plan to start again.';
+
   const sitesRef = useRef(siteList);
   sitesRef.current = siteList;
   const historyRef = useRef<HTMLDivElement>(null);
@@ -403,6 +420,14 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
       }
     }
 
+    // Refuse before anything optimistic happens. The worker would reject this anyway, but
+    // showing "Scan Initiated" first and contradicting it a moment later is worse than
+    // simply saying why it cannot run.
+    if (planEnded) {
+      setError(PLAN_ENDED_MESSAGE);
+      return;
+    }
+
     scanningRef.current = true;
     setScanning(true);
     setError(null);
@@ -495,6 +520,11 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
         setScanSuccess(true);
       }
     } catch (e: unknown) {
+      // "Scan Initiated" is shown optimistically before the request, on a 2s timer. When
+      // the scan is REFUSED — an ended plan returns 402 in well under a second — the user
+      // was told the scan had started and then immediately told it could not run. Close it
+      // as soon as we know it failed, so only the real outcome is on screen.
+      setShowScanInitPopup(false);
       const msg = e instanceof Error ? e.message : 'Scan failed';
       if (msg.toLowerCase().includes('scan limit') || msg.toLowerCase().includes('limit reached')) {
         setScanLimitReached(true);
@@ -710,7 +740,12 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
 
 
       {error && !showNoSiteModal ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+        <ErrorPopup
+          message={error}
+          onClose={() => setError(null)}
+          // Longer than the 3s default: these are sentences to act on, not confirmations.
+          duration={6000}
+        />
       ) : null}
 
       <div className="mb-7 grid grid-cols-2 gap-4">
@@ -794,7 +829,15 @@ export function CookieScanDashboard({ siteId }: { siteId: string }) {
           </div>
           <button
             type="button"
-            onClick={() => setShowSchedule(true)}
+            // Check before opening, not on save: picking a date and time and only then
+            // being told the plan has ended is wasted effort and reads as a broken form.
+            onClick={() => {
+              if (planEnded) {
+                setError(PLAN_ENDED_MESSAGE);
+                return;
+              }
+              setShowSchedule(true);
+            }}
             disabled={showNoSiteModal}
             className="h-10 rounded-lg bg-[#007aff] px-4 font-['DM_Sans'] text-[15px] font-normal leading-5 text-white transition-colors hover:bg-[#0066d6] disabled:cursor-not-allowed disabled:opacity-60"
             style={dm}

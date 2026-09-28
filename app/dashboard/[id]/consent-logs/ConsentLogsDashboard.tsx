@@ -13,6 +13,7 @@ import {
   type ConsentLogCookieRule,
 } from '@/lib/client-api';
 import LoadingPopup from '../scan/component/LoadingPopup';
+import ErrorPopup from '../../components/ErrorPopup';
 const svgPaths={
 p1b96c400: "M9.32 11.68L11.88 14.24L14.44 11.68",
 p2b261b00: "M20 12.18C20 16.6 17 20.18 12 20.18C7 20.18 4 16.6 4 12.18",
@@ -861,10 +862,15 @@ export function ConsentLogsDashboard({
         subtitle={`Fetching consent logs for "${displayDomain}"`}
       />
 
+      {/* Same toast the scan page, banner editor and domain list use, rather than a pale
+          inline strip that reads as part of the page instead of a response to an action. */}
       {loadError ? (
-        <div className="mx-auto mb-3 max-w-[1259px] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {loadError}
-        </div>
+        <ErrorPopup
+          message={loadError}
+          onClose={() => setLoadError(null)}
+          // Longer than the 3s default: these are sentences to act on, not confirmations.
+          duration={6000}
+        />
       ) : null}
 
       <div className="w-full min-h-screen bg-white p-8 pt-5">
