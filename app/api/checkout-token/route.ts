@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     body,
   });
   const text = await res.text();
-  console.log('[checkout-token proxy] POST response:', text);
   return new Response(text, {
     status: res.status,
     headers: { 'Content-Type': 'application/json', ...CORS },
@@ -30,13 +29,11 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const { search } = new URL(request.url);
-  console.log('[checkout-token proxy] GET hit, search:', search);
   const res = await proxyWorkerResponse(`/api/checkout-token${search}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
   });
   const text = await res.text();
-  console.log('[checkout-token proxy] GET response:', text);
   return new Response(text, {
     status: res.status,
     headers: { 'Content-Type': 'application/json', ...CORS },

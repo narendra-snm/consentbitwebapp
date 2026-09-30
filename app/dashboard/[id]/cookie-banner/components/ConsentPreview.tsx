@@ -10,6 +10,7 @@ import type { BannerLayoutValue } from './bannerAppearance';
 import { pxBorderRadiusToRem, weightLabelToNumeric } from './bannerAppearance';
 import {CookieConsentBanner} from "./Iab"
 import PoweredByFooter from "./PoweredByFooter";
+import { GOOGLE_PRIVACY_URL, googlePrivacyLinkText } from "./googlePrivacyLink";
 /** Strip legacy "More info." suffix from saved preference copy */
 function stripTrailingMoreInfo(text: string): string {
   return (text || '').replace(/\s*More info\.?\s*$/i, '').trim();
@@ -137,6 +138,8 @@ export default function ConsentPreview({
     cookiePolicyLink?: boolean;
     cookiePolicyLabel?: string;
     privacyPolicyUrl?: string;
+    /** Show Google's partner-sites privacy link in the Marketing row (Google Consent Mode template). */
+    googlePrivacyLink?: boolean;
     /** CCPA opt-out preference panel (Do Not Share → modal) */
     ccpaOptOutTitle?: string;
     ccpaOptOutMessage?: string;
@@ -904,6 +907,16 @@ export default function ConsentPreview({
                       className="px-3 pb-3 pl-11 text-[10px] leading-relaxed opacity-90"
                     >
                       {safeContent.categories?.marketing?.description || t('marketingDescription')}
+                      {safeContent.googlePrivacyLink ? (
+                        <a
+                          href={GOOGLE_PRIVACY_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', display: 'block', marginTop: 4, textDecoration: 'underline' }}
+                        >
+                          {googlePrivacyLinkText(lang)}
+                        </a>
+                      ) : null}
                     </p>
                   ) : null}
                 </div>

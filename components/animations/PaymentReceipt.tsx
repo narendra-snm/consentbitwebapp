@@ -1,6 +1,7 @@
 
  const imgLeftFold = "data:image/svg+xml,%3Csvg%20preserveAspectRatio%3D%22none%22%20width%3D%22100%25%22%20height%3D%22100%25%22%20overflow%3D%22visible%22%20style%3D%22display%3A%20block%3B%22%20viewBox%3D%220%200%20451%20449.385%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20id%3D%22Mask%22%20d%3D%22M0%20155.569C0%20153.064%200%20151.812%200.345206%20150.675C0.650815%20149.669%201.15185%20148.733%201.81963%20147.92C2.57395%20147.003%203.61591%20146.308%205.69984%20144.919L218.4%203.11863C220.966%201.40793%20222.249%200.552579%20223.636%200.22026C224.861%20-0.07342%20226.139%20-0.07342%20227.364%200.22026C228.751%200.552579%20230.034%201.40793%20232.6%203.11864L445.3%20144.919C447.384%20146.308%20448.426%20147.003%20449.18%20147.92C449.848%20148.733%20450.349%20149.669%20450.655%20150.675C451%20151.812%20451%20153.064%20451%20155.569V436.585C451%20441.066%20451%20443.306%20450.128%20445.017C449.361%20446.522%20448.137%20447.746%20446.632%20448.513C444.921%20449.385%20442.68%20449.385%20438.2%20449.385H12.8C8.31958%20449.385%206.07937%20449.385%204.36808%20448.513C2.86278%20447.746%201.63893%20446.522%200.871948%20445.017C0%20443.306%200%20441.066%200%20436.585L0%20155.569Z%22%20fill%3D%22var(--fill-0%2C%20black)%22%2F%3E%0A%3C%2Fsvg%3E%0A";
 import { useMemo } from 'react';
+import { safeInvoiceUrl } from '@/lib/safe-redirect';
 
 
 
@@ -143,7 +144,7 @@ export default function PaymentReceipt({ details, OnClick }: { details: any, OnC
             </p>
           </div>
 
-          <button onClick={()=>window.open(details.invoice_url)} className="h-[44px] px-6 rounded-[8px] bg-[#007aff] text-white font-semibold text-[14px] shadow-sm hover:bg-[#0051d5] transition-colors">
+          <button onClick={()=>{ const u = safeInvoiceUrl(details.invoice_url); if (u) window.open(u, '_blank', 'noopener,noreferrer'); }} className="h-[44px] px-6 rounded-[8px] bg-[#007aff] text-white font-semibold text-[14px] shadow-sm hover:bg-[#0051d5] transition-colors">
             Download Receipt
           </button>
 

@@ -7,6 +7,7 @@ import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import LawTestPanel from "./LawTestPanel";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
+import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
 import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
 import { useAppContext } from "@/app/context/AppProvider";
@@ -47,6 +48,10 @@ function makeDefaultContentSettings(langCode = 'en') {
     rejectButton: true,
     customizeButton: true,
     cookiePolicyLink: true,
+    // Google's "How Google uses data…" link in the Marketing row (translations.config
+    // googlePrivacyLink). Off by default so existing banners are unchanged; the Google
+    // Consent Mode template turns it on.
+    googlePrivacyLink: false,
     cookiePolicyLabel: T.privacyPolicy,
     privacyPolicyUrl: "",
     gdpr: {
@@ -77,6 +82,7 @@ const NON_LINGUISTIC_CONTENT_KEYS = [
   "rejectButton",
   "customizeButton",
   "cookiePolicyLink",
+  "googlePrivacyLink",
 ] as const;
 
 function makeDefaultCategories(langCode = 'en'): CookieCategoryContent {
@@ -318,6 +324,7 @@ export default function page({ siteId }: { siteId: string }) {
       cookiePolicyLink: contentSettings.cookiePolicyLink,
       cookiePolicyLabel: contentSettings.cookiePolicyLabel,
       privacyPolicyUrl: contentSettings.privacyPolicyUrl,
+      googlePrivacyLink: contentSettings.googlePrivacyLink,
       categories: contentSettings.categories,
     };
   }, [activeContentBannerType, contentSettings]);
@@ -409,6 +416,7 @@ export default function page({ siteId }: { siteId: string }) {
           rejectButton: _flagVal("rejectButtonEnabled", "1"),
           customizeButton: _flagVal("customizeButtonEnabled", "1"),
           cookiePolicyLink: (() => { const v = cfgTr.cookiePolicyLinkEnabled ?? en.cookiePolicyLinkEnabled; if (v != null) return typeof v === "boolean" ? v : String(v) !== "0"; return Boolean(customization?.privacyPolicyUrl); })(),
+          googlePrivacyLink: _flagVal("googlePrivacyLink", "0"),
           cookiePolicyLabel: T.moreInfo || en.privacyPolicy || "Privacy Policy",
           privacyPolicyUrl: customization?.privacyPolicyUrl || "",
           gdpr: {
@@ -530,6 +538,7 @@ export default function page({ siteId }: { siteId: string }) {
           rejectButton: true,
           customizeButton: true,
           cookiePolicyLink: true,
+          googlePrivacyLink: false,
           cookiePolicyLabel: "Privacy Policy",
           privacyPolicyUrl: "",
           gdpr: {
@@ -606,6 +615,7 @@ export default function page({ siteId }: { siteId: string }) {
       rejectButton: prev.rejectButton,
       customizeButton: prev.customizeButton,
       cookiePolicyLink: prev.cookiePolicyLink,
+      googlePrivacyLink: prev.googlePrivacyLink,
     }));
   }, []);
 
@@ -651,6 +661,37 @@ export default function page({ siteId }: { siteId: string }) {
     },
     [applyLanguage, contentIsPristineForLang, iabEnabled, selectedLangCode],
   );
+
+  /**
+   * Google Consent Mode template: the default heading, purpose statement and Accept label of
+   * the current language, plus the Google privacy link. Customize is forced on because the
+   * link lives in the preferences panel. Only the GDPR notice copy is replaced — the
+   * privacy-policy URL, other toggles and category text are left as the user set them.
+   */
+  const applyGoogleConsentModeTemplate = useCallback(() => {
+    const T = TRANSLATIONS[selectedLangCode] || TRANSLATIONS.en;
+    const copyEdited =
+      contentSettings.title !== T.title ||
+      contentSettings.acceptAll !== T.acceptAll ||
+      contentSettings.gdpr.message !== T.description;
+    if (
+      copyEdited &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Applying the Google Consent Mode template replaces your banner title, message and Accept button text with the template text. Continue?",
+      )
+    ) {
+      return;
+    }
+    setContentSettings((prev) => ({
+      ...prev,
+      title: T.title,
+      acceptAll: T.acceptAll,
+      customizeButton: true,
+      googlePrivacyLink: true,
+      gdpr: { ...prev.gdpr, message: T.description },
+    }));
+  }, [contentSettings, selectedLangCode]);
 
   const confirmLanguageChange = useCallback(() => {
     if (pendingLangCode) applyLanguage(pendingLangCode);
@@ -763,6 +804,7 @@ export default function page({ siteId }: { siteId: string }) {
         config: {
           ...((prev && prev.translations && prev.translations.config) || {}),
           bannerLayoutVisual: appearance.layout.position,
+          googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -887,6 +929,8 @@ export default function page({ siteId }: { siteId: string }) {
             rejectButtonEnabled: contentSettings.rejectButton ? "1" : "0",
             customizeButtonEnabled: contentSettings.customizeButton ? "1" : "0",
             cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
+            // Read by the runtime (cdnM.js gPL()) — config only, never translations.en.
+            googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1370,6 +1414,19 @@ export default function page({ siteId }: { siteId: string }) {
                 than disabled: a column of dead inputs reads as a bug. */}
             {!iabEnabled && (
             <>
+            {/* Google Consent Mode template — GDPR copy only. The CCPA opt-out banner has no
+                Marketing consent row, and IAB (hidden above) carries its own Google disclosure. */}
+            {activeContentBannerType === "gdpr" && (
+              <GoogleConsentModeTemplate
+                enabled={contentSettings.googlePrivacyLink}
+                customizeButton={contentSettings.customizeButton}
+                onToggle={() =>
+                  setContentSettings((prev) => ({ ...prev, googlePrivacyLink: !prev.googlePrivacyLink }))
+                }
+                onApplyTemplate={applyGoogleConsentModeTemplate}
+              />
+            )}
+
             {/* Cookie Notice / Preference Banner tabs */}
             <div className="w-full max-w-[409px] mx-auto">
               <div className="flex gap-1 p-1 bg-[#f1f1f3] rounded-lg">

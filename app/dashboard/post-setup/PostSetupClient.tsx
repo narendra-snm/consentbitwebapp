@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PaymentDone from "@/components/animations//PaymentDone";
 import { analytics } from "@/lib/analytics";
+import { safeInvoiceUrl } from "@/lib/safe-redirect";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PaymentDetails {
@@ -90,7 +91,8 @@ export function PostSetupClient() {
       plan_type:        params.get("plan_type")        ?? "",
       interval:         params.get("interval")         ?? "",
       invoice_id:       params.get("invoice_id")       ?? "",
-      invoice_url:      params.get("invoice_url")      ?? "",
+      // From the address bar, so untrusted — Stripe invoice links only.
+      invoice_url:      safeInvoiceUrl(params.get("invoice_url")) ?? "",
       customer_email:   params.get("email")            ?? "",
       payment_status:   params.get("payment_status")   ?? "",
       date_of_purchase: params.get("date")             ?? "",
