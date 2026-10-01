@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 import { cancelSubscription, resumeSubscription, activateLicenseWebflow } from '@/lib/client-api';
 import { isImmediatelyDeadStatus, readSubscriptionStatus } from '@/lib/subscription-state';
+import { isTeamSite } from '@/lib/team-role';
 import ErrorPopup from '../../components/ErrorPopup';
 import LoadingPopup2 from '../../[id]/scan/component/LoadingPopup';
 
@@ -29,7 +30,12 @@ interface Domain {
   subscriptionId: string | null;
   stripeSubscriptionId: string | null;
   isUnassigned: boolean;
+  // Team site (Admin or Member) — the subscription belongs to another account, so
+  // cancel/resume is shown disabled with an owner-only note (the worker refuses it too).
+  notOwner: boolean;
 }
+
+const OWNER_ONLY_NOTE = 'Only the account owner can change this subscription.';
 
 const StatusBadge = ({ status }: { status: DomainStatus }) => {
   const styles: Record<DomainStatus, { bg: string; text: string; dotColor: string }> = {
@@ -288,6 +294,7 @@ export function DomainManagementDashboard() {
         subscriptionId: site?.subscriptionId ? String(site.subscriptionId) : null,
         stripeSubscriptionId: site?.stripeSubscriptionId ? String(site.stripeSubscriptionId) : null,
         isUnassigned: site?._isUnassigned === true,
+        notOwner: isTeamSite(site),
       };
     });
   }, [sites, nowMs]);
@@ -1049,8 +1056,9 @@ export function DomainManagementDashboard() {
                   {!domain.isUnassigned && domain.status === 'Cancelling' && (
                   <button
                     type="button"
-                    disabled={actionLoadingId === domain.id}
-                    onClick={() => { setOpenMenuId(null); void handleResumeSubscription(domain); }}
+                    disabled={domain.notOwner || actionLoadingId === domain.id}
+                    onClick={() => { if (domain.notOwner) return; setOpenMenuId(null); void handleResumeSubscription(domain); }}
+                    title={domain.notOwner ? OWNER_ONLY_NOTE : undefined}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#f0f7ff] disabled:hover:bg-transparent"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -1067,8 +1075,9 @@ export function DomainManagementDashboard() {
                   {!domain.isUnassigned && domain.status !== 'Cancelling' && (
                   <button
                     type="button"
-                    disabled={['Cancelled', 'Expired'].includes(domain.status) || actionLoadingId === domain.id}
-                    onClick={() => { if (['Cancelled', 'Expired'].includes(domain.status)) return; setOpenMenuId(null); void handleCancelSubscription(domain); }}
+                    disabled={domain.notOwner || ['Cancelled', 'Expired'].includes(domain.status) || actionLoadingId === domain.id}
+                    onClick={() => { if (domain.notOwner || ['Cancelled', 'Expired'].includes(domain.status)) return; setOpenMenuId(null); void handleCancelSubscription(domain); }}
+                    title={domain.notOwner ? OWNER_ONLY_NOTE : undefined}
                     className="flex items-center gap-[8px] py-[6px] px-[8px] rounded-[4px] w-full text-left disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#fff0f0] disabled:hover:bg-transparent"
                   >
                     <svg width="14" height="14" viewBox="0 0 8 8" fill="none">
@@ -1083,6 +1092,15 @@ export function DomainManagementDashboard() {
                       {actionLoadingId === domain.id ? 'Cancelling…' : 'Cancel Subscription'}
                     </span>
                   </button>
+                  )}
+                  {/* Outside the disabled buttons so it reads at full contrast, not 40%. */}
+                  {!domain.isUnassigned && domain.notOwner && (
+                    <p
+                      className="px-[8px] pt-[2px] pb-[4px] text-[11px] leading-[14px] text-[#6b7280] max-w-[200px]"
+                      style={{ fontFamily: 'DM Sans, sans-serif' }}
+                    >
+                      {OWNER_ONLY_NOTE}
+                    </p>
                   )}
                 </div>
               )}

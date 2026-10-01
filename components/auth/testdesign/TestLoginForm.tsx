@@ -14,6 +14,7 @@ import { analytics } from "@/lib/analytics";
 import AuthShell from "./AuthShell";
 import AuthField from "./AuthField";
 import AuthOtpInput from "./AuthOtpInput";
+import { safeNextPath } from "@/lib/safe-redirect";
 import { FONT_SANS, OPSZ } from "./fonts";
 import {
   AuthError,
@@ -37,7 +38,8 @@ function formatTime(totalSeconds: number): string {
 export default function TestLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/dashboard";
+  // Same-origin paths only — see lib/safe-redirect.ts.
+  const nextPath = safeNextPath(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");

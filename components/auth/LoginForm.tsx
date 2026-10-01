@@ -10,6 +10,7 @@ import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import OtpInput from "./OtpInput";
 import Toast from "./Toast";
 import { analytics } from "@/lib/analytics";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,7 +26,8 @@ function formatTime(totalSeconds: number): string {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/dashboard";
+  // Same-origin paths only — see lib/safe-redirect.ts.
+  const nextPath = safeNextPath(searchParams.get("next"));
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<1 | 2>(1);

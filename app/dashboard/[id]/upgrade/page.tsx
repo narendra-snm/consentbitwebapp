@@ -14,6 +14,7 @@ import { accountOrgIdFor, siteTeamRole } from "@/lib/team-role";
 import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
+import { safeInvoiceUrl } from "@/lib/safe-redirect";
 /* NEW WORKFLOW (prorated in-place tier change) — Stripe Elements card entry, kept for later.
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -339,7 +340,8 @@ export default function PricingTable() {
       plan_type:       params.get("plan_type")       ?? "",
       interval:        params.get("interval")        ?? "",
       invoice_id:      params.get("invoice_id")      ?? "",
-      invoice_url:     params.get("invoice_url")     ?? "",
+      // From the address bar, so untrusted — Stripe invoice links only.
+      invoice_url:     safeInvoiceUrl(params.get("invoice_url")) ?? "",
       customer_email:  params.get("email")           ?? "",
       payment_status:  params.get("payment_status")  ?? "",
       date_of_purchase: params.get("date")           ?? "",

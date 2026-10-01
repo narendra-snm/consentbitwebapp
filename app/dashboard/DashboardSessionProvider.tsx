@@ -10,7 +10,10 @@ import React, {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getDashboardInit } from "@/lib/client-api";
+import { getDashboardInit, getMe } from "@/lib/client-api";
+
+/** localStorage key a logging-out tab writes so every other open tab follows it to /login. */
+const LOGOUT_SIGNAL_KEY = "cbLogoutAt";
 import { analytics } from "@/lib/analytics";
 
 type DashboardSessionState = {
@@ -356,6 +359,50 @@ export function DashboardSessionProvider({
     };
   }, [refresh]);
 
+  // Notice a session that ended elsewhere (logout in another tab, expiry). Client-side
+  // navigation never remounts this provider and the focus re-sync above is throttled, so
+  // a tab whose session was killed kept showing the dashboard until a hard refresh.
+  // /api/auth/me is the cheap probe; on a "no" we defer to refresh(), which re-asks
+  // dashboard-init and owns the cache clearing + redirect — so one flaky /me response
+  // can't log anyone out by itself.
+  const lastSessionCheck = useRef(0);
+  const verifySession = useCallback(async () => {
+    if (!stateRef.current?.authenticated) return;
+    if (Date.now() - lastSessionCheck.current < 3_000) return;
+    lastSessionCheck.current = Date.now();
+    try {
+      const me = await getMe();
+      if (!me?.authenticated) void refresh({ showLoading: false });
+    } catch { /* network blip — keep the session, the next check retries */ }
+  }, [refresh]);
+
+  // On every route change inside the dashboard.
+  useEffect(() => {
+    void verifySession();
+  }, [pathname, verifySession]);
+
+  // On tab focus / visibility (unthrottled by the 15s full re-sync), and immediately when
+  // another tab signals a logout.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void verifySession();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== LOGOUT_SIGNAL_KEY || !stateRef.current?.authenticated) return;
+      lastSessionCheck.current = 0;
+      void refresh({ showLoading: false });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [refresh, verifySession]);
+
   // After returning from Stripe, the webhook/session update can lag.
   // Poll dashboard-init briefly so the header plan updates without a manual reload.
   useEffect(() => {
@@ -473,6 +520,10 @@ export function DashboardSessionProvider({
     router.push("/login");
     // Fire-and-forget the logout API call in the background
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch((e) => {
+    }).finally(() => {
+      // Tell other open tabs only once the server session is gone — signalled earlier,
+      // their re-check would still find it alive and they'd stay on the dashboard.
+      try { localStorage.setItem(LOGOUT_SIGNAL_KEY, String(Date.now())); } catch { /* ignore */ }
     });
   }, [router]);
 

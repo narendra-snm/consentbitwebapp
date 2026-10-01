@@ -1159,18 +1159,28 @@ export default function BillingPage({
                   </span>
                 </div>
               )
-            ) : currentPlan !== "Free" && isOwner ? (
+            ) : currentPlan !== "Free" ? (
               // Cancelling drops the site to Free and suspends its team — owner only.
+              // A team Admin sees it disabled (with the note below) rather than not at all.
               <button
                 type="button"
-                onClick={() => { setCancelError(null); setShowCancelModal(true); }}
-                disabled={cancelLoading}
+                onClick={() => { if (!isOwner) return; setCancelError(null); setShowCancelModal(true); }}
+                disabled={!isOwner || cancelLoading}
+                title={!isOwner ? "Only the account owner can cancel this subscription." : undefined}
                 className="flex-1 min-h-[36px] bg-[#E9E5E5] hover:bg-gray-300 text-[#4B5563] py-2 px-4 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancel Subscription
               </button>
             ) : null}
           </div>
+
+          {!isOwner && currentPlan !== "Free" && !periodHasEnded && (
+            <p className="mt-2 text-[12px] text-[#6b7280]">
+              {isCancelled
+                ? "Only the account owner can resume this subscription."
+                : "Only the account owner can cancel this subscription."}
+            </p>
+          )}
 
           {/* A failed resume stays visible: with resumeOutcome set there is no button left
               to retry from, so this line is the only thing telling the customer why. */}
