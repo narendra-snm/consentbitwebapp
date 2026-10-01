@@ -1043,7 +1043,22 @@ export default function BillingPage({
                   {(currentPlan === "Essential" || currentPlan === "Growth") ? "Supported" : <span className="text-gray-400">NIL</span>}
                 </p>
               </div>
-              <div />
+              {/* Renewing plans only. A cancelled plan shows its end date on the "Cancels …"
+                  pill below, and an ended one on "Ended …" — a "Next billing" date there
+                  would promise a charge that will never happen. */}
+              {currentPlan !== "Free" && !isCancelled && !periodHasEnded ? (
+                <div>
+                  <p className="text-[14px] font-normal text-[#6b7280] mb-1">Next billing</p>
+                  <p className="text-[14px] font-bold text-[#5243C2]">
+                    {(() => {
+                      const ms = cancelDate ? Date.parse(String(cancelDate).replace(" ", "T")) : NaN;
+                      return Number.isFinite(ms)
+                        ? new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : <span className="text-gray-400">—</span>;
+                    })()}
+                  </p>
+                </div>
+              ) : <div />}
             </div>
           </div>
 
