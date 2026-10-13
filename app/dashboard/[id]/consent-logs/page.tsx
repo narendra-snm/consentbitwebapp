@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 import { ConsentLogsDashboard}  from './ConsentLogsDashboard';
-import { ConsentRetentionCard } from './ConsentRetentionCard';
+// import { ConsentRetentionCard } from './ConsentRetentionCard'; // card hidden, see below
 
 function pickSiteLabel(site: { name?: string; domain?: string } | null | undefined) {
   if (!site) return '';
@@ -45,13 +45,15 @@ export default function ConsentLogsPage() {
   // legacy + date > June 2026 → D1.
   return (
     <>
-      {/* Retention period for the D1 Consent table. Sits above the log because the
-          dashboard below is min-h-screen and would push it out of view. */}
+      {/* Retention card hidden 2026-10-10: the period is fixed (14 months, US opt-outs 24)
+          for every plan, so there is nothing for the customer to choose. Restore this block
+          to show it again; the card and /api/consent-retention are unchanged.
       <div className="w-full bg-white px-8 pt-5">
         <div className="max-w-[1259px] mx-auto">
           <ConsentRetentionCard siteId={effectiveSiteId} />
         </div>
       </div>
+      */}
       <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />
     </>
   );

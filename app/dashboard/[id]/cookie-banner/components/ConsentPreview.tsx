@@ -43,7 +43,7 @@ const FIELD_DEFAULTS: Record<string, string> = {
   rejectAll: 'Reject',
   preferencesLabel: 'Preference',
   saveMyPreferencesLabel: 'Save Preference',
-  doNotSellLabel: 'Do Not Share My Personal Information',
+  doNotSellLabel: 'Do Not Sell or Share My Personal Information',
 };
 
 /** Returns stored value if it looks reasonable; otherwise falls back to a safe default. */

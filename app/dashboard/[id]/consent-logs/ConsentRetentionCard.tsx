@@ -9,7 +9,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
 import { parseApiResponse } from '@/lib/client-api';
 
 const dm: CSSProperties = { fontVariationSettings: "'opsz' 14" };
@@ -50,6 +49,8 @@ async function saveRetention(siteId: string, days: number | null): Promise<Reten
 }
 
 function labelDays(days: number): string {
+  if (days === 91) return '3 months';
+  if (days === 426) return '14 months';
   if (days % 365 === 0) {
     const years = days / 365;
     return years === 1 ? '1 year' : `${years} years`;
@@ -159,11 +160,7 @@ export function ConsentRetentionCard({ siteId }: { siteId: string }) {
         )}
         {onlyOneChoice && settings.planKnown && (
           <p className="text-black/60">
-            Your plan keeps records for {labelDays(settings.effectiveDays)}.{' '}
-            <Link href={`/dashboard/${siteId}/upgrade`} className="text-[#007aff] underline">
-              Upgrade
-            </Link>{' '}
-            to keep them longer.
+            Records are kept for {labelDays(settings.effectiveDays)}, then deleted.
           </p>
         )}
         <p className={settings.mode === 'on' ? 'text-black/60' : 'text-amber-700'}>{MODE_NOTE[settings.mode]}</p>

@@ -67,7 +67,7 @@ export function CookieNoticeAccordion2({
     closeButton: true,
     acceptAll: 'Accept',
     rejectAll: 'Reject All',
-    doNotSellLabel: 'Do Not Share My Personal Information',
+    doNotSellLabel: 'Do Not Sell or Share My Personal Information',
     rejectButton: true,
     customizeButton: true,
     customizeLabel: 'Preferences',
@@ -267,9 +267,9 @@ export function CookieNoticeAccordion2({
                     className="block font-['DM_Sans'] font-normal text-base text-black leading-5"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
-                    Do Not Share link
+                    Do Not Sell or Share link
                   </label>
-                  <Tooltip text="Show or hide the Do Not Share My Personal Information link.">
+                  <Tooltip text="Show or hide the Do Not Sell or Share My Personal Information link.">
                     <ToggleSwitch
                       checked={settings.rejectButton}
                       onChange={() => toggleSwitch('rejectButton')}

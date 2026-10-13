@@ -6,6 +6,8 @@ import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import LawTestPanel from "./LawTestPanel";
+import GeoTargetCard, { DEFAULT_GEO_TARGET, type GeoTarget } from "./GeoTargetCard";
+import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
@@ -165,6 +167,9 @@ export default function page({ siteId }: { siteId: string }) {
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
     useState<FloatingButtonState | null>(null);
+  /** Geo-target banner (General tab): translations.config.geoTarget. */
+  const [geoTarget, setGeoTarget] = useState<GeoTarget>(DEFAULT_GEO_TARGET);
+  const [lastSavedGeoTarget, setLastSavedGeoTarget] = useState<GeoTarget | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -431,9 +436,9 @@ export default function page({ siteId }: { siteId: string }) {
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: en.doNotSell || T.doNotSell,
+            doNotSellLabel: fixCcpaLinkLabel(en.doNotSell) || T.doNotSell,
             optOutTitle: en.optOutPreference || T.optOutPreference,
-            optOutMessage: en.ccpaOptOutPreferenceIntro || T.ccpaOptOutPreferenceIntro,
+            optOutMessage: fixCcpaLinkLabelInText(en.ccpaOptOutPreferenceIntro) || T.ccpaOptOutPreferenceIntro,
             // CCPA keeps its own key so it no longer collides with the GDPR save label.
             // Falls back to the shared key for records saved before the split.
             saveMyPreferencesLabel:
@@ -473,6 +478,14 @@ export default function page({ siteId }: { siteId: string }) {
         };
         setFloatingButton(fbState);
         setLastSavedFloatingButton(fbState);
+
+        const gtRaw = cfgTr.geoTarget;
+        const gtState: GeoTarget =
+          gtRaw && (gtRaw.mode === "eu_uk" || gtRaw.mode === "countries" || gtRaw.mode === "global")
+            ? { mode: gtRaw.mode, countries: Array.isArray(gtRaw.countries) ? gtRaw.countries.map(String) : [] }
+            : DEFAULT_GEO_TARGET;
+        setGeoTarget(gtState);
+        setLastSavedGeoTarget(gtState);
 
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
@@ -550,7 +563,7 @@ export default function page({ siteId }: { siteId: string }) {
           ccpa: {
             message:
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: "Do Not Share My Personal Information",
+            doNotSellLabel: "Do Not Sell or Share My Personal Information",
             optOutTitle: TRANSLATIONS.en.optOutPreference,
             optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
@@ -564,6 +577,8 @@ export default function page({ siteId }: { siteId: string }) {
         };
         setFloatingButton(fbDefault);
         setLastSavedFloatingButton(fbDefault);
+        setGeoTarget(DEFAULT_GEO_TARGET);
+        setLastSavedGeoTarget(DEFAULT_GEO_TARGET);
         setLastPublishedBothFocus(bothContentFocusRef.current);
         const s = siteRef.current;
         if (s) {
@@ -708,6 +723,11 @@ export default function page({ siteId }: { siteId: string }) {
     return JSON.stringify(floatingButton) !== JSON.stringify(lastSavedFloatingButton);
   }, [floatingButton, lastSavedFloatingButton]);
 
+  const geoDirty = useMemo(() => {
+    if (!lastSavedGeoTarget) return false;
+    return JSON.stringify(geoTarget) !== JSON.stringify(lastSavedGeoTarget);
+  }, [geoTarget, lastSavedGeoTarget]);
+
 
   const appearanceDirty = useMemo(() => {
     if (!lastSavedAppearance) return false;
@@ -733,13 +753,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       publishSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || geoDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setPublishSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
+    geoDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -750,13 +771,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       saveSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || geoDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setSaveSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
+    geoDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -767,6 +789,7 @@ export default function page({ siteId }: { siteId: string }) {
   const hasUnsavedChanges =
     contentDirty ||
     floatingDirty ||
+    geoDirty ||
     appearanceDirty ||
     bothFocusDirty ||
     regulationDirty ||
@@ -776,6 +799,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedContentSettings(contentSettings);
     setLastSavedLangCode(selectedLangCode);
     setLastSavedFloatingButton(floatingButton);
+    setLastSavedGeoTarget(geoTarget);
     setLastSavedAppearance(appearance);
     setLastPublishedBothFocus(bothContentFocus);
     if (currentRegulationSnapshot) {
@@ -805,6 +829,8 @@ export default function page({ siteId }: { siteId: string }) {
           ...((prev && prev.translations && prev.translations.config) || {}),
           bannerLayoutVisual: appearance.layout.position,
           googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
+            // Who sees the banner (GeoTargetCard); the worker enforces it + the plan.
+            geoTarget,
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -862,6 +888,7 @@ export default function page({ siteId }: { siteId: string }) {
     contentSettings,
     currentRegulationSnapshot,
     floatingButton,
+    geoTarget,
     iabEnabled,
     googleAcEnabled,
     selectedLangCode,
@@ -931,6 +958,8 @@ export default function page({ siteId }: { siteId: string }) {
             cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
             // Read by the runtime (cdnM.js gPL()) — config only, never translations.en.
             googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
+            // Who sees the banner (GeoTargetCard); the worker enforces it + the plan.
+            geoTarget,
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1208,6 +1237,13 @@ export default function page({ siteId }: { siteId: string }) {
                   : "The selected template (opt-in banner) supports GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa)."}
               </p>
             </div>
+
+            <GeoTargetCard
+              value={geoTarget}
+              onChange={setGeoTarget}
+              isPaidPlan={isToggleEnabled}
+              onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
+            />
 
             {/* IAB Support Card */}
        

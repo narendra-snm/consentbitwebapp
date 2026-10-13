@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   getConsentHistory,
+  exportVisitorConsent,
+  deleteVisitorConsent,
   getLegacyConsentMonthly,
   getLegacyConsentMonthlyFramer,
   type ConsentLog,
@@ -61,14 +63,14 @@ function categoriesSummary(categories: ConsentLog['categories'], method: string)
 
   if (method === 'CCPA') {
     if (hasCcpa) {
-      return c.ccpa?.doNotSell ? 'Do Not Share: Yes' : 'Do Not Share: No';
+      return c.ccpa?.doNotSell ? 'Do Not Sell or Share: Yes' : 'Do Not Sell or Share: No';
     }
     if (hasGdprKeys) {
       // GDPR-shape stored under a CCPA banner — derive opt-out from any rejected category
       const anyRejected = c.analytics === false || c.marketing === false || c.preferences === false;
-      return anyRejected ? 'Do Not Share: Yes' : 'Do Not Share: No';
+      return anyRejected ? 'Do Not Sell or Share: Yes' : 'Do Not Sell or Share: No';
     }
-    return 'Do Not Share: Yes';
+    return 'Do Not Sell or Share: Yes';
   }
 
   // GDPR / IAB/GDPR
@@ -429,6 +431,17 @@ export function ConsentLogsDashboard({
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  // Visitor lookup by consent ID (Consent.deviceId) — what a visitor quotes from the banner's
+  // preference panel when asking for their records. When set, all months are shown.
+  const [visitorQuery, setVisitorQuery] = useState('');
+  const [visitorId, setVisitorId] = useState('');
+  // Export / delete for the visitor found above — the customer answering that visitor's
+  // access or erasure request (gap F). Delete always goes through a confirm step.
+  const [visitorBusy, setVisitorBusy] = useState<'export' | 'delete' | null>(null);
+  const [confirmVisitorDelete, setConfirmVisitorDelete] = useState(false);
+  const [visitorNotice, setVisitorNotice] = useState<string | null>(null);
+  // Which consent ID was just copied from the table (shows "Copied ✓" briefly).
+  const [copiedConsentId, setCopiedConsentId] = useState<string | null>(null);
   const [csvDownloading, setCsvDownloading] = useState(false);
   const [downloadingPdfIds, setDownloadingPdfIds] = useState<Set<string>>(new Set());
 
@@ -457,14 +470,16 @@ export function ConsentLogsDashboard({
 
     const doFetch = async () => {
       try {
-        const res = useFramerLegacySource
+        const res = visitorId
+          ? await getConsentHistory(siteId, 500, 0, undefined, undefined, visitorId)
+          : useFramerLegacySource
           ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
           : useWebflowLegacySource
             ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
             : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         if (!active) return;
         setData(res);
-        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
+        if (!visitorId) writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
       } catch (err: unknown) {
         if (!active) return;
         setLoadError(err instanceof Error ? err.message : 'Failed to load');
@@ -476,7 +491,7 @@ export function ConsentLogsDashboard({
     void doFetch();
 
     return () => { active = false; };
-  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain, visitorId]);
 
   const handleRefresh = useCallback(() => {
     setData(null);
@@ -495,13 +510,15 @@ export function ConsentLogsDashboard({
 
     const doFetch = async () => {
       try {
-        const res = useFramerLegacySource
+        const res = visitorId
+          ? await getConsentHistory(siteId, 500, 0, undefined, undefined, visitorId)
+          : useFramerLegacySource
           ? await getLegacyConsentMonthlyFramer(siteId, selectedYear, selectedMonth)
           : useWebflowLegacySource
             ? await getLegacyConsentMonthly(siteId, selectedYear, selectedMonth, legacyDomain || siteDomain)
             : await getConsentHistory(siteId, 500, 0, selectedYear, selectedMonth);
         setData(res);
-        writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
+        if (!visitorId) writeConsentCache(`${siteId}_${selectedYear}_${selectedMonth}`, res);
       } catch (err: unknown) {
         setLoadError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -510,14 +527,72 @@ export function ConsentLogsDashboard({
     };
 
     void doFetch();
-  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain]);
+  }, [siteId, isLegacy, isFramerLegacy, isFramerPlatform, platformSiteId, selectedYear, selectedMonth, legacyDomain, siteDomain, visitorId]);
 
   const consentRows = useMemo(() => {
-    const list = data?.consents ?? [];
+    // Filter here too: a worker without LAW_FIXES ignores deviceId and returns every record.
+    const list = (data?.consents ?? []).filter((r) => !visitorId || r.deviceId === visitorId || r.id === visitorId);
     return [...list].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [data]);
+  }, [data, visitorId]);
+
+  const handleVisitorExport = useCallback(async () => {
+    if (!visitorId || visitorBusy) return;
+    setVisitorBusy('export');
+    setVisitorNotice(null);
+    try {
+      const res = await exportVisitorConsent(siteId, visitorId);
+      const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `consent-records-${visitorId.slice(0, 36)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setVisitorBusy(null);
+    }
+  }, [siteId, visitorId, visitorBusy]);
+
+  const handleVisitorDelete = useCallback(async () => {
+    if (!visitorId || visitorBusy) return;
+    setVisitorBusy('delete');
+    setVisitorNotice(null);
+    try {
+      const { deleted, archivedDeleted } = await deleteVisitorConsent(siteId, visitorId);
+      const total = deleted + archivedDeleted;
+      setVisitorNotice(`Deleted ${total} record${total === 1 ? '' : 's'} for consent ID ${visitorId}.`);
+      // Drop any monthly copies of this site's logs held for the session.
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const k = sessionStorage.key(i);
+          if (k && k.startsWith(`cbConsent_${siteId}`)) sessionStorage.removeItem(k);
+        }
+      } catch {}
+      setConfirmVisitorDelete(false);
+      handleRefresh();
+    } catch (err: unknown) {
+      setConfirmVisitorDelete(false);
+      setLoadError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setVisitorBusy(null);
+    }
+  }, [siteId, visitorId, visitorBusy, handleRefresh]);
+
+  // Copy a full consent ID (table cell + search header); shows "Copied ✓" briefly.
+  const copyConsentId = useCallback((cid: string) => {
+    try {
+      navigator.clipboard.writeText(cid).then(() => {
+        setCopiedConsentId(cid);
+        window.setTimeout(() => setCopiedConsentId((c) => (c === cid ? null : c)), 1500);
+      }, () => {});
+    } catch {}
+  }, []);
 
   // Unique non-empty domain values present in the fetched consents.
   // Rare case: only > 1 when the site's domain URL was changed after some consents
@@ -615,7 +690,8 @@ export function ConsentLogsDashboard({
             <table class="proof-meta" role="presentation">
               <tr><td class="proof-label">Consented domain</td><td class="proof-value">${escapeHtml(domain)}</td></tr>
               <tr><td class="proof-label">Consent date</td><td class="proof-value">${escapeHtml(formatProofDate(log.createdAt))}</td></tr>
-              <tr><td class="proof-label">Consent ID</td><td class="proof-value">${escapeHtml(log.id)}</td></tr>
+              <tr><td class="proof-label">Visitor ID (consent ID)</td><td class="proof-value">${escapeHtml(log.deviceId || '—')}</td></tr>
+              <tr><td class="proof-label">Record ID</td><td class="proof-value">${escapeHtml(log.id)}</td></tr>
               <tr><td class="proof-label">Country</td><td class="proof-value">${escapeHtml(log.country || '—')}</td></tr>
               <tr><td class="proof-label">Anonymized IP address</td><td class="proof-value">${escapeHtml(anonymizeIp(log.ipAddress))}</td></tr>
               <tr><td class="proof-label">Consent status</td><td class="proof-value">${escapeHtml(displayStatus(log.status))}</td></tr>
@@ -876,119 +952,253 @@ export function ConsentLogsDashboard({
       <div className="w-full min-h-screen bg-white p-8 pt-5">
         <div className="max-w-[1259px] mx-auto">
           <div className="bg-[#fbfbfb] border border-[#ebebeb] rounded-[10px]  pt-[20px] pb-[20px]">
-            <div className="flex items-start justify-between gap-6 flex-wrap mb-[31px] pl-[21px] pr-7.5">
-              <div className="flex flex-wrap items-center gap-[60px]">
-                <div>
-                  <div className="flex items-center gap-2 mb-[11px]">
-                    {isMultiDomain ? (
-                      <>
-                        <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black whitespace-nowrap" style={dm}>
-                          Site:
-                        </h1>
-                        <select
-                          value={selectedDomain ?? ''}
-                          onChange={(e) => {
-                            setSelectedDomain(e.target.value || null);
-                            setConsentPage(1);
-                          }}
-                          className="h-8 px-2 rounded-md border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] max-w-[320px]"
-                          title="Filter by site domain"
-                        >
-                          <option value="">All domains ({consentDomains.length})</option>
-                          {consentDomains.map((d) => (
-                            <option key={d} value={d}>
-                              {d}
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    ) : (
-                      <h1 className="font-['DM_Sans'] font-semibold text-[14px] text-black" style={dm}>
-                        Site: {consentDomains[0] || displayDomain}
+            <div className="px-[21px] pb-4">
+              {/* Header: site on the left, counts as matching cards on the right */}
+              <div className="flex items-center justify-between gap-6 flex-wrap mb-5">
+                <div className="min-w-0">
+                  {isMultiDomain ? (
+                    <div className="flex items-center gap-2">
+                      <h1 className="font-['DM_Sans'] font-semibold text-[16px] text-black whitespace-nowrap" style={dm}>
+                        Site:
                       </h1>
+                      <select
+                        value={selectedDomain ?? ''}
+                        onChange={(e) => {
+                          setSelectedDomain(e.target.value || null);
+                          setConsentPage(1);
+                        }}
+                        className="h-8 px-2 rounded-md border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] max-w-[320px]"
+                        title="Filter by site domain"
+                      >
+                        <option value="">All domains ({consentDomains.length})</option>
+                        {consentDomains.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <h1 className="font-['DM_Sans'] font-semibold text-[16px] text-black truncate" style={dm}>
+                      {consentDomains[0] || displayDomain}
+                    </h1>
+                  )}
+                  <p className="font-['DM_Sans'] text-[13px] text-[#6b7280] mt-1" style={dm}>
+                    Consent logs
+                  </p>
+                </div>
+
+                <div className="flex items-stretch gap-3">
+                  {[
+                    { value: totalEvents, label: 'Consent events' },
+                    { value: cookieCount, label: 'Cookies' },
+                  ].map((s) => (
+                    <div key={s.label} className="min-w-[132px] rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5">
+                      <p className="font-['DM_Sans'] font-semibold text-[#007aff] text-[22px] leading-tight" style={dm}>
+                        {loading ? '…' : s.value}
+                      </p>
+                      <p className="font-['DM_Sans'] text-[13px] text-[#4b5563]" style={dm}>
+                        {s.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {!visitorId ? (
+                /* Normal view: browse by month on the left; search + export on the right */
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        setSelectedMonth(e.target.value);
+                        setConsentPage(1);
+                      }}
+                      disabled={loading}
+                      aria-label="Month"
+                      className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                    >
+                      {['January','February','March','April','May','June','July','August','September','October','November','December'].map((name, i) => (
+                        <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => {
+                        setSelectedYear(e.target.value);
+                        setConsentPage(1);
+                      }}
+                      disabled={loading}
+                      aria-label="Year"
+                      className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
+                    >
+                      {Array.from({ length: 4 }, (_, i) => String(now.getFullYear() - i)).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleRefresh}
+                      disabled={loading}
+                      title="Refresh"
+                      aria-label="Refresh"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg border border-[#d1d5db] bg-white disabled:opacity-50"
+                    >
+                      <RefreshIcon spinning={loading} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Find one visitor's records by the consent ID shown in their banner */}
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setVisitorId(visitorQuery.trim());
+                        setConsentPage(1);
+                        setConfirmVisitorDelete(false);
+                        setVisitorNotice(null);
+                      }}
+                    >
+                      <div className="relative">
+                        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9ca3af]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                          <circle cx="11" cy="11" r="7" strokeWidth="2" />
+                          <path d="M20 20l-3.5-3.5" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        <input
+                          type="text"
+                          value={visitorQuery}
+                          onChange={(e) => setVisitorQuery(e.target.value)}
+                          placeholder="Search by consent ID"
+                          aria-label="Search by consent ID"
+                          className="h-9 w-[280px] max-w-full pl-8 pr-3 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff]"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={loading || !visitorQuery.trim()}
+                        className="h-9 px-3 rounded-lg bg-[#007aff] text-white text-[13px] font-['DM_Sans'] font-medium disabled:opacity-50"
+                      >
+                        Find
+                      </button>
+                    </form>
+                    {/* Export CSV — available for both legacy and webapp users */}
+                    {consentRows.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void downloadCsv()}
+                        disabled={csvDownloading}
+                        className="h-9 px-3 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] font-medium text-[#0a091f] hover:bg-[#f9fafb] disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {csvDownloading ? 'Downloading…' : 'Export CSV'}
+                      </button>
                     )}
                   </div>
                 </div>
-
-                <div className="flex flex-wrap items-start gap-[107px]">
-                  <div>
-                    <p
-                      className="font-['DM_Sans'] font-medium text-[#007aff] text-[26px] mb-[5px]"
-                      style={dm}
-                    >
-                      {loading ? '...' : totalEvents}
-                    </p>
-                    <p
-                      className="font-['DM_Sans'] font-normal text-[16px] text-black"
-                      style={dm}
-                    >
-                      Total consent events
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      className="font-['DM_Sans'] font-medium text-[#007aff] text-[26px] mb-[5px]"
-                      style={dm}
-                    >
-                      {loading ? '...' : cookieCount}
-                    </p>
-                    <p
-                      className="font-['DM_Sans'] font-normal text-[16px] text-black"
-                      style={dm}
-                    >
-                      Cookie Inventory
-                    </p>
+              ) : (
+                /* Search view: one visitor's records, and the action to answer their request */
+                <div className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVisitorId('');
+                      setVisitorQuery('');
+                      setConsentPage(1);
+                      setConfirmVisitorDelete(false);
+                      setVisitorNotice(null);
+                    }}
+                    className="text-[13px] font-['DM_Sans'] text-[#007aff] hover:underline mb-2"
+                  >
+                    ← Back to all logs
+                  </button>
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[13px] font-['DM_Sans'] text-[#6b7280]">Consent ID</span>
+                        <span className="font-mono text-[13px] text-[#0a091f] break-all">{visitorId}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyConsentId(visitorId)}
+                          title="Copy consent ID"
+                          aria-label="Copy consent ID"
+                          className="text-[12px] font-['DM_Sans'] text-[#007aff] hover:underline"
+                        >
+                          {copiedConsentId === visitorId ? 'Copied ✓' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="text-[12px] font-['DM_Sans'] text-[#6b7280] mt-0.5">
+                        {loading ? 'Searching…' : `${consentRows.length} record${consentRows.length === 1 ? '' : 's'} · all months`}
+                      </p>
+                    </div>
+                    {!loading && consentRows.length > 0 && (
+                      <>
+                        {/* Export hidden 2026-10-10: no law requires JSON, and a visitor can't easily
+                            open it. Re-enable (ideally as CSV) with handleVisitorExport; the handler
+                            and /api/consent-visitor GET are still in place. */}
+                        <button
+                          type="button"
+                          onClick={() => { setConfirmVisitorDelete(true); setVisitorNotice(null); }}
+                          disabled={!!visitorBusy}
+                          className="h-9 px-3 rounded-lg border border-[#fca5a5] bg-white text-[13px] font-['DM_Sans'] font-medium text-[#b91c1c] hover:bg-[#fef2f2] disabled:opacity-50"
+                        >
+                          Delete records
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3 mt-[18px] flex-wrap">
-                {/* Month / Year picker */}
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => {
-                      setSelectedMonth(e.target.value);
-                      setConsentPage(1);
-                    }}
-                    disabled={loading}
-                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
-                  >
-                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((name, i) => (
-                      <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => {
-                      setSelectedYear(e.target.value);
-                      setConsentPage(1);
-                    }}
-                    disabled={loading}
-                    className="h-9 px-2 rounded-lg border border-[#d1d5db] bg-white text-[13px] font-['DM_Sans'] text-[#0a091f] focus:outline-none focus:ring-2 focus:ring-[#007aff] disabled:opacity-50"
-                  >
-                    {Array.from({ length: 4 }, (_, i) => String(now.getFullYear() - i)).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+              )}
+              {/* Delete confirmation — same popup style as Cancel Subscription (all-domain page). */}
+              {confirmVisitorDelete && visitorId && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                  <div
+                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                    onClick={() => { if (!visitorBusy) setConfirmVisitorDelete(false); }}
+                  />
+                  <div className="relative w-full max-w-[440px] rounded-2xl bg-white shadow-xl p-7" onClick={(e) => e.stopPropagation()}>
+                    <h2 className="text-base font-semibold text-[#0a091f] mb-2 font-['DM_Sans']">
+                      Delete consent records
+                    </h2>
+                    <p className="text-sm text-[#4b5563] leading-relaxed mb-2 font-['DM_Sans']">
+                      {consentRows.length === 1 ? (
+                        <>This will permanently delete this visitor&apos;s consent record. You can&apos;t undo this.</>
+                      ) : (
+                        <>
+                          This will permanently delete all{' '}
+                          <span className="font-semibold text-[#0a091f]">{consentRows.length}</span> of this
+                          visitor&apos;s consent records. You can&apos;t undo this.
+                        </>
+                      )}
+                    </p>
+                    <p className="text-sm text-[#4b5563] leading-relaxed mb-2 font-['DM_Sans']">
+                      Only do this when the visitor has asked for their data to be deleted.
+                    </p>
+                    <p className="text-xs font-mono text-[#6b7280] break-all mb-7">{visitorId}</p>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmVisitorDelete(false)}
+                        disabled={!!visitorBusy}
+                        className="rounded-lg border border-[#e5e7eb] px-5 py-2.5 text-sm text-[#374151] hover:bg-[#f9fafb] transition-colors font-['DM_Sans'] disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleVisitorDelete}
+                        disabled={!!visitorBusy}
+                        className="rounded-lg bg-[#c0392b] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#a93226] transition-colors font-['DM_Sans'] disabled:opacity-50"
+                      >
+                        {visitorBusy === 'delete' ? 'Deleting…' : 'Yes, delete records'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center gap-1 disabled:opacity-50"
-              >
-                <p
-                  className="font-['DM_Sans'] font-medium text-[#007aff] text-[15px] tracking-[-0.3px]"
-                  style={dm}
-                >
-                  {loading ? 'Loading…' : 'Refresh'}
-                </p>
-                <RefreshIcon spinning={loading} />
-              </button>
-              </div>
+              )}
+              {visitorNotice && (
+                <p className="mt-2 text-[13px] font-['DM_Sans'] text-[#047857]">{visitorNotice}</p>
+              )}
             </div>
 
             <div className="w-full h-px bg-black/10 mb-[4px]" />
@@ -1022,6 +1232,12 @@ export function ConsentLogsDashboard({
                       Analytics / Marketing / Preferences
                     </th>
                     <th
+                      className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] whitespace-nowrap border-b border-[#9fbce4]"
+                      style={dm}
+                    >
+                      Consent ID
+                    </th>
+                    <th
                       className="h-[46px] px-[16px] text-left font-['DM_Sans'] font-medium text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-[#9fbce4] rounded-r-[5px] whitespace-nowrap"
                       style={dm}
                     >
@@ -1034,11 +1250,13 @@ export function ConsentLogsDashboard({
                   {!loading && consentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-[16px] py-[24px] text-center font-['DM_Sans'] text-[14px] text-[#4b5563]"
                         style={dm}
                       >
-                        {isCurrentPeriod
+                        {visitorId
+                          ? `No records found for ${visitorId}. Check the ID, or this site has no consent with it.`
+                          : isCurrentPeriod
                           ? 'No consent logs yet. Consent events will appear here once visitors interact with your banner.'
                           : `No consent data found for ${selectedMonthName} ${selectedYear}.`}
                       </td>
@@ -1072,6 +1290,45 @@ export function ConsentLogsDashboard({
                             {categoriesSummary(row.categories, detectMethod(row))}
                           </div>
                         </td>
+                        <td className="px-[16px] py-[9px] border-b border-black/10 whitespace-nowrap font-['DM_Sans'] text-[12px]">
+                          {(() => {
+                            // Old records have no visitor ID (deviceId) — show the record's own
+                            // ID instead, so every row has a consent ID that can be searched.
+                            const cid = row.deviceId || row.id;
+                            // Click copies the full ID (customers paste it into replies and
+                            // tickets); "Find" next to it shows every record for that ID.
+                            return (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  title={`${cid} (click to copy)`}
+                                  onClick={() => copyConsentId(cid)}
+                                  className="font-mono text-[#0a091f] hover:text-[#007aff] cursor-copy"
+                                >
+                                  {copiedConsentId === cid ? 'Copied ✓' : `${cid.slice(0, 8)}…`}
+                                </button>
+                                {!visitorId && (
+                                  <button
+                                    type="button"
+                                    title="Show every record for this consent ID"
+                                    aria-label="Show every record for this consent ID"
+                                    onClick={() => {
+                                      setVisitorQuery(cid);
+                                      setVisitorId(cid);
+                                      setConsentPage(1);
+                                    }}
+                                    className="text-[#9ca3af] hover:text-[#007aff]"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                      <circle cx="11" cy="11" r="7" strokeWidth="2" />
+                                      <path d="M20 20l-3.5-3.5" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td className="px-[16px] py-[9px] border-b border-black/10">
                           <DownloadPdfButton
                             onClick={() => handleDownloadRowPdf(row)}
@@ -1087,19 +1344,7 @@ export function ConsentLogsDashboard({
             </div>
             <PaginationBar current={consentPage} total={consentTotalPages} onChange={(p) => setConsentPage(p)} />
 
-            {/* Export CSV — available for both legacy and webapp users */}
-            {consentRows.length > 0 && (
-              <div className="flex justify-end px-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => void downloadCsv()}
-                  disabled={csvDownloading}
-                  className="h-9 px-4 rounded-lg bg-[#007aff] text-white text-sm font-medium hover:bg-[#0066d6] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {csvDownloading ? 'Downloading…' : 'Export CSV'}
-                </button>
-              </div>
-            )}
+            {/* Export CSV moved into the toolbar at the top (normal view). */}
           </div>
 
           <div className="mt-[59px]">
