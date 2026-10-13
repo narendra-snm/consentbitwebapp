@@ -78,6 +78,9 @@ export default function GeoTargetCard({
 }) {
   const [query, setQuery] = useState("");
   const [showUpgrade, setShowUpgrade] = useState(false);
+  // After "Select all" there can be ~250 chips; show the first CHIP_LIMIT unless expanded.
+  const [showAllChips, setShowAllChips] = useState(false);
+  const CHIP_LIMIT = 30;
 
   const options = useMemo(() => {
     let dn: Intl.DisplayNames | null = null;
@@ -155,7 +158,7 @@ export default function GeoTargetCard({
   };
 
   return (
-    <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
+    <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4 mb-4">
       <p className="font-semibold text-base text-black mb-1">Geo-target banner</p>
       <p className="text-xs text-[#6b7280] mb-3">Choose which visitors see the banner, based on their location.</p>
 
@@ -183,7 +186,7 @@ export default function GeoTargetCard({
         <div className="mt-2">
           {value.countries.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {value.countries.map((c) => (
+              {(showAllChips ? value.countries : value.countries.slice(0, CHIP_LIMIT)).map((c) => (
                 <span key={c} className="inline-flex items-center gap-1 rounded-full bg-white border border-[#d1d5db] px-2 py-0.5 text-xs">
                   {options.find((o) => o.code === c)?.name || c}
                   <button type="button" aria-label={`Remove ${c}`} onClick={() => toggleCountry(c)} className="text-[#6b7280] hover:text-black">
@@ -191,15 +194,33 @@ export default function GeoTargetCard({
                   </button>
                 </span>
               ))}
+              {value.countries.length > CHIP_LIMIT && (
+                <button type="button" onClick={() => setShowAllChips((v) => !v)} className="text-xs text-[#007aff] hover:underline px-1">
+                  {showAllChips ? "Show less" : `+${value.countries.length - CHIP_LIMIT} more`}
+                </button>
+              )}
             </div>
           )}
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-[#6b7280]">{value.countries.length} selected</span>
+            <div className="flex items-center gap-3">
+            {/* Select all = every country in the current search results (all countries when
+                the search box is empty), added to what is already selected. */}
+            {filtered.some((o) => !selected.has(o.code)) && (
+              <button
+                type="button"
+                onClick={() => onChange({ mode: "countries", countries: [...new Set([...value.countries, ...filtered.map((o) => o.code)])] })}
+                className="text-xs text-[#007aff] hover:underline"
+              >
+                {q ? "Select all results" : "Select all"}
+              </button>
+            )}
             {value.countries.length > 0 && (
               <button type="button" onClick={() => onChange({ mode: "countries", countries: [] })} className="text-xs text-[#007aff] hover:underline">
                 Clear all
               </button>
             )}
+            </div>
           </div>
           <div className="relative">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9ca3af]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

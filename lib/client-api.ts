@@ -1484,6 +1484,8 @@ export type ConsentHistoryResponse = {
   total: number;
   limit: number;
   offset: number;
+  /** Free plan: records before this date (YYYY-MM-DD) are hidden. Absent/null = no limit. */
+  viewCutoff?: string | null;
 };
 
 const EMPTY_CONSENT_RESPONSE: ConsentHistoryResponse = {

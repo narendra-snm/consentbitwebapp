@@ -440,7 +440,7 @@ export function ConsentLogsDashboard({
   const [visitorBusy, setVisitorBusy] = useState<'export' | 'delete' | null>(null);
   const [confirmVisitorDelete, setConfirmVisitorDelete] = useState(false);
   const [visitorNotice, setVisitorNotice] = useState<string | null>(null);
-  // Which consent ID was just copied from the table (shows "Copied ✓" briefly).
+  // Which Copy button was just clicked — 'header' or `row:<id>` (shows "Copied ✓" briefly).
   const [copiedConsentId, setCopiedConsentId] = useState<string | null>(null);
   const [csvDownloading, setCsvDownloading] = useState(false);
   const [downloadingPdfIds, setDownloadingPdfIds] = useState<Set<string>>(new Set());
@@ -585,11 +585,13 @@ export function ConsentLogsDashboard({
   }, [siteId, visitorId, visitorBusy, handleRefresh]);
 
   // Copy a full consent ID (table cell + search header); shows "Copied ✓" briefly.
-  const copyConsentId = useCallback((cid: string) => {
+  // `slot` names the clicked button: rows in a consent-ID search all share one ID, so
+  // keying "Copied ✓" on the ID alone lit up every Copy button at once.
+  const copyConsentId = useCallback((cid: string, slot: string) => {
     try {
       navigator.clipboard.writeText(cid).then(() => {
-        setCopiedConsentId(cid);
-        window.setTimeout(() => setCopiedConsentId((c) => (c === cid ? null : c)), 1500);
+        setCopiedConsentId(slot);
+        window.setTimeout(() => setCopiedConsentId((c) => (c === slot ? null : c)), 1500);
       }, () => {});
     } catch {}
   }, []);
@@ -986,6 +988,14 @@ export function ConsentLogsDashboard({
                   <p className="font-['DM_Sans'] text-[13px] text-[#6b7280] mt-1" style={dm}>
                     Consent logs
                   </p>
+                  {/* Free plan keeps 3 months; the worker hides older records and says from when. */}
+                  {data?.viewCutoff && (
+                    <p className="font-['DM_Sans'] text-[12px] text-[#92400e] mt-1" style={dm}>
+                      Free plan: showing records from the last 3 months (since{' '}
+                      {new Date(`${data.viewCutoff}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}).
+                      Upgrade to keep 12 months.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-stretch gap-3">
@@ -1119,12 +1129,12 @@ export function ConsentLogsDashboard({
                         <span className="font-mono text-[13px] text-[#0a091f] break-all">{visitorId}</span>
                         <button
                           type="button"
-                          onClick={() => copyConsentId(visitorId)}
+                          onClick={() => copyConsentId(visitorId, 'header')}
                           title="Copy consent ID"
                           aria-label="Copy consent ID"
                           className="text-[12px] font-['DM_Sans'] text-[#007aff] hover:underline"
                         >
-                          {copiedConsentId === visitorId ? 'Copied ✓' : 'Copy'}
+                          {copiedConsentId === 'header' ? 'Copied ✓' : 'Copy'}
                         </button>
                       </div>
                       <p className="text-[12px] font-['DM_Sans'] text-[#6b7280] mt-0.5">
@@ -1302,10 +1312,10 @@ export function ConsentLogsDashboard({
                                 <button
                                   type="button"
                                   title={`${cid} (click to copy)`}
-                                  onClick={() => copyConsentId(cid)}
+                                  onClick={() => copyConsentId(cid, `row:${row.id}`)}
                                   className="font-mono text-[#0a091f] hover:text-[#007aff] cursor-copy"
                                 >
-                                  {copiedConsentId === cid ? 'Copied ✓' : `${cid.slice(0, 8)}…`}
+                                  {copiedConsentId === `row:${row.id}` ? 'Copied ✓' : `${cid.slice(0, 8)}…`}
                                 </button>
                                 {!visitorId && (
                                   <button
