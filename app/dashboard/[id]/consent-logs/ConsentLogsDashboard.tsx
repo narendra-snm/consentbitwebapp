@@ -671,10 +671,22 @@ export function ConsentLogsDashboard({
             `,
           );
           const allRows = [...scannedRows, ...customRows];
-          return allRows.length === 0
-            ? '<tr><td class="proof-td" colspan="3">No cookies recorded for accepted categories.</td></tr>'
-            : allRows.join('');
+          return allRows.join('');
         })();
+
+        // No cookies for the accepted categories → a short note instead of an empty table.
+        const cookieTableHtml = cookieRows
+          ? `<table class="proof-cookie-table">
+                <thead>
+                  <tr>
+                    <th class="proof-th">Cookie Name</th>
+                    <th class="proof-th">Duration</th>
+                    <th class="proof-th">Description</th>
+                  </tr>
+                </thead>
+                <tbody>${cookieRows}</tbody>
+              </table>`
+          : '<p class="proof-no-cookies">No cookie details are tracked for the accepted categories.</p>';
 
         return `
           <div class="proof-page">
@@ -693,10 +705,10 @@ export function ConsentLogsDashboard({
               <tr><td class="proof-label">Consented domain</td><td class="proof-value">${escapeHtml(domain)}</td></tr>
               <tr><td class="proof-label">Consent date</td><td class="proof-value">${escapeHtml(formatProofDate(log.createdAt))}</td></tr>
               <tr><td class="proof-label">Visitor ID (consent ID)</td><td class="proof-value">${escapeHtml(log.deviceId || '—')}</td></tr>
-              <tr><td class="proof-label">Record ID</td><td class="proof-value">${escapeHtml(log.id)}</td></tr>
               <tr><td class="proof-label">Country</td><td class="proof-value">${escapeHtml(log.country || '—')}</td></tr>
               <tr><td class="proof-label">Anonymized IP address</td><td class="proof-value">${escapeHtml(anonymizeIp(log.ipAddress))}</td></tr>
               <tr><td class="proof-label">Consent status</td><td class="proof-value">${escapeHtml(displayStatus(log.status))}</td></tr>
+              <tr><td class="proof-label">Banner type</td><td class="proof-value">${detectMethod(log) === 'CCPA' ? 'Opt-out' : 'Opt-in'}</td></tr>
             </table>
 
             <div class="proof-section-box">
@@ -704,16 +716,7 @@ export function ConsentLogsDashboard({
                 <p class="proof-categories-title">Accepted Categories</p>
                 <p class="proof-categories-line">${escapeHtml(acceptedLabels)}</p>
               </div>
-              <table class="proof-cookie-table">
-                <thead>
-                  <tr>
-                    <th class="proof-th">Cookie Name</th>
-                    <th class="proof-th">Duration</th>
-                    <th class="proof-th">Description</th>
-                  </tr>
-                </thead>
-                <tbody>${cookieRows}</tbody>
-              </table>
+              ${cookieTableHtml}
             </div>
 
             <p class="proof-footer">Page ${index + 1} of ${rows.length}</p>
@@ -801,6 +804,13 @@ export function ConsentLogsDashboard({
           .proof-cookie-table {
             border-collapse: collapse;
             width: 100%;
+          }
+          .proof-no-cookies {
+            margin: 0;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px solid #bfdbfe;
           }
           .proof-th, .proof-td {
             border: 1px solid #bfdbfe;
@@ -1302,9 +1312,10 @@ export function ConsentLogsDashboard({
                         </td>
                         <td className="px-[16px] py-[9px] border-b border-black/10 whitespace-nowrap font-['DM_Sans'] text-[12px]">
                           {(() => {
-                            // Old records have no visitor ID (deviceId) — show the record's own
-                            // ID instead, so every row has a consent ID that can be searched.
-                            const cid = row.deviceId || row.id;
+                            // Old records have no visitor ID (deviceId). The record's own ID is
+                            // internal and never shown (2026-10-15), so those rows show a dash.
+                            const cid = row.deviceId;
+                            if (!cid) return <span className="text-[#9ca3af]">—</span>;
                             // Click copies the full ID (customers paste it into replies and
                             // tickets); "Find" next to it shows every record for that ID.
                             return (

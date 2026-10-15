@@ -58,13 +58,13 @@ const EXPECTATIONS: Row[] = [
     flag: "🇧🇷",
     label: "Brazil",
     expected: "GDPR opt-in banner, in the language YOU selected in the dashboard — not switched by location.",
-    watch: "Consent record: law='LGPD', consent_model='optin', lang_wanted='pt-BR' (recorded only, never shown).",
+    watch: "Consent record: law='Brazil LGPD', consent_model='optin', lang_wanted='pt-BR' (recorded only, never shown).",
   },
   {
     flag: "🇦🇺",
     label: "Australia",
     expected: "GDPR opt-in banner, in the language YOU selected — your own text and spelling, unchanged.",
-    watch: "Consent record: law='PRIVACY_ACT'. GPC is ignored outside the ccpa banner type.",
+    watch: "Consent record: law='Australia Privacy Act 1988'. GPC is ignored outside the ccpa banner type.",
   },
   {
     flag: "🇨🇦",

@@ -6,7 +6,7 @@ import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import LawTestPanel from "./LawTestPanel";
-import GeoTargetCard, { DEFAULT_GEO_TARGET, type GeoTarget } from "./GeoTargetCard";
+import RegionalLanguagesCard, { DEFAULT_REGIONAL_LANGUAGES, type RegionalLanguages } from "./RegionalLanguagesCard";
 import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
@@ -167,9 +167,9 @@ export default function page({ siteId }: { siteId: string }) {
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
     useState<FloatingButtonState | null>(null);
-  /** Geo-target banner (General tab): translations.config.geoTarget. */
-  const [geoTarget, setGeoTarget] = useState<GeoTarget>(DEFAULT_GEO_TARGET);
-  const [lastSavedGeoTarget, setLastSavedGeoTarget] = useState<GeoTarget | null>(null);
+  /** Regional requirements (General tab): translations.config.regionalLanguages. */
+  const [regionalLanguages, setRegionalLanguages] = useState<RegionalLanguages>(DEFAULT_REGIONAL_LANGUAGES);
+  const [lastSavedRegionalLanguages, setLastSavedRegionalLanguages] = useState<RegionalLanguages | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -479,13 +479,13 @@ export default function page({ siteId }: { siteId: string }) {
         setFloatingButton(fbState);
         setLastSavedFloatingButton(fbState);
 
-        const gtRaw = cfgTr.geoTarget;
-        const gtState: GeoTarget =
-          gtRaw && (gtRaw.mode === "eu_uk" || gtRaw.mode === "countries" || gtRaw.mode === "global")
-            ? { mode: gtRaw.mode, countries: Array.isArray(gtRaw.countries) ? gtRaw.countries.map(String) : [] }
-            : DEFAULT_GEO_TARGET;
-        setGeoTarget(gtState);
-        setLastSavedGeoTarget(gtState);
+        const rlRaw = cfgTr.regionalLanguages;
+        const rlState: RegionalLanguages =
+          rlRaw && typeof rlRaw === "object"
+            ? { quebec: rlRaw.quebec === true, brazil: rlRaw.brazil === true }
+            : DEFAULT_REGIONAL_LANGUAGES;
+        setRegionalLanguages(rlState);
+        setLastSavedRegionalLanguages(rlState);
 
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
@@ -577,8 +577,8 @@ export default function page({ siteId }: { siteId: string }) {
         };
         setFloatingButton(fbDefault);
         setLastSavedFloatingButton(fbDefault);
-        setGeoTarget(DEFAULT_GEO_TARGET);
-        setLastSavedGeoTarget(DEFAULT_GEO_TARGET);
+        setRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
+        setLastSavedRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
         setLastPublishedBothFocus(bothContentFocusRef.current);
         const s = siteRef.current;
         if (s) {
@@ -723,10 +723,10 @@ export default function page({ siteId }: { siteId: string }) {
     return JSON.stringify(floatingButton) !== JSON.stringify(lastSavedFloatingButton);
   }, [floatingButton, lastSavedFloatingButton]);
 
-  const geoDirty = useMemo(() => {
-    if (!lastSavedGeoTarget) return false;
-    return JSON.stringify(geoTarget) !== JSON.stringify(lastSavedGeoTarget);
-  }, [geoTarget, lastSavedGeoTarget]);
+  const regionalDirty = useMemo(() => {
+    if (!lastSavedRegionalLanguages) return false;
+    return JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages);
+  }, [regionalLanguages, lastSavedRegionalLanguages]);
 
 
   const appearanceDirty = useMemo(() => {
@@ -753,14 +753,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       publishSuccess &&
-      (contentDirty || floatingDirty || geoDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setPublishSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
-    geoDirty,
+    regionalDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -771,14 +771,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       saveSuccess &&
-      (contentDirty || floatingDirty || geoDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setSaveSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
-    geoDirty,
+    regionalDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -789,7 +789,7 @@ export default function page({ siteId }: { siteId: string }) {
   const hasUnsavedChanges =
     contentDirty ||
     floatingDirty ||
-    geoDirty ||
+    regionalDirty ||
     appearanceDirty ||
     bothFocusDirty ||
     regulationDirty ||
@@ -799,7 +799,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedContentSettings(contentSettings);
     setLastSavedLangCode(selectedLangCode);
     setLastSavedFloatingButton(floatingButton);
-    setLastSavedGeoTarget(geoTarget);
+    setLastSavedRegionalLanguages(regionalLanguages);
     setLastSavedAppearance(appearance);
     setLastPublishedBothFocus(bothContentFocus);
     if (currentRegulationSnapshot) {
@@ -829,8 +829,8 @@ export default function page({ siteId }: { siteId: string }) {
           ...((prev && prev.translations && prev.translations.config) || {}),
           bannerLayoutVisual: appearance.layout.position,
           googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
-            // Who sees the banner (GeoTargetCard); the worker enforces it + the plan.
-            geoTarget,
+            // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
+            regionalLanguages,
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -888,7 +888,7 @@ export default function page({ siteId }: { siteId: string }) {
     contentSettings,
     currentRegulationSnapshot,
     floatingButton,
-    geoTarget,
+    regionalLanguages,
     iabEnabled,
     googleAcEnabled,
     selectedLangCode,
@@ -958,8 +958,8 @@ export default function page({ siteId }: { siteId: string }) {
             cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
             // Read by the runtime (cdnM.js gPL()) — config only, never translations.en.
             googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
-            // Who sees the banner (GeoTargetCard); the worker enforces it + the plan.
-            geoTarget,
+            // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
+            regionalLanguages,
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1238,9 +1238,9 @@ export default function page({ siteId }: { siteId: string }) {
               </p>
             </div>
 
-            <GeoTargetCard
-              value={geoTarget}
-              onChange={setGeoTarget}
+            <RegionalLanguagesCard
+              value={regionalLanguages}
+              onChange={setRegionalLanguages}
               isPaidPlan={isToggleEnabled}
               onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
             />
@@ -1488,6 +1488,7 @@ export default function page({ siteId }: { siteId: string }) {
 
             {contentTab === "notice" && (
             <CookieNoticeAccordion2
+              regionalLanguages={isToggleEnabled ? regionalLanguages : undefined}
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
               plain
