@@ -1242,6 +1242,7 @@ export default function page({ siteId }: { siteId: string }) {
               value={regionalLanguages}
               onChange={setRegionalLanguages}
               isPaidPlan={isToggleEnabled}
+              iabActive={iabEnabled}
               onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
             />
 

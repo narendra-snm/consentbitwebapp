@@ -10,6 +10,9 @@ import { useState } from "react";
  * Saved as translations.config.regionalLanguages; applied by the worker (cdnM.js), which
  * re-checks the plan at serve time, so a downgraded site falls back to the selected language.
  * Replaces the 2026-10-12 Geo-target banner (GeoTargetCard.tsx.bak-regional-lang).
+ * Also works with the IAB TCF banner: the worker sets the IAB banner's language to fr / pt
+ * for these visitors (iabLangOverride in cdnM.js). IAB has no Brazilian Portuguese, so
+ * Brazil gets the IAB's standard Portuguese; iabActive shows a note saying so.
  */
 
 export type RegionalLanguages = { quebec: boolean; brazil: boolean };
@@ -32,14 +35,17 @@ export default function RegionalLanguagesCard({
   value,
   onChange,
   isPaidPlan,
+  iabActive = false,
   onUpgrade,
 }: {
   value: RegionalLanguages;
   onChange: (next: RegionalLanguages) => void;
   isPaidPlan: boolean;
+  iabActive?: boolean;
   onUpgrade: () => void;
 }) {
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const enabled = isPaidPlan;
 
   const toggle = (key: keyof RegionalLanguages) => {
     if (!isPaidPlan) {
@@ -62,11 +68,11 @@ export default function RegionalLanguagesCard({
       {OPTIONS.map((o) => (
         <label
           key={o.key}
-          className={`flex items-start gap-2 py-1.5 ${isPaidPlan ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+          className={`flex items-start gap-2 py-1.5 ${enabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
         >
           <input
             type="checkbox"
-            checked={isPaidPlan && value[o.key]}
+            checked={enabled && value[o.key]}
             onChange={() => toggle(o.key)}
             className="accent-[#007aff] mt-0.5"
           />
@@ -76,6 +82,13 @@ export default function RegionalLanguagesCard({
           </span>
         </label>
       ))}
+
+      {iabActive && isPaidPlan && (
+        <p className="text-xs text-[#6b7280] mt-2 leading-relaxed">
+          With the IAB TCF banner, Brazil visitors see the IAB&apos;s standard Portuguese text. IAB does not
+          publish a Brazilian Portuguese version.
+        </p>
+      )}
 
       {showUpgrade && !isPaidPlan && (
         <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
