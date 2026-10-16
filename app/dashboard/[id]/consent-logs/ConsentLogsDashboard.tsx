@@ -1153,11 +1153,6 @@ export function ConsentLogsDashboard({
                         {loading ? 'Searching…' : `${consentRows.length} record${consentRows.length === 1 ? '' : 's'} · all months`}
                       </p>
                     </div>
-                    {!loading && consentRows.length > 0 && !canDeleteRecords && (
-                      <span className="text-[12px] font-['DM_Sans'] text-[#6b7280]">
-                        Deleting records is available on the Growth plan
-                      </span>
-                    )}
                     {!loading && consentRows.length > 0 && canDeleteRecords && (
                       <>
                         {/* Export hidden 2026-10-10: no law requires JSON, and a visitor can't easily
