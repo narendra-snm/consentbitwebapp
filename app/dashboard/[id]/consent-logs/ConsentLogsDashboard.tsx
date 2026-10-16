@@ -409,6 +409,7 @@ export function ConsentLogsDashboard({
   isLegacy = false,
   platformSiteId,
   platform,
+  canDeleteRecords = false,
 }: {
   siteId: string;
   siteDomain: string;
@@ -416,6 +417,7 @@ export function ConsentLogsDashboard({
   isLegacy?: boolean;
   platformSiteId?: string | null;
   platform?: string | null;
+  canDeleteRecords?: boolean;
 }) {
   const isFramerPlatform = (platform || '').toLowerCase() === 'framer';
   const isFramerLegacy = isLegacy && isFramerPlatform;
@@ -1151,7 +1153,12 @@ export function ConsentLogsDashboard({
                         {loading ? 'Searching…' : `${consentRows.length} record${consentRows.length === 1 ? '' : 's'} · all months`}
                       </p>
                     </div>
-                    {!loading && consentRows.length > 0 && (
+                    {!loading && consentRows.length > 0 && !canDeleteRecords && (
+                      <span className="text-[12px] font-['DM_Sans'] text-[#6b7280]">
+                        Deleting records is available on the Growth plan
+                      </span>
+                    )}
+                    {!loading && consentRows.length > 0 && canDeleteRecords && (
                       <>
                         {/* Export hidden 2026-10-10: no law requires JSON, and a visitor can't easily
                             open it. Re-enable (ideally as CSV) with handleVisitorExport; the handler
@@ -1170,7 +1177,7 @@ export function ConsentLogsDashboard({
                 </div>
               )}
               {/* Delete confirmation — same popup style as Cancel Subscription (all-domain page). */}
-              {confirmVisitorDelete && visitorId && (
+              {confirmVisitorDelete && visitorId && canDeleteRecords && (
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4" role="dialog" aria-modal="true">
                   <div
                     className="absolute inset-0 bg-black/40 backdrop-blur-sm"
