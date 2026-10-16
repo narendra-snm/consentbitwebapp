@@ -5,6 +5,9 @@ import ConsentPreview from "./ConsentPreview";
 import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
+import LawTestPanel from "./LawTestPanel";
+import RegionalLanguagesCard, { DEFAULT_REGIONAL_LANGUAGES, type RegionalLanguages } from "./RegionalLanguagesCard";
+import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
@@ -29,6 +32,7 @@ import {
 import { TRANSLATIONS, LANGUAGE_OPTIONS } from "./translations";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../../../DashboardSessionProvider";
+import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
 import InstallConsentModal from "../../../components/InstallConsentModal";
 import ErrorPopup from "../../../components/ErrorPopup";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
@@ -163,6 +167,9 @@ export default function page({ siteId }: { siteId: string }) {
   const [lastSavedContentSettings, setLastSavedContentSettings] = useState<any>(null);
   const [lastSavedFloatingButton, setLastSavedFloatingButton] =
     useState<FloatingButtonState | null>(null);
+  /** Regional requirements (General tab): translations.config.regionalLanguages. */
+  const [regionalLanguages, setRegionalLanguages] = useState<RegionalLanguages>(DEFAULT_REGIONAL_LANGUAGES);
+  const [lastSavedRegionalLanguages, setLastSavedRegionalLanguages] = useState<RegionalLanguages | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -429,9 +436,9 @@ export default function page({ siteId }: { siteId: string }) {
               en.ccpaDescription ||
               en.description ||
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: en.doNotSell || T.doNotSell,
+            doNotSellLabel: fixCcpaLinkLabel(en.doNotSell) || T.doNotSell,
             optOutTitle: en.optOutPreference || T.optOutPreference,
-            optOutMessage: en.ccpaOptOutPreferenceIntro || T.ccpaOptOutPreferenceIntro,
+            optOutMessage: fixCcpaLinkLabelInText(en.ccpaOptOutPreferenceIntro) || T.ccpaOptOutPreferenceIntro,
             // CCPA keeps its own key so it no longer collides with the GDPR save label.
             // Falls back to the shared key for records saved before the split.
             saveMyPreferencesLabel:
@@ -471,6 +478,14 @@ export default function page({ siteId }: { siteId: string }) {
         };
         setFloatingButton(fbState);
         setLastSavedFloatingButton(fbState);
+
+        const rlRaw = cfgTr.regionalLanguages;
+        const rlState: RegionalLanguages =
+          rlRaw && typeof rlRaw === "object"
+            ? { quebec: rlRaw.quebec === true, brazil: rlRaw.brazil === true }
+            : DEFAULT_REGIONAL_LANGUAGES;
+        setRegionalLanguages(rlState);
+        setLastSavedRegionalLanguages(rlState);
 
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
@@ -548,7 +563,7 @@ export default function page({ siteId }: { siteId: string }) {
           ccpa: {
             message:
               "We use cookies to provide you with the best possible experience. They also allow us to analyze user behavior in order to constantly improve the website for you.",
-            doNotSellLabel: "Do Not Share My Personal Information",
+            doNotSellLabel: "Do Not Sell or Share My Personal Information",
             optOutTitle: TRANSLATIONS.en.optOutPreference,
             optOutMessage: TRANSLATIONS.en.ccpaOptOutPreferenceIntro,
             saveMyPreferencesLabel: TRANSLATIONS.en.saveMyPreferences,
@@ -562,6 +577,8 @@ export default function page({ siteId }: { siteId: string }) {
         };
         setFloatingButton(fbDefault);
         setLastSavedFloatingButton(fbDefault);
+        setRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
+        setLastSavedRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
         setLastPublishedBothFocus(bothContentFocusRef.current);
         const s = siteRef.current;
         if (s) {
@@ -706,6 +723,11 @@ export default function page({ siteId }: { siteId: string }) {
     return JSON.stringify(floatingButton) !== JSON.stringify(lastSavedFloatingButton);
   }, [floatingButton, lastSavedFloatingButton]);
 
+  const regionalDirty = useMemo(() => {
+    if (!lastSavedRegionalLanguages) return false;
+    return JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages);
+  }, [regionalLanguages, lastSavedRegionalLanguages]);
+
 
   const appearanceDirty = useMemo(() => {
     if (!lastSavedAppearance) return false;
@@ -731,13 +753,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       publishSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setPublishSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
+    regionalDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -748,13 +771,14 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       saveSuccess &&
-      (contentDirty || floatingDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setSaveSuccess(false);
     }
   }, [
     contentDirty,
     floatingDirty,
+    regionalDirty,
     appearanceDirty,
     bothFocusDirty,
     regulationDirty,
@@ -765,6 +789,7 @@ export default function page({ siteId }: { siteId: string }) {
   const hasUnsavedChanges =
     contentDirty ||
     floatingDirty ||
+    regionalDirty ||
     appearanceDirty ||
     bothFocusDirty ||
     regulationDirty ||
@@ -774,6 +799,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedContentSettings(contentSettings);
     setLastSavedLangCode(selectedLangCode);
     setLastSavedFloatingButton(floatingButton);
+    setLastSavedRegionalLanguages(regionalLanguages);
     setLastSavedAppearance(appearance);
     setLastPublishedBothFocus(bothContentFocus);
     if (currentRegulationSnapshot) {
@@ -803,6 +829,8 @@ export default function page({ siteId }: { siteId: string }) {
           ...((prev && prev.translations && prev.translations.config) || {}),
           bannerLayoutVisual: appearance.layout.position,
           googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
+            // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
+            regionalLanguages,
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -860,6 +888,7 @@ export default function page({ siteId }: { siteId: string }) {
     contentSettings,
     currentRegulationSnapshot,
     floatingButton,
+    regionalLanguages,
     iabEnabled,
     googleAcEnabled,
     selectedLangCode,
@@ -929,6 +958,8 @@ export default function page({ siteId }: { siteId: string }) {
             cookiePolicyLinkEnabled: contentSettings.cookiePolicyLink ? "1" : "0",
             // Read by the runtime (cdnM.js gPL()) — config only, never translations.en.
             googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
+            // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
+            regionalLanguages,
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -984,8 +1015,18 @@ export default function page({ siteId }: { siteId: string }) {
     applyPersistSuccessState();
   };
 
+  // A site whose own plan has ended is read-only: its banner is no longer served, so
+  // there is nothing for an edit to take effect on. The worker enforces this and returns
+  // 402 SUBSCRIPTION_ENDED; checking here too means the customer is told why up front
+  // instead of losing their edits to a generic "something went wrong".
+  const subEnded = siteSubscriptionHasEnded(site);
+
   const handleSaveChanges = async () => {
     if (!site?.id || !hasUnsavedChanges) return;
+    if (subEnded) {
+      setPublishError("Your plan has ended, so the banner can no longer be edited. Choose a plan to start again.");
+      return;
+    }
     try {
       setPersistKind("save");
       setSavingContent(true);
@@ -1183,7 +1224,9 @@ export default function page({ siteId }: { siteId: string }) {
                   // Session-level loading can cause the whole dropdown to appear "stuck disabled".
                   loading={false}
                   disabled={iabEnabled}
-                  effectivePlanId={effectivePlanId}
+                  // The site's own live plan (same rule as the header's "Upgrade to Pro"): the session
+                  // plan falls back to the account's paid plan, and an ended plan keeps its planId.
+                  effectivePlanId={isToggleEnabled && !subEnded ? String(site?.planId) : "free"}
                   onChange={handleRegulationChange}
                 />
               </div>
@@ -1194,10 +1237,21 @@ export default function page({ siteId }: { siteId: string }) {
                   : consentType === "ccpa"
                   ? "The selected template (opt-out banner) supports CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
                   : consentType === "both"
-                  ? "The selected template supports GDPR (EU/EEA) opt-in consent and CCPA/CPRA (California) opt-out consent."
+                  ? "The selected template shows an opt-in banner for GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa), and an opt-out banner for CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
                   : "The selected template (opt-in banner) supports GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa)."}
               </p>
             </div>
+
+            {/* Essential/Growth only, and hidden while the IAB TCF banner is selected. */}
+            {isToggleEnabled && !iabEnabled && (
+              <RegionalLanguagesCard
+                value={regionalLanguages}
+                onChange={setRegionalLanguages}
+                isPaidPlan={isToggleEnabled}
+                iabActive={iabEnabled}
+                onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
+              />
+            )}
 
             {/* IAB Support Card */}
        
@@ -1442,6 +1496,7 @@ export default function page({ siteId }: { siteId: string }) {
 
             {contentTab === "notice" && (
             <CookieNoticeAccordion2
+              regionalLanguages={isToggleEnabled ? regionalLanguages : undefined}
               key={activeContentBannerType}
               bannerType={activeContentBannerType}
               plain
@@ -1637,6 +1692,14 @@ export default function page({ siteId }: { siteId: string }) {
           <FontPickerPanel
             value={appearance.type}
             onChange={(type) => setAppearance((a) => ({ ...a, type }))}
+          />
+        )}
+        {active === "Law test" && (
+          <LawTestPanel
+            scriptUrl={site?.scriptUrl}
+            siteId={site?.id}
+            cdnScriptId={(site as any)?.cdnScriptId}
+            regionMode={(site as any)?.region_mode}
           />
         )}
       </div>

@@ -53,6 +53,7 @@ export function CookieNoticeAccordion2({
   isOpen,
   onToggle,
   plain,
+  regionalLanguages,
 }: {
   value?: Partial<CookieNoticeSettings>;
   onChange?: (next: CookieNoticeSettings) => void;
@@ -60,6 +61,8 @@ export function CookieNoticeAccordion2({
   isOpen?: boolean;
   onToggle?: (nextOpen: boolean) => void;
   plain?: boolean;
+  /** Regional requirements ticks — the Reject warning names Law 25 / LGPD when ticked. */
+  regionalLanguages?: { quebec: boolean; brazil: boolean };
 }) {
   const settings: CookieNoticeSettings = {
     title: 'We value your privacy',
@@ -67,7 +70,7 @@ export function CookieNoticeAccordion2({
     closeButton: true,
     acceptAll: 'Accept',
     rejectAll: 'Reject All',
-    doNotSellLabel: 'Do Not Share My Personal Information',
+    doNotSellLabel: 'Do Not Sell or Share My Personal Information',
     rejectButton: true,
     customizeButton: true,
     customizeLabel: 'Preferences',
@@ -89,6 +92,18 @@ export function CookieNoticeAccordion2({
   const update = (patch: Partial<CookieNoticeSettings>) => {
     onChange?.({ ...settings, ...patch });
   };
+
+  // Reject is the customer's choice (decided 2026-10-15); while it is off, say which laws
+  // that may break. Quebec / Brazil are named only when ticked in Regional requirements.
+  const rejectWarningLaws = [
+    "GDPR (EU/UK)",
+    ...(regionalLanguages?.quebec ? ["Quebec Law 25"] : []),
+    ...(regionalLanguages?.brazil ? ["Brazil's LGPD"] : []),
+  ];
+  const rejectWarningLawText =
+    rejectWarningLaws.length > 1
+      ? `${rejectWarningLaws.slice(0, -1).join(", ")} or ${rejectWarningLaws[rejectWarningLaws.length - 1]}`
+      : rejectWarningLaws[0];
 
   const toggleSwitch = (field: keyof CookieNoticeSettings) => {
     const current = settings[field];
@@ -259,6 +274,12 @@ export function CookieNoticeAccordion2({
                   className="w-full h-12 px-4 bg-white border rounded-lg text-sm text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
+                {!settings.rejectButton && (
+                  <p className="text-xs text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-md p-2 leading-relaxed">
+                    ⚠️ Without a Reject button, this banner may not comply with {rejectWarningLawText}, under which
+                    rejecting consent must be as easy as accepting it. We recommend enabling the Reject button.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -267,9 +288,9 @@ export function CookieNoticeAccordion2({
                     className="block text-sm text-[#111827]"
                     style={{ fontVariationSettings: "'opsz' 14" }}
                   >
-                    Do Not Share link
+                    Do Not Sell or Share link
                   </label>
-                  <Tooltip text="Show or hide the Do Not Share My Personal Information link.">
+                  <Tooltip text="Show or hide the Do Not Sell or Share My Personal Information link.">
                     <ToggleSwitch
                       checked={settings.rejectButton}
                       onChange={() => toggleSwitch('rejectButton')}

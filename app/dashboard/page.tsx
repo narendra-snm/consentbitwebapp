@@ -21,7 +21,7 @@ export default function DashboardPage() {
  const router = useRouter();
  const pathname = usePathname();
  const searchParams = useSearchParams();
- const { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, refresh } = useDashboardSession();
+ const { loading, authenticated, user, sites, activeOrganizationId, activeSiteId, refresh, logout } = useDashboardSession();
  const activeSite = sites.find((s: any) => String(s?.id) === String(activeSiteId)) || null;
  const userEmail = user?.email ?? "";
  /**
@@ -479,6 +479,15 @@ export default function DashboardPage() {
           alt="logo"
           className="h-6"
         />
+        {authenticated && (
+          <button
+            type="button"
+            onClick={logout}
+            className="px-3 py-2.5 rounded-lg bg-white border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Logout
+          </button>
+        )}
       </div>
 
       {/* Wizard — never render during post-payment flows; PostSetupOverlay handles those */}

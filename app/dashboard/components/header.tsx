@@ -186,7 +186,7 @@ export default function Header() {
     const isPaid = (k === "basic" || k === "essential" || k === "growth") && !subEnded;
     const planDisplay = {
       label,
-      upgradeButtonText: isPaid ? "Change plan" : "Update to Pro",
+      upgradeButtonText: isPaid ? "Change plan" : "Upgrade to Pro",
       tooltipUpgrade: isPaid
         ? "Switch or modify your current subscription plan."
         : "Upgrade to a paid plan to unlock more features.",
@@ -457,7 +457,7 @@ const handleSelectSite = (site: any) => {
         {/* PLAN — skeleton until dashboard-init finishes (no false "Free" on reload).
             Hidden once this site's subscription has ended: there is no current plan to
             name, and the stale tier read as if the site were still paid for. The
-            "Update to Pro" button beside this stays, so the way back is still one click.
+            "Upgrade to Pro" button beside this stays, so the way back is still one click.
             Kept behind `!showPlanSkeleton` so the pill doesn't flicker away on first
             paint before the session data has loaded. */}
         {!showPlanSkeleton && subEnded ? null : (

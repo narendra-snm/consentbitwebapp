@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useDashboardSession } from '../../DashboardSessionProvider';
 import { ConsentLogsDashboard}  from './ConsentLogsDashboard';
+// import { ConsentRetentionCard } from './ConsentRetentionCard'; // card hidden, see below
 
 function pickSiteLabel(site: { name?: string; domain?: string } | null | undefined) {
   if (!site) return '';
@@ -42,5 +43,18 @@ export default function ConsentLogsPage() {
   // Pass raw isLegacy — ConsentLogsDashboard uses the selected date to decide KV vs D1:
   // legacy + date ≤ June 2026 → legacy store (Framer KV for framer platform, KV/R2 otherwise),
   // legacy + date > June 2026 → D1.
-  return <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />;
+  return (
+    <>
+      {/* Retention card hidden 2026-10-10: the period is fixed (14 months, US opt-outs 24)
+          for every plan, so there is nothing for the customer to choose. Restore this block
+          to show it again; the card and /api/consent-retention are unchanged.
+      <div className="w-full bg-white px-8 pt-5">
+        <div className="max-w-[1259px] mx-auto">
+          <ConsentRetentionCard siteId={effectiveSiteId} />
+        </div>
+      </div>
+      */}
+      <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />
+    </>
+  );
 }

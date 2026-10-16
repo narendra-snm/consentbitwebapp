@@ -1484,6 +1484,8 @@ export type ConsentHistoryResponse = {
   total: number;
   limit: number;
   offset: number;
+  /** Free plan: records before this date (YYYY-MM-DD) are hidden. Absent/null = no limit. */
+  viewCutoff?: string | null;
 };
 
 const EMPTY_CONSENT_RESPONSE: ConsentHistoryResponse = {
@@ -1529,6 +1531,8 @@ export async function getConsentHistory(
   offset: number = 0,
   year?: string,
   month?: string,
+  /** Visitor consent ID (Consent.deviceId): all of that visitor's records, every month. */
+  deviceId?: string,
 ): Promise<ConsentHistoryResponse> {
   const params = new URLSearchParams({
     siteId,
@@ -1536,11 +1540,36 @@ export async function getConsentHistory(
     offset: String(offset),
     ...(year ? { year } : {}),
     ...(month ? { month } : {}),
+    ...(deviceId ? { deviceId } : {}),
   });
   const res = await fetch(`/api/consent-history?${params.toString()}`, { credentials: 'include' });
   const data = await parseApiResponse(res);
   if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
   return data;
+}
+
+/** Every record for one visitor consent ID (or one record ID), for their access request. */
+export async function exportVisitorConsent(siteId: string, deviceId: string): Promise<{
+  success: boolean; siteId: string; consentId: string; exportedAt: string; count: number; records: unknown[];
+}> {
+  const params = new URLSearchParams({ siteId, deviceId });
+  const res = await fetch(`/api/consent-visitor?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Export failed: ${res.status}`);
+  return data;
+}
+
+/** Delete every record for one visitor consent ID (or one record ID), for their erasure request. */
+export async function deleteVisitorConsent(siteId: string, deviceId: string): Promise<{ deleted: number; archivedDeleted: number }> {
+  const res = await fetch('/api/consent-visitor', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siteId, deviceId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Delete failed: ${res.status}`);
+  return { deleted: data.deleted ?? 0, archivedDeleted: data.archivedDeleted ?? 0 };
 }
 
 // script verification starts here

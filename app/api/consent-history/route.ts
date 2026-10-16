@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
   const offset = request.nextUrl.searchParams.get('offset') || '0';
   const year = request.nextUrl.searchParams.get('year');
   const month = request.nextUrl.searchParams.get('month');
+  // Visitor consent ID: all of one visitor's records (worker honours it only with LAW_FIXES on).
+  const deviceId = request.nextUrl.searchParams.get('deviceId');
 
   if (!siteId) {
     return NextResponse.json({ success: false, error: 'siteId is required' }, { status: 400 });
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
     offset,
     ...(year ? { year } : {}),
     ...(month ? { month } : {}),
+    ...(deviceId ? { deviceId } : {}),
   });
 
   const cookie = request.headers.get('cookie') || '';

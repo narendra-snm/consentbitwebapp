@@ -46,3 +46,54 @@ export function resolveInstallScriptUrl(
   const path = `/consentbit/${embedId}/script.js`;
   return `${getConsentbitCdnOrigin()}${path}`;
 }
+
+/**
+ * BANNER TESTING ONLY — never use this for the install snippet.
+ *
+ * Points at the worker's `/cdn-test/` route (handlers/cdnTest.js), a copy of the
+ * live CDN that additionally honours geo overrides. Same origin as the live CDN,
+ * only the path differs, so no extra env var is needed.
+ *
+ * `resolveInstallScriptUrl` above is deliberately left alone: that URL is backed
+ * by `Site.embedScriptUrl` in D1 and must stay stable, because verification and
+ * publishers depend on the exact `src` string.
+ *
+ * @example
+ *   resolveBannerTestScriptUrl(site.scriptUrl, site.id, site.cdnScriptId, { country: 'BR' })
+ *   // https://…workers.dev/cdn-test/<id>.js?__country=BR
+ *
+ *   // Utah — reproduces the optOut/enforcement mismatch
+ *   resolveBannerTestScriptUrl(…, { country: 'US', region: 'UT' })
+ *
+ *   // EU
+ *   resolveBannerTestScriptUrl(…, { country: 'DE', eu: true })
+ */
+export function resolveBannerTestScriptUrl(
+  scriptUrl: string | undefined | null,
+  siteId: string | undefined | null,
+  cdnScriptId?: string | undefined | null,
+  geo?: { country?: string; region?: string; eu?: boolean },
+): string {
+  // Reuse the live resolver purely to recover the embed id, then swap the path.
+  const live = resolveInstallScriptUrl(scriptUrl, siteId, cdnScriptId);
+  if (!live) return '';
+
+  let embedId = '';
+  try {
+    const segs = new URL(live).pathname.split('/').filter(Boolean);
+    const last = segs[segs.length - 1] || '';
+    // Paths are either /consentbit/<id>/script.js or /client_data/<id>.js
+    embedId = last === 'script.js' ? (segs[segs.length - 2] || '') : last.replace(/\.js$/i, '');
+  } catch {
+    return '';
+  }
+  if (!embedId) return '';
+
+  const qs = new URLSearchParams();
+  if (geo?.country) qs.set('__country', geo.country);
+  if (geo?.region) qs.set('__region', geo.region);
+  if (geo?.eu != null) qs.set('__eu', geo.eu ? '1' : '0');
+  const query = qs.toString();
+
+  return `${getConsentbitCdnOrigin()}/cdn-test/${embedId}.js${query ? `?${query}` : ''}`;
+}
