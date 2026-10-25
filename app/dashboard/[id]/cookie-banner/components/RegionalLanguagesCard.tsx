@@ -105,7 +105,7 @@ export default function RegionalLanguagesCard({
 
         <p className="text-xs text-[#4b5563] mt-3 leading-relaxed">
           Select these if you have visitors from Quebec or Brazil. Quebec law requires French for businesses that target
-          Quebec, and Brazil expects Portuguese. Consent rules for both places apply automatically either way.
+          Quebec, and Brazil expects Portuguese.
         </p>
       </Accordion>
     </div>

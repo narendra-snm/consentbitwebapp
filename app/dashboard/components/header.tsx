@@ -17,7 +17,7 @@ function Tooltip({ text, children, align = "left" }: { text: string; children: R
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import AddNewSiteModal from "./AddNewSiteModal";
-import { getBillingUsage } from "@/lib/client-api";
+import { getBillingUsage, getRetentionNotice, type RetentionNotice } from "@/lib/client-api";
 import { analytics } from "@/lib/analytics";
 import { resolvePlanTierForSiteContext } from "@/lib/dashboard-plan-tier";
 import { siteSubscriptionHasEnded } from "@/lib/subscription-state";
@@ -85,6 +85,7 @@ export default function Header() {
   const [hydrated, setHydrated] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<'pageview' | 'scan'>('pageview');
+  const [retentionNotice, setRetentionNotice] = useState<RetentionNotice | null>(null);
   const [pageviewOverLimit, setPageviewOverLimit] = useState(false);
   const [pageviewUsage, setPageviewUsage] = useState<{ used: number; limit: number } | null>(null);
   const [scanOverLimit, setScanOverLimit] = useState(false);
@@ -94,6 +95,8 @@ export default function Header() {
 
   const router = useRouter();
   const pathname = usePathname();
+  // Profile pages are account-level: no site picker, domain links or plan controls.
+  const onProfile = (pathname || "").startsWith("/dashboard/profile");
   const pathParts = (pathname || "").split("/").filter(Boolean);
 
   const {
@@ -218,7 +221,32 @@ export default function Header() {
       .catch(() => {/* non-critical */});
   }, [accountOrgId, activeSiteId, resolvedPlanKey]);
 
-  const notifications: { title: string; desc: string; time: string; action?: () => void }[] = [
+  // Consent records about to be hidden (Free, 3 months) or removed (paid, 12 months).
+  useEffect(() => {
+    setRetentionNotice(null);
+    if (!activeSiteId) return;
+    getRetentionNotice(activeSiteId)
+      .then(setRetentionNotice)
+      .catch(() => {/* non-critical */});
+  }, [activeSiteId, resolvedPlanKey]);
+
+  const fmtDay = (d?: string) =>
+    d ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
+
+  const notifications: { title: string; desc: string; time: string; action?: () => void; actionLabel?: string }[] = [
+    ...(retentionNotice && activeSiteId ? [retentionNotice.kind === 'free' ? {
+      title: 'Consent records expiring',
+      desc: `${retentionNotice.count.toLocaleString()} consent record${retentionNotice.count === 1 ? '' : 's'} will be older than 3 months and hidden from ${fmtDay(retentionNotice.date)}. Upgrade to a Pro plan to keep them for 12 months.`,
+      time: 'Now',
+      action: () => { setNotifOpen(false); router.push(`/dashboard/${activeSiteId}/upgrade`); },
+      actionLabel: 'Upgrade Plan →',
+    } : {
+      title: 'Consent records expiring',
+      desc: `${retentionNotice.count.toLocaleString()} consent record${retentionNotice.count === 1 ? '' : 's'} will be removed on ${fmtDay(retentionNotice.date)}. Download them to keep a copy for your reference.`,
+      time: 'Now',
+      action: () => { setNotifOpen(false); router.push(`/dashboard/${activeSiteId}/consent-logs`); },
+      actionLabel: 'Go to Consent Logs →',
+    }] : []),
     ...(pageviewOverLimit && pageviewUsage ? [{
       title: 'Pageview limit reached',
       desc: `${pageviewUsage.used.toLocaleString()} / ${pageviewUsage.limit.toLocaleString()} pageviews used. Tracking paused — upgrade to continue.`,
@@ -324,6 +352,7 @@ const handleSelectSite = (site: any) => {
   className="w-[100px] xl:w-[170px] h-auto"
 />
 
+        {!onProfile && (<>
         {/* DOMAIN SELECTOR */}
         <div ref={domainRef} className="relative flex items-center gap-2">
           <button
@@ -450,10 +479,12 @@ const handleSelectSite = (site: any) => {
             View all Domains
           </button>
         </Tooltip>
+        </>)}
       </div>
 
       {/* RIGHT SECTION */}
       <div className="flex items-center gap-4">
+        {!onProfile && (<>
         {/* PLAN — skeleton until dashboard-init finishes (no false "Free" on reload).
             Hidden once this site's subscription has ended: there is no current plan to
             name, and the stale tier read as if the site were still paid for. The
@@ -517,6 +548,8 @@ const handleSelectSite = (site: any) => {
           </Tooltip>
         )}
 
+        </>)}
+
         {/* LOGOUT */}
         <button
           type="button"
@@ -530,7 +563,7 @@ const handleSelectSite = (site: any) => {
         {/* NOTIFICATION — hidden for Members: every entry is an upgrade prompt */}
         {!isMemberRole && (
         <div ref={notifRef} className="relative">
-          <Tooltip text="View alerts for pageview or scan limit warnings." align="right">
+          <Tooltip text="View alerts for pageview or scan limits and expiring consent records." align="right">
             <div className="relative mt-1 cursor-pointer" role="button" aria-label="Notifications" onClick={() => setNotifOpen(!notifOpen)}>
               <img src="/images/bell.svg" />
               {notifications.length > 0 && (
@@ -568,7 +601,7 @@ const handleSelectSite = (site: any) => {
                         </div>
                         <p className="text-xs text-gray-500 mt-1 leading-snug">{n.desc}</p>
                         {n.action && (
-                          <p className="text-xs text-[#007AFF] mt-1.5 font-medium">Upgrade Plan →</p>
+                          <p className="text-xs text-[#007AFF] mt-1.5 font-medium">{n.actionLabel || 'Upgrade Plan →'}</p>
                         )}
                       </div>
                     </div>

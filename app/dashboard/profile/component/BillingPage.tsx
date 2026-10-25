@@ -861,7 +861,13 @@ export default function BillingPage({
             <div className="relative">
               <select
                 value={filterDomain}
-                onChange={(e) => setFilterDomain(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFilterDomain(v);
+                  // A specific site also becomes the active site (like the header picker), so
+                  // the plan, usage and billing details below follow it. "All" only filters invoices.
+                  if (v !== "all") setActiveSiteId(v);
+                }}
                 className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >

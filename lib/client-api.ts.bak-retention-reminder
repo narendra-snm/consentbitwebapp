@@ -1,0 +1,1600 @@
+
+
+/**
+ * Decode a base64 transport envelope produced by the worker's security middleware.
+ * Response shape: { d: "<base64 UTF-8 JSON>" }
+ * Falls through for plain JSON responsesss (backward-compat / public endpoints).
+ */
+function decodeEnvelope(parsed: any): any {
+  if (parsed && typeof parsed.d === 'string') {
+    try {
+      const binary = atob(parsed.d);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch { /* fall through to raw parsed value */ }
+  }
+  return parsed;
+}
+
+/** Parse a fetch response safely — reads body once, handles HTML error pages from Cloudflare/Workers. */
+export async function parseApiResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  let parsed: any;
+  try { parsed = JSON.parse(text); } catch {
+    return { success: false, error: text.trimStart().startsWith('<') ? `Verification failed. Please try again in a moment.` : text || `Verification failed. Please try again.` };
+  }
+  return decodeEnvelope(parsed);
+}
+
+//login starts here
+
+/**
+ * Raised when the email is valid but the account has no password — created through OTP
+ * signup, Webflow/Framer, or a migration. The login screen catches this to offer the
+ * email-code route instead of showing a dead-end credential error.
+ */
+export class PasswordNotSetError extends Error {
+  readonly canUseOtp = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'PasswordNotSetError';
+  }
+}
+
+/**
+ * Password login.
+ *
+ * The password is sent as plaintext over HTTPS and hashed server-side with PBKDF2.
+ * It is deliberately NOT hashed in the browser: TLS already protects it in transit, and
+ * the previous client-side SHA-256 scheme made the stored value directly replayable —
+ * anyone who could read the database could authenticate as any user.
+ */
+export async function login(email: string, password: string) {
+  const emailNorm = email.trim().toLowerCase();
+
+  // Plaintext over HTTPS, hashed server-side with PBKDF2. TLS protects it in transit and
+  // the salted hash protects it at rest; hashing in the browser would only make that hash
+  // the credential. The worker also accepts an RSA-encrypted `passwordEnc` field, which
+  // this client deliberately does not use — it removed plaintext from the request body
+  // but bought no real protection, at the cost of a key fetch on every page load.
+  const res = await fetch('/api/auth/password-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email: emailNorm, password }),
+  });
+
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    const message = data?.error || `Login failed: ${res.status}`;
+    if (data?.passwordNotSet) throw new PasswordNotSetError(message);
+    throw new Error(message);
+  }
+
+  try {
+    sessionStorage.setItem('cbLastUserEmail', emailNorm);
+    sessionStorage.removeItem('cbSessionCache');
+  } catch {}
+
+  return data;
+}
+//login ends here
+
+// Passwordless OTP auth starts here
+export async function requestVerificationCode(payload: {
+  email: string;
+  purpose: 'login' | 'signup';
+  name?: string;
+  
+  // Signup only. Sent here rather than at verify time so the account is created in one
+  // step once the code checks out — the worker hashes it and parks it on the
+  // verification row, so no User exists until the email is proven.
+  password?: string;
+  confirmPassword?: string;
+}) {
+  const res = await fetch('/api/auth/request-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      email: payload.email.trim().toLowerCase(),
+      purpose: payload.purpose,
+      name: payload.name,
+      ...(payload.password ? { password: payload.password } : {}),
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+      ...(payload.password ? { password: payload.password } : {}),
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+    }),
+  });
+  const data = await parseApiResponse(res);
+  const success =
+    Boolean(data?.success) ||
+    (res.ok && (typeof data?.requestId === 'string' || typeof data?.expiresAt === 'string' || typeof data?.code === 'string'));
+  if (!res.ok || !success) throw new Error(data?.error || `Request code failed: ${res.status}`);
+  return data as { success: true; requestId: string; expiresAt: string; code?: string };
+}
+
+export async function verifyVerificationCode(payload: {
+  email: string;
+  purpose: 'login' | 'signup';
+  code: string;
+  scanId?: string;
+}) {
+  const res = await fetch('/api/auth/verify-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      email: payload.email.trim().toLowerCase(),
+      purpose: payload.purpose,
+      code: payload.code.trim(),
+      // Optional cookie-scan id handed off from the scanner landing page.
+      ...(payload.scanId ? { scanId: payload.scanId } : {}),
+    }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Verify code failed: ${res.status}`);
+  try {
+    // Record who just logged in and drop any previous user's cached session so the
+    // dashboard doesn't flash stale data before its own dashboard-init fetch completes.
+    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    sessionStorage.removeItem('cbSessionCache');
+    // Cache dashboard data for instant render only if the worker still returns it
+    // (verify no longer blocks on building it — the dashboard fetches it on mount).
+    if (data.dashboardInit?.authenticated) {
+      sessionStorage.setItem('dashboardInit', JSON.stringify(data.dashboardInit));
+    }
+  } catch {}
+  return data;
+}
+// Passwordless OTP auth ends here
+
+
+
+//Signup statrs here
+
+export type SignupPayload = {
+  name: string;
+  email: string;
+  password: string;
+
+  /** Optional. The signup form uses a single password field with a reveal toggle. */
+  confirmPassword?: string;
+};
+
+/**
+ * Signup step 1 — validates the password and emails a 6-digit code. The account is not
+ * created here; finish with verifyVerificationCode({ purpose: 'signup', code }).
+ *
+ * Replaces the old POST /api/auth/signup, which created an account straight from the
+ * request body and so let anyone register an email they did not control.
+ */
+/**
+ * Signup step 1 — validates the password and emails a 6-digit code. The account is not
+ * created here; finish with verifyVerificationCode({ purpose: 'signup', code }).
+ *
+ * Replaces the old POST /api/auth/signup, which created an account straight from the
+ * request body and so let anyone register an email they did not control.
+ */
+export async function signup(payload: SignupPayload) {
+  return requestVerificationCode({
+    email: payload.email,
+    purpose: 'signup',
+    name: payload.name.trim(),
+    password: payload.password,
+    confirmPassword: payload.confirmPassword,
+  });
+}
+
+/**
+ * Signup WITHOUT email verification — creates the account in one request and returns
+ * with the session cookie already set, so the caller can go straight to /dashboard.
+ *
+ * The plaintext password travels over HTTPS and is hashed server-side with PBKDF2
+ * (100k iterations, per-user salt). It is never hashed here: a client-side hash would
+ * become the credential itself, replayable by anyone who could read it.
+ *
+ * TRADE-OFF: unlike signup(), nothing proves the address belongs to the person
+ * registering it. Use signup() when that matters.
+ */
+export async function signupWithPassword(payload: SignupPayload) {
+  const res = await fetch('/api/auth/password-signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      name: payload.name.trim(),
+      email: payload.email.trim().toLowerCase(),
+      // Plaintext over HTTPS — see the note in login().
+      password: payload.password,
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+    }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Signup failed: ${res.status}`);
+  }
+
+  try {
+    sessionStorage.setItem('cbLastUserEmail', payload.email.trim().toLowerCase());
+    sessionStorage.removeItem('cbSessionCache');
+  } catch {
+    // sessionStorage unavailable (private mode) — non-fatal.
+  }
+  return data;
+}
+
+
+/**
+ * Confirm an emailed verification token. No session required — the token is the proof,
+ * so this also works if the link is opened in a different browser.
+ */
+export async function confirmEmailVerification(token: string) {
+  const res = await fetch('/api/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Verification failed: ${res.status}`);
+  }
+  return data as { success: true; email?: string; alreadyVerified?: boolean };
+}
+
+/** Ask for a fresh confirmation link. Requires a session — it emails the logged-in user. */
+export async function resendEmailVerification() {
+  const res = await fetch('/api/auth/verify-email/resend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: '{}',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not send a new link: ${res.status}`);
+  }
+  return data as { success: true; sent?: boolean; alreadyVerified?: boolean };
+}
+
+//signup ends here
+
+//set / change password starts here
+
+/**
+ * Set a first password, or change an existing one, for the signed-in user.
+ *
+ * `currentPassword` is required only when the account already has a password — the
+ * worker enforces this, so a stolen session cannot silently take over an account.
+ * This doubles as the password-reset path: log in with an email code, then set a new one.
+ */
+/**
+ * Check the signed-in user's current password without changing it.
+ *
+ * Lets the profile panel hold back the new-password fields until the current one is
+ * confirmed. Returns `valid` rather than throwing: a wrong password is an expected
+ * answer here, not a failed request. setPassword() re-verifies on save, so this is a
+ * UX gate and never the thing that authorises the change.
+ */
+export async function verifyCurrentPassword(currentPassword: string) {
+  const res = await fetch('/api/auth/verify-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ currentPassword }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not verify password: ${res.status}`);
+  }
+  return data as { success: true; valid: boolean; passwordNotSet?: boolean };
+}
+
+export async function setPassword(payload: {
+  newPassword: string;
+  currentPassword?: string;
+  /** Optional. The UI uses a single field with a reveal toggle; the worker only
+   *  compares this when it is actually sent. */
+  confirmPassword?: string;
+}) {
+  const res = await fetch('/api/auth/set-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      newPassword: payload.newPassword,
+      ...(payload.confirmPassword ? { confirmPassword: payload.confirmPassword } : {}),
+      ...(payload.currentPassword ? { currentPassword: payload.currentPassword } : {}),
+    }),
+  });
+
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Could not update password: ${res.status}`);
+  }
+  return data as { success: true; hasPassword: true; message: string };
+}
+
+//set / change password ends here
+
+//me endpoint starts here
+export async function getMe() {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (!res.ok) return { authenticated: false, user: null, organizations: [] };
+  return parseApiResponse(res);
+}
+
+export async function getDashboardInit() {
+  const res = await fetch('/api/auth/dashboard-init', { credentials: 'include', cache: 'no-store' });
+  if (!res.ok) return { authenticated: false, user: null, organizations: [], sites: [], effectivePlanId: '' };
+  return parseApiResponse(res); // decodes base64 envelope if present
+}
+//me endpoint ends here
+//profile update starts here
+export async function updateProfile(payload: { name?: string; billingEmail?: string }) {
+  const res = await fetch('/api/auth/profile', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+  return data; // { success, user, organizations }
+}
+//profile update ends here
+
+//transfer ownership starts here
+/**
+ * Request an account ownership transfer. Sends an authorization link to the CURRENT
+ * owner's email; nothing changes until that link is clicked.
+ */
+export async function requestOwnershipTransfer(payload: { newEmail: string; newName: string }) {
+  const res = await fetch('/api/auth/transfer-ownership/request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest', // CSRF guard (authenticated mutation)
+    },
+    credentials: 'include',
+    body: JSON.stringify({
+      newEmail: payload.newEmail.trim().toLowerCase(),
+      newName: payload.newName.trim(),
+      // Let the worker build the authorization link against this exact app origin.
+      appOrigin: typeof window !== 'undefined' ? window.location.origin : '',
+    }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to start ownership transfer');
+  return data as { success: true; sentTo?: string; authorizeLink?: string; expiresAt?: string };
+}
+
+/** Complete the transfer by submitting the token from the emailed authorization link. */
+export async function authorizeOwnershipTransfer(token: string) {
+  const res = await fetch('/api/auth/transfer-ownership/authorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to authorize ownership transfer');
+  return data as { success: true; newOwner?: { email: string; name: string } };
+}
+//transfer ownership ends here
+
+//team members starts here
+export type TeamRole = 'admin' | 'member';
+
+export type TeamSite = {
+  id: string;
+  name: string | null;
+  domain: string | null;
+  planId: string | null;
+  /** false on plans without the team feature (Free, Basic) */
+  teamEnabled: boolean;
+  /** seats per role; null = unlimited */
+  caps: Record<TeamRole, number | null>;
+  used: Record<TeamRole, number>;
+};
+
+export type TeamMember = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: TeamRole;
+  status: 'pending' | 'active';
+  siteIds: string[];
+  createdAt: string;
+  acceptedAt: string | null;
+  inviteExpired: boolean;
+  hasOtherSites?: boolean;
+  /** Sites of this person that dropped to Basic/Free — access there is suspended. */
+  suspendedSiteIds?: string[];
+  /** Every site of this person is on Basic/Free, so they have no access right now. */
+  suspended?: boolean;
+  isSelf: boolean;
+  canEdit: boolean;
+  canRemove: boolean;
+};
+
+export type TeamOverview = {
+  success: true;
+  organizationId: string;
+  organizationName: string | null;
+  viewerRole: 'owner' | 'admin';
+  owner: { email: string; name: string | null } | null;
+  organizations: { organizationId: string; name: string | null; role: 'owner' | 'admin' }[];
+  sites: TeamSite[];
+  members: TeamMember[];
+};
+
+export type TeamInviteInfo = {
+  email: string;
+  role: TeamRole;
+  status: 'pending' | 'active';
+  ownerEmail: string | null;
+  inviterEmail: string | null;
+  inviterName: string | null;
+  sites: { name: string | null; domain: string | null }[];
+};
+
+/** Error carrying the worker's `code` so the UI can branch (e.g. TEAM_LIMIT_REACHED). */
+export class TeamApiError extends Error {
+  code: string | null;
+  status: number;
+  data: any;
+  constructor(message: string, status: number, data: any) {
+    super(message);
+    this.name = 'TeamApiError';
+    this.code = data?.code ?? null;
+    this.status = status;
+    this.data = data;
+  }
+}
+
+async function teamRequest(path: string, init?: { method?: 'GET' | 'POST'; body?: unknown }) {
+  const method = init?.method ?? 'GET';
+  const res = await fetch(path, {
+    method,
+    credentials: 'include',
+    cache: 'no-store',
+    headers: method === 'POST'
+      ? { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      : undefined,
+    body: method === 'POST' ? JSON.stringify(init?.body ?? {}) : undefined,
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || data?.success === false) {
+    throw new TeamApiError(data?.error || `Request failed (${res.status})`, res.status, data);
+  }
+  return data;
+}
+
+const appOrigin = () => (typeof window !== 'undefined' ? window.location.origin : '');
+
+export async function getTeam(organizationId?: string | null): Promise<TeamOverview> {
+  const qs = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : '';
+  return teamRequest(`/api/team${qs}`);
+}
+
+export async function inviteTeamMember(payload: {
+  organizationId?: string | null;
+  email: string;
+  role: TeamRole;
+  siteIds: string[];
+}): Promise<{ success: true; member: Partial<TeamMember>; inviteLink?: string }> {
+  return teamRequest('/api/team/invite', {
+    method: 'POST',
+    body: { ...payload, email: payload.email.trim().toLowerCase(), appOrigin: appOrigin() },
+  });
+}
+
+export async function updateTeamMember(payload: { memberId: string; role?: TeamRole; siteIds?: string[] }) {
+  return teamRequest('/api/team/update', { method: 'POST', body: payload });
+}
+
+export async function removeTeamMember(memberId: string): Promise<{ success: true; removed: 'member' | 'sites' }> {
+  return teamRequest('/api/team/remove', { method: 'POST', body: { memberId } });
+}
+
+export async function resendTeamInvite(memberId: string): Promise<{ success: true; inviteLink?: string }> {
+  return teamRequest('/api/team/resend', { method: 'POST', body: { memberId, appOrigin: appOrigin() } });
+}
+
+export async function getTeamInviteInfo(token: string): Promise<{ success: true; invite: TeamInviteInfo }> {
+  return teamRequest(`/api/team/invite-info?token=${encodeURIComponent(token)}`);
+}
+
+export async function acceptTeamInvite(token: string): Promise<{ success: true; organizationId: string; role: TeamRole; siteIds: string[] }> {
+  return teamRequest('/api/team/accept', { method: 'POST', body: { token, appOrigin: appOrigin() } });
+}
+//team members ends here
+
+//first setup starts here
+export async function firstSetup(payload: {
+  websiteUrl: string; // Website URL/Domain (e.g., valuable-tenets-951054.framer.app)
+  /** Only when a team Admin adds a site for the owner's account (the worker checks it). */
+  organizationId?: string;
+}) {
+  // Ensure we're using a relative path to the Next.js API route
+  const apiUrl = '/api/onboarding/first-setup';
+  
+  const res = await fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    let message = errorText;
+    try {
+      const parsed = decodeEnvelope(JSON.parse(errorText));
+      message = parsed?.error || parsed?.message || message;
+    } catch {
+      // non-json response
+    }
+    throw new Error(message || `Setup failed: ${res.status}`);
+  }
+
+  const result = await parseApiResponse(res);
+
+  // PostHog: fire domain_submitted here so EVERY caller is covered (onboarding wizard,
+  // post-setup overlay, dashboard first-time setup, and the add-site modal). firstSetup
+  // is always the free-plan creation path (paid plans go through createCheckoutSession).
+  // Lazy import keeps posthog-js out of any non-browser bundle that imports this module.
+  try {
+    const siteId = String(result?.siteId || result?.site?.id || "").trim() || null;
+    const { analytics } = await import("./analytics");
+    analytics.domainSubmitted(payload.websiteUrl, siteId, "free");
+  } catch { /* analytics must never block setup */ }
+
+  return result;
+}
+//first setup ends here
+
+export async function checkDomainAvailability(payload: { websiteUrl: string }): Promise<{
+  success: boolean;
+  available?: boolean;
+  domain?: string;
+  code?: string;
+  message?: string;
+  error?: string;
+}> {
+  const res = await fetch('/api/sites/check-domain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok) {
+    throw new Error((data as any)?.error || `Domain check failed: ${res.status}`);
+  }
+  return data as any;
+}
+
+//sites endpoint starts here
+export async function getSites(organizationId?: string) {
+  const url = organizationId ? `/api/sites?organizationId=${organizationId}` : '/api/sites';
+    
+  const response = await fetch(url, {
+    credentials: 'include',
+  });
+
+  const data = await parseApiResponse(response);
+  if (!response.ok) {
+    throw new Error((data as any)?.error || `Failed to load sites: ${response.status}`);
+  }
+  return data;
+}
+//sites endpoint ends here
+
+// site banner settings update starts here
+export async function updateSiteBannerSettings(payload: {
+  name: string;
+  domain: string;
+  organizationId: string;
+  bannerType: 'gdpr' | 'ccpa' | 'iab';
+  regionMode: 'gdpr' | 'ccpa' | 'both';
+}) {
+  const res = await fetch('/api/sites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data: any;
+  try { const p = JSON.parse(text); data = p?.d ? JSON.parse(atob(p.d)) : p; } catch {
+    data = { success: false, error: text.trimStart().startsWith('<') ? `Something went wrong. Please try again.` : text };
+  }
+  if (!res.ok || !data.success) throw new Error(data.error || `Update site failed: ${res.status}`);
+  return data as { success: true; site?: any };
+}
+// site banner settings update ends here
+
+/** Preflight for Manage site URL: same account / other account / available. */
+export async function checkSiteDomainForRename(
+  websiteUrl: string,
+  excludeSiteId: string,
+): Promise<{
+  success: boolean;
+  available?: boolean;
+  domain?: string;
+  code?: string;
+  message?: string;
+  error?: string;
+}> {
+  let res: Response;
+  try {
+    res = await fetch('/api/sites/check-domain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ websiteUrl, excludeSiteId }),
+    });
+  } catch (fetchErr) {
+    return { success: false, available: false, error: String(fetchErr) };
+  }
+  const text = await res.text();
+  let data: any;
+  try {
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
+  } catch {
+    return {
+      success: false,
+      available: false,
+      error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text,
+    };
+  }
+  if (!res.ok || data.success === false) {
+    return {
+      success: false,
+      available: false,
+      error: data.error || `Check failed: ${res.status}`,
+    };
+  }
+  return data;
+}
+
+export async function renameSite(
+  siteId: string,
+  name: string,
+  domain: string,
+): Promise<{ success: true; site: any }> {
+  const payload: { siteId: string; name: string; domain: string } = {
+    siteId,
+    name,
+    domain: String(domain ?? '').trim(),
+  };
+  const res = await fetch('/api/sites', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data: any;
+  try {
+    const parsed = JSON.parse(text);
+    data = parsed?.d ? JSON.parse(atob(parsed.d)) : parsed;
+  } catch {
+    data = { success: false, error: text.trimStart().startsWith('<') ? 'Something went wrong.' : text };
+  }
+  if (!res.ok || !data.success) {
+    const err = new Error(data.error || `Rename failed: ${res.status}`) as Error & {
+      code?: string;
+    };
+    err.code = data.code;
+    throw err;
+  }
+  return data as { success: true; site: any };
+}
+
+// banner customization starts here
+export async function getBannerCustomization(siteId: string) {
+  const res = await fetch(`/api/banner-customization?siteId=${encodeURIComponent(siteId)}`, {
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Get customization failed: ${res.status}`);
+  return data as { success: true; customization: any | null; iabActivated?: boolean; compliance?: string[] };
+}
+
+export async function saveBannerCustomization(payload: { siteId: string; customization: any; compliance?: string[] }) {
+  const _bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let _binary = '';
+  for (let i = 0; i < _bytes.length; i++) _binary += String.fromCharCode(_bytes[i]);
+  const res = await fetch('/api/banner-customization', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ d: btoa(_binary) }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Save customization failed: ${res.status}`);
+  return data as { success: true };
+}
+// banner customization ends here
+
+// payments starts here — matches consent-manager tier checkout (planId + interval + siteId)
+export type CreateCheckoutPayload = {
+  organizationId: string;
+  planId: 'basic' | 'essential' | 'growth' | 'free';
+  interval: 'monthly' | 'yearly';
+  siteId?: string | null;
+  siteName?: string | null;
+  siteDomain?: string | null;
+  /** Stripe Coupon ID (underlying coupon). Prefer stripePromotionCodeId when available. */
+  stripeCouponId?: string | null;
+  promotionCodeId?: string | null;
+  successUrl?: string;
+  cancelUrl?: string;
+};
+
+export async function createCheckoutSession(
+  payload: CreateCheckoutPayload,
+): Promise<{ success: true; url: string; sessionId?: string }> {
+  const res = await fetch('/api/create-checkout-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Checkout failed: ${res.status}`);
+  return data as { success: true; url: string; sessionId?: string };
+}
+// payments ends here
+
+// billing invoices starts here
+export type BillingInvoice = {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountDue: number;
+  amountPaid: number;
+  created: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+  /** Site whose Stripe subscription produced this invoice, when known */
+  siteId?: string | null;
+};
+
+export async function getBillingInvoices(
+  organizationId: string,
+  limit: number = 20,
+): Promise<{ invoices: BillingInvoice[] }> {
+  const res = await fetch(
+    `/api/billing/invoices?organizationId=${encodeURIComponent(organizationId)}&limit=${limit}`,
+    { credentials: "include" },
+  );
+  const data = await parseApiResponse(res);
+  if (!res.ok) throw new Error(data.error || `Billing invoices failed: ${res.status}`);
+  return data as { invoices: BillingInvoice[] };
+}
+// billing invoices ends here
+
+// billing usage starts here
+export type BillingUsage = {
+  yearMonth: string;
+  pageviewsUsed: number;
+  pageviewsLimit: number;
+  scansUsed: number;
+  scansLimit: number;
+  sitesUsed: number;
+  sitesLimit: number;
+  planId: string;
+};
+
+export async function getBillingUsage(
+  organizationId: string,
+  siteId?: string,
+): Promise<BillingUsage> {
+  const siteParam = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
+  const res = await fetch(
+    `/api/billing/usage?organizationId=${encodeURIComponent(organizationId)}${siteParam}`,
+    { credentials: "include" },
+  );
+  const data = await parseApiResponse(res);
+  if (!res.ok) throw new Error(data.error || `Billing usage failed: ${res.status}`);
+  return data as BillingUsage;
+}
+// billing usage ends here
+
+// request scan topup email starts here
+export async function requestScanTopupEmail(payload: {
+  organizationId: string;
+  siteId: string;
+  packs?: number;
+}): Promise<{ success: true; message: string }> {
+  const res = await fetch("/api/billing/request-scan-topup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...payload, packs: payload.packs ?? 1 }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Request failed: ${res.status}`);
+  return data;
+}
+// request scan topup email ends here
+
+// add scans to next renewal starts here
+export async function addScansToNextRenewal(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  packs: number;
+}): Promise<{
+  success: true;
+  invoiceItemId: string;
+  packs: number;
+  scansAdded: number;
+  chargedAtRenewal: number;
+  currency: string;
+}> {
+  const res = await fetch("/api/billing/add-scans", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Add scans failed: ${res.status}`);
+  }
+  return data;
+}
+// add scans to next renewal ends here
+
+// subscription upgrade starts here
+export async function upgradeSubscription(payload: {
+  siteId: string;
+  organizationId: string;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  successUrl?: string;
+  cancelUrl?: string;
+  /** Stripe Promotion Code ID — preferred when applying a user-facing promo code. */
+  promotionCodeId?: string | null;
+  /** Stripe Coupon ID — fallback when no promotion code is available. */
+  couponId?: string | null;
+}): Promise<{ success: true; url: string; sessionId?: string }> {
+  const res = await fetch("/api/subscriptions/upgrade", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Upgrade subscription failed: ${res.status}`);
+  }
+  return data as { success: true; url: string; sessionId?: string };
+}
+// subscription upgrade ends here
+
+// subscription cancel starts here
+export async function cancelSubscription(payload: {
+  subscriptionId?: string | null;
+  stripeSubscriptionId?: string | null;
+}): Promise<{ success: true; message?: string }> {
+  const res = await fetch("/api/subscriptions/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Cancel subscription failed: ${res.status}`);
+  }
+  return data as { success: true; message?: string };
+}
+// subscription cancel ends here
+
+/**
+ * Undo a scheduled cancellation — the same subscription keeps renewing (no new checkout,
+ * same billing date and saved card).
+ *
+ * Unlike the other calls here this one does NOT throw on a refusal: the two failure modes
+ * carry meaning the caller has to act on, and an Error would flatten them into a message.
+ *   409 { ended: true }    → Stripe has fully cancelled it; only a new checkout brings the
+ *                            plan back, so the UI offers "Subscribe now" instead.
+ *   404 { notFound: true } → the subscription isn't visible to billing; needs support, so
+ *                            the UI must stop offering a button that cannot work.
+ * Network/parse failures still throw.
+ */
+export async function resumeSubscription(payload: {
+  subscriptionId?: string | null;
+  stripeSubscriptionId?: string | null;
+}): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  ended?: boolean;
+  notFound?: boolean;
+  cancelAtPeriodEnd?: boolean;
+  status?: string;
+  currentPeriodEnd?: string | null;
+}> {
+  const res = await fetch("/api/subscriptions/resume", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok && !data.error) {
+    return { success: false, error: `Resume subscription failed: ${res.status}` };
+  }
+  return data as Awaited<ReturnType<typeof resumeSubscription>>;
+}
+
+export async function activateLicenseWebflow(payload: {
+  licenseKey: string;
+  domain: string;
+  organizationId?: string | null;
+  wfSiteId?: string | null;
+}): Promise<{ success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null }> {
+  const res = await fetch('/api/licenses/activate-license', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `License activation failed: ${res.status}`);
+  }
+  return data as { success: true; siteId: string; domain: string; cdnScriptId: string; scriptUrl: string; platformSiteId: string | null };
+}
+
+export async function deleteSite(siteId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/sites?siteId=${encodeURIComponent(siteId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || `Delete site failed: ${res.status}`);
+  }
+  return data as { success: boolean };
+}
+
+// billing summary starts here
+export type BillingSummary = {
+  planName: string;
+  planId: string | null;
+  interval?: 'monthly' | 'yearly' | string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionId?: string | null;       // some backends return this alias
+  nextBillingDate?: string | null;
+  currentPeriodEnd?: string | null;     // alias used by some backends
+  amountCents?: number | null;
+  cancelAtPeriodEnd?: boolean;
+  cancel_at_period_end?: boolean;       // snake_case alias
+  paymentMethod?: { brand: string; last4: string; exp_month: number; exp_year: number } | null;
+  domainsLimit?: number;
+  billingCountry?: string | null;
+  billingAddress?: string | null;
+};
+export async function getBillingSummary(organizationId: string, siteId?: string | null): Promise<BillingSummary> {
+  const siteParam = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
+  const res = await fetch(`/api/billing/summary?organizationId=${encodeURIComponent(organizationId)}${siteParam}`, { credentials: "include" });
+  const data = await parseApiResponse(res);
+  if (!res.ok) throw new Error(data.error || "Failed to load billing summary");
+  return data as BillingSummary;
+}
+
+export async function createBillingPortalSession(organizationId: string, returnUrl: string): Promise<{ url: string }> {
+  const res = await fetch("/api/billing/portal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, returnUrl }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok) throw new Error(data.error || "Failed to create portal session");
+  return data as { url: string };
+}
+
+export async function createSetupIntent(organizationId: string): Promise<{ success: true; clientSecret: string }> {
+  const res = await fetch("/api/billing/setup-intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to create setup intent");
+  return data as { success: true; clientSecret: string };
+}
+
+export async function updatePaymentMethod(
+  organizationId: string,
+  paymentMethodId: string,
+): Promise<{ success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } }> {
+  const res = await fetch("/api/billing/update-payment-method", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, paymentMethodId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to update payment method");
+  return data as { success: true; paymentMethod: { brand: string; last4: string; exp_month: number; exp_year: number } };
+}
+
+export async function switchBillingInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+  siteId?: string | null,
+): Promise<{ success: true; interval: string; nextBillingDate: string | null }> {
+  const res = await fetch("/api/subscriptions/switch-interval", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval, ...(siteId ? { siteId } : {}) }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to switch billing interval");
+  return data as { success: true; interval: string; nextBillingDate: string | null };
+}
+
+export type SwitchIntervalPreview = {
+  success: true;
+  currentInterval: string;
+  targetInterval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;   // active: charged now; trial: billed at trial end
+  currency: string;
+  trialEnd: string | null;
+};
+export async function previewSwitchInterval(
+  organizationId: string,
+  targetInterval: "monthly" | "yearly",
+  siteId?: string | null,
+): Promise<SwitchIntervalPreview> {
+  const res = await fetch("/api/subscriptions/switch-interval/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ organizationId, targetInterval, ...(siteId ? { siteId } : {}) }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as SwitchIntervalPreview;
+}
+
+// —— Tier change (upgrade/downgrade of an existing paid subscription, in-place proration) ——
+export type ChangeTierPreview = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  currentPlanId: string;
+  currentInterval: string;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  isTrialing: boolean;
+  amountDueCents: number | null;   // upgrade: prorated charge now; downgrade: 0; trial: price at trial end
+  newPlanAmountCents?: number | null; // downgrade: what they'll pay from the next period
+  currency: string;
+  couponPreviewSkipped?: boolean;
+  trialEnd: string | null;
+  effectiveAt: string | null;      // downgrade: when the change takes effect
+};
+
+// Preview the prorated amount for a tier change WITHOUT committing it.
+export async function previewChangeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierPreview> {
+  const res = await fetch("/api/subscriptions/change-tier/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to preview the charge");
+  return data as ChangeTierPreview;
+}
+
+export type ChangeTierResult = {
+  success: true;
+  direction: "upgrade" | "downgrade";
+  scheduled: boolean;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  amountPaidCents?: number | null;
+  currency?: string;
+  invoiceId?: string | null;
+  invoiceUrl?: string | null;
+  paymentStatus?: string;
+  nextBillingDate?: string | null;
+  effectiveAt?: string | null;
+  // Present only if a new card requiring 3D Secure was used (not our default path):
+  requiresAction?: boolean;
+  clientSecret?: string;
+};
+
+// Commit an in-place tier change. No paymentMethodId → charges the card already on file.
+export async function changeTier(payload: {
+  organizationId: string;
+  siteId?: string | null;
+  planId: "basic" | "essential" | "growth";
+  interval: "monthly" | "yearly";
+  promotionCodeId?: string | null;
+}): Promise<ChangeTierResult> {
+  const res = await fetch("/api/subscriptions/change-tier", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || "Failed to change plan");
+  return data as ChangeTierResult;
+}
+// change tier ends here
+
+// —— Cookie scan (site scanner) ——
+export type ScanHistoryRow = {
+  id: string;
+  siteId: string;
+  scanUrl: string | null;
+  scriptsFound: number;
+  cookiesFound: number;
+  /** Distinct cookie category keys for this scan (e.g. analytics, necessary). */
+  categories?: string[];
+  scanDuration: number | null;
+  scanStatus: string;
+  createdAt: string;
+};
+
+export type ScanCookie = {
+  id: string;
+  siteId: string;
+  scanHistoryId: string | null;
+  name: string;
+  domain: string | null;
+  path: string | null;
+  category: string;
+  provider: string | null;
+  description: string | null;
+  expires: string | null;
+  httpOnly: number;
+  secure: number;
+  sameSite: string | null;
+  source?: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+export type ScheduledScan = {
+  id: string;
+  siteId: string;
+  scheduledAt: string;
+  frequency: 'once' | 'daily' | 'weekly' | 'monthly';
+  isActive: number;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getScanHistory(siteId: string): Promise<{ success: boolean; scans: ScanHistoryRow[] }> {
+  const res = await fetch(`/api/scan-history?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Scan history failed: ${res.status}`);
+  return data;
+}
+
+export async function getSiteCookies(siteId: string): Promise<{
+  success: boolean;
+  cookies: ScanCookie[];
+  cookiesByCategory: Record<string, ScanCookie[]>;
+}> {
+  const res = await fetch(`/api/cookies?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Cookies failed: ${res.status}`);
+  return data;
+}
+
+// ── Custom cookie rules ───────────────────────────────────────────────────────
+
+export type CustomCookieRule = {
+  id: string;
+  siteId: string;
+  name: string;
+  domain: string;
+  scriptUrlPattern: string | null;
+  category: string;
+  description: string | null;
+  duration: string | null;
+  published: 0 | 1;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getCustomCookieRules(siteId: string): Promise<{ rules: CustomCookieRule[] }> {
+  const res = await fetch(`/api/custom-cookie-rules?siteId=${encodeURIComponent(siteId)}`, {
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to load cookie rules: ${res.status}`);
+  return data as { rules: CustomCookieRule[] };
+}
+
+export async function addExpectedCookie(payload: {
+  siteId: string;
+  name: string;
+  domain: string;
+  category: string;
+  provider?: string;
+  duration?: string;
+  scriptUrlPattern?: string;
+  description?: string;
+}): Promise<{ success: boolean }> {
+  const res = await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to add cookie: ${res.status}`);
+  return data;
+}
+
+export async function addCustomCookieRule(payload: {
+  siteId: string;
+  name: string;
+  domain: string;
+  category: string;
+  provider?: string;
+  scriptUrlPattern?: string;
+  description?: string;
+  duration?: string;
+}): Promise<{ success: boolean; id?: string }> {
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to add cookie rule: ${res.status}`);
+  return data;
+}
+
+export async function deleteCustomCookieRule(id: string): Promise<{ success: boolean }> {
+  // POST + action:'delete' (not the DELETE method) so it works where DELETE is
+  // blocked at the edge — same pattern as publishCustomCookieRules / /api/cookies.
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ action: 'delete', id }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to delete cookie rule: ${res.status}`);
+  return data;
+}
+
+export async function publishCustomCookieRules(siteId: string): Promise<{ success: boolean }> {
+  const res = await fetch('/api/custom-cookie-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ action: 'publish', siteId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Failed to publish rules: ${res.status}`);
+  return data;
+}
+
+// ── Legacy (kept for backward compat) ────────────────────────────────────────
+export async function addCustomCookie(payload: {
+  siteId: string;
+  name: string;
+  domain?: string;
+  category: string;
+  duration?: string;
+  scriptUrlPattern?: string;
+  description?: string;
+}): Promise<{ success: boolean }> {
+  const res = await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Add cookie failed: ${res.status}`);
+  return data;
+}
+
+export async function scanSiteNow(siteId: string): Promise<{
+  success: boolean;
+  scanHistoryId?: string;
+  scanning?: boolean;
+  scriptsFound?: number;
+  cookiesFound?: number;
+  scanDuration?: number;
+  error?: string;
+}> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  let res: Response;
+  try {
+    res = await fetch('/api/scan-site', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ siteId }),
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    if ((err as { name?: string })?.name === 'AbortError') {
+      throw new Error('Scan request timed out. The site may be slow or blocking scan traffic. Please try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Scan failed: ${res.status}`);
+  return data;
+}
+
+/** Set pendingScan = 1 on the site so the next browser visit triggers a full cookie+script report. */
+export async function requestBrowserScan(siteId: string): Promise<void> {
+  const res = await fetch('/api/scan-pending', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ siteId, action: 'request' }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || 'Failed to request browser scan');
+}
+
+export async function checkBrowserScanPending(siteId: string): Promise<boolean> {
+  const res = await fetch(`/api/scan-pending?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  return !!data.pending;
+}
+
+export async function getScheduledScans(siteId: string): Promise<{
+  success: boolean;
+  scheduledScans?: ScheduledScan[];
+}> {
+  const res = await fetch(`/api/scheduled-scan?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Scheduled scans failed: ${res.status}`);
+  return data;
+}
+
+export class ScanLimitError extends Error {
+  code = 'SCAN_LIMIT_REACHED' as const;
+  scansLimit: number;
+  constructor(message: string, scansLimit: number) {
+    super(message);
+    this.scansLimit = scansLimit;
+  }
+}
+
+export async function createScheduledScan(
+  siteId: string,
+  scheduledAt: string,
+  frequency: 'once' | 'daily' | 'weekly' | 'monthly' = 'once',
+): Promise<{ success: boolean; scheduledScanId?: string }> {
+  const res = await fetch('/api/scheduled-scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ siteId, scheduledAt, frequency }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) {
+    if (data.code === 'SCAN_LIMIT_REACHED') {
+      throw new ScanLimitError(data.error || 'Scan limit reached', Number(data.scansLimit ?? 0));
+    }
+    throw new Error(data.error || `Schedule failed: ${res.status}`);
+  }
+  return data;
+}
+
+export async function deleteScheduledScan(id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/scheduled-scan?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Delete schedule failed: ${res.status}`);
+  return data;
+}
+
+// —— Consent logs ——
+export type ConsentCategories = {
+  essential?: boolean;
+  analytics?: boolean;
+  marketing?: boolean;
+  preferences?: boolean;
+  ccpa?: { doNotSell?: boolean };
+};
+
+export type ConsentLog = {
+  id: string;
+  siteId: string;
+  deviceId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  country: string | null;
+  region: string | null;
+  is_eu: number;
+  createdAt: string;
+  updatedAt: string;
+  regulation: string | null;
+  bannerType: string | null;
+  consentMethod: string | null;
+  status: string | null;
+  expiresAt: string | null;
+  categories: ConsentCategories | null;
+};
+
+export type ConsentLogCookie = {
+  id: string;
+  name: string;
+  domain: string | null;
+  path: string | null;
+  category: string;
+  provider: string | null;
+  description: string | null;
+  expires: string | null;
+  source: string | null;
+  lastSeenAt: string | null;
+};
+
+export type ConsentLogCookieRule = {
+  id: string;
+  name: string;
+  domain: string;
+  scriptUrlPattern: string | null;
+  category: string;
+  duration: string | null;
+  description: string | null;
+};
+
+export type ConsentHistoryResponse = {
+  success: boolean;
+  consents: ConsentLog[];
+  cookies: ConsentLogCookie[];
+  customCookieRules: ConsentLogCookieRule[];
+  total: number;
+  limit: number;
+  offset: number;
+  /** Free plan: records before this date (YYYY-MM-DD) are hidden. Absent/null = no limit. */
+  viewCutoff?: string | null;
+};
+
+const EMPTY_CONSENT_RESPONSE: ConsentHistoryResponse = {
+  success: true,
+  consents: [],
+  cookies: [],
+  customCookieRules: [],
+  total: 0,
+  limit: 0,
+  offset: 0,
+};
+
+export async function getLegacyConsentMonthly(
+  siteId: string,
+  year: string,
+  month: string,
+  domain?: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, ...(domain ? { domain } : {}) });
+  const res = await fetch(`/api/legacy-consent-monthly?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  // Treat not-found / access errors as empty data — the site may not have legacy
+  // records yet, or may not be fully registered; surfacing a red banner is confusing.
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
+export async function getLegacyConsentMonthlyFramer(
+  siteId: string,
+  year: string,
+  month: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({ siteId, year, month, limit: '500', offset: '0' });
+  const res = await fetch(`/api/legacy-consent-monthly-framer?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!data.success) return EMPTY_CONSENT_RESPONSE;
+  return data;
+}
+
+export async function getConsentHistory(
+  siteId: string,
+  limit: number = 100,
+  offset: number = 0,
+  year?: string,
+  month?: string,
+  /** Visitor consent ID (Consent.deviceId): all of that visitor's records, every month. */
+  deviceId?: string,
+): Promise<ConsentHistoryResponse> {
+  const params = new URLSearchParams({
+    siteId,
+    limit: String(limit),
+    offset: String(offset),
+    ...(year ? { year } : {}),
+    ...(month ? { month } : {}),
+    ...(deviceId ? { deviceId } : {}),
+  });
+  const res = await fetch(`/api/consent-history?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Consent history failed: ${res.status}`);
+  return data;
+}
+
+/** Every record for one visitor consent ID (or one record ID), for their access request. */
+export async function exportVisitorConsent(siteId: string, deviceId: string): Promise<{
+  success: boolean; siteId: string; consentId: string; exportedAt: string; count: number; records: unknown[];
+}> {
+  const params = new URLSearchParams({ siteId, deviceId });
+  const res = await fetch(`/api/consent-visitor?${params.toString()}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Export failed: ${res.status}`);
+  return data;
+}
+
+/** Delete every record for one visitor consent ID (or one record ID), for their erasure request. */
+export async function deleteVisitorConsent(siteId: string, deviceId: string): Promise<{ deleted: number; archivedDeleted: number }> {
+  const res = await fetch('/api/consent-visitor', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siteId, deviceId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Delete failed: ${res.status}`);
+  return { deleted: data.deleted ?? 0, archivedDeleted: data.archivedDeleted ?? 0 };
+}
+
+// script verification starts here
+export async function verifyScript(payload: { publicUrl: string; scriptUrl: string; siteId?: string }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let res: Response;
+  try {
+    res = await fetch('/api/verify-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new Error('Verification timed out. Please try again.');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) throw new Error(data.error || `Verify failed: ${res.status}`);
+  return data as { success: true; found: boolean; siteId?: string | null; debug?: any };
+}
+// script verification ends here
