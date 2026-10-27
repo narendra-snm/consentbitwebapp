@@ -117,7 +117,6 @@ export default function DpaRequestPage() {
   const [requests, setRequests] = useState<DpaRequestSummary[]>([]);
   // Newest request with a published signed PDF (the list is newest first).
   const latestSigned = useMemo(() => requests.find((r) => r.hasDocument) || null, [requests]);
-  const [dpaPreviewOpen, setDpaPreviewOpen] = useState(false);
   // The signed-copy form stays behind a button; Growth-plan accounts only.
   const [formOpen, setFormOpen] = useState(false);
 
@@ -224,13 +223,6 @@ export default function DpaRequestPage() {
             <p className="text-[13px] text-[#6b7280]">Version {DPA_VERSION} · Seattle New Media, LLC (dba ConsentBit)</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDpaPreviewOpen((v) => !v)}
-              className="h-[36px] px-3.5 rounded-[8px] border border-[#007aff] text-[#007aff] text-[13px] hover:bg-[#f5f9ff] transition-colors"
-            >
-              {dpaPreviewOpen ? "Hide DPA" : "Read DPA"}
-            </button>
             <a
               href={DPA_HTML_URL}
               target="_blank"
@@ -251,19 +243,12 @@ export default function DpaRequestPage() {
             )}
           </div>
         </div>
-        {dpaPreviewOpen && (
-          <iframe
-            src={DPA_HTML_URL}
-            title="ConsentBit Data Processing Agreement"
-            className="w-full h-[560px] border-t border-[#e5e7eb] bg-[#f5f7fa]"
-          />
-        )}
       </div>
 
       <p className="font-semibold text-[18px] text-[#111827]">Request a signed copy</p>
       <p className="text-[15px] text-[#4b5563] mt-1 mb-5">
         Need the DPA signed by ConsentBit with your company details, for your records or procurement? Tell us who the agreement is
-        with and who signs it. Our team prepares the signed copy and emails it to the signatory.
+        with and who signs it.
       </p>
 
       {growthSites.length ? (
