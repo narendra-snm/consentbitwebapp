@@ -13,20 +13,23 @@
   .bar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 16px; }
   .bar button { height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #007aff; background: #007aff; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
   h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; }
-  h2 { font-size: 18px; margin: 32px 0 8px; padding-top: 8px; }
-  h3 { font-size: 16px; margin: 22px 0 6px; }
+  h2 { font-size: 18px; margin: 26px 0 8px; }
+  h3 { font-size: 16px; margin: 16px 0 6px; }
+  /* Headings that follow a rule or a heading don't add their own gap on top. */
+  hr + h2, hr + .keep > h2:first-child { margin-top: 0; }
+  h2 + h3 { margin-top: 8px; }
+  p.subhead { margin: 14px 0 4px; }
   p { margin: 0 0 12px; }
   p, li { text-align: justify; hyphens: auto; }
   ul, ol { margin: 0 0 12px; padding-left: 22px; }
   ol.alpha { list-style: none; padding-left: 22px; }
   li { margin-bottom: 4px; }
-  hr { border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0; }
+  hr { border: 0; border-top: 1px solid #e5e7eb; margin: 22px 0; }
   table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
   th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
   thead th, tbody th { background: #f9fafb; font-weight: 600; }
   table.kv th { width: 24%; }
   a { color: #007aff; word-break: break-word; }
-  .draft { background: #fef3c7; color: #92400e; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   mark.fill { background: #fef3c7; color: #92400e; padding: 0 3px; border-radius: 3px; }
   @media (max-width: 640px) { .doc { padding: 24px 18px; } p, li { text-align: left; } table { display: block; overflow-x: auto; } }
   @page {
@@ -41,16 +44,18 @@
     .doc { border: 0; border-radius: 0; padding: 0; }
     .bar { display: none; }
     h1 { font-size: 20pt; margin-bottom: 6pt; }
-    h2 { font-size: 13pt; margin: 18pt 0 6pt; padding-top: 0; }
-    h3 { font-size: 11pt; margin: 12pt 0 4pt; }
+    h2 { font-size: 13pt; margin: 14pt 0 5pt; }
+    h3 { font-size: 11pt; margin: 9pt 0 3pt; }
+    hr + h2, hr + .keep > h2:first-child { margin-top: 0; }
+    h2 + h3 { margin-top: 4pt; }
+    p.subhead { margin: 8pt 0 3pt; }
     p, ul, ol { margin-bottom: 7pt; }
     li { margin-bottom: 2pt; }
-    hr { margin: 16pt 0; }
+    hr { margin: 12pt 0; }
     table { font-size: 9pt; margin: 4pt 0 10pt; }
     th, td { padding: 5pt 6pt; }
     h1, h2, h3 { break-after: avoid; }
-    h2[id^="annex"] { break-before: page; margin-top: 0; }
-    hr:has(+ h2[id^="annex"]) { display: none; }
+    .keep { break-inside: avoid; }
     p, li { orphans: 2; widows: 2; }
     tr { break-inside: avoid; }
     thead { display: table-header-group; }
@@ -66,10 +71,12 @@
 <h1 id="consentbit-data-processing-agreement">ConsentBit Data Processing Agreement</h1>
 <p><strong>Version 1.0</strong> | Effective date: 24 October 2026.</p>
 <p>This Data Processing Agreement ("<strong>DPA</strong>") forms part of the ConsentBit Terms of Service (the "<strong>Agreement</strong>") between:</p>
-<ul><li><strong>Seattle New Media, LLC</strong>, a Florida limited liability company doing business as ConsentBit, 5608 17th Ave. NW, Suite 581, Seattle, WA 98107, USA ("<strong>ConsentBit</strong>", "<strong>we</strong>", "<strong>Processor</strong>"); and</li><li>the customer that has accepted the Agreement ("<strong>Customer</strong>", "<strong>you</strong>", "<strong>Controller</strong>").</li></ul>
+<ul><li><strong>Seattle New Media, LLC</strong>, a Florida limited liability company doing business as ConsentBit, 5608 17th Ave. NW, Suite 581, Seattle, WA 98107, USA ("<strong>ConsentBit</strong>", "<strong>we</strong>", "<strong>Processor</strong>"); and</li><li>The customer that has accepted the Agreement ("<strong>Customer</strong>", "<strong>you</strong>", "<strong>Controller</strong>").</li></ul>
 <p>It applies whenever ConsentBit processes Personal Data on the Customer's behalf through the ConsentBit service, for every website in the Customer's account, including websites added later. By accepting the Agreement, the Customer accepts the current version of this DPA. Where this DPA and the Agreement conflict about Personal Data, this DPA wins. Where this DPA and the SCCs conflict, the SCCs win.</p>
+<div class="keep">
 <h2 id="1-definitions">1. Definitions</h2>
 <p>1.1 <strong>Data Protection Laws</strong>: all privacy laws that apply to the processing, including the EU GDPR (Regulation 2016/679), the UK GDPR and Data Protection Act 2018, the Swiss Federal Act on Data Protection ("<strong>FADP</strong>"), the California Consumer Privacy Act as amended by the CPRA ("<strong>CCPA</strong>") and other US state privacy laws, Brazil's LGPD, Quebec's Law 25, Canada's PIPEDA, and any other law that applies to the Customer's website.</p>
+</div>
 <p>1.2 <strong>Personal Data</strong>: any information about an identified or identifiable person that ConsentBit processes for the Customer under the Agreement.</p>
 <p>1.3 <strong>Visitor</strong>: a person who visits a website on which the Customer has installed the ConsentBit banner.</p>
 <p>1.4 <strong>Consent Record</strong>: the record ConsentBit stores each time a Visitor makes a choice on the banner.</p>
@@ -77,22 +84,28 @@
 <p>1.6 <strong>Security Incident</strong>: a breach of security that leads to the accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to, Personal Data.</p>
 <p>1.7 <strong>SCCs</strong>: the Standard Contractual Clauses approved by Commission Implementing Decision (EU) 2021/914.</p>
 <p>1.8 "Controller", "Processor", "Data Subject", "Processing", "Personal Data Breach" and "Supervisory Authority" have the meanings given in the GDPR. "Business", "Service Provider", "Sell" and "Share" have the meanings given in the CCPA.</p>
+<div class="keep">
 <h2 id="2-roles-and-scope">2. Roles and scope</h2>
 <p>2.1 For Personal Data about Visitors, the Customer is the Controller (under the CCPA, the "Business") and ConsentBit is the Processor (under the CCPA, the "Service Provider").</p>
+</div>
 <p>2.2 If the Customer is itself a processor for another controller (for example, an agency installing the banner on a client's website), ConsentBit is the Customer's sub-processor, the Customer confirms that it has its controller's authorisation to use ConsentBit, and the Customer's instructions under this DPA are given on behalf of that controller.</p>
 <p>2.3 For data about the Customer's own account (account users' names, emails, billing), ConsentBit is an independent Controller. That data is covered by the ConsentBit Privacy Policy, not this DPA.</p>
 <p>2.4 Details of the processing are in Annex I.</p>
 <p>2.5 The Consent ID is random, is stored in a first-party cookie on each website separately, and is not linked across websites or to a Visitor's identity. ConsentBit will not use Personal Data to track Visitors across different Customer websites except as expressly documented in this DPA.</p>
+<div class="keep">
 <h2 id="3-the-customer-s-responsibilities">3. The Customer's responsibilities</h2>
 <p>The Customer:</p>
-<p>3.1 decides which cookies and scripts to use and puts each in the correct category in the banner settings;</p>
-<p>3.2 publishes and maintains a privacy policy on its website, linked from the banner;</p>
-<p>3.3 has a lawful basis for the processing and gives Visitors the information Data Protection Laws require;</p>
-<p>3.4 answers Visitors' requests, using the tools ConsentBit provides (section 8);</p>
-<p>3.5 gives instructions that comply with Data Protection Laws; and</p>
-<p>3.6 keeps its account login details secure and limits dashboard access to people who need it.</p>
+</div>
+<p>3.1 Decides which cookies and scripts to use and puts each in the correct category in the banner settings;</p>
+<p>3.2 Publishes and maintains a privacy policy on its website, linked from the banner;</p>
+<p>3.3 Has a lawful basis for the processing and gives Visitors the information Data Protection Laws require;</p>
+<p>3.4 Answers Visitors' requests, using the tools ConsentBit provides (section 8);</p>
+<p>3.5 Gives instructions that comply with Data Protection Laws; and</p>
+<p>3.6 Keeps its account login details secure and limits dashboard access to people who need it.</p>
+<div class="keep">
 <h2 id="4-consentbit-s-obligations">4. ConsentBit's obligations</h2>
 <p>ConsentBit will:</p>
+</div>
 <p>4.1 <strong>Instructions.</strong> Process Personal Data only on the Customer's documented instructions, including for transfers outside the EEA, UK and Switzerland, unless the law requires otherwise, in which case we will tell the Customer first unless the law forbids it. The Agreement, this DPA and the Customer's settings in the ConsentBit dashboard are the Customer's complete instructions. Instructions given orally must be confirmed in writing or by email. We will tell the Customer promptly if we believe an instruction breaks Data Protection Laws.</p>
 <p>4.2 <strong>Confidentiality.</strong> Make sure everyone authorised to process Personal Data is bound by confidentiality.</p>
 <p>4.3 <strong>Security.</strong> Apply the technical and organisational measures in Annex II.</p>
@@ -103,23 +116,29 @@
 <p>4.8 <strong>Authorities.</strong> Tell the Customer without undue delay if a Supervisory Authority inspects, investigates or contacts ConsentBit about Personal Data processed for the Customer, unless the law forbids it.</p>
 <p>4.9 <strong>Government requests.</strong> If a public authority asks ConsentBit for access to Personal Data processed for the Customer, we will: tell the Customer (unless the law forbids it); disclose only what is legally required after reviewing the request's lawfulness; challenge requests we consider unlawful where there are reasonable grounds; and keep a record of such requests. ConsentBit has received no such request to date.</p>
 <p>4.10 <strong>Self-checks.</strong> ConsentBit will review the technical and organisational measures in Annex II at least once a year and update them as technology and risks change.</p>
+<div class="keep">
 <h2 id="5-us-state-privacy-laws-ccpa-and-similar">5. US state privacy laws (CCPA and similar)</h2>
 <p>When acting as a Service Provider or Processor under the CCPA or another US state privacy law, ConsentBit:</p>
-<p>5.1 processes Personal Data only for the limited and specified business purpose of providing the consent-management service described in Annex I;</p>
-<p>5.2 will not Sell or Share Personal Data;</p>
-<p>5.3 will not retain, use or disclose Personal Data outside the direct business relationship with the Customer, or for any purpose other than the business purpose, including any commercial purpose;</p>
-<p>5.4 will not combine Personal Data with personal information it receives from other sources or collects from its own interactions with a consumer, except as the CCPA permits;</p>
-<p>5.5 will comply with the CCPA, give the same level of privacy protection the CCPA requires, and notify the Customer if it can no longer meet its obligations;</p>
-<p>5.6 allows the Customer to take reasonable and appropriate steps to stop and remedy unauthorised use of Personal Data; and</p>
-<p>5.7 certifies that it understands and will comply with these restrictions.</p>
+</div>
+<p>5.1 Processes Personal Data only for the limited and specified business purpose of providing the consent-management service described in Annex I;</p>
+<p>5.2 Will not Sell or Share Personal Data;</p>
+<p>5.3 Will not retain, use or disclose Personal Data outside the direct business relationship with the Customer, or for any purpose other than the business purpose, including any commercial purpose;</p>
+<p>5.4 Will not combine Personal Data with personal information it receives from other sources or collects from its own interactions with a consumer, except as the CCPA permits;</p>
+<p>5.5 Will comply with the CCPA, give the same level of privacy protection the CCPA requires, and notify the Customer if it can no longer meet its obligations;</p>
+<p>5.6 Allows the Customer to take reasonable and appropriate steps to stop and remedy unauthorised use of Personal Data; and</p>
+<p>5.7 Certifies that it understands and will comply with these restrictions.</p>
+<div class="keep">
 <h2 id="6-sub-processors">6. Sub-processors</h2>
 <p>6.1 The Customer gives general written authorisation for ConsentBit to use Sub-processors. The current list is in Annex III of this DPA, published at <a href="https://www.consentbit.com/dpa">https://www.consentbit.com/dpa</a>.</p>
+</div>
 <p>6.2 We will give at least 30 days' notice before adding or replacing a Sub-processor, by updating Annex III and emailing the Customer's account email.</p>
 <p>6.3 The Customer may object on reasonable data-protection grounds by email to privacy@consentbit.com within that 30-day period. If it does:</p>
 <ol class="alpha"><li>(a) we will discuss the objection with the Customer in good faith and, where possible, offer a reasonable alternative (such as not using the new Sub-processor for the Customer's data);</li><li>(b) if we cannot resolve the objection within 30 days of receiving it, the Customer may terminate the affected part of the service by written notice, without penalty; and</li><li>(c) ConsentBit will refund prepaid fees for the unused period of the terminated service.</li></ol>
 <p>6.4 We impose data-protection obligations on each Sub-processor that are at least as protective as this DPA, and remain responsible to the Customer for each Sub-processor's performance.</p>
+<div class="keep">
 <h2 id="7-international-transfers">7. International transfers</h2>
 <p>7.1 ConsentBit is based in the United States. Consent Records are stored in the European Union, in a Cloudflare D1 database with EU jurisdiction (Annex III). Personal Data may still pass through other countries when Cloudflare's global network serves the banner, and ConsentBit staff may access it from the United States for support and maintenance. ConsentBit is <strong>not</strong> certified under the EU–US Data Privacy Framework; transfers rely on the SCCs below.</p>
+</div>
 <p>7.2 <strong>EU Standard Contractual Clauses.</strong> For transfers of Personal Data from the EEA to a country without an adequacy decision, the parties agree to the SCCs, which are incorporated into this DPA by reference, as follows:</p>
 <ol class="alpha"><li>(a) Module Two (Controller to Processor) applies where the Customer is a controller; Module Three (Processor to Processor) applies where the Customer is a processor (section 2.2);</li><li>(b) Clause 7 (docking clause) applies;</li><li>(c) Clause 9(a): Option 2 (general written authorisation), with the notice period in section 6.2;</li><li>(d) Clause 11(a): the optional language does not apply;</li><li>(e) Clause 13: (i) where the Customer is established in an EU Member State, the supervisory authority of that Member State; (ii) where the Customer is not established in the EU but falls under Article 3(2) GDPR and has appointed an EU representative, the supervisory authority of the Member State where the representative is established; (iii) where the Customer is not established in the EU and has no representative, the supervisory authority of the Member State where the Visitors whose data is transferred are located, as set out in Clause 13(a) of the SCCs;</li><li>(f) Clause 17: Option 1, the law of Ireland;</li><li>(g) Clause 18: the courts of Ireland;</li><li>(h) Annexes I.A, I.B and I.C of the SCCs are completed by Annex I of this DPA; Annex II by Annex II; Annex III by Annex III.</li></ol>
 <p>7.3 <strong>Customer acts as processor.</strong> Where Module Three applies, the Customer will pass on to its controller any information ConsentBit provides under the SCCs, and ConsentBit may rely on the Customer's instructions as the controller's instructions.</p>
@@ -127,65 +146,103 @@
 <p>7.5 <strong>Switzerland.</strong> For transfers from Switzerland, the SCCs apply with these changes: references to the GDPR are read as references to the FADP where the FADP applies; the Federal Data Protection and Information Commissioner is the competent supervisory authority for those transfers; the term "Member State" includes Switzerland, so Swiss data subjects can enforce their rights in Switzerland.</p>
 <p>7.6 ConsentBit will document the transfer impact assessment and supplementary measures applicable to its verified data flows before making this DPA effective, and will provide an appropriate summary to the Customer on request.</p>
 <p>7.7 If the SCCs and this DPA conflict, the SCCs win.</p>
+<div class="keep">
 <h2 id="8-visitor-requests">8. Visitor requests</h2>
 <p>8.1 If a Visitor contacts ConsentBit directly about Personal Data we process for a Customer, we will forward the request to the Customer within 2 working days and will not answer it ourselves, unless the Customer asks us to.</p>
+</div>
 <p>8.2 ConsentBit provides the Customer with tools in the ConsentBit dashboard to respond to Visitor requests, including the capabilities listed below to the extent supported by the service.</p>
 <ol class="alpha"><li>(a) find a Visitor's records by the Consent ID, which the Visitor can read in their own browser storage under the cookie named "consentbit-consentid";</li><li>(b) export those records as a file (access and portability requests); and</li><li>(c) delete those records (erasure requests).</li></ol>
 <p>8.3 If the Customer cannot answer a request with these tools, we will help on request, at no extra cost unless requests are manifestly unfounded or excessive.</p>
+<div class="keep">
 <h2 id="9-security-incidents">9. Security Incidents</h2>
 <p>9.1 ConsentBit will notify the Customer without undue delay, and in any case within 48 hours, after becoming aware of a Security Incident affecting the Customer's Personal Data. Notice goes to the Customer's account email.</p>
+</div>
 <p>9.2 The notice will describe, as far as known: the nature of the incident; the categories and approximate number of Visitors and records affected; a contact point at ConsentBit; the likely consequences; and the measures taken or proposed. Information may be given in stages.</p>
 <p>9.3 We will take reasonable steps to contain the incident and limit its effects, keep a record of every Security Incident, and help the Customer meet its own notification duties to Supervisory Authorities and Visitors.</p>
 <p>9.4 Notifying a Security Incident is not an admission of fault or liability.</p>
+<div class="keep">
 <h2 id="10-retention-return-and-deletion">10. Retention, return and deletion</h2>
 <p>10.1 <strong>During the Agreement.</strong> Consent Records are deleted according to the shortest technically practicable and legally justified retention schedule approved for the relevant record type and plan: Free plan: shown in the dashboard for 3 months and kept for 12 months; paid plans: 12 months; records of US Visitors' choices (including opt-outs) under the CCPA: 24 months on every plan. ConsentBit will document the applicable periods and allow deletion requests as described in section 8, subject to lawful retention obligations.</p>
+</div>
 <p>10.2 <strong>When the Agreement ends, or the Customer removes a website.</strong> The Customer may export its Consent Records before the end date. ConsentBit deletes the Consent Records for that website within 30 days, unless the law requires us to keep them.</p>
 <p>10.3 <strong>Backups.</strong> Deleted Personal Data is removed from active systems and backups according to the verified deletion and recovery schedules: from active systems at once, and from backups within 30 days (the Cloudflare D1 recovery window).</p>
 <p>10.4 <strong>Proof of deletion.</strong> On request, ConsentBit will confirm in writing what was deleted and when.</p>
+<div class="keep">
 <h2 id="11-audits">11. Audits</h2>
 <p>11.1 On request, ConsentBit will give the Customer the information reasonably needed to show compliance with this DPA, including a description of our security measures, results of the reviews described in section 4.10, to the extent disclosable, and the Sub-processor's current certifications (such as Cloudflare's SOC 2 report and ISO 27001 certificate, where Cloudflare allows them to be shared).</p>
+</div>
 <p>11.2 If that information is not enough, or a Supervisory Authority requires it, the Customer (or an independent auditor bound by confidentiality and not a competitor of ConsentBit) may carry out an audit at most once a year, with at least 30 days' notice, during business hours, at the Customer's cost. Audits after a Security Incident, or required by a Supervisory Authority, are not limited to once a year.</p>
+<div class="keep">
 <h2 id="12-liability">12. Liability</h2>
 <p>Each party's liability under this DPA is subject to the limits and exclusions, including any approved aggregate liability cap, in the Agreement, except where Data Protection Laws or the SCCs do not allow those limits. Nothing in this DPA limits a Visitor's rights under Article 82 GDPR.</p>
+</div>
+<div class="keep">
 <h2 id="13-term-and-changes">13. Term and changes</h2>
 <p>13.1 This DPA lasts as long as ConsentBit processes Personal Data for the Customer. Sections that by their nature should survive (including sections 9, 10 and 12) survive termination.</p>
+</div>
 <p>13.2 ConsentBit may update this DPA to reflect changes in law or in the service. We will email the Customer at least 30 days before a change that reduces the Customer's protection takes effect. Each version is dated and numbered.</p>
 <p>13.3 The Customer may request an executed PDF of this same master DPA by email to privacy@consentbit.com. Any signature page and customer-specific information shall be generated from the then-approved version of this DPA, without creating or maintaining a separately edited agreement.</p>
+<div class="keep">
 <h2 id="14-governing-law">14. Governing law</h2>
 <p>This DPA is governed by the law that governs the Agreement, except where the SCCs or Data Protection Laws require otherwise.</p>
+</div>
 <hr>
+<div class="keep">
 <h2 id="annex-i-description-of-the-processing">Annex I: Description of the processing</h2>
 <h3 id="a-list-of-parties">A. List of parties</h3>
-<p><strong>Data exporter (Controller, or Processor under section 2.2)</strong></p>
+<p class="subhead"><strong>Data exporter (Controller, or Processor under section 2.2)</strong></p>
 <ul><li>Name, address, contact person: as identified in the Customer's ConsentBit account at acceptance.</li><li>Activities: operating the website(s) on which the ConsentBit banner is installed.</li><li>Role: Controller (Module Two) or Processor (Module Three).</li><li>Signature and date: acceptance of the Agreement when the Customer's ConsentBit account was created; a customer-specific execution page is provided only upon request.</li></ul>
-<p><strong>Data importer (Processor)</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>Data importer (Processor)</strong></p>
 <ul><li>Name: Seattle New Media, LLC, doing business as ConsentBit.</li><li>Address: 5608 17th Ave. NW, Suite 581, Seattle, WA 98107, USA.</li><li>Contact for data protection: privacy@consentbit.com.</li><li>Activities: providing a cookie-consent management service.</li><li>Role: Processor.</li></ul>
+</div>
 <h3 id="b-description-of-the-transfer">B. Description of the transfer</h3>
 <table class="kv"><tbody><tr><th>Data subjects</th><td>Visitors to the Customer's website(s).</td></tr><tr><th>Sensitive data</th><td>None. The service is not designed to collect special categories of data.</td></tr><tr><th>Frequency</th><td>Continuous, each time a Visitor makes or changes a choice.</td></tr><tr><th>Nature of processing</th><td>Collecting, storing, retrieving, exporting and deleting Consent Records; displaying them to the Customer; serving the banner script.</td></tr><tr><th>Purpose</th><td>To record and prove Visitors' consent choices, apply those choices on the Customer's website (blocking or allowing cookies and scripts), and help the Customer answer Visitor requests.</td></tr><tr><th>Retention</th><td>Record-specific periods and deletion terms as approved and recorded in section 10.1; Free plan: shown in the dashboard for 3 months and kept for 12 months; paid plans: 12 months; records of US Visitors' choices (including opt-outs) under the CCPA: 24 months on every plan; website-removal and account-termination deletion as described in sections 10.2–10.4.</td></tr><tr><th>Transfers to Sub-processors</th><td>As in Annex III, for the same purpose and duration.</td></tr></tbody></table>
-<p><strong>Categories of Personal Data, and why each is needed</strong></p>
+<p class="subhead"><strong>Categories of Personal Data, and why each is needed</strong></p>
 <table><thead><tr><th>Data item</th><th>Why it is needed</th></tr></thead><tbody><tr><td>Consent ID (random, stored in the Visitor's browser)</td><td>Lets the Visitor and the Customer find the record later, as proof of consent or to answer a request.</td></tr><tr><td>Shortened IP address (IPv4 to /24, IPv6 to /48; the full address is never stored)</td><td>Proof that the choice came from a real request; rough location when no country header is available.</td></tr><tr><td>Country and region</td><td>Decides which law and which banner apply (for example GDPR, CCPA, Law 25).</td></tr><tr><td>Browser user agent</td><td>Tells real visits apart from bots and automated traffic; shows the device type in proof records.</td></tr><tr><td>Page domain</td><td>Shows on which website consent was given.</td></tr><tr><td>Date and time of the choice; expiry</td><td>Shows when consent was given and when it must be asked again.</td></tr><tr><td>Choice per category (necessary, analytics, marketing, preferences)</td><td>The consent itself.</td></tr><tr><td>Method (banner, preference panel, Global Privacy Control signal)</td><td>Shows how the choice was made, needed to prove a valid opt-out under US laws.</td></tr><tr><td>Law that applied</td><td>Shows which rules the banner followed for this Visitor.</td></tr><tr><td>Fingerprint of the banner text and privacy-policy link shown</td><td>Proves what information the Visitor saw when choosing.</td></tr><tr><td>IAB TCF purpose and vendor choices (TCF banners only)</td><td>Required by the IAB Transparency &amp; Consent Framework to pass the choice to ad vendors.</td></tr></tbody></table>
 <p>Not collected: names, email addresses, account identifiers, or any other direct identifier of Visitors.</p>
+<div class="keep">
 <h3 id="c-competent-supervisory-authority">C. Competent supervisory authority</h3>
 <p>Determined under section 7.2(e) (Clause 13 of the SCCs).</p>
+</div>
 <hr>
+<div class="keep">
 <h2 id="annex-ii-technical-and-organisational-measures">Annex II: Technical and organisational measures</h2>
 <p>Organised under Article 32 GDPR.</p>
-<p><strong>1. Confidentiality</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>1. Confidentiality</strong></p>
 <ul><li>Access control (dashboard): login by email one-time code, or password stored with PBKDF2 hashing. Each user sees only the websites of their own organisation, or websites they were granted as a team member. Deleting Consent Records is limited to the account owner or a team Admin.</li><li>Access control (API): consent-data endpoints require a valid session for the website; requests that change data require a CSRF header; inputs are checked for size and format.</li><li>Secrets: signing keys and API secrets are stored as encrypted Cloudflare secrets, not in source code, and are rotated after any suspected exposure.</li><li>Internal access: access to production data is limited to named staff who need it for support or maintenance, uses individual accounts with multi-factor authentication on Cloudflare, and is bound by confidentiality.</li><li>Physical security: no ConsentBit-operated servers; physical security is provided by Cloudflare's data centres (ISO 27001, SOC 2 Type II).</li></ul>
-<p><strong>2. Pseudonymisation and data minimisation</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>2. Pseudonymisation and data minimisation</strong></p>
 <ul><li>IP addresses are shortened before storage (IPv4 /24, IPv6 /48).</li><li>No names, emails or account identifiers of Visitors are collected.</li><li>The Consent ID is random, scoped to one website, and not linked to identity.</li><li>Deletion logs keep only a one-way hash of the Consent ID.</li></ul>
-<p><strong>3. Integrity</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>3. Integrity</strong></p>
 <ul><li>All traffic to and from the banner script, the API and the dashboard uses HTTPS (TLS 1.2 or higher).</li><li>Each Visitor-record deletion is logged (who, when, how many records).</li><li>Changes to the production service are made through version control and reviewed before deployment.</li></ul>
-<p><strong>4. Encryption</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>4. Encryption</strong></p>
 <ul><li>In transit: TLS 1.2 or higher.</li><li>At rest: Cloudflare D1 and KV encrypt all stored data at rest (AES-256).</li></ul>
-<p><strong>5. Availability and recoverability</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>5. Availability and recoverability</strong></p>
 <ul><li>Hosted on Cloudflare's global network, which provides DDoS protection and redundancy.</li><li>The banner keeps working, and keeps blocking scripts until consent, if the consent API is unavailable.</li><li>The database recovery capabilities are point-in-time restore of the Cloudflare D1 database to any moment in the last 30 days (Time Travel, Workers Paid plan).</li></ul>
-<p><strong>6. Retention enforcement</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>6. Retention enforcement</strong></p>
 <ul><li>An automated job runs twice a month (on the 1st and 15th) and removes Consent Records past their retention period from the active database, and logs each run.</li><li>Records of removed websites are deleted within 30 days.</li></ul>
-<p><strong>7. Incident management</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>7. Incident management</strong></p>
 <ul><li>Written incident-response procedure with a 48-hour customer notice target and an incident log (section 9).</li></ul>
-<p><strong>8. Regular testing and review</strong></p>
+</div>
+<div class="keep">
+<p class="subhead"><strong>8. Regular testing and review</strong></p>
 <ul><li>Yearly review of these measures (section 4.10).</li><li>Security review of code changes affecting Personal Data; periodic security audits of the service, with critical findings fixed before release.</li><li>Sub-processor security reviewed yearly (certifications and terms).</li></ul>
+</div>
 <hr>
 <h2 id="annex-iii-sub-processors-authoritative-list">Annex III: Sub-processors (authoritative list)</h2>
 <table><thead><tr><th>Sub-processor</th><th>Services</th><th>Personal data</th><th>Processing locations</th></tr></thead><tbody><tr><td>Cloudflare, Inc.<br>101 Townsend St, San Francisco, CA 94107, USA</td><td>Hosting banner/API Workers; D1 database; KV storage.</td><td>Consent Records. Data subjects: Visitors to Customer websites.</td><td>Consent Records: Cloudflare D1 database, EU jurisdiction; retention archive: Cloudflare D1 database, Western Europe. Banner delivery and request routing: Cloudflare's global network. Support access: ConsentBit staff in the United States.</td></tr></tbody></table>

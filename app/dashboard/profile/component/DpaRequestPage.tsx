@@ -104,6 +104,10 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
+// Accounts (login email, lowercase) allowed to request a signed DPA for Essential-plan
+// sites as well as Growth. The worker enforces the same list (consent-manager dpaRequest.js).
+const DPA_ESSENTIAL_ALLOWED = ["rafee.niloy@strativ.se"];
+
 export default function DpaRequestPage() {
   const { user, sites } = useDashboardSession();
   const [form, setForm] = useState<DpaRequestPayload>(EMPTY);
@@ -118,15 +122,16 @@ export default function DpaRequestPage() {
   const [formOpen, setFormOpen] = useState(false);
 
   // The account's own Growth-plan sites — used to prefill the company website.
-  // Same plan fields the Profile → Organizations tab reads.
-  const growthSites = useMemo(
-    () =>
-      (Array.isArray(sites) ? sites : []).filter((s: any) => {
-        const plan = String(s?.planId ?? s?.plan_id ?? s?.subscription_plan ?? s?.plan ?? "").toLowerCase();
-        return siteTeamRole(s) === "owner" && s?.id && plan === "growth";
-      }),
-    [sites],
-  );
+  // Same plan fields the Profile → Organizations tab reads. Allowlisted accounts
+  // may also pick Essential-plan sites.
+  const accountEmail = String((user as any)?.email || "").trim().toLowerCase();
+  const growthSites = useMemo(() => {
+    const plans = DPA_ESSENTIAL_ALLOWED.includes(accountEmail) ? ["growth", "essential"] : ["growth"];
+    return (Array.isArray(sites) ? sites : []).filter((s: any) => {
+      const plan = String(s?.planId ?? s?.plan_id ?? s?.subscription_plan ?? s?.plan ?? "").toLowerCase();
+      return siteTeamRole(s) === "owner" && s?.id && plans.includes(plan);
+    });
+  }, [sites, accountEmail]);
 
   useEffect(() => {
     getDpaRequests()
