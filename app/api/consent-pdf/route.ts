@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   const res = await serverFetch(`/api/consent-pdf?${params.toString()}`, {
     method: 'GET',
     cookies: cookie,
+    timeoutMs: 45000, // headless-Chrome PDF; the worker bounds its own wait, so a real error can surface here
   });
 
   const body = await res.arrayBuffer();

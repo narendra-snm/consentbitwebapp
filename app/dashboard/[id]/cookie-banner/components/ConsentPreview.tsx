@@ -90,6 +90,8 @@ export default function ConsentPreview({
   forceModalView,
   /** Initial cookie banner layout (matches published embed: box / banner / popup). */
   initialLayout,
+  /** Growth entitlement: hide the "Powered by ConsentBit" strip on the preference views. */
+  hideBranding = false,
 }: {
   iabEnabled: boolean;
   /** Google Additional Consent (AC) — adds the Google Partners sub-tab in the IAB Vendors view. */
@@ -123,6 +125,7 @@ export default function ConsentPreview({
   /** Optional action for top-right Next button. */
   onNext?: () => void;
   initialLayout?: Pick<BannerLayoutValue, 'position' | 'alignment' | 'borderRadius' | 'buttonRadius' | 'animation'>;
+  hideBranding?: boolean;
   content?: {
     title?: string;
     message?: string;
@@ -1017,8 +1020,8 @@ export default function ConsentPreview({
                 </button>
               </div>
 
-              {/* Powered by ConsentBit */}
-              <PoweredByFooter />
+              {/* Powered by ConsentBit — hidden on Growth when "Remove branding" is on */}
+              {!hideBranding && <PoweredByFooter />}
             </div>
           ) : (
             <div
@@ -1095,8 +1098,8 @@ export default function ConsentPreview({
               </div>
               </div>
 
-              {/* Powered by ConsentBit */}
-              <PoweredByFooter />
+              {/* Powered by ConsentBit — hidden on Growth when "Remove branding" is on */}
+              {!hideBranding && <PoweredByFooter />}
             </div>
           )}
             </div>
@@ -1127,6 +1130,7 @@ export default function ConsentPreview({
   buttonBorderRadius: String(buttonRadiusPx),
   bannerType: initialLayout?.position || "banner", // "box" | "banner" | "popup"
   isGAC: googleAcEnabled,
+  hideBranding,
 }} />}
         </div>
       {/* Floating logo pinned below the banner in all views — z-10 keeps it under the banner (z-20) */}
