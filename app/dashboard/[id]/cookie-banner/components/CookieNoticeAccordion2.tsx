@@ -3,6 +3,7 @@
 
 import Accordion from "./ui/Accordion";
 import ToggleSwitch from "./ui/ToggleSwitch";
+import { isHttpUrl } from "./bannerComplianceChecks";
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   return (
@@ -276,8 +277,8 @@ export function CookieNoticeAccordion2({
                 />
                 {!settings.rejectButton && (
                   <p className="text-xs text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-md p-2 leading-relaxed">
-                    ⚠️ Without a Reject button, your banner may not meet {rejectWarningLawText}, which
-                    require refusing to be as easy as accepting. You are responsible for your banner&apos;s compliance.
+                    ⚠️ Without a Reject button, this banner may not comply with {rejectWarningLawText}, under which
+                    rejecting consent must be as easy as accepting it. We recommend enabling the Reject button.
                   </p>
                 )}
               </div>
@@ -311,6 +312,12 @@ export function CookieNoticeAccordion2({
                   className="w-full h-12 px-4 bg-white border rounded-lg font-['DM_Sans'] text-base text-[#111827] border-[#e5e5e5]"
                   style={{ fontVariationSettings: "'opsz' 14" }}
                 />
+                {!settings.rejectButton && (
+                  <p className="text-xs text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-md p-2 leading-relaxed">
+                    ⚠️ Without a Do Not Sell or Share link, this banner may not comply with CCPA/CPRA (California),
+                    which requires a clear way to opt out. We recommend enabling the link.
+                  </p>
+                )}
               </div>
             )}
 
@@ -385,6 +392,14 @@ export function CookieNoticeAccordion2({
                 className="w-full h-12 px-4 bg-white border border-[#e5e5e5] rounded-lg focus:border-[#007aff] focus:outline-none font-['DM_Sans'] text-base text-[#111827]"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               />
+              {/* Every law we support needs the full policy one click from the banner (layered notice). */}
+              {(!settings.cookiePolicyLink || !isHttpUrl(settings.url)) && (
+                <p className="text-xs text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-md p-2 leading-relaxed">
+                  {!settings.cookiePolicyLink
+                    ? "⚠️ The policy link is turned off. Privacy laws require a link from the banner to your full privacy policy, otherwise visitors' consent may not count as informed."
+                    : "⚠️ Add your privacy policy URL (starting with https://). Privacy laws require a link from the banner to your full privacy policy."}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">

@@ -1,0 +1,443 @@
+'use client';
+
+// Privacy Policy tab: a questionnaire that builds a hosted privacy policy
+// (/privacy-policy/<domain> on the consentbit-privacy-requests worker). Every publish
+// is a new dated version; the cookie list on the page comes from the latest scan.
+
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+type Tool = { name: string; purpose: string; country: string };
+
+type Answers = {
+  companyName: string;
+  address: string;
+  contactEmail: string;
+  website: string;
+  dpoName: string;
+  dpoEmail: string;
+  euRepresentative: string;
+  appealEmail: string;
+  collects: Record<string, boolean>;
+  usesAnalytics: boolean;
+  usesAdvertising: boolean;
+  sellsOrShares: boolean;
+  tools: Tool[];
+  regions: Record<string, boolean>;
+  retentionCustomer: string;
+  retentionEnquiries: string;
+  retentionMarketing: string;
+  childrenDirected: boolean;
+  automatedDecisions: boolean;
+};
+
+type PolicyResponse = {
+  success: boolean;
+  error?: string;
+  enabled?: boolean;
+  canEdit?: boolean;
+  publicUrl?: string | null;
+  answers?: Answers;
+  draftSavedAt?: string | null;
+  versions?: { version: number; publishedAt: string }[];
+  scan?: { scannedAt: string; cookieCount: number } | null;
+  options?: {
+    regions: Record<string, string>;
+    collects: Record<string, string>;
+    toolPresets: Tool[];
+  };
+};
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+async function postPolicy(action: 'save' | 'preview' | 'publish', siteId: string, answers: Answers) {
+  const res = await fetch(`/api/privacy-policy/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siteId, answers }),
+  });
+  const data = (await res.json().catch(() => ({ success: false, error: 'Something went wrong.' }))) as {
+    success?: boolean;
+    error?: string;
+    problems?: string[];
+    html?: string;
+    draftSavedAt?: string;
+    version?: number;
+    versions?: { version: number; publishedAt: string }[];
+  };
+  if (!res.ok || !data.success) throw Object.assign(new Error(data.error || 'Something went wrong.'), { problems: data.problems });
+  return data;
+}
+
+const inputCls =
+  'w-full h-10 px-3 bg-white border border-[#E5E5E5] rounded-lg text-sm text-[#111827] focus:outline-none focus:border-[#007AFF] disabled:bg-[#F9FAFB]';
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="block text-sm font-medium text-[#111827]">{label}</span>
+      {children}
+      {hint && <span className="block text-xs text-[#6B7280]">{hint}</span>}
+    </label>
+  );
+}
+
+function Check({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <label className="flex items-start gap-2 text-sm text-[#111827] cursor-pointer">
+      <input type="checkbox" className="mt-0.5" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border border-[#E5E7EB] rounded-xl p-5 space-y-4">
+      <h2 className="text-base font-semibold text-[#111827]">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export default function PrivacyPolicyPage() {
+  const params = useParams<{ id: string }>();
+  const siteId = String(params?.id || '');
+  const [data, setData] = useState<PolicyResponse | null>(null);
+  const [answers, setAnswers] = useState<Answers | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string; problems?: string[] } | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`/api/privacy-policy?siteId=${encodeURIComponent(siteId)}`, { cache: 'no-store' });
+      const d = (await res.json()) as PolicyResponse;
+      setData(d);
+      if (d.answers) setAnswers(d.answers);
+    } catch {
+      setData({ success: false, error: 'Could not load the privacy policy.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const set = <K extends keyof Answers>(key: K, value: Answers[K]) => setAnswers((a) => (a ? { ...a, [key]: value } : a));
+  const setIn = (key: 'collects' | 'regions', sub: string, value: boolean) =>
+    setAnswers((a) => (a ? { ...a, [key]: { ...a[key], [sub]: value } } : a));
+
+  const presetNames = useMemo(() => new Set((data?.options?.toolPresets || []).map((t) => t.name)), [data]);
+  const customTools = (answers?.tools || []).filter((t) => !presetNames.has(t.name));
+  const hasTool = (name: string) => !!answers?.tools.some((t) => t.name === name);
+  const togglePreset = (tool: Tool, on: boolean) =>
+    set('tools', on ? [...(answers?.tools || []), tool] : (answers?.tools || []).filter((t) => t.name !== tool.name));
+  const setCustom = (i: number, patch: Partial<Tool>) => {
+    const presets = (answers?.tools || []).filter((t) => presetNames.has(t.name));
+    const next = customTools.map((t, j) => (j === i ? { ...t, ...patch } : t));
+    set('tools', [...presets, ...next]);
+  };
+  const removeCustom = (i: number) => {
+    const presets = (answers?.tools || []).filter((t) => presetNames.has(t.name));
+    set('tools', [...presets, ...customTools.filter((_, j) => j !== i)]);
+  };
+
+  const run = async (action: 'save' | 'preview' | 'publish') => {
+    if (!answers) return;
+    setBusy(action);
+    setMessage(null);
+    try {
+      const res = await postPolicy(action, siteId, answers);
+      if (action === 'preview') {
+        setPreviewHtml(res.html || '');
+        if (res.problems?.length) setMessage({ tone: 'error', text: 'Fix these before publishing:', problems: res.problems });
+      } else if (action === 'save') {
+        setMessage(
+          res.problems?.length
+            ? { tone: 'error', text: 'Draft saved. Fix these before publishing:', problems: res.problems }
+            : { tone: 'ok', text: 'Draft saved.' }
+        );
+        setData((d) => (d ? { ...d, draftSavedAt: res.draftSavedAt || d.draftSavedAt } : d));
+      } else {
+        setMessage({ tone: 'ok', text: `Published version ${res.version}. Your policy page is live.` });
+        setData((d) => (d ? { ...d, versions: res.versions || d.versions } : d));
+      }
+    } catch (e: any) {
+      setMessage({ tone: 'error', text: e?.message || 'Something went wrong.', problems: e?.problems });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copy = async () => {
+    if (!data?.publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(data.publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked; the link is visible to copy by hand */
+    }
+  };
+
+  const ro = !data?.canEdit;
+  const versions = data?.versions || [];
+  const r = answers?.regions || {};
+  const usLaw = r.california || r.us_state;
+  const btn = 'h-10 px-4 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed';
+
+  return (
+    <div className="w-full bg-white px-4 md:px-8 pt-6 pb-12">
+      <div className="max-w-[900px] mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#111827]">Privacy Policy</h1>
+          <p className="text-[#4B5563] mt-1">
+            Answer a few questions and we host a privacy policy for your website, with sections for each region you choose. The cookie
+            list fills in from your latest scan.
+          </p>
+        </div>
+
+        {loading && <p className="text-[#6B7280]">Loading…</p>}
+        {!loading && data && !data.success && <p className="text-[#B91C1C]">{data.error || 'Could not load the privacy policy.'}</p>}
+
+        {!loading && data?.success && !data.enabled && (
+          <div className="border border-[#E5E7EB] rounded-xl p-6 bg-[#F9FAFB]">
+            <h2 className="text-lg font-semibold text-[#111827]">Available on Essential and Growth</h2>
+            <p className="text-[#4B5563] mt-1">
+              Every privacy law requires a privacy policy, and your cookie banner should link to it. Upgrade to create and host one here.
+            </p>
+            <Link href={`/dashboard/${siteId}/upgrade`} className="inline-block mt-4 h-10 leading-10 px-5 rounded-lg bg-[#007AFF] text-white font-medium">
+              Upgrade
+            </Link>
+          </div>
+        )}
+
+        {!loading && data?.success && data.enabled && answers && data.options && (
+          <>
+            <div className="border border-[#E5E7EB] rounded-xl p-5">
+              <p className="font-medium text-[#111827]">Your policy page</p>
+              {versions.length ? (
+                <>
+                  <p className="text-sm text-[#4B5563] mt-1">
+                    Version {versions[0].version}, published {fmtDate(versions[0].publishedAt)}. Use this link as the privacy policy URL in
+                    your cookie banner (Cookie Banner → Content) and in your website footer.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                    <input readOnly value={data.publicUrl || ''} onFocus={(e) => e.currentTarget.select()} className={`${inputCls} flex-1 bg-[#F9FAFB]`} />
+                    <button onClick={copy} className={`${btn} bg-[#007AFF] text-white`}>{copied ? 'Copied' : 'Copy link'}</button>
+                    <a href={data.publicUrl || '#'} target="_blank" rel="noopener noreferrer" className={`${btn} leading-10 border border-[#E5E5E5] text-[#111827] text-center`}>
+                      Open
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-[#4B5563] mt-1">Not published yet. Fill in the questions below, preview it, then publish.</p>
+              )}
+              <p className="text-xs text-[#6B7280] mt-3">
+                {data.scan
+                  ? `Cookie list from your scan on ${fmtDate(data.scan.scannedAt)} (${data.scan.cookieCount} cookies). It updates when you scan again.`
+                  : 'No scan yet. Run a scan so the cookie list can be filled in.'}
+              </p>
+            </div>
+
+            {ro && <p className="text-sm text-[#6B7280]">Only the account owner or a team Admin can edit the privacy policy.</p>}
+
+            <fieldset disabled={ro} className="space-y-6">
+              <Section title="Your business">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Company or business name *">
+                    <input className={inputCls} value={answers.companyName} maxLength={200} onChange={(e) => set('companyName', e.target.value)} />
+                  </Field>
+                  <Field label="Privacy contact email *">
+                    <input className={inputCls} type="email" value={answers.contactEmail} maxLength={254} onChange={(e) => set('contactEmail', e.target.value)} />
+                  </Field>
+                  <Field label="Postal address">
+                    <input className={inputCls} value={answers.address} maxLength={400} onChange={(e) => set('address', e.target.value)} />
+                  </Field>
+                  <Field label="Website">
+                    <input className={inputCls} value={answers.website} maxLength={200} onChange={(e) => set('website', e.target.value)} />
+                  </Field>
+                  <Field label="Data protection officer name" hint="Optional. Also used as the encarregado (Brazil) and privacy officer (Quebec).">
+                    <input className={inputCls} value={answers.dpoName} maxLength={200} onChange={(e) => set('dpoName', e.target.value)} />
+                  </Field>
+                  <Field label="Data protection officer email">
+                    <input className={inputCls} type="email" value={answers.dpoEmail} maxLength={254} onChange={(e) => set('dpoEmail', e.target.value)} />
+                  </Field>
+                  {(r.eu || r.uk) && (
+                    <Field label="EU/UK representative" hint="Only if your business is outside the EU/UK. Name and address.">
+                      <input className={inputCls} value={answers.euRepresentative} maxLength={400} onChange={(e) => set('euRepresentative', e.target.value)} />
+                    </Field>
+                  )}
+                  {r.us_state && (
+                    <Field label="Email for appeals" hint="US state laws require a way to appeal a refused request. Defaults to your privacy contact.">
+                      <input className={inputCls} type="email" value={answers.appealEmail} maxLength={254} onChange={(e) => set('appealEmail', e.target.value)} />
+                    </Field>
+                  )}
+                </div>
+              </Section>
+
+              <Section title="Where are your visitors? *">
+                <div className="grid gap-2 md:grid-cols-2">
+                  {Object.entries(data.options.regions).map(([k, label]) => (
+                    <Check key={k} label={label} checked={!!r[k]} onChange={(v) => setIn('regions', k, v)} />
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="What does your website collect?">
+                <div className="grid gap-2 md:grid-cols-2">
+                  {Object.entries(data.options.collects).map(([k, label]) => (
+                    <Check key={k} label={label} checked={!!answers.collects[k]} onChange={(v) => setIn('collects', k, v)} />
+                  ))}
+                </div>
+                <div className="space-y-2 pt-2 border-t border-[#F3F4F6]">
+                  <Check label="Analytics cookies (for example Google Analytics)" checked={answers.usesAnalytics} onChange={(v) => set('usesAnalytics', v)} />
+                  <Check label="Advertising cookies or pixels (for example Meta Pixel, Google Ads)" checked={answers.usesAdvertising} onChange={(v) => set('usesAdvertising', v)} />
+                  {usLaw && (
+                    <Check
+                      label="Advertising partners get visitor data (counts as “sharing” under California law)"
+                      checked={answers.sellsOrShares}
+                      onChange={(v) => set('sellsOrShares', v)}
+                    />
+                  )}
+                </div>
+              </Section>
+
+              <Section title="Tools and service providers">
+                <p className="text-sm text-[#4B5563]">Tick the tools you use. We ticked the ones your scan found. ConsentBit is always listed.</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {data.options.toolPresets.map((t) => (
+                    <Check key={t.name} label={`${t.name} — ${t.purpose}`} checked={hasTool(t.name)} onChange={(v) => togglePreset(t, v)} />
+                  ))}
+                </div>
+                <div className="space-y-2 pt-2 border-t border-[#F3F4F6]">
+                  <p className="text-sm font-medium text-[#111827]">Other tools</p>
+                  {customTools.map((t, i) => (
+                    <div key={i} className="grid gap-2 md:grid-cols-[1fr_1.4fr_1fr_auto]">
+                      <input className={inputCls} placeholder="Name" value={t.name} maxLength={120} onChange={(e) => setCustom(i, { name: e.target.value })} />
+                      <input className={inputCls} placeholder="What it does" value={t.purpose} maxLength={200} onChange={(e) => setCustom(i, { purpose: e.target.value })} />
+                      <input className={inputCls} placeholder="Country" value={t.country} maxLength={80} onChange={(e) => setCustom(i, { country: e.target.value })} />
+                      <button type="button" className={`${btn} border border-[#E5E5E5] text-[#B91C1C]`} onClick={() => removeCustom(i)}>
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className={`${btn} border border-[#E5E5E5] text-[#111827]`}
+                    disabled={(answers.tools || []).length >= 40}
+                    onClick={() => set('tools', [...answers.tools, { name: '', purpose: '', country: '' }])}
+                  >
+                    + Add a tool
+                  </button>
+                </div>
+              </Section>
+
+              <Section title="How long you keep data">
+                <div className="grid gap-4">
+                  {(answers.collects.accounts || answers.collects.orders) && (
+                    <Field label="Account, order and customer data">
+                      <input className={inputCls} value={answers.retentionCustomer} maxLength={400} onChange={(e) => set('retentionCustomer', e.target.value)} />
+                    </Field>
+                  )}
+                  {(answers.collects.contactForms || answers.collects.support || answers.collects.jobApplications) && (
+                    <Field label="Enquiries, support conversations and applications">
+                      <input className={inputCls} value={answers.retentionEnquiries} maxLength={400} onChange={(e) => set('retentionEnquiries', e.target.value)} />
+                    </Field>
+                  )}
+                  {answers.collects.newsletter && (
+                    <Field label="Newsletter subscriptions">
+                      <input className={inputCls} value={answers.retentionMarketing} maxLength={400} onChange={(e) => set('retentionMarketing', e.target.value)} />
+                    </Field>
+                  )}
+                  <p className="text-xs text-[#6B7280]">Technical data and cookie choices use fixed periods that match how ConsentBit stores them.</p>
+                </div>
+              </Section>
+
+              <Section title="Other">
+                <Check label="Our website is meant for children under 16" checked={answers.childrenDirected} onChange={(v) => set('childrenDirected', v)} />
+                <Check
+                  label="We make automated decisions with legal or similar effects on people (for example automatic credit or job screening)"
+                  checked={answers.automatedDecisions}
+                  onChange={(v) => set('automatedDecisions', v)}
+                />
+              </Section>
+            </fieldset>
+
+            {message && (
+              <div className={`rounded-lg p-3 text-sm ${message.tone === 'ok' ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#FEF2F2] text-[#B91C1C]'}`}>
+                <p>{message.text}</p>
+                {message.problems && message.problems.length > 0 && (
+                  <ul className="list-disc pl-5 mt-1">
+                    {message.problems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {!ro && (
+                <button className={`${btn} border border-[#E5E5E5] text-[#111827]`} disabled={!!busy} onClick={() => run('save')}>
+                  {busy === 'save' ? 'Saving…' : 'Save draft'}
+                </button>
+              )}
+              <button className={`${btn} border border-[#E5E5E5] text-[#111827]`} disabled={!!busy} onClick={() => run('preview')}>
+                {busy === 'preview' ? 'Loading…' : 'Preview'}
+              </button>
+              {!ro && (
+                <button className={`${btn} bg-[#007AFF] text-white`} disabled={!!busy} onClick={() => run('publish')}>
+                  {busy === 'publish' ? 'Publishing…' : versions.length ? 'Publish new version' : 'Publish'}
+                </button>
+              )}
+              {data.draftSavedAt && <span className="text-xs text-[#6B7280]">Draft saved {fmtDate(data.draftSavedAt)}</span>}
+            </div>
+            <p className="text-xs text-[#6B7280]">
+              You are responsible for checking that the policy matches what your website really does. Publish again whenever your tools or
+              practices change, and at least once a year. We email you a reminder after 11 months.
+            </p>
+
+            {previewHtml !== null && (
+              <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+                  <p className="text-sm font-medium text-[#111827]">Preview (not published)</p>
+                  <button className="text-sm text-[#007AFF]" onClick={() => setPreviewHtml(null)}>Close</button>
+                </div>
+                {/* Empty sandbox: the preview can't run scripts or reach the dashboard. */}
+                <iframe title="Privacy policy preview" sandbox="" srcDoc={previewHtml} className="w-full h-[640px] bg-white" />
+              </div>
+            )}
+
+            {versions.length > 0 && (
+              <Section title="Published versions">
+                <ul className="text-sm space-y-1">
+                  {versions.map((v) => (
+                    <li key={v.version}>
+                      <a
+                        className="text-[#007AFF] underline"
+                        href={`${data.publicUrl}${v.version === versions[0].version ? '' : `?v=${v.version}`}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Version {v.version}
+                      </a>{' '}
+                      — {fmtDate(v.publishedAt)}
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

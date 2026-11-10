@@ -1,0 +1,225 @@
+'use client';
+
+// Legal Policies hub: one card per document (privacy policy, cookie policy, terms and
+// conditions) with its status, last published date and a link to the hosted page. Each card
+// opens the step-by-step generator for that document. Documents are built and hosted by the
+// consentbit-privacy-requests worker; this page only reads their status.
+
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+type DocStatus = {
+  kind: 'privacy' | 'cookie' | 'terms';
+  status: 'none' | 'draft' | 'published';
+  version: number | null;
+  publishedAt: string | null;
+  draftSavedAt: string | null;
+  publicUrl: string | null;
+};
+
+type SummaryResponse = {
+  success: boolean;
+  error?: string;
+  enabled?: boolean;
+  canEdit?: boolean;
+  documents?: { privacy: DocStatus; cookie: DocStatus; terms: DocStatus };
+};
+
+const CARDS: { kind: DocStatus['kind']; title: string; blurb: string; slug: string; tint: string; icon: React.ReactNode }[] = [
+  {
+    kind: 'privacy',
+    title: 'Privacy Policy',
+    blurb: 'What data you collect, why, who gets it, and visitors’ rights, with a section for each region you serve.',
+    slug: 'privacy-policy',
+    tint: 'bg-[#EEF2FF] text-[#4F46E5]',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    kind: 'cookie',
+    title: 'Cookie Policy',
+    blurb: 'Which cookies the site uses, how consent works, and the live cookie list from your latest scan.',
+    slug: 'cookie-policy',
+    tint: 'bg-[#ECFDF5] text-[#059669]',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-4-4 4 4 0 0 1-4-4 4 4 0 0 1-2-2z" />
+        <circle cx="8.5" cy="10.5" r="1" />
+        <circle cx="12" cy="15.5" r="1" />
+        <circle cx="16" cy="13" r="1" />
+      </svg>
+    ),
+  },
+  {
+    kind: 'terms',
+    title: 'Terms & Conditions',
+    blurb: 'The rules for using your website and buying from you: orders, refunds, accounts, liability and governing law.',
+    slug: 'terms',
+    tint: 'bg-[#F5F3FF] text-[#7C3AED]',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M7 3h7l5 5v13H7z" />
+        <path d="M14 3v5h5" />
+        <path d="M10 13h6M10 17h6" />
+      </svg>
+    ),
+  },
+];
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+function StatusPill({ doc }: { doc: DocStatus }) {
+  const map = {
+    published: { label: `Published · v${doc.version}`, dot: 'bg-[#10B981]', cls: 'bg-[#ECFDF5] text-[#047857]' },
+    draft: { label: 'Draft', dot: 'bg-[#F59E0B]', cls: 'bg-[#FFFBEB] text-[#B45309]' },
+    none: { label: 'Not generated', dot: 'bg-[#9CA3AF]', cls: 'bg-[#F3F4F6] text-[#4B5563]' },
+  }[doc.status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium ${map.cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${map.dot}`} />
+      {map.label}
+    </span>
+  );
+}
+
+export default function LegalPoliciesPage() {
+  const params = useParams<{ id: string }>();
+  const siteId = String(params?.id || '');
+  const [data, setData] = useState<SummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`/api/legal-policies?siteId=${encodeURIComponent(siteId)}`, { cache: 'no-store' });
+      setData((await res.json()) as SummaryResponse);
+    } catch {
+      setData({ success: false, error: 'Could not load your legal policies.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const docs = data?.documents;
+
+  return (
+    <div className="w-full bg-white px-4 md:px-8 pt-6 pb-12">
+      <div className="max-w-[1100px] mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#111827]">Legal Policies</h1>
+          <p className="text-[#4B5563] mt-1">Generate and manage the legal documents for your website. Each one is hosted by us, versioned, and can also be embedded on your own page.</p>
+        </div>
+
+        {loading && <p className="text-[#6B7280]">Loading…</p>}
+        {!loading && data && !data.success && <p className="text-[#B91C1C]">{data.error || 'Could not load your legal policies.'}</p>}
+
+        {!loading && data?.success && !data.enabled && (
+          <div className="border border-[#E5E7EB] rounded-xl p-6 bg-[#F9FAFB]">
+            <h2 className="text-lg font-semibold text-[#111827]">Available on Essential and Growth</h2>
+            <p className="text-[#4B5563] mt-1">
+              Every privacy law requires a privacy policy, and your cookie banner should link to it. Upgrade to generate and host your privacy policy, cookie policy and terms here.
+            </p>
+            <Link href={`/dashboard/${siteId}/upgrade`} className="inline-block mt-4 h-10 leading-10 px-5 rounded-lg bg-[#007AFF] text-white font-medium">
+              Upgrade
+            </Link>
+          </div>
+        )}
+
+        {!loading && data?.success && data.enabled && docs && (
+          <>
+            <div className="grid gap-5 md:grid-cols-2">
+              {CARDS.map((card) => {
+                const doc = docs[card.kind];
+                const href = `/dashboard/${siteId}/legal-policies/${card.slug}`;
+                const lastUpdated = doc.publishedAt || doc.draftSavedAt;
+                return (
+                  <section key={card.kind} className="border border-[#E5E7EB] rounded-2xl p-5 md:p-6 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] flex flex-col">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${card.tint}`}>{card.icon}</span>
+                      <div className="flex items-center gap-2">
+                        <StatusPill doc={doc} />
+                        {doc.publicUrl ? (
+                          <a
+                            href={doc.publicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open the hosted page"
+                            aria-label={`Open the hosted ${card.title}`}
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB]"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          </a>
+                        ) : (
+                          <span
+                            title="Publish first to get a hosted page"
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-[#E5E7EB] text-[#D1D5DB]"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <h2 className="text-lg font-semibold text-[#111827] mt-4">{card.title}</h2>
+                    <p className="text-sm text-[#6B7280] mt-1">{card.blurb}</p>
+
+                    {doc.status === 'none' ? (
+                      <div className="mt-5 flex-1 border border-dashed border-[#E5E7EB] rounded-xl bg-[#F9FAFB] p-6 flex flex-col items-center justify-center text-center">
+                        <p className="text-sm text-[#6B7280]">No policy generated yet</p>
+                        <Link href={href} className="mt-3 inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-[#007AFF] text-white font-medium">
+                          <span aria-hidden="true">+</span> Generate
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        <dl className="mt-5 border-t border-[#F3F4F6] text-sm">
+                          <div className="flex items-center justify-between py-2.5 border-b border-[#F3F4F6]">
+                            <dt className="text-[#6B7280]">Last updated</dt>
+                            <dd className="text-[#111827] font-medium">{lastUpdated ? fmtDate(lastUpdated) : '—'}</dd>
+                          </div>
+                          <div className="flex items-center justify-between py-2.5 border-b border-[#F3F4F6]">
+                            <dt className="text-[#6B7280]">{doc.status === 'published' ? 'Published version' : 'Status'}</dt>
+                            <dd className="text-[#111827] font-medium">{doc.status === 'published' ? `Version ${doc.version}` : 'Draft, not published'}</dd>
+                          </div>
+                          <div className="flex items-center justify-between py-2.5">
+                            <dt className="text-[#6B7280]">Languages</dt>
+                            <dd className="text-[#111827] font-medium">EN</dd>
+                          </div>
+                        </dl>
+                        <Link href={href} className="mt-4 inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-[#007AFF] text-white font-medium">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                          </svg>
+                          {data.canEdit ? 'Edit' : 'View'}
+                        </Link>
+                      </>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+            <p className="text-xs text-[#6B7280]">
+              Put the links to all three documents in your website footer, and the privacy policy link in the cookie banner (Cookie Banner → Content). You are responsible for checking that each document matches what your website really does.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

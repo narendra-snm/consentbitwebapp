@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import ProfileForm from "./component/ProfileForm";
 import BillingPage from "./component/BillingPage";
 import TeamPage from "./component/TeamPage";
+import DpaRequestPage from "./component/DpaRequestPage";
+import McpAccessPage from "./component/McpAccessPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
@@ -28,7 +30,7 @@ const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
 };
 
-type TabType = "general" | "billing" | "organizations" | "usage" | "team";
+type TabType = "general" | "billing" | "organizations" | "usage" | "team" | "dpa" | "mcp";
 
 type Organization = {
   siteId?: string;
@@ -101,7 +103,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return;
     try {
       const raw = window.sessionStorage.getItem(profileTabKey);
-      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team") {
+      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team" || raw === "dpa" || raw === "mcp") {
         setActiveTab(raw);
       }
     } catch {
@@ -135,8 +137,9 @@ export default function SettingsPage() {
   const showOwnerTabs = ownsAccount || isTeamAdmin;
   const tabAllowed = useCallback(
     (tab: TabType) =>
-      tab === "general" || (tab === "team" ? canManageTeam : showOwnerTabs),
-    [canManageTeam, showOwnerTabs],
+      tab === "general" ||
+      (tab === "team" ? canManageTeam : tab === "dpa" || tab === "mcp" ? ownsAccount : showOwnerTabs),
+    [canManageTeam, showOwnerTabs, ownsAccount],
   );
   useEffect(() => {
     if (loading) return;
@@ -562,6 +565,34 @@ export default function SettingsPage() {
             <p className={`text-[15px] text-left ${isActive("usage") ? "text-[#007aff]" : "text-[#111827]"}`}>Usage Overview</p>
           </button>
           )}
+
+          {/* DPA Request Tab — account owner only (every plan); the signed-copy form inside is Growth-only */}
+          {ownsAccount && (
+          <button onClick={() => setActiveTab("dpa")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("dpa") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 7V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V7C3 4 4.5 2 8 2H16C19.5 2 21 4 21 7Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 7.5H16M8 11.5H16M8 15.5H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M14 18.5L15.5 20L18.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className={`text-[15px] text-left ${isActive("dpa") ? "text-[#007aff]" : "text-[#111827]"}`}>DPA</p>
+          </button>
+          )}
+
+          {/* MCP Access Tab — account owner only; AI clients (ChatGPT, Claude) via the ConsentBit MCP server */}
+          {ownsAccount && (
+          <button onClick={() => setActiveTab("mcp")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("mcp") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 2V5M15 2V5M9 19V22M15 19V22M2 9H5M2 15H5M19 9H22M19 15H22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M16 5H8C6.34 5 5 6.34 5 8V16C5 17.66 6.34 19 8 19H16C17.66 19 19 17.66 19 16V8C19 6.34 17.66 5 16 5Z" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M9.5 12H14.5M12 9.5V14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <p className={`text-[15px] text-left ${isActive("mcp") ? "text-[#007aff]" : "text-[#111827]"}`}>MCP access</p>
+          </button>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -740,6 +771,10 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "team" && canManageTeam && <TeamPage />}
+
+          {activeTab === "dpa" && ownsAccount && <DpaRequestPage />}
+
+          {activeTab === "mcp" && ownsAccount && <McpAccessPage />}
 
           {activeTab === "general" && (
             <div className="text-center">

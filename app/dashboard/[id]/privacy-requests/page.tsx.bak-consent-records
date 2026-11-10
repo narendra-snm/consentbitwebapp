@@ -1,0 +1,439 @@
+'use client';
+
+// Privacy Requests tab: requests visitors sent through the public form
+// (/privacy-request/<domain> on the consentbit-privacy-requests worker), with the legal
+// deadline for each. Owner and team Admins can act; Members see them read-only.
+
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+type PrivacyRequest = {
+  id: string;
+  ref: string;
+  type: 'access' | 'delete' | 'correct' | 'optout';
+  region: string;
+  law: string;
+  name: string | null;
+  email: string;
+  message: string | null;
+  consentId: string | null;
+  status: 'new' | 'in_progress' | 'completed' | 'rejected';
+  createdAt: string;
+  verifiedAt: string | null;
+  dueAt: string;
+  extendedAt: string | null;
+  completedAt: string | null;
+  reply: string | null;
+  ownerNote: string | null;
+};
+
+type ListResponse = {
+  success: boolean;
+  error?: string;
+  enabled?: boolean;
+  canEdit?: boolean;
+  publicUrl?: string | null;
+  requests?: PrivacyRequest[];
+};
+
+type RequestEvent = { at: string; action: string; detail: string | null };
+
+const TYPE_LABEL: Record<PrivacyRequest['type'], string> = {
+  access: 'See a copy of their data',
+  delete: 'Delete their data',
+  correct: 'Correct their data',
+  optout: 'Stop selling or sharing',
+};
+
+const STATUS_LABEL: Record<PrivacyRequest['status'], string> = {
+  new: 'New',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  rejected: 'Rejected',
+};
+
+const STATUS_STYLE: Record<PrivacyRequest['status'], string> = {
+  new: 'bg-[#EFF6FF] text-[#1D4ED8]',
+  in_progress: 'bg-[#FEF3C7] text-[#92400E]',
+  completed: 'bg-[#ECFDF5] text-[#047857]',
+  rejected: 'bg-[#F3F4F6] text-[#4B5563]',
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  submitted: 'Request sent',
+  verified: 'Visitor confirmed their email',
+  started: 'Marked in progress',
+  extended: 'Deadline extended',
+  completed: 'Completed, visitor emailed',
+  rejected: 'Rejected, visitor emailed',
+  note: 'Internal note saved',
+  reminder: 'Deadline reminder sent',
+  overdue_alert: 'Overdue alert sent',
+};
+
+const fmtDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+function daysLeft(dueAt: string) {
+  return Math.ceil((Date.parse(dueAt) - Date.now()) / 86400000);
+}
+
+function DueCell({ req }: { req: PrivacyRequest }) {
+  if (req.status === 'completed' || req.status === 'rejected') {
+    return <span className="text-[#6B7280]">Closed {fmtDate(req.completedAt)}</span>;
+  }
+  const d = daysLeft(req.dueAt);
+  const tone = d < 0 ? 'text-[#B91C1C] font-semibold' : d <= 7 ? 'text-[#B45309] font-semibold' : 'text-[#111827]';
+  const text = d < 0 ? `${-d} day${d === -1 ? '' : 's'} overdue` : d === 0 ? 'Due today' : `${d} day${d === 1 ? '' : 's'} left`;
+  return (
+    <span className={tone}>
+      {text}
+      <span className="block text-xs font-normal text-[#6B7280]">
+        {fmtDate(req.dueAt)}
+        {req.extendedAt ? ' (extended)' : ''}
+      </span>
+    </span>
+  );
+}
+
+async function postUpdate(body: Record<string, string>) {
+  const res = await fetch('/api/privacy-requests/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({ success: false, error: 'Something went wrong.' }))) as {
+    success?: boolean;
+    error?: string;
+  };
+  if (!res.ok || !data.success) throw new Error(data.error || 'Something went wrong.');
+  return data;
+}
+
+function RequestDetail({
+  siteId,
+  req,
+  canEdit,
+  onChanged,
+}: {
+  siteId: string;
+  req: PrivacyRequest;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [reply, setReply] = useState('');
+  const [note, setNote] = useState(req.ownerNote || '');
+  const [events, setEvents] = useState<RequestEvent[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const open = req.status === 'new' || req.status === 'in_progress';
+
+  useEffect(() => {
+    const params = new URLSearchParams({ siteId, id: req.id });
+    fetch(`/api/privacy-requests/events?${params.toString()}`)
+      .then((r) => r.json() as Promise<{ events?: RequestEvent[] }>)
+      .then((d) => setEvents(d?.events || []))
+      .catch(() => setEvents([]));
+  }, [siteId, req.id, req.status, req.dueAt, req.ownerNote]);
+
+  const act = async (action: string, extra: Record<string, string> = {}) => {
+    setBusy(action);
+    setError(null);
+    try {
+      await postUpdate({ siteId, id: req.id, action, ...extra });
+      if (action !== 'note') setReply('');
+      onChanged();
+    } catch (e: any) {
+      setError(e?.message || 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const btn = 'h-9 px-4 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed';
+
+  return (
+    <div className="bg-[#F9FAFB] border-t border-[#E5E7EB] px-5 py-5 grid gap-6 md:grid-cols-2">
+      <div className="space-y-3 text-sm">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+          <dt className="text-[#6B7280]">Name</dt><dd>{req.name || '—'}</dd>
+          <dt className="text-[#6B7280]">Email</dt><dd className="break-all">{req.email}</dd>
+          <dt className="text-[#6B7280]">Law</dt><dd>{req.law}</dd>
+          <dt className="text-[#6B7280]">Received</dt><dd>{fmtDate(req.createdAt)}</dd>
+          <dt className="text-[#6B7280]">Consent ID</dt>
+          <dd className="break-all">{req.consentId || '—'}</dd>
+        </dl>
+        {req.message && (
+          <div>
+            <p className="text-[#6B7280] mb-1">Their message</p>
+            <p className="whitespace-pre-wrap bg-white border border-[#E5E7EB] rounded-lg p-3">{req.message}</p>
+          </div>
+        )}
+        <p className="text-xs text-[#4B5563] bg-white border border-[#E5E7EB] rounded-lg p-3 leading-relaxed">
+          ConsentBit only holds this visitor&apos;s cookie consent records.{' '}
+          {req.consentId ? (
+            <>
+              Search the consent ID above in{' '}
+              <Link href={`/dashboard/${siteId}/consent-logs`} className="text-[#007AFF] underline">Consent Logs</Link>{' '}
+              to export or delete them.
+            </>
+          ) : (
+            <>
+              Find them in <Link href={`/dashboard/${siteId}/consent-logs`} className="text-[#007AFF] underline">Consent Logs</Link>{' '}
+              if the visitor gives you their consent ID.
+            </>
+          )}{' '}
+          Any other data you hold about them (forms, orders, emails, CRM) you need to handle yourself.
+        </p>
+        {req.reply && (
+          <div>
+            <p className="text-[#6B7280] mb-1">Your reply to the visitor</p>
+            <p className="whitespace-pre-wrap bg-white border border-[#E5E7EB] rounded-lg p-3">{req.reply}</p>
+          </div>
+        )}
+        <div>
+          <p className="text-[#6B7280] mb-1">History</p>
+          <ul className="space-y-1">
+            {events.map((e, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="text-[#6B7280] shrink-0 w-28">
+                  {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span>
+                  {EVENT_LABEL[e.action] || e.action}
+                  {e.action === 'extended' && e.detail ? ` to ${fmtDate(e.detail)}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="space-y-4 text-sm">
+        {!canEdit && (
+          <p className="text-[#6B7280]">Only the account owner or a team Admin can handle requests.</p>
+        )}
+        {canEdit && open && (
+          <div className="space-y-2">
+            <label className="block font-medium text-[#111827]" htmlFor={`reply-${req.id}`}>
+              Message to the visitor
+            </label>
+            <textarea
+              id={`reply-${req.id}`}
+              value={reply}
+              onChange={(e) => setReply(e.target.value.slice(0, 4000))}
+              placeholder="For example: we have deleted your account and all records we hold about you. Required when rejecting or extending."
+              className="w-full min-h-[110px] p-3 bg-white border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[#007AFF]"
+            />
+            <div className="flex flex-wrap gap-2">
+              {req.status === 'new' && (
+                <button className={`${btn} bg-white border border-[#E5E5E5] text-[#111827]`} disabled={!!busy} onClick={() => act('start')}>
+                  {busy === 'start' ? 'Saving…' : 'Mark in progress'}
+                </button>
+              )}
+              <button className={`${btn} bg-[#007AFF] text-white`} disabled={!!busy} onClick={() => act('complete', { reply })}>
+                {busy === 'complete' ? 'Sending…' : 'Complete & email visitor'}
+              </button>
+              <button
+                className={`${btn} bg-white border border-[#E5E5E5] text-[#B91C1C]`}
+                disabled={!!busy || !reply.trim()}
+                title={reply.trim() ? '' : 'Write the reason in the message first'}
+                onClick={() => act('reject', { reply })}
+              >
+                {busy === 'reject' ? 'Sending…' : 'Reject'}
+              </button>
+              {!req.extendedAt && (
+                <button
+                  className={`${btn} bg-white border border-[#E5E5E5] text-[#111827]`}
+                  disabled={!!busy || !reply.trim()}
+                  title={reply.trim() ? '' : 'Write the reason in the message first'}
+                  onClick={() => act('extend', { reply })}
+                >
+                  {busy === 'extend' ? 'Saving…' : 'Extend deadline'}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-[#6B7280]">
+              The visitor is emailed when you complete, reject or extend. Extending is allowed once, and only where the law allows it
+              (GDPR +2 months, US state laws +45 days, PIPEDA +30 days).
+            </p>
+          </div>
+        )}
+        {canEdit && (
+          <div className="space-y-2">
+            <label className="block font-medium text-[#111827]" htmlFor={`note-${req.id}`}>
+              Internal note <span className="font-normal text-[#6B7280]">(not sent to the visitor)</span>
+            </label>
+            <textarea
+              id={`note-${req.id}`}
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 4000))}
+              className="w-full min-h-[70px] p-3 bg-white border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[#007AFF]"
+            />
+            <button
+              className={`${btn} bg-white border border-[#E5E5E5] text-[#111827]`}
+              disabled={!!busy || note === (req.ownerNote || '')}
+              onClick={() => act('note', { note })}
+            >
+              {busy === 'note' ? 'Saving…' : 'Save note'}
+            </button>
+          </div>
+        )}
+        {error && <p className="text-sm text-[#B91C1C]">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+export default function PrivacyRequestsPage() {
+  const params = useParams<{ id: string }>();
+  const siteId = String(params?.id || '');
+  const [data, setData] = useState<ListResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`/api/privacy-requests?siteId=${encodeURIComponent(siteId)}`, { cache: 'no-store' });
+      setData(await res.json());
+    } catch {
+      setData({ success: false, error: 'Could not load privacy requests.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const copy = async () => {
+    if (!data?.publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(data.publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked; the link is visible to copy by hand */
+    }
+  };
+
+  const requests = data?.requests || [];
+  const openCount = requests.filter((r) => r.status === 'new' || r.status === 'in_progress').length;
+
+  return (
+    <div className="w-full bg-white px-4 md:px-8 pt-6 pb-12">
+      <div className="max-w-[1259px] mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#111827]">Privacy Requests</h1>
+          <p className="text-[#4B5563] mt-1">
+            Visitors use your request page to ask you to show, delete or correct their data, or to stop selling or sharing it.
+            Each request has a legal deadline.
+          </p>
+        </div>
+
+        {loading && <p className="text-[#6B7280]">Loading…</p>}
+
+        {!loading && data && !data.success && <p className="text-[#B91C1C]">{data.error || 'Could not load privacy requests.'}</p>}
+
+        {!loading && data?.success && !data.enabled && (
+          <div className="border border-[#E5E7EB] rounded-xl p-6 bg-[#F9FAFB]">
+            <h2 className="text-lg font-semibold text-[#111827]">Available on Essential and Growth</h2>
+            <p className="text-[#4B5563] mt-1">
+              Get a privacy request page for your visitors, deadline tracking and reminders. Every privacy law requires a way for
+              visitors to make these requests.
+            </p>
+            <Link href={`/dashboard/${siteId}/upgrade`} className="inline-block mt-4 h-10 leading-10 px-5 rounded-lg bg-[#007AFF] text-white font-medium">
+              Upgrade
+            </Link>
+          </div>
+        )}
+
+        {!loading && data?.success && data.enabled && (
+          <>
+            <div className="border border-[#E5E7EB] rounded-xl p-5">
+              <p className="font-medium text-[#111827]">Your request page</p>
+              <p className="text-sm text-[#4B5563] mt-1">
+                Link to it from your privacy policy and website footer, for example as &quot;Your privacy rights&quot;.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                <input
+                  readOnly
+                  value={data.publicUrl || ''}
+                  className="flex-1 h-10 px-3 border border-[#E5E5E5] rounded-lg bg-[#F9FAFB] text-sm text-[#111827]"
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <button onClick={copy} className="h-10 px-4 rounded-lg bg-[#007AFF] text-white text-sm font-medium">
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
+                <a
+                  href={data.publicUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-10 leading-10 px-4 rounded-lg border border-[#E5E5E5] text-sm text-[#111827] text-center"
+                >
+                  Open
+                </a>
+              </div>
+            </div>
+
+            <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
+                <p className="font-medium text-[#111827]">Requests</p>
+                <p className="text-sm text-[#6B7280]">{openCount} open</p>
+              </div>
+              {requests.length === 0 ? (
+                <p className="px-5 py-10 text-center text-[#6B7280]">No requests yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#F9FAFB] text-left text-[#6B7280]">
+                      <tr>
+                        <th className="px-5 py-2.5 font-medium">Reference</th>
+                        <th className="px-5 py-2.5 font-medium">Request</th>
+                        <th className="px-5 py-2.5 font-medium">Law</th>
+                        <th className="px-5 py-2.5 font-medium">Received</th>
+                        <th className="px-5 py-2.5 font-medium">Deadline</th>
+                        <th className="px-5 py-2.5 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    {requests.map((r) => (
+                      <tbody key={r.id} className="border-t border-[#E5E7EB]">
+                        <tr
+                          className="cursor-pointer hover:bg-[#F9FAFB]"
+                          onClick={() => setOpenId(openId === r.id ? null : r.id)}
+                          aria-expanded={openId === r.id}
+                        >
+                          <td className="px-5 py-3 font-medium text-[#111827] whitespace-nowrap">{r.ref}</td>
+                          <td className="px-5 py-3">{TYPE_LABEL[r.type] || r.type}</td>
+                          <td className="px-5 py-3 whitespace-nowrap">{r.law}</td>
+                          <td className="px-5 py-3 whitespace-nowrap">{fmtDate(r.createdAt)}</td>
+                          <td className="px-5 py-3 whitespace-nowrap"><DueCell req={r} /></td>
+                          <td className="px-5 py-3">
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_STYLE[r.status]}`}>
+                              {STATUS_LABEL[r.status] || r.status}
+                            </span>
+                          </td>
+                        </tr>
+                        {openId === r.id && (
+                          <tr>
+                            <td colSpan={6} className="p-0">
+                              <RequestDetail siteId={siteId} req={r} canEdit={!!data.canEdit} onChanged={load} />
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    ))}
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -257,6 +257,30 @@ function CookieIcon({ className, size = 18, draw = false }: AnimatedIconProps) {
   );
 }
 
+function ScaleIcon({ className, size = 18, draw = false }: AnimatedIconProps) {
+  const baseStroke = draw ? "#93C5FD" : "#9CA3AF";
+  const animatedStyle = getAnimatedPathStyle(draw);
+  const beam = "M10 3v14M6 17h8M4 6h12";
+  const pans = "M4 6 2 11a2.4 2.4 0 0 0 4 0zM16 6l-2 5a2.4 2.4 0 0 0 4 0z";
+
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d={beam} stroke={baseStroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={pans} stroke={baseStroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={beam} stroke="#1E66F5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" pathLength={100} style={animatedStyle} />
+      <path d={pans} stroke="#1E66F5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" pathLength={100} style={animatedStyle} />
+    </svg>
+  );
+}
+
 function UpgradeIcon({ className, size = 18, draw = false }: AnimatedIconProps) {
   const baseStroke = draw ? "#93C5FD" : "#9CA3AF";
   const animatedStyle = getAnimatedPathStyle(draw);
@@ -344,6 +368,12 @@ const tabs = [
     name: "Consent Logs",
     slug: "consent-logs",
     icon: FileText,
+  },
+  {
+    // Hub for the policy generators and the Privacy Requests inbox.
+    name: "Legal",
+    slug: "legal-policies",
+    icon: ScaleIcon,
   },
   {
     name: "Upgrade",

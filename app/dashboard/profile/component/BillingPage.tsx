@@ -861,7 +861,13 @@ export default function BillingPage({
             <div className="relative">
               <select
                 value={filterDomain}
-                onChange={(e) => setFilterDomain(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFilterDomain(v);
+                  // A specific site also becomes the active site (like the header picker), so
+                  // the plan, usage and billing details below follow it. "All" only filters invoices.
+                  if (v !== "all") setActiveSiteId(v);
+                }}
                 className="appearance-none bg-white border border-[#e5e5e5] rounded-[50px] h-[36px] px-[12px] pr-[32px] font-normal text-[14px] text-[#007AFF] outline-none cursor-pointer"
                 style={{ fontVariationSettings: "'opsz' 14" }}
               >
@@ -1194,6 +1200,16 @@ export default function BillingPage({
               {isCancelled
                 ? "Only the account owner can resume this subscription."
                 : "Only the account owner can cancel this subscription."}
+            </p>
+          )}
+
+          {/* Free fallback: an ended site moves to the Free plan unless another site on the
+              account already uses it. dashboard-init names that site (`freeBlockedBy`) —
+              the one place the customer learns why this site's banner stayed off. A site
+              that WAS moved arrives as plain Free and never reaches this branch. */}
+          {periodHasEnded && activeSiteData?.freeBlockedBy && (
+            <p className="mt-2 text-[12px] text-[#92400e]">
+              This site stayed inactive because {activeSiteData.freeBlockedBy.domain || activeSiteData.freeBlockedBy.name || "another site on your account"} already uses the one Free site included with your account. Choose a plan to turn the banner back on.
             </p>
           )}
 

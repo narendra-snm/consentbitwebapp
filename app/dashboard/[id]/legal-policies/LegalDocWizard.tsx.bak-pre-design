@@ -1,0 +1,711 @@
+'use client';
+
+// Shared step-by-step generator for the Cookie Policy (kind="cookie") and the Terms &
+// Conditions (kind="terms"). The documents are built and hosted by the
+// consentbit-privacy-requests worker (/cookie-policy/<domain>, /terms/<domain>). Every publish
+// is a new dated version; the cookie policy's cookie list comes from the latest scan. Either
+// document can be added to the website as a hosted link, an embed script, or copied HTML.
+//
+// The privacy policy has its own page (./privacy-policy) with a richer questionnaire.
+
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+type Kind = 'cookie' | 'terms';
+type Answers = Record<string, any>;
+type Version = { version: number; publishedAt: string };
+type Options = Record<string, Record<string, string>>;
+
+type DocResponse = {
+  success: boolean;
+  error?: string;
+  enabled?: boolean;
+  kind?: Kind;
+  title?: string;
+  canEdit?: boolean;
+  publicUrl?: string | null;
+  embedSnippet?: string | null;
+  answers?: Answers;
+  draftSavedAt?: string | null;
+  versions?: Version[];
+  scan?: { scannedAt: string; cookieCount: number } | null;
+  options?: Options;
+};
+
+const META: Record<Kind, { title: string; intro: string; steps: string[]; containerId: string; gate: string }> = {
+  cookie: {
+    title: 'Cookie Policy',
+    intro: 'Answer a few questions and we build a cookie policy for your website. The cookie list is filled in from your latest scan every time the page is viewed, so it stays current.',
+    steps: ['Website and regions', 'Cookies you use', 'Links and contact', 'Review and publish'],
+    containerId: 'consentbit-cookie-policy',
+    gate: 'A cookie policy tells visitors which cookies you use and how to control them. Most privacy laws expect one next to the cookie banner.',
+  },
+  terms: {
+    title: 'Terms & Conditions',
+    intro: 'Answer the questions step by step and we build the terms and conditions for your website: what you offer, payments and refunds, accounts, acceptable use, liability and governing law.',
+    steps: ['Your business', 'What you offer', 'Payments and refunds', 'Content and liability', 'Law and contact', 'Review and publish'],
+    containerId: 'consentbit-terms',
+    gate: 'Terms and conditions set the rules for using your website and buying from you, and limit your liability.',
+  },
+};
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+async function postDoc(action: 'save' | 'preview' | 'publish', siteId: string, kind: Kind, answers: Answers) {
+  const res = await fetch(`/api/legal-policy/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siteId, kind, answers }),
+  });
+  const data = (await res.json().catch(() => ({ success: false, error: 'Something went wrong.' }))) as {
+    success?: boolean;
+    error?: string;
+    problems?: string[];
+    html?: string;
+    draftSavedAt?: string;
+    version?: number;
+    versions?: Version[];
+  };
+  if (!res.ok || !data.success) throw Object.assign(new Error(data.error || 'Something went wrong.'), { problems: data.problems });
+  return data;
+}
+
+const inputCls =
+  'w-full h-10 px-3 bg-white border border-[#E5E5E5] rounded-lg text-sm text-[#111827] focus:outline-none focus:border-[#007AFF] disabled:bg-[#F9FAFB]';
+const textareaCls =
+  'w-full min-h-[80px] p-3 bg-white border border-[#E5E5E5] rounded-lg text-sm text-[#111827] focus:outline-none focus:border-[#007AFF] disabled:bg-[#F9FAFB]';
+const btn = 'h-10 px-4 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed';
+const btnPrimary = `${btn} bg-[#007AFF] text-white`;
+const btnPlain = `${btn} border border-[#E5E5E5] text-[#111827] bg-white`;
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="block text-sm font-medium text-[#111827]">{label}</span>
+      {children}
+      {hint && <span className="block text-xs text-[#6B7280]">{hint}</span>}
+    </label>
+  );
+}
+
+function Check({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+  return (
+    <label className="flex items-start gap-2 text-sm text-[#111827] cursor-pointer">
+      <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        {label}
+        {hint && <span className="block text-xs text-[#6B7280]">{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
+function Radio({ name, value, options, onChange }: { name: string; value: string; options: Record<string, string>; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-2">
+      {Object.entries(options).map(([k, label]) => (
+        <label key={k} className="flex items-start gap-2 text-sm text-[#111827] cursor-pointer">
+          <input type="radio" className="mt-0.5" name={name} checked={String(value) === k} onChange={() => onChange(k)} />
+          <span>{label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function Question({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-[#111827]">{title}</p>
+      {hint && <p className="text-xs text-[#6B7280]">{hint}</p>}
+      {children}
+    </div>
+  );
+}
+
+function CopyButton({ text, label = 'Copy', className = btnPlain }: { text: string; label?: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked; the text is visible to copy by hand */
+    }
+  };
+  return (
+    <button type="button" className={className} onClick={copy} disabled={!text}>
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+export default function LegalDocWizard({ kind }: { kind: Kind }) {
+  const meta = META[kind];
+  const STEPS = meta.steps;
+  const params = useParams<{ id: string }>();
+  const siteId = String(params?.id || '');
+  const [data, setData] = useState<DocResponse | null>(null);
+  const [answers, setAnswers] = useState<Answers | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string; problems?: string[] } | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [addMethod, setAddMethod] = useState<'link' | 'embed' | 'html'>('link');
+  const [docHtml, setDocHtml] = useState<string>('');
+
+  const load = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`/api/legal-policy?siteId=${encodeURIComponent(siteId)}&kind=${kind}`, { cache: 'no-store' });
+      const d = (await res.json()) as DocResponse;
+      setData(d);
+      if (d.answers) setAnswers(d.answers);
+    } catch {
+      setData({ success: false, error: `Could not load the ${meta.title.toLowerCase()}.` });
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId, kind, meta.title]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const set = (key: string, value: unknown) => setAnswers((a) => (a ? { ...a, [key]: value } : a));
+  const setIn = (key: string, sub: string, value: boolean) => setAnswers((a) => (a ? { ...a, [key]: { ...(a[key] || {}), [sub]: value } } : a));
+
+  const ro = !data?.canEdit;
+  const versions = data?.versions || [];
+  const r = (answers?.regions || {}) as Record<string, boolean>;
+  const usLaw = !!(r.california || r.us_state);
+  const o = (answers?.offers || {}) as Record<string, boolean>;
+  const sells = !!(o.products || o.digital || o.services || o.subscription || o.software);
+
+  const run = async (action: 'save' | 'preview' | 'publish', quiet = false) => {
+    if (!answers) return false;
+    setBusy(action);
+    if (!quiet) setMessage(null);
+    try {
+      const res = await postDoc(action, siteId, kind, answers);
+      if (action === 'preview') {
+        setPreviewHtml(res.html || '');
+        if (res.problems?.length) setMessage({ tone: 'error', text: 'Fix these before publishing:', problems: res.problems });
+      } else if (action === 'save') {
+        if (!quiet) {
+          setMessage(
+            res.problems?.length
+              ? { tone: 'error', text: 'Draft saved. Fix these before publishing:', problems: res.problems }
+              : { tone: 'ok', text: 'Draft saved.' }
+          );
+        }
+        setData((d) => (d ? { ...d, draftSavedAt: res.draftSavedAt || d.draftSavedAt } : d));
+      } else {
+        setMessage({ tone: 'ok', text: `Published version ${res.version}. Your ${meta.title.toLowerCase()} page is live.` });
+        setData((d) => (d ? { ...d, versions: res.versions || d.versions } : d));
+        setDocHtml('');
+      }
+      return true;
+    } catch (e: any) {
+      setMessage({ tone: 'error', text: e?.message || 'Something went wrong.', problems: e?.problems });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Moving between steps keeps the draft on the server, so nothing is lost on a refresh.
+  const goTo = async (next: number) => {
+    const target = Math.max(0, Math.min(STEPS.length - 1, next));
+    if (target === step) return;
+    if (!ro && answers) await run('save', true);
+    setStep(target);
+    setMessage(null);
+    if (target === STEPS.length - 1) {
+      setPreviewHtml(null);
+      await run('preview', true);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const fetchHtml = async () => {
+    if (docHtml) return docHtml;
+    setBusy('html');
+    try {
+      const res = await fetch(`/api/legal-policy/html?siteId=${encodeURIComponent(siteId)}&kind=${kind}`, { cache: 'no-store' });
+      const d = (await res.json()) as { success?: boolean; html?: string; error?: string };
+      if (!res.ok || !d.success || !d.html) throw new Error(d.error || 'Could not load the HTML.');
+      setDocHtml(d.html);
+      return d.html;
+    } catch (e: any) {
+      setMessage({ tone: 'error', text: e?.message || 'Could not load the HTML.' });
+      return '';
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  useEffect(() => {
+    if (addMethod === 'html' && versions.length && !docHtml) void fetchHtml();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addMethod, versions.length]);
+
+  const opt = (name: string): Record<string, string> => data?.options?.[name] || {};
+
+  // ── shared blocks ─────────────────────────────────────────────────────────
+
+  const companyBlock = (regionsTitle: string, regionsHint: string) =>
+    answers && (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Company or business name *" hint="Shown as the organisation responsible for the website.">
+            <input className={inputCls} value={answers.companyName || ''} maxLength={200} onChange={(e) => set('companyName', e.target.value)} />
+          </Field>
+          <Field label="Website">
+            <input className={inputCls} value={answers.website || ''} maxLength={200} onChange={(e) => set('website', e.target.value)} />
+          </Field>
+          {kind === 'terms' && (
+            <>
+              <Field label="Legal form" hint="Optional. For example Ltd, LLC, GmbH, Inc.">
+                <input className={inputCls} value={answers.legalForm || ''} maxLength={120} onChange={(e) => set('legalForm', e.target.value)} />
+              </Field>
+              <Field label="Country where the business is based" hint="Optional. Named in the opening paragraph.">
+                <input className={inputCls} value={answers.country || ''} maxLength={120} onChange={(e) => set('country', e.target.value)} />
+              </Field>
+            </>
+          )}
+          <Field label="Postal address" hint="Recommended. Consumer laws usually expect a business address.">
+            <input className={inputCls} value={answers.address || ''} maxLength={400} onChange={(e) => set('address', e.target.value)} />
+          </Field>
+        </div>
+        <Question title={regionsTitle} hint={regionsHint}>
+          <div className="grid gap-2 md:grid-cols-2">
+            {Object.entries(opt('regions')).map(([k, label]) => (
+              <Check key={k} label={label} checked={!!r[k]} onChange={(v) => setIn('regions', k, v)} />
+            ))}
+          </div>
+        </Question>
+      </div>
+    );
+
+  const contactBlock = () =>
+    answers && (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Contact email *" hint="Where visitors send questions about this document.">
+          <input className={inputCls} type="email" value={answers.contactEmail || ''} maxLength={254} onChange={(e) => set('contactEmail', e.target.value)} />
+        </Field>
+        <Field label="Contact page link" hint="Optional. A page on your website where visitors can reach you.">
+          <input className={inputCls} type="url" placeholder="https://" value={answers.contactUrl || ''} maxLength={300} onChange={(e) => set('contactUrl', e.target.value)} />
+        </Field>
+        <Field label="Privacy policy link" hint={answers.privacyPolicyUrl ? 'Pre-filled with your hosted privacy policy. Change it if the policy lives on your own domain.' : 'Optional. Publish a privacy policy here and we fill this in for you.'}>
+          <input className={inputCls} type="url" placeholder="https://" value={answers.privacyPolicyUrl || ''} maxLength={300} onChange={(e) => set('privacyPolicyUrl', e.target.value)} />
+        </Field>
+        {kind === 'terms' && (
+          <Field label="Cookie policy link" hint={answers.cookiePolicyUrl ? 'Pre-filled with your hosted cookie policy.' : 'Optional. Publish a cookie policy here and we fill this in for you.'}>
+            <input className={inputCls} type="url" placeholder="https://" value={answers.cookiePolicyUrl || ''} maxLength={300} onChange={(e) => set('cookiePolicyUrl', e.target.value)} />
+          </Field>
+        )}
+      </div>
+    );
+
+  const reviewBlock = () =>
+    data && (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <button className={btnPlain} disabled={!!busy} onClick={() => run('preview')}>
+            {busy === 'preview' ? 'Loading…' : 'Refresh preview'}
+          </button>
+          {!ro && (
+            <button className={btnPrimary} disabled={!!busy} onClick={() => run('publish')}>
+              {busy === 'publish' ? 'Publishing…' : versions.length ? 'Publish new version' : 'Publish'}
+            </button>
+          )}
+          {versions.length > 0 && <span className="text-xs text-[#6B7280]">Current: version {versions[0].version}, published {fmtDate(versions[0].publishedAt)}</span>}
+        </div>
+        <p className="text-xs text-[#6B7280]">
+          You are responsible for checking that the document matches what your website really does. Publish again whenever your practices change.
+          {kind === 'terms' ? ' For anything unusual, such as regulated products or high-value contracts, have a lawyer review the result.' : ''}
+        </p>
+
+        {previewHtml !== null ? (
+          <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+            <div className="px-4 py-2 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+              <p className="text-sm font-medium text-[#111827]">Preview{versions.length ? ' of the next version' : ''} (not published)</p>
+            </div>
+            {/* Empty sandbox: the preview can't run scripts or reach the dashboard. */}
+            <iframe title={`${meta.title} preview`} sandbox="" srcDoc={previewHtml} className="w-full h-[640px] bg-white" />
+          </div>
+        ) : (
+          <p className="text-sm text-[#6B7280]">{busy === 'preview' ? 'Building the preview…' : 'Click Refresh preview to see the document.'}</p>
+        )}
+
+        {versions.length > 0 && (
+          <div className="border border-[#E5E7EB] rounded-xl p-5 space-y-4">
+            <div>
+              <p className="font-medium text-[#111827]">Add it to your website</p>
+              <p className="text-sm text-[#4B5563] mt-1">Pick one. Then link to it from your website footer{kind === 'cookie' ? ' and from the cookie banner text' : ' and from your checkout or sign-up form'}.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['link', 'Hosted link'],
+                  ['embed', 'Embed on my page'],
+                  ['html', 'Copy HTML'],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setAddMethod(k)}
+                  className={`h-9 px-3 rounded-lg text-sm font-medium border ${addMethod === k ? 'border-[#007AFF] text-[#007AFF] bg-[#EFF6FF]' : 'border-[#E5E5E5] text-[#111827] bg-white'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {addMethod === 'link' && (
+              <div className="space-y-2">
+                <p className="text-sm text-[#4B5563]">A page we host. It always shows the current version{kind === 'cookie' ? ' and the live cookie list' : ''}. Nothing to install.</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input readOnly value={data.publicUrl || ''} onFocus={(e) => e.currentTarget.select()} className={`${inputCls} flex-1 bg-[#F9FAFB]`} />
+                  <CopyButton text={data.publicUrl || ''} label="Copy link" className={btnPrimary} />
+                  <a href={data.publicUrl || '#'} target="_blank" rel="noopener noreferrer" className={`${btnPlain} leading-10 text-center`}>
+                    Open
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {addMethod === 'embed' && (
+              <div className="space-y-2">
+                <p className="text-sm text-[#4B5563]">
+                  Shows the document inside a page on your own domain, using your site’s fonts. It updates by itself when you publish a new version. Paste it where the
+                  document should appear, for example a Webflow Embed element or a Framer Embed component.
+                </p>
+                <textarea readOnly value={data.embedSnippet || ''} onFocus={(e) => e.currentTarget.select()} className={`${textareaCls} font-mono text-xs bg-[#F9FAFB]`} rows={3} />
+                <CopyButton text={data.embedSnippet || ''} label="Copy code" className={btnPrimary} />
+              </div>
+            )}
+
+            {addMethod === 'html' && (
+              <div className="space-y-2">
+                <p className="text-sm text-[#4B5563]">
+                  Plain HTML to paste into your own page. It does not update by itself: copy it again after each publish{kind === 'cookie' ? ' and after each cookie scan' : ''}.
+                </p>
+                <textarea readOnly value={docHtml} onFocus={(e) => e.currentTarget.select()} className={`${textareaCls} font-mono text-xs bg-[#F9FAFB]`} rows={8} placeholder={busy === 'html' ? 'Loading…' : ''} />
+                <CopyButton text={docHtml} label="Copy HTML" className={btnPrimary} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {versions.length > 0 && (
+          <div className="border border-[#E5E7EB] rounded-xl p-5">
+            <p className="font-medium text-[#111827] mb-2">Published versions</p>
+            <ul className="text-sm space-y-1">
+              {versions.map((v) => (
+                <li key={v.version}>
+                  <a className="text-[#007AFF] underline" href={`${data.publicUrl}${v.version === versions[0].version ? '' : `?v=${v.version}`}`} target="_blank" rel="noopener noreferrer">
+                    Version {v.version}
+                  </a>{' '}
+                  — {fmtDate(v.publishedAt)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+
+  // ── cookie policy steps ───────────────────────────────────────────────────
+
+  const cookieStep = () => {
+    if (!answers) return null;
+    switch (step) {
+      case 0:
+        return companyBlock('Where are your visitors? *', 'Tick every region your website serves. Each one adds its own consent rules to the policy.');
+      case 1:
+        return (
+          <div className="space-y-6">
+            <Question
+              title="Which kinds of cookies does your website use?"
+              hint={data?.scan ? `Your last scan (${fmtDate(data.scan.scannedAt)}) found ${data.scan.cookieCount} cookies. Strictly necessary cookies are always included. The cookie list itself is filled in from the scan each time the policy is viewed.` : 'Strictly necessary cookies are always included. Run a scan so the cookie list on the page is filled in.'}
+            >
+              <div className="space-y-2">
+                <Check label="Functional and preference cookies" hint="Language, region or display settings." checked={!!answers.usesFunctional} onChange={(v) => set('usesFunctional', v)} />
+                <Check label="Analytics cookies" hint="For example Google Analytics, Microsoft Clarity, Hotjar." checked={!!answers.usesAnalytics} onChange={(v) => set('usesAnalytics', v)} />
+                <Check label="Advertising cookies or pixels" hint="For example Meta Pixel, Google Ads, LinkedIn Insight Tag." checked={!!answers.usesAdvertising} onChange={(v) => set('usesAdvertising', v)} />
+                <Check label="Embedded content from other companies" hint="YouTube or Vimeo videos, Google Maps, social media posts." checked={!!answers.usesEmbeds} onChange={(v) => set('usesEmbeds', v)} />
+              </div>
+            </Question>
+            {(usLaw || answers.usesAdvertising) && (
+              <Question title="Do advertising partners receive visitor data through your ads or pixels?" hint="California law calls this “sharing”. It changes the wording of the US notice.">
+                <Check label="Yes, advertising partners receive identifiers or browsing activity" checked={!!answers.sellsOrShares} onChange={(v) => set('sellsOrShares', v)} />
+              </Question>
+            )}
+            <Question title="How long is a visitor’s choice remembered?" hint="ConsentBit stores the choice for 12 months by default. Only change this if you changed the banner’s consent duration.">
+              <Radio name="consentMonths" value={String(answers.consentMonths || '12')} options={opt('consentMonths')} onChange={(v) => set('consentMonths', v)} />
+            </Question>
+            <Field label="Name of the button visitors use to change their choice" hint="The floating button or footer link your banner shows. Appears in the policy as “use the ‘…’ button”.">
+              <input className={inputCls} value={answers.preferencesLabel || ''} maxLength={60} onChange={(e) => set('preferencesLabel', e.target.value)} />
+            </Field>
+            <Question title="Does your website react to a browser “Do Not Track” signal?" hint="California requires the policy to say either way. Global Privacy Control is always honoured.">
+              <Radio name="dnt" value={answers.dntResponse || 'ignore'} options={opt('dnt')} onChange={(v) => set('dntResponse', v)} />
+            </Question>
+          </div>
+        );
+      case 2:
+        return contactBlock();
+      case 3:
+        return reviewBlock();
+      default:
+        return null;
+    }
+  };
+
+  // ── terms steps ───────────────────────────────────────────────────────────
+
+  const termsStep = () => {
+    if (!answers) return null;
+    switch (step) {
+      case 0:
+        return companyBlock('Where are your customers? *', 'Tick every region you sell to or serve. Each one adds its consumer protections: the EU/UK 14-day right to cancel, Brazil’s 7-day withdrawal, Quebec’s rules, and so on.');
+      case 1:
+        return (
+          <div className="space-y-6">
+            <Question title="What does your website offer?" hint="Tick everything that applies. Each one adds its own section: orders, licences, bookings, subscriptions.">
+              <div className="grid gap-2 md:grid-cols-2">
+                {Object.entries(opt('offers')).map(([k, label]) => (
+                  <Check key={k} label={label} checked={!!o[k]} onChange={(v) => setIn('offers', k, v)} />
+                ))}
+              </div>
+            </Question>
+            <Question title="Accounts and users">
+              <div className="space-y-2">
+                <Check label="Visitors can create an account or log in" checked={!!answers.accounts} onChange={(v) => set('accounts', v)} />
+                <Check label="Visitors can post or upload content" hint="Reviews, comments, profiles, files. Adds a section on who owns it and what is allowed." checked={!!answers.userContent} onChange={(v) => set('userContent', v)} />
+              </div>
+            </Question>
+            <Question title="Minimum age to use the website">
+              <Radio name="minimumAge" value={String(answers.minimumAge || 'none')} options={opt('minimumAge')} onChange={(v) => set('minimumAge', v)} />
+            </Question>
+          </div>
+        );
+      case 2:
+        return sells ? (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Currency of your prices" hint="For example EUR, GBP, USD.">
+                <input className={inputCls} value={answers.currency || ''} maxLength={40} onChange={(e) => set('currency', e.target.value)} />
+              </Field>
+              <Field label="Payment providers" hint="For example Stripe, PayPal, Shopify Payments.">
+                <input className={inputCls} value={answers.paymentProviders || ''} maxLength={200} onChange={(e) => set('paymentProviders', e.target.value)} />
+              </Field>
+            </div>
+            <Check label="Prices shown include tax (VAT, sales tax)" checked={!!answers.pricesIncludeTax} onChange={(v) => set('pricesIncludeTax', v)} />
+            {o.products && (
+              <Field label="Where do you deliver?" hint="For example “the UK and the EU”, “the United States and Canada”, “worldwide”.">
+                <input className={inputCls} value={answers.shippingRegions || ''} maxLength={300} onChange={(e) => set('shippingRegions', e.target.value)} />
+              </Field>
+            )}
+            {o.subscription && (
+              <>
+                <Question title="How do subscriptions renew?">
+                  <Radio name="renewal" value={answers.renewal || 'auto'} options={opt('renewal')} onChange={(v) => set('renewal', v)} />
+                </Question>
+                {answers.renewal === 'auto' && (
+                  <Field label="When can a customer cancel?" hint="Completes the sentence “You can cancel …”.">
+                    <input className={inputCls} value={answers.cancellationNotice || ''} maxLength={200} onChange={(e) => set('cancellationNotice', e.target.value)} />
+                  </Field>
+                )}
+              </>
+            )}
+            <Question title="What is your refund policy?" hint="Legal rights, such as the EU/UK right to cancel and refunds for faulty goods, are always added on top.">
+              <Radio name="refundPolicy" value={answers.refundPolicy || 'statutory'} options={opt('refund')} onChange={(v) => set('refundPolicy', v)} />
+            </Question>
+            <Field label={answers.refundPolicy === 'custom' ? 'Describe your refund policy *' : 'Anything to add about refunds?'} hint="Plain sentences. Appears in the refunds section.">
+              <textarea className={textareaCls} value={answers.refundDetails || ''} maxLength={1000} onChange={(e) => set('refundDetails', e.target.value)} />
+            </Field>
+          </div>
+        ) : (
+          <p className="text-sm text-[#4B5563]">Nothing to set here: you have not ticked anything you sell. Go back to “What you offer” if that is wrong.</p>
+        );
+      case 3:
+        return (
+          <div className="space-y-6">
+            <Question title="Links and recommendations">
+              <div className="space-y-2">
+                <Check label="The website links to other companies’ websites or services" checked={!!answers.thirdPartyLinks} onChange={(v) => set('thirdPartyLinks', v)} />
+                <Check label="Some links are affiliate links that earn us a commission" hint="Adds the disclosure consumer-protection rules expect." checked={!!answers.affiliateLinks} onChange={(v) => set('affiliateLinks', v)} />
+              </div>
+            </Question>
+            <Question title="Does the website cover any of these topics?" hint="Each one adds a “not professional advice” disclaimer.">
+              <div className="grid gap-2 md:grid-cols-2">
+                {Object.entries(opt('advice')).map(([k, label]) => (
+                  <Check key={k} label={label} checked={!!answers.advice?.[k]} onChange={(v) => setIn('advice', k, v)} />
+                ))}
+              </div>
+            </Question>
+            <Question title="How do you want to cap your liability?" hint="Death, personal injury, fraud and consumers’ legal rights are never excluded, whatever you choose.">
+              <Radio name="liabilityCap" value={answers.liabilityCap || 'paid12'} options={opt('liability')} onChange={(v) => set('liabilityCap', v)} />
+            </Question>
+            {answers.liabilityCap === 'fixed' && (
+              <Field label="Fixed amount *" hint="For example “EUR 1,000” or “USD 500”.">
+                <input className={inputCls} value={answers.liabilityAmount || ''} maxLength={60} onChange={(e) => set('liabilityAmount', e.target.value)} />
+              </Field>
+            )}
+          </div>
+        );
+      case 4:
+        return (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Governing law *" hint="The country, or US state, whose law applies. For example “England and Wales”, “Germany”, “the State of California”.">
+                <input className={inputCls} value={answers.governingLaw || ''} maxLength={120} onChange={(e) => set('governingLaw', e.target.value)} />
+              </Field>
+              <Field label="Courts" hint="Optional. For example “the courts of London”. Defaults to the courts of the governing-law country.">
+                <input className={inputCls} value={answers.courts || ''} maxLength={160} onChange={(e) => set('courts', e.target.value)} />
+              </Field>
+            </div>
+            <Question title="How are disputes resolved?" hint="Consumers in the EU, UK, Brazil and Quebec keep their right to go to their local courts whatever you choose.">
+              <Radio name="disputes" value={answers.disputes || 'courts'} options={opt('disputes')} onChange={(v) => set('disputes', v)} />
+            </Question>
+            {answers.disputes === 'arbitration' && (
+              <>
+                <Field label="Arbitration body *" hint="For example “the American Arbitration Association (AAA)” or “JAMS”.">
+                  <input className={inputCls} value={answers.arbitrationBody || ''} maxLength={200} onChange={(e) => set('arbitrationBody', e.target.value)} />
+                </Field>
+                {usLaw && (
+                  <Check
+                    label="Add a class-action waiver (US)"
+                    hint="Claims can only be brought individually. Includes a 30-day opt-out, which US courts expect."
+                    checked={!!answers.classWaiver}
+                    onChange={(v) => set('classWaiver', v)}
+                  />
+                )}
+              </>
+            )}
+            <Field label="Notice before material changes to the terms (days)" hint="0 means changes apply when posted. 30 is common; subscriptions and accounts should give notice.">
+              <input className={`${inputCls} md:w-40`} type="number" min={0} max={90} value={answers.changeNoticeDays ?? '30'} onChange={(e) => set('changeNoticeDays', e.target.value)} />
+            </Field>
+            {contactBlock()}
+          </div>
+        );
+      case 5:
+        return reviewBlock();
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="w-full bg-white px-4 md:px-8 pt-6 pb-12">
+      <div className="max-w-[900px] mx-auto space-y-6">
+        <div>
+          <Link href={`/dashboard/${siteId}/legal-policies`} className="text-sm text-[#007AFF] hover:underline">
+            ← Legal Policies
+          </Link>
+          <h1 className="text-2xl font-semibold text-[#111827] mt-2">{meta.title}</h1>
+          <p className="text-[#4B5563] mt-1">{meta.intro} Host it with us, embed it on your own page, or copy the HTML.</p>
+        </div>
+
+        {loading && <p className="text-[#6B7280]">Loading…</p>}
+        {!loading && data && !data.success && <p className="text-[#B91C1C]">{data.error || `Could not load the ${meta.title.toLowerCase()}.`}</p>}
+
+        {!loading && data?.success && !data.enabled && (
+          <div className="border border-[#E5E7EB] rounded-xl p-6 bg-[#F9FAFB]">
+            <h2 className="text-lg font-semibold text-[#111827]">Available on Essential and Growth</h2>
+            <p className="text-[#4B5563] mt-1">{meta.gate} Upgrade to create and host one here.</p>
+            <Link href={`/dashboard/${siteId}/upgrade`} className="inline-block mt-4 h-10 leading-10 px-5 rounded-lg bg-[#007AFF] text-white font-medium">
+              Upgrade
+            </Link>
+          </div>
+        )}
+
+        {!loading && data?.success && data.enabled && answers && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="text-[#4B5563]">
+                {versions.length ? (
+                  <>
+                    Live: version {versions[0].version}, published {fmtDate(versions[0].publishedAt)}.{' '}
+                    <a href={data.publicUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-[#007AFF] underline">
+                      Open
+                    </a>
+                  </>
+                ) : (
+                  'Not published yet.'
+                )}
+              </p>
+              {data.draftSavedAt && <span className="text-xs text-[#6B7280]">Draft saved {fmtDate(data.draftSavedAt)}</span>}
+            </div>
+
+            {ro && <p className="text-sm text-[#6B7280]">Only the account owner or a team Admin can edit the {meta.title.toLowerCase()}. You can still preview it.</p>}
+
+            <ol className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+              {STEPS.map((label, i) => (
+                <li key={label} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => goTo(i)}
+                    aria-current={i === step ? 'step' : undefined}
+                    className={`flex items-center gap-2 h-9 px-3 rounded-lg text-sm whitespace-nowrap ${
+                      i === step ? 'bg-[#007AFF] text-white' : i < step ? 'bg-[#EFF6FF] text-[#1D4ED8]' : 'bg-[#F3F4F6] text-[#4B5563]'
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${i === step ? 'bg-white text-[#007AFF]' : 'bg-white/70 text-inherit'}`}>
+                      {i + 1}
+                    </span>
+                    {label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+
+            <section className="border border-[#E5E7EB] rounded-xl p-5 space-y-4">
+              <h2 className="text-base font-semibold text-[#111827]">
+                Step {step + 1} of {STEPS.length}: {STEPS[step]}
+              </h2>
+              <fieldset disabled={ro && step !== STEPS.length - 1} className="space-y-4">
+                {kind === 'cookie' ? cookieStep() : termsStep()}
+              </fieldset>
+            </section>
+
+            {message && (
+              <div className={`rounded-lg p-3 text-sm ${message.tone === 'ok' ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#FEF2F2] text-[#B91C1C]'}`}>
+                <p>{message.text}</p>
+                {message.problems && message.problems.length > 0 && (
+                  <ul className="list-disc pl-5 mt-1">
+                    {message.problems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button className={btnPlain} disabled={step === 0 || !!busy} onClick={() => goTo(step - 1)}>
+                Back
+              </button>
+              {step < STEPS.length - 1 && (
+                <button className={btnPrimary} disabled={!!busy} onClick={() => goTo(step + 1)}>
+                  {busy === 'save' ? 'Saving…' : step === STEPS.length - 2 ? 'Preview' : 'Next'}
+                </button>
+              )}
+              {!ro && step < STEPS.length - 1 && (
+                <button className={btnPlain} disabled={!!busy} onClick={() => run('save')}>
+                  Save draft
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -499,6 +499,89 @@ export async function removeTeamMember(memberId: string): Promise<{ success: tru
   return teamRequest('/api/team/remove', { method: 'POST', body: { memberId } });
 }
 
+// ── DPA request (Profile → DPA Request) ─────────────────────────────────────
+
+export type DpaRequestPayload = {
+  companyName: string;
+  addressLine: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  registrationNumber: string;
+  vatNumber: string;
+  companySize: string;
+  website: string;
+  siteIds: string[];
+  signatoryName: string;
+  signatoryTitle: string;
+  signatoryEmail: string;
+  privacyContactName: string;
+  privacyContactEmail: string;
+  representative: string;
+  agreementType: 'standard' | 'customer_template';
+  regions: string[];
+  neededBy: string;
+  notes: string;
+  privacyAck: boolean;
+};
+
+export type DpaRequestSummary = {
+  id: string;
+  companyName: string;
+  signatoryName: string;
+  signatoryEmail: string;
+  status: string;
+  createdAt: string;
+  publishedAt?: string | null;
+  hasDocument?: boolean;
+};
+
+export async function getDpaRequests(): Promise<{ success: true; requests: DpaRequestSummary[] }> {
+  return teamRequest('/api/dpa-request');
+}
+
+export async function submitDpaRequest(payload: DpaRequestPayload): Promise<{ success: true; request: DpaRequestSummary }> {
+  return teamRequest('/api/dpa-request', { method: 'POST', body: payload });
+}
+
+// ── MCP access (Profile → MCP access) ───────────────────────────────────────
+
+export type McpConnection = {
+  id: string;
+  clientName: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+export type McpAccessState = { success: true; enabled: boolean; connections: McpConnection[] };
+
+export async function getMcpAccess(): Promise<McpAccessState> {
+  return teamRequest('/api/mcp-access');
+}
+
+export async function setMcpAccessEnabled(enabled: boolean): Promise<McpAccessState> {
+  return teamRequest('/api/mcp-access', { method: 'POST', body: { enabled } });
+}
+
+export async function disconnectMcpClient(connectionId: string): Promise<McpAccessState> {
+  return teamRequest('/api/mcp-access/disconnect', { method: 'POST', body: { connectionId } });
+}
+
+export type McpAuthRequestInfo = {
+  success: true;
+  request: { clientName: string; scopes: string[]; expiresAt: string };
+  enabled: boolean;
+};
+
+export async function getMcpAuthRequest(nonce: string): Promise<McpAuthRequestInfo> {
+  return teamRequest(`/api/mcp-access/authorize?nonce=${encodeURIComponent(nonce)}`);
+}
+
+export async function answerMcpAuthRequest(nonce: string, decision: 'allow' | 'deny'): Promise<{ success: true; redirectTo: string }> {
+  return teamRequest('/api/mcp-access/authorize', { method: 'POST', body: { nonce, decision } });
+}
+
 export async function resendTeamInvite(memberId: string): Promise<{ success: true; inviteLink?: string }> {
   return teamRequest('/api/team/resend', { method: 'POST', body: { memberId, appOrigin: appOrigin() } });
 }
@@ -807,6 +890,28 @@ export async function getBillingUsage(
   return data as BillingUsage;
 }
 // billing usage ends here
+
+// consent retention notice starts here
+/** free: records hidden from `date` (collected from..until). paid: removed on `date` (collected before cutoff). */
+export type RetentionNotice = {
+  kind: 'free' | 'paid';
+  count: number;
+  date: string;
+  from?: string;
+  until?: string;
+  cutoff?: string;
+};
+
+export async function getRetentionNotice(siteId: string): Promise<RetentionNotice | null> {
+  const res = await fetch(
+    `/api/consent-retention-notice?siteId=${encodeURIComponent(siteId)}`,
+    { credentials: "include" },
+  );
+  if (!res.ok) return null;
+  const data = (await res.json().catch(() => null)) as { notice?: RetentionNotice | null } | null;
+  return (data?.notice as RetentionNotice | null) ?? null;
+}
+// consent retention notice ends here
 
 // request scan topup email starts here
 export async function requestScanTopupEmail(payload: {

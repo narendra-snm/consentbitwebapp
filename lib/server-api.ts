@@ -18,9 +18,11 @@ export async function serverFetch(
     headers?: Record<string, string>;
     body?: any;
     cookies?: string;
+    /** Per-call override of the 20 s default (PDF generation runs headless Chrome). */
+    timeoutMs?: number;
   } = {}
 ): Promise<Response> {
-  const { method = 'GET', headers = {}, body, cookies } = options;
+  const { method = 'GET', headers = {}, body, cookies, timeoutMs } = options;
   
   const url = `${getProductionApiBase()}${endpoint}`;
   
@@ -38,7 +40,7 @@ export async function serverFetch(
   const fetchOptions: RequestInit = {
     method,
     headers: requestHeaders,
-    signal: AbortSignal.timeout(20000), // 20 s — cold-start worker + D1 auth can exceed 8 s; avoids false "try again" timeouts
+    signal: AbortSignal.timeout(timeoutMs || 20000), // 20 s — cold-start worker + D1 auth can exceed 8 s; avoids false "try again" timeouts
   };
 
   if (body) {

@@ -1201,6 +1201,27 @@ function redirectToDashboard() {
           </div>
         )}
 
+        {/* FREE-SLOT NOTICE — the plan has ENDED and the site did NOT move to the Free plan,
+            because another site on this account already uses the one Free site included.
+            The worker says which one (`freeBlockedBy`, dashboard-init). A site that WAS
+            moved arrives as plain Free (no subscription status), so nothing shows here. */}
+        {lapsed && !planActiveUntil && (() => {
+          const blockedBy = (activeSite as { freeBlockedBy?: { domain?: string | null; name?: string | null } | null } | null)?.freeBlockedBy;
+          if (!blockedBy) return null;
+          const who = blockedBy.domain || blockedBy.name || "another site on your account";
+          return (
+            <div className="mx-9 mt-6 rounded-[14px] border border-[#f59e0b]/30 bg-[#fffbeb] px-5 py-4">
+              <div className="text-[15px] font-semibold text-[#92400e]">
+                This site stayed inactive after its plan ended
+              </div>
+              <div className="mt-1 text-[13px] leading-relaxed text-[#92400e]/80">
+                {`${who} already uses the one Free site included with your account, so this site could not move to the Free plan. `}
+                Choose a plan below to turn the banner back on — your settings and installed script are kept, so there&apos;s nothing to re-install.
+              </div>
+            </div>
+          );
+        })()}
+
         {/* A resume that failed for good takes its button away with it, so the reason has
             to live here instead — otherwise the grid silently goes back to "Current Plan". */}
         {resumeError && !showResumeModal && (

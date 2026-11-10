@@ -4,6 +4,23 @@ import React, { useEffect, useRef, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import { useAppContext } from "@/app/context/AppProvider";
 import type { ColorSettings } from "./bannerAppearance";
+import { contrastWarnings, type ContrastWarning } from "./bannerComplianceChecks";
+
+function ContrastWarnings({ items }: { items: ContrastWarning[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="space-y-2 mt-4">
+      {items.map((w) => (
+        <p
+          key={w.message}
+          className="text-xs text-[#92400e] bg-[#fffbeb] border border-[#fde68a] rounded-md p-2 leading-relaxed"
+        >
+          ⚠️ {w.message}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 
 type Props = {
@@ -88,6 +105,7 @@ const ColorPickerPanel: React.FC<Props> = ({
 }) => {
   const ctx = useAppContext();
   const colors = (controlledValue ?? ctx.colors) as ColorSettings;
+  const warnings = contrastWarnings(colors);
 
   const updateColor = (key: keyof ColorSettings, v: string) => {
     const applyPreferenceSync = (next: ColorSettings): ColorSettings => {
@@ -223,6 +241,7 @@ const ColorPickerPanel: React.FC<Props> = ({
             onChange={(v) => updateColor("headingColor", v)}
           />
         </div>
+        <ContrastWarnings items={warnings.filter((w) => w.group === "general")} />
       </div>
 
       <div className="bg-[#F9F9FA] border border-[#E5E5E5] rounded-xl p-5">
@@ -261,6 +280,7 @@ const ColorPickerPanel: React.FC<Props> = ({
             onChange={(v) => updateColor("preferencesButtonText", v)}
           />
         </div>
+        <ContrastWarnings items={warnings.filter((w) => w.group === "buttons")} />
       </div>
     </div>
   );

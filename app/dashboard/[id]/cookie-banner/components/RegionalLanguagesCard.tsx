@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Accordion from "./ui/Accordion";
 
 /**
  * Regional requirements (General tab), Essential + Growth only.
@@ -55,59 +56,58 @@ export default function RegionalLanguagesCard({
     onChange({ ...value, [key]: !value[key] });
   };
 
+  // Container renders this only for Essential/Growth with IAB off; shown as a collapsed accordion.
   return (
-    <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4 mb-4">
-      <div className="flex items-center gap-2 mb-1">
-        <p className="font-semibold text-base text-black">Regional requirements</p>
-        <span className="text-[10px] font-semibold text-[#b45309] bg-[#fef3c7] rounded px-1.5 py-0.5">Essential / Growth</span>
-      </div>
-      <p className="text-xs text-[#6b7280] mb-3">
-        Show the banner in the local language to visitors in these places. Everyone else sees your selected language.
-      </p>
-
-      {OPTIONS.map((o) => (
-        <label
-          key={o.key}
-          className={`flex items-start gap-2 py-1.5 ${enabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
-        >
-          <input
-            type="checkbox"
-            checked={enabled && value[o.key]}
-            onChange={() => toggle(o.key)}
-            className="accent-[#007aff] mt-0.5"
-          />
-          <span>
-            <span className="block text-sm text-black">{o.label}</span>
-            <span className="block text-xs text-[#6b7280]">{o.detail}</span>
-          </span>
-        </label>
-      ))}
-
-      {iabActive && isPaidPlan && (
-        <p className="text-xs text-[#6b7280] mt-2 leading-relaxed">
-          With the IAB TCF banner, Brazil visitors see the IAB&apos;s standard Portuguese text. IAB does not
-          publish a Brazilian Portuguese version.
+    <div className="mt-4 mb-4">
+      <Accordion title="Regional requirements" defaultOpen={false}>
+        <p className="text-xs text-[#6b7280] mb-3">
+          Show the banner in the local language to visitors in these places. Everyone else sees your selected language.
         </p>
-      )}
 
-      {showUpgrade && !isPaidPlan && (
-        <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
-          <p className="text-sm font-semibold mb-1">Upgrade for regional requirements</p>
-          <p className="text-xs text-[#1A5EA1] mb-2">Regional languages are available on the Essential and Growth plans.</p>
-          <button
-            type="button"
-            onClick={onUpgrade}
-            className="h-8 px-3 rounded-md bg-[#007AFF] text-white text-xs font-semibold"
+        {OPTIONS.map((o) => (
+          <label
+            key={o.key}
+            className={`flex items-start gap-2 py-1.5 ${enabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
           >
-            Upgrade plan
-          </button>
-        </div>
-      )}
+            <input
+              type="checkbox"
+              checked={enabled && value[o.key]}
+              onChange={() => toggle(o.key)}
+              className="accent-[#007aff] mt-0.5"
+            />
+            <span>
+              <span className="block text-sm text-black">{o.label}</span>
+              <span className="block text-xs text-[#6b7280]">{o.detail}</span>
+            </span>
+          </label>
+        ))}
 
-      <p className="text-xs text-[#4b5563] mt-3 leading-relaxed">
-        Select these if you have visitors from Quebec or Brazil. Quebec law requires French for businesses that target
-        Quebec, and Brazil expects Portuguese. Consent rules for both places apply automatically either way.
-      </p>
+        {iabActive && isPaidPlan && (
+          <p className="text-xs text-[#6b7280] mt-2 leading-relaxed">
+            With the IAB TCF banner, Brazil visitors see the IAB&apos;s standard Portuguese text. IAB does not
+            publish a Brazilian Portuguese version.
+          </p>
+        )}
+
+        {showUpgrade && !isPaidPlan && (
+          <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-sm font-semibold mb-1">Upgrade for regional requirements</p>
+            <p className="text-xs text-[#1A5EA1] mb-2">Regional languages are available on the Essential and Growth plans.</p>
+            <button
+              type="button"
+              onClick={onUpgrade}
+              className="h-8 px-3 rounded-md bg-[#007AFF] text-white text-xs font-semibold"
+            >
+              Upgrade plan
+            </button>
+          </div>
+        )}
+
+        <p className="text-xs text-[#4b5563] mt-3 leading-relaxed">
+          Select these if you have visitors from Quebec or Brazil. Quebec law requires French for businesses that target
+          Quebec, and Brazil expects Portuguese.
+        </p>
+      </Accordion>
     </div>
   );
 }

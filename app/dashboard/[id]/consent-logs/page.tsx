@@ -16,7 +16,7 @@ function pickSiteLabel(site: { name?: string; domain?: string } | null | undefin
 export default function ConsentLogsPage() {
   const params = useParams<{ id: string }>();
   const siteId = params?.id;
-  const { sites, loading } = useDashboardSession();
+  const { sites, loading, effectivePlanId } = useDashboardSession();
 
   const siteFromSession = useMemo(
     () => sites.find((s: { id?: string | number }) => String(s?.id) === String(siteId)),
@@ -37,6 +37,9 @@ export default function ConsentLogsPage() {
   // using their webapp siteId — read from the new API, not the legacy store.
   const siteDomainRaw = (resolved as any)?.domain ?? (resolved as any)?.Domain ?? '';
   const effectiveSiteId = String(siteId);
+  // Deleting a visitor's records is Growth-only (the worker enforces it too).
+  const planId = String((resolved as any)?.planId || effectivePlanId || '').toLowerCase();
+  const canDeleteRecords = planId === 'growth';
 
   if (!siteId) return null;
 
@@ -54,7 +57,7 @@ export default function ConsentLogsPage() {
         </div>
       </div>
       */}
-      <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} />
+      <ConsentLogsDashboard siteId={effectiveSiteId} siteDomain={siteDomain} legacyDomain={siteDomainRaw} isLegacy={isLegacy} platformSiteId={platformSiteId} platform={platform} canDeleteRecords={canDeleteRecords} />
     </>
   );
 }

@@ -5,7 +5,6 @@ import ConsentPreview from "./ConsentPreview";
 import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
-import LawTestPanel from "./LawTestPanel";
 import RegionalLanguagesCard, { DEFAULT_REGIONAL_LANGUAGES, type RegionalLanguages } from "./RegionalLanguagesCard";
 import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
@@ -173,6 +172,13 @@ export default function page({ siteId }: { siteId: string }) {
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
+  /**
+   * Growth-plan entitlement: removes the "Powered by ConsentBit" strip from the bottom
+   * of the preference banner. Mirrors BannerCustomization.hideBranding in D1; the worker
+   * re-checks the plan on save and again when it serves the script.
+   */
+  const [hideBranding, setHideBranding] = useState(false);
+  const [lastSavedHideBranding, setLastSavedHideBranding] = useState<boolean | null>(null);
   const {
     setColors: setPreviewColors,
     setFontFamily: setPreviewFontFamily,
@@ -491,6 +497,11 @@ export default function page({ siteId }: { siteId: string }) {
         setAppearance(app);
         setLastSavedAppearance(app);
 
+        const hb =
+          customization?.hideBranding === 1 || customization?.hideBranding === true;
+        setHideBranding(hb);
+        setLastSavedHideBranding(hb);
+
         // Reconcile IAB toggle with fresh DB state (res.iabActivated is read live from DB,
         // not from the session-cached site object which may lag behind Webflow app changes).
         const freshIabActivated = res?.iabActivated === true;
@@ -579,6 +590,8 @@ export default function page({ siteId }: { siteId: string }) {
         setLastSavedFloatingButton(fbDefault);
         setRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
         setLastSavedRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
+        setHideBranding(false);
+        setLastSavedHideBranding(false);
         setLastPublishedBothFocus(bothContentFocusRef.current);
         const s = siteRef.current;
         if (s) {
@@ -734,6 +747,11 @@ export default function page({ siteId }: { siteId: string }) {
     return JSON.stringify(appearance) !== JSON.stringify(lastSavedAppearance);
   }, [appearance, lastSavedAppearance]);
 
+  const brandingDirty = useMemo(() => {
+    if (lastSavedHideBranding === null) return false;
+    return hideBranding !== lastSavedHideBranding;
+  }, [hideBranding, lastSavedHideBranding]);
+
   /** GDPR+CCPA: switching preview/content tab should allow Publish (CDN gets full translations; user may publish to refresh). */
   const bothFocusDirty = useMemo(
     () =>
@@ -753,7 +771,7 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       publishSuccess &&
-      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || brandingDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setPublishSuccess(false);
     }
@@ -762,6 +780,7 @@ export default function page({ siteId }: { siteId: string }) {
     floatingDirty,
     regionalDirty,
     appearanceDirty,
+    brandingDirty,
     bothFocusDirty,
     regulationDirty,
     langDirty,
@@ -771,7 +790,7 @@ export default function page({ siteId }: { siteId: string }) {
   useEffect(() => {
     if (
       saveSuccess &&
-      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || bothFocusDirty || regulationDirty || langDirty)
+      (contentDirty || floatingDirty || regionalDirty || appearanceDirty || brandingDirty || bothFocusDirty || regulationDirty || langDirty)
     ) {
       setSaveSuccess(false);
     }
@@ -780,6 +799,7 @@ export default function page({ siteId }: { siteId: string }) {
     floatingDirty,
     regionalDirty,
     appearanceDirty,
+    brandingDirty,
     bothFocusDirty,
     regulationDirty,
     langDirty,
@@ -791,6 +811,7 @@ export default function page({ siteId }: { siteId: string }) {
     floatingDirty ||
     regionalDirty ||
     appearanceDirty ||
+    brandingDirty ||
     bothFocusDirty ||
     regulationDirty ||
     langDirty;
@@ -801,6 +822,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedFloatingButton(floatingButton);
     setLastSavedRegionalLanguages(regionalLanguages);
     setLastSavedAppearance(appearance);
+    setLastSavedHideBranding(hideBranding);
     setLastPublishedBothFocus(bothContentFocus);
     if (currentRegulationSnapshot) {
       setLastPublishedRegulation(currentRegulationSnapshot);
@@ -821,6 +843,7 @@ export default function page({ siteId }: { siteId: string }) {
       saveButtonText: appearance.colors.savePreferencesButtonText,
       contentEditedFromWebapp: true,
       bannerBorderRadius: pxBorderRadiusToRem(appearance.layout.borderRadius),
+      hideBranding: hideBranding ? 1 : 0,
       buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
       privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
       translations: {
@@ -889,6 +912,7 @@ export default function page({ siteId }: { siteId: string }) {
     currentRegulationSnapshot,
     floatingButton,
     regionalLanguages,
+    hideBranding,
     iabEnabled,
     googleAcEnabled,
     selectedLangCode,
@@ -941,6 +965,7 @@ export default function page({ siteId }: { siteId: string }) {
           buttonBorderRadius: pxBorderRadiusToRem(appearance.layout.buttonRadius),
         bannerLogoPosition: floatingButton.position,
         showBannerLogo: floatingButton.enabled ? 1 : 0,
+        hideBranding: hideBranding ? 1 : 0,
         centerAnimationDirection: appearance.layout.animation,
         privacyPolicyUrl: contentSettings.privacyPolicyUrl || "",
         translations: {
@@ -1150,6 +1175,18 @@ export default function page({ siteId }: { siteId: string }) {
   }, [active, isFreePlan]);
   const sitePlanId = sites.find((s: any) => String(s?.id) === String(activeSiteId))?.planId;
   const resolvedPlanId = sitePlanId || effectivePlanId || "";
+  /** Removing ConsentBit branding is a Growth-plan feature. */
+  const canRemoveBranding = String(resolvedPlanId).toLowerCase() === "growth";
+  /** What the CDN will actually serve: the flag only takes effect on Growth. */
+  const brandingHiddenInPreview = canRemoveBranding && hideBranding;
+  // A downgrade leaves hideBranding=1 on the row while the worker has already gone back
+  // to serving the footer. Follow the worker so the editor never claims an entitlement
+  // the site no longer has, and clear the baseline too so this does not read as an edit.
+  useEffect(() => {
+    if (canRemoveBranding) return;
+    setHideBranding(false);
+    setLastSavedHideBranding((prev) => (prev === true ? false : prev));
+  }, [canRemoveBranding, hideBranding]);
 
   return (
     <div className="relative border-t overflow-x-hidden border-[#00000010] mt-0.25 grid xl:grid-cols-[172px_minmax(420px,454px)_minmax(0,1fr)]   grid-cols-[172px_minmax(0,1fr)]">
@@ -1222,7 +1259,9 @@ export default function page({ siteId }: { siteId: string }) {
                   // Session-level loading can cause the whole dropdown to appear "stuck disabled".
                   loading={false}
                   disabled={iabEnabled}
-                  effectivePlanId={effectivePlanId}
+                  // The site's own live plan (same rule as the header's "Upgrade to Pro"): the session
+                  // plan falls back to the account's paid plan, and an ended plan keeps its planId.
+                  effectivePlanId={isToggleEnabled && !subEnded ? String(site?.planId) : "free"}
                   onChange={handleRegulationChange}
                 />
               </div>
@@ -1233,18 +1272,21 @@ export default function page({ siteId }: { siteId: string }) {
                   : consentType === "ccpa"
                   ? "The selected template (opt-out banner) supports CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
                   : consentType === "both"
-                  ? "The selected template supports GDPR (EU/EEA) opt-in consent and CCPA/CPRA (California) opt-out consent."
+                  ? "The selected template shows an opt-in banner for GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa), and an opt-out banner for CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
                   : "The selected template (opt-in banner) supports GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa)."}
               </p>
             </div>
 
-            <RegionalLanguagesCard
-              value={regionalLanguages}
-              onChange={setRegionalLanguages}
-              isPaidPlan={isToggleEnabled}
-              iabActive={iabEnabled}
-              onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
-            />
+            {/* Essential/Growth only, and hidden while the IAB TCF banner is selected. */}
+            {isToggleEnabled && !iabEnabled && (
+              <RegionalLanguagesCard
+                value={regionalLanguages}
+                onChange={setRegionalLanguages}
+                isPaidPlan={isToggleEnabled}
+                iabActive={iabEnabled}
+                onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
+              />
+            )}
 
             {/* IAB Support Card */}
        
@@ -1381,6 +1423,7 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   </div>
 </div>
+
           </div>
         )}
          {active === "Content" && (
@@ -1647,6 +1690,54 @@ export default function page({ siteId }: { siteId: string }) {
               onChange={setFloatingButton}
             />
 
+            {/* ConsentBit Branding — removing the preference-banner footer is Growth-only. */}
+            <div className="bg-[#f9f9fa] border border-[#e5e5e5] rounded-lg p-4 mt-4">
+              <p className="font-semibold text-base text-black mb-4">ConsentBit Branding</p>
+
+              <label
+                className={`flex items-start gap-2.5 ${
+                  canRemoveBranding ? "cursor-pointer" : "cursor-not-allowed"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-[1px] h-4 w-4 shrink-0 accent-[#007aff] disabled:opacity-50"
+                  checked={brandingHiddenInPreview}
+                  disabled={!canRemoveBranding}
+                  onChange={(e) => setHideBranding(e.target.checked)}
+                />
+                <span
+                  className={`text-xs tracking-tight ${
+                    canRemoveBranding ? "text-black" : "text-[#6b7280]"
+                  }`}
+                >
+                  Remove ConsentBit branding
+                  <span className="block text-[11px] text-[#6b7280] mt-1 leading-relaxed">
+                    Hides the &ldquo;Powered by ConsentBit&rdquo; logo at the bottom of the
+                    preference banner.
+                  </span>
+                </span>
+              </label>
+
+              {!canRemoveBranding && (
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#e5e5e5] pt-3">
+                  <p className="text-[11px] text-[#6b7280]">
+                    Available on the Growth plan.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      analytics.upgradeCtaClicked("cookie_banner_branding", String(siteId), resolvedPlanId);
+                      router.push(`/dashboard/${siteId}/upgrade`);
+                    }}
+                    className="h-[32px] px-3 flex items-center justify-center gap-2 bg-[#007AFF] hover:bg-blue-700 text-white text-[13px] font-semibold rounded-md transition"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              )}
+            </div>
+
             <BannerLinkSection />
             </>
             )}
@@ -1687,14 +1778,6 @@ export default function page({ siteId }: { siteId: string }) {
             onChange={(type) => setAppearance((a) => ({ ...a, type }))}
           />
         )}
-        {active === "Law test" && (
-          <LawTestPanel
-            scriptUrl={site?.scriptUrl}
-            siteId={site?.id}
-            cdnScriptId={(site as any)?.cdnScriptId}
-            regionMode={(site as any)?.region_mode}
-          />
-        )}
       </div>
       {/* Skeleton shown while customization loads from the API */}
       {customizationLoading && (
@@ -1721,6 +1804,7 @@ export default function page({ siteId }: { siteId: string }) {
         siteDomain={site?.domain ?? null}
         consentType={consentType}
         initialLayout={appearance.layout}
+        hideBranding={brandingHiddenInPreview}
         content={contentForPreview}
         floatingButton={floatingButton}
         onSaveChanges={handleSaveChanges}

@@ -363,24 +363,21 @@ export default function TestLoginForm() {
           )}
         </div>
 
-        <AuthHelperText>
-          {method === "password" ? (
-            <>
-              Forgot your password? Log in with an email code,<br className="hidden lg:inline" />
-              {" "}then set a new one in Account Settings.
-            </>
-          ) : step === 1 ? (
-            <>
-              Log in using the email you used for your initial<br className="hidden lg:inline" />
-              {" "}app registration.
-            </>
-          ) : (
-            <>
-              Check your inbox — and your spam folder if it&apos;s<br className="hidden lg:inline" />
-              {" "}not there.
-            </>
-          )}
-        </AuthHelperText>
+        {(method === "password" || step === 1) && (
+          <AuthHelperText>
+            {method === "password" ? (
+              <>
+                Forgot your password? Log in with an email code,<br className="hidden lg:inline" />
+                {" "}then set a new one in Account Settings.
+              </>
+            ) : (
+              <>
+                Log in using the email you used for your initial<br className="hidden lg:inline" />
+                {" "}app registration.
+              </>
+            )}
+          </AuthHelperText>
+        )}
       </form>
     </AuthShell>
   );
