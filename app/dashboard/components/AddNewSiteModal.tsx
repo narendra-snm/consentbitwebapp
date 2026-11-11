@@ -33,12 +33,15 @@ interface PricingPlan {
   buttonTextColor?: string;
 }
 
-type AppliedCoupon = {
-  promotionCodeId: string;
-  code: string;
-  percentOff: number | null;
-  amountOff: number | null;
-  currency: string;
+/**
+ * Black Friday offer, applied automatically when a paid plan is chosen (no code entry).
+ * promotionCodeId = the Stripe promotion code for that plan; the worker re-verifies it at checkout.
+ * Same table as the dashboard upgrade and subscription checkout pages — keep them in sync.
+ */
+const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { percentOff: number; promotionCodeId: string }> = {
+  basic: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
+  essential: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
+  growth: { percentOff: 30, promotionCodeId: "promo_1UahKUJwcuG9163MXTgBqwLZ" }, // BF30OFF
 };
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
@@ -128,10 +131,6 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
-  const [couponInput, setCouponInput] = useState("");
-  const [couponLoading, setCouponLoading] = useState(false);
-  const [couponError, setCouponError] = useState<string | null>(null);
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [mounted, setMounted] = useState(false);
   const checkoutTab = useRef<Window | null>(null);
   useLayoutEffect(() => {
@@ -210,58 +209,6 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     checkoutTab.current = null;
     setCheckoutPending(false);
     setSubmitting(false);
-  }
-
-  /**
-   * Validate a promo code server-side before checkout. The worker resolves the caller
-   * from the `sid` session cookie, so per-customer restricted codes are only accepted
-   * for the account they belong to — this cannot be spoofed from here.
-   */
-  async function applyCoupon() {
-    const code = couponInput.trim();
-    if (!code) {
-      setAppliedCoupon(null);
-      setCouponError("Enter a promo code.");
-      return;
-    }
-    setCouponError(null);
-    setCouponLoading(true);
-    try {
-      const res = await fetch(
-        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: "include" },
-      );
-      const text = await res.text();
-      type CouponResponse = {
-        valid?: boolean;
-        error?: string;
-        promotionCodeId?: string;
-        code?: string;
-        percentOff?: number | null;
-        amountOff?: number | null;
-        currency?: string;
-      };
-      let data: CouponResponse | null = null;
-      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
-      if (!data || !data.valid || !data.promotionCodeId) {
-        setAppliedCoupon(null);
-        setCouponError(data?.error || "Invalid or expired promo code.");
-        return;
-      }
-      setAppliedCoupon({
-        promotionCodeId: data.promotionCodeId,
-        code: data.code || code,
-        percentOff: data.percentOff ?? null,
-        amountOff: data.amountOff ?? null,
-        currency: data.currency || "usd",
-      });
-      setCouponError(null);
-    } catch {
-      setAppliedCoupon(null);
-      setCouponError("Could not validate the promo code. Please try again.");
-    } finally {
-      setCouponLoading(false);
-    }
   }
 
   function normalizeDomain(raw: string): string {
@@ -424,8 +371,10 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
           siteDomain: domain,
           successUrl,
           cancelUrl,
-          // Server re-validates this against the logged-in account before applying it.
-          ...(appliedCoupon ? { promotionCodeId: appliedCoupon.promotionCodeId } : {}),
+          // Black Friday offer for the chosen plan; the worker re-verifies it before applying.
+          ...(BLACK_FRIDAY_OFFERS[planId as "basic" | "essential" | "growth"]
+            ? { promotionCodeId: BLACK_FRIDAY_OFFERS[planId as "basic" | "essential" | "growth"].promotionCodeId }
+            : {}),
         });
         sessionStorage.setItem('cb_stripe_redirect_modal', '1');
         window.location.href = data.url;
@@ -742,93 +691,14 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
             })}
           </div>
 
-          {/* Promo code — validated server-side against the logged-in account.
-              Layout note: flex-wrap (not sm: variants) so the button sits beside the
-              input whenever there is room and wraps under it when there isn't — no
-              breakpoint to get wrong. State colours use inline style rather than
-              conditional arbitrary classes so they never depend on class scanning. */}
+          {/* Black Friday offer — applied automatically when a paid plan is chosen. No code entry. */}
           <div className="mt-8 px-[28px]">
-            <label
-              className="mb-2 block font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px]"
-              style={{ fontVariationSettings: "'opsz' 14" }}
-            >
-              Promo code
-            </label>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-[220px] max-w-full">
-                <input
-                  type="text"
-                  value={couponInput}
-                  disabled={!!appliedCoupon}
-                  onChange={(e) => {
-                    setCouponInput(e.target.value);
-                    setCouponError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !appliedCoupon) {
-                      e.preventDefault();
-                      void applyCoupon();
-                    }
-                  }}
-                  placeholder="Promo code"
-                  className="h-[44px] w-full border rounded-lg font-['DM_Sans',sans-serif] font-normal text-[14px] tracking-[-0.28px] outline-none focus:border-[#007aff] disabled:cursor-not-allowed"
-                  style={{
-                    fontVariationSettings: "'opsz' 14",
-                    paddingLeft: 14,
-                    paddingRight: appliedCoupon || couponInput ? 38 : 14,
-                    borderColor: couponError ? "#b91c1c" : appliedCoupon ? "#15803d" : "#e5e5e5",
-                    backgroundColor: appliedCoupon ? "#f8fafc" : "#ffffff",
-                    color: appliedCoupon ? "#6b7280" : "#161616",
-                  }}
-                />
-                {/* Clears the code (applied or rejected), re-enables Apply, and hides itself */}
-                {(appliedCoupon || couponInput) && (
-                  <button
-                    type="button"
-                    aria-label="Remove promo code"
-                    title="Remove promo code"
-                    onClick={() => {
-                      setAppliedCoupon(null);
-                      setCouponInput("");
-                      setCouponError(null);
-                    }}
-                    className="absolute right-[10px] top-1/2 flex h-[20px] w-[20px] -translate-y-1/2 items-center justify-center rounded-full text-[14px] leading-none"
-                    style={{ backgroundColor: "#e5e5e5", color: "#161616" }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void applyCoupon()}
-                disabled={couponLoading || !!appliedCoupon}
-                className="h-[44px] shrink-0 rounded-[8px] px-5 text-[14px] text-white disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ backgroundColor: "#007aff" }}
-              >
-                {couponLoading ? "Checking…" : appliedCoupon ? "Applied" : "Apply"}
-              </button>
-            </div>
-
-            {appliedCoupon && (
-              <p className="mt-1.5 max-w-full text-xs break-words" style={{ color: "#15803d" }}>
-                {appliedCoupon.code} applied
-                {appliedCoupon.percentOff != null
-                  ? ` — ${appliedCoupon.percentOff}% off`
-                  : appliedCoupon.amountOff != null
-                    ? ` — ${(appliedCoupon.amountOff / 100).toFixed(2)} ${appliedCoupon.currency.toUpperCase()} off`
-                    : ""}
-                . Discount shown at checkout.
-              </p>
-            )}
-            {couponError && (
-              <p className="mt-1.5 flex max-w-full items-start gap-1 text-xs break-words" style={{ color: "#b91c1c" }}>
-                <span className="leading-[1.4]">⚠</span>
-                <span>{couponError}</span>
-              </p>
-            )}
+            <p className="font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px]">
+              Black Friday offer
+            </p>
+            <p className="mt-1.5 text-xs text-[#374151]">
+              Basic and Essential: 20% off. Growth: 30% off. Applied automatically at checkout for your first 3 months.
+            </p>
           </div>
 
           {/* Submit Error */}

@@ -28,6 +28,17 @@ interface AppliedCoupon {
   durationInMonths: number | null;
 }
 
+/**
+ * Black Friday offer, applied automatically from the selected plan (customers never enter a code).
+ * promotionCodeId = the Stripe promotion code for that plan; the worker re-verifies it at checkout.
+ * Offer ends with the Stripe coupons (Nov 17, 2026, 18:30 UTC).
+ */
+const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; promotionCodeId: string }> = {
+  basic: { code: "BF20OFF", percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" },
+  essential: { code: "BF20OFF", percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" },
+  growth: { code: "BF30OFF", percentOff: 30, promotionCodeId: "promo_1UahKUJwcuG9163MXTgBqwLZ" },
+};
+
 interface PlanConfig {
   name: string;
   monthly: number;
@@ -464,8 +475,7 @@ interface CheckoutFormProps {
   interval: Interval;
   onPlanChange: (p: PlanId) => void;
   onIntervalChange: (i: Interval) => void;
-  appliedCoupon: AppliedCoupon | null;
-  onCouponChange: (c: AppliedCoupon | null) => void;
+  appliedCoupon: AppliedCoupon;
 }
 
 function CheckoutForm({
@@ -479,7 +489,6 @@ function CheckoutForm({
   onPlanChange,
   onIntervalChange,
   appliedCoupon,
-  onCouponChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -504,67 +513,9 @@ function CheckoutForm({
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [couponInput, setCouponInput] = useState("");
-  const [couponLoading, setCouponLoading] = useState(false);
-  const [couponError, setCouponError] = useState("");
-  const [showCoupon, setShowCoupon] = useState(false);
 
   function clearErr(field: string) {
     setFieldErrors((p) => ({ ...p, [field]: "" }));
-  }
-
-  async function applyCoupon() {
-    const code = couponInput.trim();
-    if (!code) {
-      setCouponError("Enter a coupon code.");
-      return;
-    }
-    setCouponError("");
-    setCouponLoading(true);
-    try {
-      const res = await fetch(
-        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: 'include' },
-      );
-      const data = (await parseApiResponse(res)) as {
-        valid: boolean;
-        error?: string;
-        promotionCodeId?: string;
-        code?: string;
-        name?: string;
-        percentOff?: number | null;
-        amountOff?: number | null;
-        currency?: string;
-        duration?: "once" | "repeating" | "forever";
-        durationInMonths?: number | null;
-      };
-      // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
-      if (!data.valid || !data.promotionCodeId) {
-        setCouponError(data.error || "Invalid or expired code.");
-        onCouponChange(null);
-        setCouponLoading(false);
-        return;
-      }
-      onCouponChange({
-        promotionCodeId: data.promotionCodeId,
-        code: data.code || code,
-        name: data.name || code,
-        percentOff: data.percentOff ?? null,
-        amountOff: data.amountOff ?? null,
-        currency: data.currency || "usd",
-        duration: data.duration || "once",
-        durationInMonths: data.durationInMonths ?? null,
-      });
-    } catch {
-      setCouponError("Could not validate code. Please try again.");
-    }
-    setCouponLoading(false);
-  }
-
-  function removeCoupon() {
-    onCouponChange(null);
-    setCouponInput("");
-    setCouponError("");
   }
 
   function handleEmailChange(v: string) {
@@ -1158,61 +1109,16 @@ function CheckoutForm({
           </div>
         </FormSection>
 
-        {/* 5 — Coupon (optional) */}
-        <FormSection n={5} title="Have a coupon?">
-          {appliedCoupon ? (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-green-800 truncate">
-                  {appliedCoupon.code} applied
-                </p>
-                <p className="text-xs text-green-700">
-                  {appliedCoupon.percentOff != null
-                    ? `${appliedCoupon.percentOff}% off your first charge`
-                    : appliedCoupon.amountOff != null
-                      ? `$${(appliedCoupon.amountOff / 100).toFixed(2)} off your first charge`
-                      : "Discount applied"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={removeCoupon}
-                className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <Field label="Coupon code" error={couponError}>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => {
-                    setCouponInput(e.target.value);
-                    if (couponError) setCouponError("");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      applyCoupon();
-                    }
-                  }}
-                  placeholder="Enter coupon code"
-                  disabled={couponLoading}
-                  className={inputCls(!!couponError, couponLoading)}
-                />
-                <button
-                  type="button"
-                  onClick={applyCoupon}
-                  disabled={couponLoading || !couponInput.trim()}
-                  className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {couponLoading ? "Checking…" : "Apply"}
-                </button>
-              </div>
-            </Field>
-          )}
+        {/* 5 — Black Friday offer (applied automatically from the selected plan; no code entry) */}
+        <FormSection n={5} title="Black Friday offer">
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+            <p className="text-sm font-semibold text-green-800">
+              Black Friday {appliedCoupon.percentOff}% offer applied
+            </p>
+            <p className="text-xs text-green-700">
+              {appliedCoupon.percentOff}% off for your first 3 months.
+            </p>
+          </div>
         </FormSection>
 
         {error && (
@@ -1277,9 +1183,18 @@ function CheckoutPageInner() {
   const [interval, setInterval] = useState<Interval>(
     rawInterval === "yearly" ? "yearly" : "monthly",
   );
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
-    null,
-  );
+  // Offer is derived from the selected plan — no code entry, no apply step.
+  const offer = BLACK_FRIDAY_OFFERS[planId];
+  const appliedCoupon: AppliedCoupon = {
+    promotionCodeId: offer.promotionCodeId,
+    code: offer.code,
+    name: "Black Friday",
+    percentOff: offer.percentOff,
+    amountOff: null,
+    currency: "usd",
+    duration: "repeating",
+    durationInMonths: 3,
+  };
 
   const rawD = params.get("d") ?? "";
   let decoded: Record<string, string> = {};
@@ -1337,7 +1252,6 @@ function CheckoutPageInner() {
                   onPlanChange={setPlanId}
                   onIntervalChange={setInterval}
                   appliedCoupon={appliedCoupon}
-                  onCouponChange={setAppliedCoupon}
                 />
               </Elements>
             ) : (
