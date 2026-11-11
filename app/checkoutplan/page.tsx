@@ -35,9 +35,9 @@ interface AppliedCoupon {
  * Same table as the dashboard upgrade page — keep the two in sync.
  */
 const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; promotionCodeId: string }> = {
-  basic: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UahXrJwcuG9163MWExvF8MS' },
-  essential: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UahXrJwcuG9163MWExvF8MS' },
-  growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UahKUJwcuG9163MXTgBqwLZ' },
+  basic: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UakZMJwcuG9163My19Z7s03' },
+  essential: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UakZMJwcuG9163My19Z7s03' },
+  growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UakbBJwcuG9163MHJ5xP4EW' },
 };
 
 interface PlanConfig {

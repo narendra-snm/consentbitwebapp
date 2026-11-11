@@ -49,9 +49,9 @@ type AppliedCoupon = {
  * it on every checkout / tier change, so a changed or expired code is rejected server-side.
  */
 const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { percentOff: number; promotionCodeId: string }> = {
-  basic: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
-  essential: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
-  growth: { percentOff: 30, promotionCodeId: "promo_1UahKUJwcuG9163MXTgBqwLZ" }, // BF30OFF
+  basic: { percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" }, // BF20OFF
+  essential: { percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" }, // BF20OFF
+  growth: { percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" }, // BF30OFF
 };
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
