@@ -43,6 +43,18 @@ type AppliedCoupon = {
   durationInMonths: number | null;
 };
 
+/**
+ * Black Friday offer, applied automatically from the selected plan (customers never enter a code).
+ * promotionCodeId = the promotion code created in Stripe for that plan. The worker re-verifies
+ * it on every checkout / tier change, so a changed or expired code is rejected server-side.
+ * TODO: replace the placeholder IDs with the promo_… IDs created in Stripe.
+ */
+const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { percentOff: number; promotionCodeId: string }> = {
+  basic: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
+  essential: { percentOff: 20, promotionCodeId: "promo_1UahXrJwcuG9163MWExvF8MS" }, // BF20OFF
+  growth: { percentOff: 30, promotionCodeId: "promo_1UahKUJwcuG9163MXTgBqwLZ" }, // BF30OFF
+};
+
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
 function decodeEnvelope(parsed: unknown): unknown {
   if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
@@ -417,10 +429,20 @@ export default function PricingTable() {
   const proceedRef = useRef<HTMLDivElement>(null);
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
-  const [promoInput, setPromoInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
-  const [promoError, setPromoError] = useState(false);
-  const [promoLoading, setPromoLoading] = useState(false);
+  // Offer is derived from the selected plan — no code entry, no apply step.
+  const offer = selected && selected !== "free" ? BLACK_FRIDAY_OFFERS[selected] : undefined;
+  const appliedCoupon: AppliedCoupon | null = offer
+    ? {
+        promotionCodeId: offer.promotionCodeId,
+        code: "BLACK_FRIDAY",
+        name: "Black Friday",
+        percentOff: offer.percentOff,
+        amountOff: null,
+        currency: "usd",
+        duration: "repeating",
+        durationInMonths: 3,
+      }
+    : null;
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -536,60 +558,10 @@ export default function PricingTable() {
     return Math.round(total);
   };
 
-  const applyPromo = async () => {
-    const code = promoInput.trim();
-    if (!code) {
-      setAppliedCoupon(null);
-      setPromoError(true);
-      return;
-    }
-    setPromoError(false);
-    setPromoLoading(true);
-    try {
-      const res = await fetch(
-        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
-        { credentials: 'include' },
-      );
-      const text = await res.text();
-      type CouponResponse = {
-        valid?: boolean;
-        error?: string;
-        promotionCodeId?: string;
-        code?: string;
-        name?: string;
-        percentOff?: number | null;
-        amountOff?: number | null;
-        currency?: string;
-        duration?: 'once' | 'repeating' | 'forever';
-        durationInMonths?: number | null;
-      };
-      let data: CouponResponse | null = null;
-      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
-      // console.log('[Coupon] validate response', { status: res.status, ok: res.ok, data });
-      if (!data || !data.valid || !data.promotionCodeId) {
-        setAppliedCoupon(null);
-        setPromoError(true);
-      } else {
-        setAppliedCoupon({
-          promotionCodeId: data.promotionCodeId,
-          code: data.code || code,
-          name: data.name || code,
-          percentOff: data.percentOff ?? null,
-          amountOff: data.amountOff ?? null,
-          currency: data.currency || 'usd',
-          duration: data.duration || 'once',
-          durationInMonths: data.durationInMonths ?? null,
-        });
-        setPromoError(false);
-      }
-    } catch {
-      setAppliedCoupon(null);
-      setPromoError(true);
-    }
-    setPromoLoading(false);
-  };
-
   const total = calculateTotal();
+  const listTotal = selected && selected !== "free"
+    ? Math.round(billing === "yearly" ? prices[selected] * 12 * 0.8 : prices[selected])
+    : 0;
 
   /* NEW WORKFLOW (prorated in-place tier change) — Total-box "due now" derivation, kept for later.
   // Show the prorated "due now" figure (instead of the plan sticker price) once an
@@ -1370,64 +1342,25 @@ function redirectToDashboard() {
         {/* BOTTOM */}
         <div className="grid grid-cols-[430px_1fr] gap-4 p-6 pt-15.5">
 
-          {/* PROMO */}
-          <div  className={` rounded-[15px] p-7 relative border-white ${!selected ? 'opacity-50' : ''}`}>
-<img src="/images/smallbox.png" alt="promo" className="absolute inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
-            <div className="relative z-10 text-lg font-semibold mb-1">Promo code</div>
+          {/* OFFER — applied automatically from the selected plan. No code entry. */}
+          <div className={` rounded-[15px] p-7 relative border-white ${!selected ? 'opacity-50' : ''}`}>
+<img src="/images/smallbox.png" alt="offer" className="absolute inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
+            <div className="relative z-10 text-lg font-semibold mb-1">Black Friday offer</div>
             {!selected && (
-              <p className="relative z-10 text-xs text-[#6b7280] mb-3">Select a plan to apply a promo code.</p>
+              <p className="relative z-10 text-xs text-[#6b7280] mb-3">Select a plan to see your offer.</p>
             )}
-            {selected && <div className="mb-4" />}
-
-            {/* ── Promo input (always visible) ── */}
-            <div className="relative z-10 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
-
-              <input
-                value={promoInput}
-                onChange={(e) => { setPromoInput(e.target.value); setAppliedCoupon(null); setPromoError(false); }}
-                disabled={!selected || promoLoading}
-                className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg"
-                placeholder="Enter promo code"
-              />
-
-              {promoInput && (
-                <button
-                  type="button"
-                  onClick={() => { setAppliedCoupon(null); setPromoInput(''); setPromoError(false); }}
-                  className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
-                >
-                  ×
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={applyPromo}
-                disabled={!selected || !promoInput.trim() || promoLoading}
-                className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-                {promoLoading ? 'Checking…' : 'Apply'}
-              </button>
-
-            </div>
 
             {appliedCoupon && (
               <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
-                Promo applied. You pay ${total}
+                Black Friday {appliedCoupon.percentOff}% offer applied
               </div>
             )}
 
-            {promoError && !appliedCoupon && (
-              <div className="relative z-10 mt-3 flex items-center gap-1.5 text-sm text-[#ef4444]">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="7.5" cy="7.5" r="6.5" stroke="#ef4444" strokeWidth="1.5"/>
-                  <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
-                  <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
-                </svg>
-                Invalid or expired promo code.
+            {appliedCoupon && (
+              <div className="relative z-10 mt-2 text-sm text-[#374151]">
+                <span className="line-through text-[#9ca3af] mr-2">${listTotal}</span>
+                <span className="font-semibold">${total}</span>
+                {" "}{billing === "yearly" ? "billed yearly" : "billed monthly"} for your first 3 months
               </div>
             )}
 

@@ -7,10 +7,12 @@
 // Layout follows the Claude Design "Privacy Requests" page: a list view (request-page link,
 // count tiles, filterable table) and a full-width detail view (deadline banner, respond card,
 // consent records, visitor card, activity timeline). The open request is kept in ?req=<id>
-// so the browser back button returns to the list.
+// so the browser back button returns to the list. The "Your request page" card also carries
+// the design's Customize block: site logo + brand colour for the public form (saved through
+// POST /api/privacy-requests/branding, rendered by the worker's dark portal shell).
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import s from './privacy-requests.module.css';
 
@@ -39,12 +41,17 @@ type PrivacyRequest = {
   ownerNote: string | null;
 };
 
+/** Logo (data URL) + accent colour shown on the public request pages; worker defaults when unset. */
+type Branding = { logo: string | null; color: string; updatedAt?: string | null };
+
 type ListResponse = {
   success: boolean;
   error?: string;
   enabled?: boolean;
   canEdit?: boolean;
   publicUrl?: string | null;
+  /** Older worker builds omit it; the page then shows the defaults. */
+  branding?: Branding;
   requests?: PrivacyRequest[];
 };
 
@@ -766,6 +773,225 @@ function RequestDetail({
   );
 }
 
+// ---------- customize (logo + brand colour of the public page) ----------
+
+const BRAND_DEFAULT_COLOR = '#007AFF';
+const BRAND_DEFAULT: Branding = { logo: null, color: BRAND_DEFAULT_COLOR };
+// First swatch = the portal's own blue; the rest are the design's presets.
+const BRAND_SWATCHES = ['#007AFF', '#111827', '#0F7A4D', '#6D28D9', '#C2410C', '#BE123C'];
+const MAX_LOGO_BYTES = 200 * 1024;
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
+
+/** Same rule as the worker's brandTextColor: light text on dark accents, dark text on light ones. */
+function textOn(hex: string) {
+  const h = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const v = (parseInt(h.slice(i, i + 2), 16) || 0) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#0a091f' : '#fff';
+}
+
+function Customize({
+  siteId,
+  branding,
+  canEdit,
+  onSaved,
+  onToast,
+}: {
+  siteId: string;
+  branding: Branding;
+  canEdit: boolean;
+  onSaved: (b: Branding) => void;
+  onToast: (text: string) => void;
+}) {
+  const savedColor = (branding.color || BRAND_DEFAULT_COLOR).toUpperCase();
+  const [open, setOpen] = useState(false);
+  const [logo, setLogo] = useState<string | null>(branding.logo);
+  const [color, setColor] = useState(savedColor);
+  const [hex, setHex] = useState(savedColor.slice(1));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [saved, setSaved] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Follow a reload of the list (another admin may have saved meanwhile).
+  useEffect(() => {
+    setLogo(branding.logo);
+    setColor(savedColor);
+    setHex(savedColor.slice(1));
+  }, [branding.logo, savedColor]);
+
+  const dirty = logo !== branding.logo || color !== savedColor;
+
+  const pickColor = (c: string) => {
+    const up = c.toUpperCase();
+    setColor(up);
+    setHex(up.slice(1));
+    setSaved(false);
+    setErr('');
+  };
+
+  const pickLogo = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!LOGO_TYPES.includes(f.type)) return setErr('Use a PNG, JPG or SVG file.');
+    if (f.size > MAX_LOGO_BYTES) return setErr('The logo must be 200 KB or smaller.');
+    if (f.type === 'image/svg+xml' && /<script|<foreignObject|javascript:|\son[a-z]+\s*=/i.test(await f.text())) {
+      return setErr('The SVG contains scripts or event handlers. Export it again as a plain image.');
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(f);
+    }).catch(() => '');
+    if (!dataUrl) return setErr('Could not read that file.');
+    setLogo(dataUrl);
+    setSaved(false);
+    setErr('');
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/privacy-requests/branding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, logo, color }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; branding?: Branding };
+      if (!res.ok || !data.success || !data.branding) throw new Error(data.error || 'Could not save the changes.');
+      onSaved(data.branding);
+      setSaved(true);
+      onToast('Request page updated');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Could not save the changes.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const head = (
+    <div className={s.czH}>
+      <div>
+        <div className={s.ct}>Customize</div>
+        <div className={s.cd}>Add your site logo and brand colour to the privacy request form.</div>
+      </div>
+      <div className={s.czHr}>
+        {!open && (
+          <span className={s.czSum}>
+            <i style={{ background: savedColor }} />
+            {savedColor}
+            <em>·</em>
+            {branding.logo ? 'Logo added' : 'No logo'}
+          </span>
+        )}
+        {canEdit && (
+          <button type="button" className={`${s.btn} ${s.btnO}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? 'Hide' : 'Customize'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!open) return <div className={`${s.cz} ${s.czCollapsed}`}>{head}</div>;
+
+  return (
+    <div className={s.cz}>
+      {head}
+      <div className={s.czF}>
+        <div>
+          <div className={s.czL}>Logo</div>
+          <div className={s.czRow}>
+            {/* data: URLs — next/image has nothing to optimise here */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <div className={s.czLogo}>{logo ? <img src={logo} alt="Logo" /> : 'No logo'}</div>
+            <button type="button" className={`${s.btn} ${s.btnO}`} onClick={() => fileRef.current?.click()}>
+              {logo ? 'Replace' : 'Upload logo'}
+            </button>
+            {logo && (
+              <button
+                type="button"
+                className={`${s.btn} ${s.btnO}`}
+                onClick={() => {
+                  setLogo(null);
+                  setSaved(false);
+                }}
+              >
+                Remove
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/png,image/svg+xml,image/jpeg" hidden onChange={pickLogo} />
+          </div>
+          <div className={s.hint} style={{ marginTop: 6 }}>
+            PNG, SVG or JPG, up to 200 KB. Shown 28px tall on the dark request page, so a light or white version works best.
+          </div>
+        </div>
+        <div>
+          <div className={s.czL}>Colour theme</div>
+          <div className={s.czSw}>
+            {BRAND_SWATCHES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={c}
+                aria-pressed={color === c}
+                className={color === c ? s.czOn : undefined}
+                style={{ background: c }}
+                onClick={() => pickColor(c)}
+              />
+            ))}
+            <span className={s.czSep} />
+            <div className={s.czHex}>
+              <label className={s.czChip} style={{ background: color }} title="Pick a custom colour">
+                <input type="color" value={color} aria-label="Custom colour" onChange={(e) => pickColor(e.target.value)} />
+              </label>
+              <span className={s.czHash}>#</span>
+              <input
+                type="text"
+                aria-label="Hex colour"
+                maxLength={6}
+                value={hex}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^0-9a-f]/gi, '').toUpperCase();
+                  setHex(v);
+                  if (v.length === 6) pickColor(`#${v}`);
+                }}
+                onBlur={() => setHex(color.slice(1))}
+              />
+            </div>
+          </div>
+        </div>
+        <div className={s.czAct}>
+          <button type="button" className={`${s.btn} ${s.btnP}`} disabled={busy || !dirty} onClick={save}>
+            {busy ? 'Saving…' : 'Save changes'}
+          </button>
+          {err ? <span className={s.err}>{err}</span> : saved && !dirty ? <span className={s.hint}>Saved. Your request page is updated.</span> : null}
+        </div>
+      </div>
+      <div className={s.czPv}>
+        <div className={s.czPl}>Preview</div>
+        <div className={s.czFm}>
+          <div className={s.czFh} style={{ borderTop: `3px solid ${color}` }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {logo ? <img src={logo} alt="" /> : 'ConsentBit logo'}
+          </div>
+          <div className={s.czFb}>
+            <b>Data Subject Request (DSR) Portal</b>
+            <i />
+            <i />
+            <span style={{ background: color, color: textOn(color) }}>Send request</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- page ----------
 
 export default function PrivacyRequestsPage() {
@@ -944,6 +1170,13 @@ export default function PrivacyRequestsPage() {
                 <ExternalIcon />
               </a>
             </div>
+            <Customize
+              siteId={siteId}
+              branding={data.branding || BRAND_DEFAULT}
+              canEdit={!!data.canEdit}
+              onSaved={(b) => setData((d) => (d ? { ...d, branding: b } : d))}
+              onToast={flash}
+            />
           </section>
 
           <div className={s.tiles}>
