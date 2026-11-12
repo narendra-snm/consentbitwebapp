@@ -53,6 +53,8 @@ type AppliedCoupon = {
   currency: string;
 };
 
+import { couponPlanMismatch, friendlyCouponError } from "@/lib/blackFridayCoupons";
+
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
 function decodeEnvelope(parsed: unknown): unknown {
   if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
@@ -391,6 +393,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
     }
     const domain = normalizeDomain(websiteUrl);
     setUrlError(null);
+    // A manually applied Black Friday code only covers certain plans — say so here
+    // instead of letting Stripe reject the session with a generic message.
+    const mismatch = appliedCoupon ? couponPlanMismatch(appliedCoupon.code, planId) : null;
+    if (mismatch) {
+      setSubmitError(mismatch);
+      return;
+    }
     setSubmitError(null);
     setSubmitting(true);
     try {
@@ -456,7 +465,8 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         window.location.href = data.url;
       }
     } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : "Failed to add website");
+      const msg = e instanceof Error ? e.message : "Failed to add website";
+      setSubmitError(friendlyCouponError(msg, planId, appliedCoupon?.code));
       setSubmitting(false);
     }
   }
@@ -885,7 +895,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                     className="mt-2 text-xs underline underline-offset-2"
                     style={{ color: "#6b7280" }}
                   >
-                    Cancel, keep the Black Friday offer
+                    Cancel
                   </button>
                 )}
               </>

@@ -39,6 +39,8 @@ const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; pr
   growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UakbBJwcuG9163MHJ5xP4EW' },
 };
 
+import { couponPlanMismatch } from '@/lib/blackFridayCoupons';
+
 /** Human-readable discount line for a manually applied coupon. */
 function couponSummary(c: AppliedCoupon): string {
   const amount =
@@ -544,6 +546,14 @@ function CheckoutForm({
         setCouponLoading(false);
         return;
       }
+      // Known Black Friday code on a plan its coupon does not cover — Stripe would
+      // reject it at payment; explain which code fits instead.
+      const mismatch = couponPlanMismatch(data.code || code, planId);
+      if (mismatch) {
+        setCouponError(mismatch);
+        setCouponLoading(false);
+        return;
+      }
       onCouponChange({
         promotionCodeId: data.promotionCodeId,
         code: data.code || code,
@@ -621,6 +631,13 @@ function CheckoutForm({
     const cardEl = elements.getElement(CardNumberElement);
     if (!cardEl) {
       setError('Card details are incomplete.');
+      return;
+    }
+
+    // Never send a Black Friday code to Stripe for a plan it does not cover.
+    const couponMismatch = !isDefaultOffer ? couponPlanMismatch(appliedCoupon.code, planId) : null;
+    if (couponMismatch) {
+      setError(couponMismatch);
       return;
     }
 
@@ -1047,7 +1064,7 @@ function CheckoutForm({
               onClick={cancelCouponInput}
               className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
             >
-              Cancel, keep the Black Friday offer
+              Cancel
             </button>
           </div>
         )}

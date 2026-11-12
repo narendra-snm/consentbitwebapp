@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession, parseApiResponse } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
+import { couponPlanMismatch, friendlyCouponError } from '@/lib/blackFridayCoupons';
 
 /**
  * Black Friday offer, applied automatically from the chosen plan at checkout. The code is shown
@@ -46,6 +47,8 @@ export function PricingTable({
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   // Manual promo box is hidden until the customer asks for it; the offer applies by default.
   const [showCouponInput, setShowCouponInput] = useState(false);
+  // Checkout failures (e.g. a code that does not cover the chosen plan) show here, not in an alert.
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Reset loading state if user returns via browser back button (bfcache restore).
   useEffect(() => {
@@ -93,6 +96,7 @@ export function PricingTable({
       return;
     }
     setCouponError(null);
+    setCheckoutError(null);
     setCouponLoading(true);
     try {
       const res = await fetch(
@@ -132,6 +136,7 @@ export function PricingTable({
     setAppliedCoupon(null);
     setCouponInput('');
     setCouponError(null);
+    setCheckoutError(null);
     setShowCouponInput(false);
   }
 
@@ -144,6 +149,14 @@ export function PricingTable({
       alert('No domain found. Please go back and enter your domain.');
       return;
     }
+    // A manually applied Black Friday code only covers certain plans — say so here
+    // instead of letting Stripe reject the session with a generic message.
+    const mismatch = appliedCoupon ? couponPlanMismatch(appliedCoupon.code, planId) : null;
+    if (mismatch) {
+      setCheckoutError(mismatch);
+      return;
+    }
+    setCheckoutError(null);
     try {
       setLoadingPlan(planId);
       // Step 8 + 9 — plan card selected then straight to checkout in this menu.
@@ -172,7 +185,8 @@ export function PricingTable({
       });
       window.location.assign(data.url);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Checkout failed');
+      const msg = e instanceof Error ? e.message : 'Checkout failed';
+      setCheckoutError(friendlyCouponError(msg, planId, appliedCoupon?.code));
     } finally {
       setLoadingPlan(null);
     }
@@ -241,9 +255,9 @@ export function PricingTable({
             shown, and a promo input lets the customer apply one manually (or use another code); a
             manually applied code overrides the automatic offer. */}
         <div className="mx-6 mt-5 rounded-xl border border-green-200 bg-green-50 px-5 py-4">
-          <p className="text-sm font-semibold text-green-800">
-            {appliedCoupon ? `${appliedCoupon.code} applied` : 'Black Friday offer applied automatically at checkout'}
-          </p>
+          {appliedCoupon && (
+            <p className="text-sm font-semibold text-green-800">{appliedCoupon.code} applied</p>
+          )}
           {appliedCoupon && (
             <p className="mt-1 text-xs text-green-700">
               {appliedCoupon.percentOff != null
@@ -255,11 +269,15 @@ export function PricingTable({
             </p>
           )}
 
+          {checkoutError && (
+            <p className="mb-2 text-xs font-medium text-red-600">{checkoutError}</p>
+          )}
+
           {!appliedCoupon && !showCouponInput && (
             <button
               type="button"
               onClick={() => setShowCouponInput(true)}
-              className="mt-2 text-xs font-medium text-[#007aff] underline underline-offset-2"
+              className="text-xs font-medium text-[#007aff] underline underline-offset-2"
             >
               Have a coupon code?
             </button>
@@ -330,7 +348,7 @@ export function PricingTable({
                   onClick={clearCoupon}
                   className="mt-2 text-xs text-gray-500 underline underline-offset-2"
                 >
-                  Cancel, keep the Black Friday offer
+                  Cancel
                 </button>
               )}
             </div>

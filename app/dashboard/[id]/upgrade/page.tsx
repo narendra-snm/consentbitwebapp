@@ -54,6 +54,8 @@ const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { code: stri
   growth: { code: "BF30OFF", percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" },
 };
 
+import { couponPlanMismatch, friendlyCouponError, isCouponScopeError } from "@/lib/blackFridayCoupons";
+
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
 function decodeEnvelope(parsed: unknown): unknown {
   if (parsed && typeof parsed === 'object' && typeof (parsed as { d?: unknown }).d === 'string') {
@@ -445,13 +447,22 @@ export default function PricingTable() {
     : null;
   const [promoInput, setPromoInput] = useState("");
   const [manualCoupon, setManualCoupon] = useState<AppliedCoupon | null>(null);
-  const [promoError, setPromoError] = useState(false);
+  // false = no error; true = generic "invalid or expired"; string = specific message to show.
+  const [promoError, setPromoError] = useState<boolean | string>(false);
   const [promoLoading, setPromoLoading] = useState(false);
   // Manual promo box is hidden until the customer asks for it; the offer applies by default.
   const [showPromoInput, setShowPromoInput] = useState(false);
   const appliedCoupon: AppliedCoupon | null =
     selected && selected !== "free" ? (manualCoupon ?? defaultCoupon) : null;
   const isDefaultOffer = !manualCoupon;
+  // A manual Black Friday code only covers certain plans. If the customer picks a plan
+  // it does not cover, drop it (back to that plan's automatic offer) and say why.
+  useEffect(() => {
+    if (!manualCoupon || !selected) return;
+    const mismatch = couponPlanMismatch(manualCoupon.code, selected);
+    if (mismatch) { setManualCoupon(null); setPromoError(mismatch); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -602,6 +613,10 @@ export default function PricingTable() {
       try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
       if (!data || !data.valid || !data.promotionCodeId) {
         setPromoError(true);
+      } else if (couponPlanMismatch(data.code || code, selected)) {
+        // Known Black Friday code on a plan its coupon does not cover — Stripe would
+        // reject it at checkout; explain which code fits instead.
+        setPromoError(couponPlanMismatch(data.code || code, selected) as string);
       } else {
         setManualCoupon({
           promotionCodeId: data.promotionCodeId,
@@ -658,6 +673,17 @@ export default function PricingTable() {
     }
     if (plan === "free") return;
 
+    // Never send a Black Friday code to Stripe for a plan it does not cover: drop the
+    // manual code (back to this plan's automatic offer) and say why in the promo box.
+    if (manualCoupon) {
+      const mismatch = couponPlanMismatch(manualCoupon.code, plan);
+      if (mismatch) {
+        setManualCoupon(null);
+        setPromoError(mismatch);
+        return;
+      }
+    }
+
     // Existing paid subscription → change tier in place. Opens a confirm dialog that
     // previews the prorated amount, then charges the card already on file (no redirect,
     // no re-entering card details). Downgrades are scheduled for period end.
@@ -692,7 +718,10 @@ export default function PricingTable() {
       window.location.href = url;
       // Do NOT reset checkoutLoading here — keep overlay visible until browser navigates away.
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not start checkout.");
+      const msg = e instanceof Error ? e.message : "Could not start checkout.";
+      // A coupon-scope rejection is explained in the promo box; anything else keeps the alert.
+      if (isCouponScopeError(msg)) setPromoError(friendlyCouponError(msg, plan, appliedCoupon?.code));
+      else alert(msg);
       setCheckoutLoading(false);
     }
   }
@@ -715,7 +744,7 @@ export default function PricingTable() {
       });
       setTierPreview(p);
     } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not load the charge details.");
+      setTierError(friendlyCouponError(e instanceof Error ? e.message : "Could not load the charge details.", tierTarget, appliedCoupon?.code));
     } finally {
       setTierPreviewLoading(false);
     }
@@ -724,6 +753,14 @@ export default function PricingTable() {
   // Confirmed → apply the tier change in-place, charging the card on file (no redirect).
   async function confirmTierChange() {
     if (!activeOrganizationId || !tierTarget || changingTier) return;
+    // Same plan/code check right before the charge, in case the code changed after preview.
+    if (manualCoupon) {
+      const mismatch = couponPlanMismatch(manualCoupon.code, tierTarget);
+      if (mismatch) {
+        setTierError(mismatch);
+        return;
+      }
+    }
     setChangingTier(true);
     setTierError(null);
     try {
@@ -739,7 +776,7 @@ export default function PricingTable() {
       setChangingTier(false);
       router.push(`/dashboard/${siteId}?upgraded=1`);
     } catch (e) {
-      setTierError(e instanceof Error ? e.message : "Could not change your plan. Please try again.");
+      setTierError(friendlyCouponError(e instanceof Error ? e.message : "Could not change your plan. Please try again.", tierTarget, appliedCoupon?.code));
       setChangingTier(false);
     }
   }
@@ -1484,7 +1521,7 @@ function redirectToDashboard() {
                 onClick={clearPromo}
                 className="relative z-10 mt-2 text-xs text-[#6b7280] underline underline-offset-2"
               >
-                Cancel, keep the Black Friday offer
+                Cancel
               </button>
             )}
 
@@ -1495,7 +1532,7 @@ function redirectToDashboard() {
                   <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
                   <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
                 </svg>
-                Invalid or expired promo code.
+                {typeof promoError === "string" ? promoError : "Invalid or expired promo code."}
               </div>
             )}
 

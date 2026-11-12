@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import {
@@ -38,6 +38,8 @@ const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; pr
   essential: { code: "BF20OFF", percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" },
   growth: { code: "BF30OFF", percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" },
 };
+
+import { couponPlanMismatch } from "@/lib/blackFridayCoupons";
 
 /** Human-readable discount line for a manually applied coupon. */
 function couponSummary(c: AppliedCoupon): string {
@@ -579,6 +581,14 @@ function CheckoutForm({
         setCouponLoading(false);
         return;
       }
+      // Known Black Friday code on a plan its coupon does not cover — Stripe would
+      // reject it at payment; explain which code fits instead.
+      const mismatch = couponPlanMismatch(data.code || code, planId);
+      if (mismatch) {
+        setCouponError(mismatch);
+        setCouponLoading(false);
+        return;
+      }
       onCouponChange({
         promotionCodeId: data.promotionCodeId,
         code: data.code || code,
@@ -653,6 +663,13 @@ function CheckoutForm({
     const cardEl = elements.getElement(CardNumberElement);
     if (!cardEl) {
       setError("Card details are incomplete.");
+      return;
+    }
+
+    // Never send a Black Friday code to Stripe for a plan it does not cover.
+    const couponMismatch = !isDefaultOffer ? couponPlanMismatch(appliedCoupon.code, planId) : null;
+    if (couponMismatch) {
+      setError(couponMismatch);
       return;
     }
 
@@ -1283,7 +1300,7 @@ function CheckoutForm({
                 onClick={cancelCouponInput}
                 className="mt-2 text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
               >
-                Cancel, keep the Black Friday offer
+                Cancel
               </button>
             </div>
           )}
@@ -1366,6 +1383,13 @@ function CheckoutPageInner() {
   };
   const [manualCoupon, setManualCoupon] = useState<AppliedCoupon | null>(null);
   const appliedCoupon: AppliedCoupon = manualCoupon ?? defaultCoupon;
+  // A manual Black Friday code only covers certain plans. If the customer switches to a
+  // plan it does not cover, drop it so the automatic offer for the new plan applies
+  // instead of Stripe rejecting the payment.
+  useEffect(() => {
+    if (manualCoupon && couponPlanMismatch(manualCoupon.code, planId)) setManualCoupon(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
 
   const rawD = params.get("d") ?? "";
   let decoded: Record<string, string> = {};
