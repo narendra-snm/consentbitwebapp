@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession, parseApiResponse } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
-import { couponPlanMismatch, friendlyCouponError } from '@/lib/blackFridayCoupons';
+import { BLACK_FRIDAY_CODE_PLANS, couponPlanMismatch, friendlyCouponError } from '@/lib/blackFridayCoupons';
 
 /**
  * Black Friday offer, applied automatically from the chosen plan at checkout. The code is shown
@@ -266,6 +266,12 @@ export function PricingTable({
                   ? `${(appliedCoupon.amountOff / 100).toFixed(2)} ${appliedCoupon.currency.toUpperCase()} off`
                   : 'Discount applied'}
               .
+              {(() => {
+                const scope = BLACK_FRIDAY_CODE_PLANS[appliedCoupon.code.toUpperCase()];
+                if (!scope) return null;
+                const names = scope.map((id) => id.charAt(0).toUpperCase() + id.slice(1));
+                return ` Valid for ${names.join(' and ')} only.`;
+              })()}
             </p>
           )}
 

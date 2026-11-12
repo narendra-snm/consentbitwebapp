@@ -54,7 +54,7 @@ const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { code: stri
   growth: { code: "BF30OFF", percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" },
 };
 
-import { couponPlanMismatch, friendlyCouponError, isCouponScopeError } from "@/lib/blackFridayCoupons";
+import { BLACK_FRIDAY_CODE_PLANS, couponPlanMismatch, friendlyCouponError, isCouponScopeError } from "@/lib/blackFridayCoupons";
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
 function decodeEnvelope(parsed: unknown): unknown {
@@ -1458,6 +1458,12 @@ function redirectToDashboard() {
             {appliedCoupon && !isDefaultOffer && (
               <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
                 {appliedCoupon.code} applied. You pay ${total}
+                {(() => {
+                  const scope = BLACK_FRIDAY_CODE_PLANS[appliedCoupon.code.toUpperCase()];
+                  if (!scope) return null;
+                  const names = scope.map((id) => id.charAt(0).toUpperCase() + id.slice(1));
+                  return <div className="mt-1 text-sm font-normal text-[#374151]">Valid for {names.join(" and ")} only.</div>;
+                })()}
               </div>
             )}
 

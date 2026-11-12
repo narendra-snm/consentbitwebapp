@@ -40,9 +40,9 @@ const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; pr
   growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UakbBJwcuG9163MHJ5xP4EW' },
 };
 
-import { couponPlanMismatch } from '@/lib/blackFridayCoupons';
+import { BLACK_FRIDAY_CODE_PLANS, couponPlanMismatch, friendlyCouponError, isCouponScopeError } from '@/lib/blackFridayCoupons';
 
-/** Human-readable discount line for a manually applied coupon. */
+/** Human-readable discount line for a manually applied coupon, with the plans a Black Friday code covers. */
 function couponSummary(c: AppliedCoupon): string {
   const amount =
     c.percentOff != null
@@ -50,11 +50,18 @@ function couponSummary(c: AppliedCoupon): string {
       : c.amountOff != null
         ? `$${(c.amountOff / 100).toFixed(2)} off`
         : 'Discount applied';
+  let line: string;
   if (c.duration === 'repeating' && c.durationInMonths) {
-    return `${amount} for your first ${c.durationInMonths} month${c.durationInMonths > 1 ? 's' : ''}.`;
+    line = `${amount} for your first ${c.durationInMonths} month${c.durationInMonths > 1 ? 's' : ''}.`;
+  } else if (c.duration === 'forever') {
+    line = `${amount}, forever.`;
+  } else {
+    line = `${amount} your first charge.`;
   }
-  if (c.duration === 'forever') return `${amount}, forever.`;
-  return `${amount} your first charge.`;
+  const scope = BLACK_FRIDAY_CODE_PLANS[String(c.code || '').toUpperCase()];
+  if (!scope) return line;
+  const names = scope.map((id) => id.charAt(0).toUpperCase() + id.slice(1));
+  return `${line} Valid for ${names.join(' and ')} only.`;
 }
 
 interface PlanConfig {
@@ -690,7 +697,7 @@ function CheckoutForm({
         subscriptionId?: string;
       };
       if (!data.success) {
-        setError(friendlyCardError(data.error));
+        setError(isCouponScopeError(data.error) ? friendlyCouponError(String(data.error), planId, isDefaultOffer ? null : appliedCoupon.code) : friendlyCardError(data.error));
         setIsSubmitting(false);
         return;
       }

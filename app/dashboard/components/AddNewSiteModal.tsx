@@ -53,7 +53,7 @@ type AppliedCoupon = {
   currency: string;
 };
 
-import { couponPlanMismatch, friendlyCouponError } from "@/lib/blackFridayCoupons";
+import { BLACK_FRIDAY_CODE_PLANS, couponPlanMismatch, friendlyCouponError } from "@/lib/blackFridayCoupons";
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
 function decodeEnvelope(parsed: unknown): unknown {
@@ -263,6 +263,13 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         setCouponError(data?.error || "Invalid or expired promo code.");
         return;
       }
+      // A Black Friday code only covers certain plans. If a plan card is already
+      // highlighted and the code does not cover it, say so instead of applying.
+      const planMismatch = couponPlanMismatch(data.code || code, selectedPlan);
+      if (planMismatch) {
+        setCouponError(planMismatch);
+        return;
+      }
       setAppliedCoupon({
         promotionCodeId: data.promotionCodeId,
         code: data.code || code,
@@ -277,6 +284,14 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
       setCouponLoading(false);
     }
   }
+
+  // Re-check the applied code whenever a different plan card is highlighted, so the
+  // customer sees the mismatch before clicking the plan button (which blocks it anyway).
+  useEffect(() => {
+    if (!appliedCoupon || !selectedPlan) return;
+    setCouponError(couponPlanMismatch(appliedCoupon.code, selectedPlan));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan]);
 
   /** Clear the manual code and fall back to the automatic Black Friday offer. */
   function clearCoupon() {
@@ -526,7 +541,7 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="pb-[60px]">
+        <div className="pb-[28px]">
           {/* Website URL Section */}
           <div className="mt-[26px] grid grid-cols-[1fr_1fr] gap-4 px-[28px]">
             <div className="flex items-center gap-7">
@@ -791,16 +806,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
               shown, and a promo input lets the customer apply one manually (or use another code);
               a manually applied code overrides the automatic offer. Validated server-side against
               the logged-in account. */}
-          <div className="mt-8 px-[28px]">
-            <p className="font-semibold leading-[normal] text-[#161616] text-[14px] tracking-[-0.28px]">
-              Black Friday offer
-            </p>
-
+          <div className="mt-3 px-[28px]">
             {!appliedCoupon && !showCouponInput && (
               <button
                 type="button"
                 onClick={() => setShowCouponInput(true)}
-                className="mt-2 text-xs font-medium underline underline-offset-2"
+                className="text-xs font-medium underline underline-offset-2"
                 style={{ color: "#007aff" }}
               >
                 Have a coupon code?
@@ -880,6 +891,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
                         ? ` — ${(appliedCoupon.amountOff / 100).toFixed(2)} ${appliedCoupon.currency.toUpperCase()} off`
                         : ""}
                     .
+                    {(() => {
+                      const scope = BLACK_FRIDAY_CODE_PLANS[appliedCoupon.code.toUpperCase()];
+                      if (!scope) return null;
+                      const names = scope.map((id) => id.charAt(0).toUpperCase() + id.slice(1));
+                      return ` Valid for ${names.join(" and ")} only.`;
+                    })()}
                   </p>
                 )}
                 {couponError && (
@@ -904,12 +921,12 @@ export default function AddNewSiteModal({ onClose }: { onClose?: () => void }) {
 
           {/* Submit Error */}
           {submitError ? (
-            <p className="mt-8 text-sm text-[#b91c1c] px-[28px] flex items-center gap-1">
+            <p className="mt-3 text-sm text-[#b91c1c] px-[28px] flex items-center gap-1">
               <span>⚠</span>
               {submitError}
             </p>
           ) : (
-            <p className="mt-8 text-sm text-[#b91c1c] invisible px-[28px]">hi</p>
+            <p className="mt-3 text-sm text-[#b91c1c] invisible px-[28px]">hi</p>
           )}
         </div>
       </div>
