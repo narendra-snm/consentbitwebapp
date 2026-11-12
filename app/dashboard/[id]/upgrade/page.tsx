@@ -48,10 +48,10 @@ type AppliedCoupon = {
  * promotionCodeId = the promotion code created in Stripe for that plan. The worker re-verifies
  * it on every checkout / tier change, so a changed or expired code is rejected server-side.
  */
-const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { percentOff: number; promotionCodeId: string }> = {
-  basic: { percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" }, // BF20OFF
-  essential: { percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" }, // BF20OFF
-  growth: { percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" }, // BF30OFF
+const BLACK_FRIDAY_OFFERS: Record<"basic" | "essential" | "growth", { code: string; percentOff: number; promotionCodeId: string }> = {
+  basic: { code: "BF20OFF", percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" },
+  essential: { code: "BF20OFF", percentOff: 20, promotionCodeId: "promo_1UakZMJwcuG9163My19Z7s03" },
+  growth: { code: "BF30OFF", percentOff: 30, promotionCodeId: "promo_1UakbBJwcuG9163MHJ5xP4EW" },
 };
 
 /** Decode worker security-middleware envelope ({ d: "<base64 JSON>" }). */
@@ -428,12 +428,13 @@ export default function PricingTable() {
   const proceedRef = useRef<HTMLDivElement>(null);
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan>(null);
-  // Offer is derived from the selected plan — no code entry, no apply step.
+  // The Black Friday offer for the selected plan is applied by default. A promo code the
+  // customer validates manually overrides it; clearing that code falls back to the offer.
   const offer = selected && selected !== "free" ? BLACK_FRIDAY_OFFERS[selected] : undefined;
-  const appliedCoupon: AppliedCoupon | null = offer
+  const defaultCoupon: AppliedCoupon | null = offer
     ? {
         promotionCodeId: offer.promotionCodeId,
-        code: "BLACK_FRIDAY",
+        code: offer.code,
         name: "Black Friday",
         percentOff: offer.percentOff,
         amountOff: null,
@@ -442,6 +443,15 @@ export default function PricingTable() {
         durationInMonths: 3,
       }
     : null;
+  const [promoInput, setPromoInput] = useState("");
+  const [manualCoupon, setManualCoupon] = useState<AppliedCoupon | null>(null);
+  const [promoError, setPromoError] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
+  // Manual promo box is hidden until the customer asks for it; the offer applies by default.
+  const [showPromoInput, setShowPromoInput] = useState(false);
+  const appliedCoupon: AppliedCoupon | null =
+    selected && selected !== "free" ? (manualCoupon ?? defaultCoupon) : null;
+  const isDefaultOffer = !manualCoupon;
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnedFromStripe, setReturnedFromStripe] = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(5);
@@ -555,6 +565,68 @@ export default function PricingTable() {
     }
 
     return Math.round(total);
+  };
+
+  /**
+   * Fallback for when the automatic offer does not come through (or the customer has a
+   * different code): validate a promo code server-side and let it override the default offer.
+   * A rejected code leaves the automatic offer in place.
+   */
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError(true);
+      return;
+    }
+    setPromoError(false);
+    setPromoLoading(true);
+    try {
+      const res = await fetch(
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const text = await res.text();
+      type CouponResponse = {
+        valid?: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        name?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+        duration?: 'once' | 'repeating' | 'forever';
+        durationInMonths?: number | null;
+      };
+      let data: CouponResponse | null = null;
+      try { data = decodeEnvelope(JSON.parse(text)) as CouponResponse; } catch { data = null; }
+      if (!data || !data.valid || !data.promotionCodeId) {
+        setPromoError(true);
+      } else {
+        setManualCoupon({
+          promotionCodeId: data.promotionCodeId,
+          code: data.code || code,
+          name: data.name || code,
+          percentOff: data.percentOff ?? null,
+          amountOff: data.amountOff ?? null,
+          currency: data.currency || 'usd',
+          duration: data.duration || 'once',
+          durationInMonths: data.durationInMonths ?? null,
+        });
+        setPromoError(false);
+      }
+    } catch {
+      setPromoError(true);
+    }
+    setPromoLoading(false);
+  };
+
+  /** Clear the manual code and fall back to the automatic Black Friday offer. */
+  const clearPromo = () => {
+    setManualCoupon(null);
+    setPromoInput('');
+    setPromoError(false);
+    setShowPromoInput(false);
   };
 
   const total = calculateTotal();
@@ -1320,25 +1392,110 @@ function redirectToDashboard() {
         {/* BOTTOM */}
         <div className="grid grid-cols-[430px_1fr] gap-4 p-6 pt-15.5">
 
-          {/* OFFER — applied automatically from the selected plan. No code entry. */}
+          {/* OFFER / PROMO — the Black Friday offer is applied automatically from the selected
+              plan and its code is shown; a manual promo input is available as a fallback and a
+              manually applied code overrides the offer. */}
           <div className={` rounded-[15px] p-7 relative border-white ${!selected ? 'opacity-50' : ''}`}>
 <img src="/images/smallbox.png" alt="offer" className="absolute inset-0 w-full h-full  rounded-[15px] pointer-events-none" />
-            <div className="relative z-10 text-lg font-semibold mb-1">Black Friday offer</div>
+            <div className="relative z-10 text-lg font-semibold mb-1">{isDefaultOffer ? "Black Friday offer" : "Promo code"}</div>
             {!selected && (
               <p className="relative z-10 text-xs text-[#6b7280] mb-3">Select a plan to see your offer.</p>
             )}
 
-            {appliedCoupon && (
+            {appliedCoupon && isDefaultOffer && (
+              <>
+                <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
+                  Black Friday {appliedCoupon.percentOff}% offer applied
+                </div>
+                <div className="relative z-10 mt-1 text-sm text-[#374151]">
+                  Coupon code <span className="font-mono font-semibold">{appliedCoupon.code}</span>
+                </div>
+                <div className="relative z-10 mt-2 text-sm text-[#374151]">
+                  <span className="line-through text-[#9ca3af] mr-2">${listTotal}</span>
+                  <span className="font-semibold">${total}</span>
+                  {" "}{billing === "yearly" ? "billed yearly" : "billed monthly"} for your first 3 months
+                </div>
+              </>
+            )}
+
+            {appliedCoupon && !isDefaultOffer && (
               <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
-                Black Friday {appliedCoupon.percentOff}% offer applied
+                {appliedCoupon.code} applied. You pay ${total}
               </div>
             )}
 
-            {appliedCoupon && (
-              <div className="relative z-10 mt-2 text-sm text-[#374151]">
-                <span className="line-through text-[#9ca3af] mr-2">${listTotal}</span>
-                <span className="font-semibold">${total}</span>
-                {" "}{billing === "yearly" ? "billed yearly" : "billed monthly"} for your first 3 months
+            {selected && isDefaultOffer && !showPromoInput && (
+              <button
+                type="button"
+                onClick={() => setShowPromoInput(true)}
+                className="relative z-10 mt-3 text-sm font-medium text-[#007aff] underline underline-offset-2"
+              >
+                Have a coupon code?
+              </button>
+            )}
+
+            {selected && (showPromoInput || !isDefaultOffer) && (
+              <div className="relative z-10 mt-3 flex border border-[#E5E5E5] bg-white pr-1.5 items-center rounded-lg">
+                <input
+                  value={promoInput}
+                  onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(false); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void applyPromo();
+                    }
+                  }}
+                  disabled={!selected || promoLoading || !isDefaultOffer}
+                  className="flex-1 min-w-0 px-4 py-3 outline-none disabled:cursor-not-allowed bg-white rounded-lg"
+                  placeholder="Enter promo code"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+
+                {(promoInput || !isDefaultOffer) && (
+                  <button
+                    type="button"
+                    onClick={clearPromo}
+                    aria-label="Remove promo code"
+                    title="Remove promo code"
+                    className="shrink-0 px-1 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void applyPromo()}
+                  disabled={!selected || !promoInput.trim() || promoLoading || !isDefaultOffer}
+                  className="shrink-0 bg-[#007aff] rounded-[5px] text-white px-4 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="inline mr-1" width="15" height="10" viewBox="0 0 15 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1 4.76471L5.15732 8.67748C5.34984 8.85868 5.65016 8.85868 5.84268 8.67748L14 1" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  {promoLoading ? 'Checking…' : !isDefaultOffer ? 'Applied' : 'Apply'}
+                </button>
+              </div>
+            )}
+
+            {selected && isDefaultOffer && showPromoInput && (
+              <button
+                type="button"
+                onClick={clearPromo}
+                className="relative z-10 mt-2 text-xs text-[#6b7280] underline underline-offset-2"
+              >
+                Cancel, keep the Black Friday offer
+              </button>
+            )}
+
+            {promoError && isDefaultOffer && (
+              <div className="relative z-10 mt-3 flex items-center gap-1.5 text-sm text-[#ef4444]">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="7.5" cy="7.5" r="6.5" stroke="#ef4444" strokeWidth="1.5"/>
+                  <path d="M7.5 4.5V8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="7.5" cy="10.5" r="0.75" fill="#ef4444"/>
+                </svg>
+                Invalid or expired promo code.
               </div>
             )}
 

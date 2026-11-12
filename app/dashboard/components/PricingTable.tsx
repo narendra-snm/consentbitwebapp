@@ -1,7 +1,28 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckoutSession } from '@/lib/client-api';
+import { createCheckoutSession, parseApiResponse } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
+
+/**
+ * Black Friday offer, applied automatically from the chosen plan at checkout. The code is shown
+ * and a manual promo input is offered as a fallback; a manually validated code overrides it.
+ * promotionCodeId = the Stripe promotion code for that plan; the worker re-verifies it.
+ * Same table as AddNewSiteModal, the upgrade page and the checkout pages — keep them in sync.
+ */
+const BLACK_FRIDAY_OFFERS: Record<'basic' | 'essential' | 'growth', { code: string; percentOff: number; promotionCodeId: string }> = {
+  basic: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UakZMJwcuG9163My19Z7s03' },
+  essential: { code: 'BF20OFF', percentOff: 20, promotionCodeId: 'promo_1UakZMJwcuG9163My19Z7s03' },
+  growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UakbBJwcuG9163MHJ5xP4EW' },
+};
+
+/** A promo code the customer validated manually; it overrides the automatic offer at checkout. */
+type AppliedCoupon = {
+  promotionCodeId: string;
+  code: string;
+  percentOff: number | null;
+  amountOff: number | null;
+  currency: string;
+};
 
 export function PricingTable({
   onclick,
@@ -19,6 +40,12 @@ export function PricingTable({
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [loadingPlan, setLoadingPlan] = useState<null | 'basic' | 'essential' | 'growth'>(null);
   const [freeLoading, setFreeLoading] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  // Manual promo box is hidden until the customer asks for it; the offer applies by default.
+  const [showCouponInput, setShowCouponInput] = useState(false);
 
   // Reset loading state if user returns via browser back button (bfcache restore).
   useEffect(() => {
@@ -54,6 +81,60 @@ export function PricingTable({
     };
   }, [billingInterval]);
 
+  /**
+   * Fallback for when the automatic Black Friday offer does not come through (or the customer
+   * has a different code). Validated server-side against the logged-in account (session cookie),
+   * so per-customer restricted codes cannot be spoofed. A rejected code leaves the offer in place.
+   */
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) {
+      setCouponError('Enter a promo code.');
+      return;
+    }
+    setCouponError(null);
+    setCouponLoading(true);
+    try {
+      const res = await fetch(
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const data = (await parseApiResponse(res)) as {
+        valid?: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+      } | null;
+      if (!data || !data.valid || !data.promotionCodeId) {
+        setCouponError(data?.error || 'Invalid or expired promo code.');
+        return;
+      }
+      setAppliedCoupon({
+        promotionCodeId: data.promotionCodeId,
+        code: data.code || code,
+        percentOff: data.percentOff ?? null,
+        amountOff: data.amountOff ?? null,
+        currency: data.currency || 'usd',
+      });
+      setCouponError(null);
+    } catch {
+      setCouponError('Could not validate the promo code. Please try again.');
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  /** Clear the manual code and fall back to the automatic Black Friday offer. */
+  function clearCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+    setShowCouponInput(false);
+  }
+
   async function goPaid(planId: 'basic' | 'essential' | 'growth') {
     if (!organizationId) {
       alert('Organization not loaded. Please refresh and try again.');
@@ -83,6 +164,11 @@ export function PricingTable({
           ? `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?domain=${encodeURIComponent(domain)}`)}`
           : `${origin}/api/checkout-session-redirect?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(`${origin}/dashboard/post-setup?siteId=${encodeURIComponent(String(siteId ?? ''))}`)}`  ,
         cancelUrl: `${origin}/dashboard`,
+        // A promo code the customer validated manually wins; otherwise the Black Friday
+        // offer for the chosen plan. The worker re-verifies either before applying it.
+        promotionCodeId: appliedCoupon
+          ? appliedCoupon.promotionCodeId
+          : BLACK_FRIDAY_OFFERS[planId].promotionCodeId,
       });
       window.location.assign(data.url);
     } catch (e) {
@@ -151,6 +237,106 @@ export function PricingTable({
           </div>
         </div>
 
+        {/* Black Friday offer — applied automatically at checkout for the chosen plan. The codes are
+            shown, and a promo input lets the customer apply one manually (or use another code); a
+            manually applied code overrides the automatic offer. */}
+        <div className="mx-6 mt-5 rounded-xl border border-green-200 bg-green-50 px-5 py-4">
+          <p className="text-sm font-semibold text-green-800">
+            {appliedCoupon ? `${appliedCoupon.code} applied` : 'Black Friday offer applied automatically at checkout'}
+          </p>
+          {appliedCoupon && (
+            <p className="mt-1 text-xs text-green-700">
+              {appliedCoupon.percentOff != null
+                ? `${appliedCoupon.percentOff}% off`
+                : appliedCoupon.amountOff != null
+                  ? `${(appliedCoupon.amountOff / 100).toFixed(2)} ${appliedCoupon.currency.toUpperCase()} off`
+                  : 'Discount applied'}
+              .
+            </p>
+          )}
+
+          {!appliedCoupon && !showCouponInput && (
+            <button
+              type="button"
+              onClick={() => setShowCouponInput(true)}
+              className="mt-2 text-xs font-medium text-[#007aff] underline underline-offset-2"
+            >
+              Have a coupon code?
+            </button>
+          )}
+
+          {(showCouponInput || appliedCoupon) && (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-[220px] max-w-full">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    disabled={!!appliedCoupon || couponLoading}
+                    onChange={(e) => {
+                      setCouponInput(e.target.value.toUpperCase());
+                      setCouponError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !appliedCoupon) {
+                        e.preventDefault();
+                        void applyCoupon();
+                      }
+                    }}
+                    placeholder="Promo code"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="h-[44px] w-full rounded-lg border bg-white px-3.5 text-sm font-mono uppercase tracking-wider outline-none focus:border-[#007aff] disabled:cursor-not-allowed"
+                    style={{
+                      paddingRight: appliedCoupon || couponInput ? 38 : 14,
+                      borderColor: couponError ? '#b91c1c' : appliedCoupon ? '#15803d' : '#e5e5e5',
+                      backgroundColor: appliedCoupon ? '#f8fafc' : '#ffffff',
+                      color: appliedCoupon ? '#6b7280' : '#161616',
+                    }}
+                  />
+                  {(appliedCoupon || couponInput) && (
+                    <button
+                      type="button"
+                      aria-label="Remove promo code"
+                      title="Remove promo code"
+                      onClick={clearCoupon}
+                      className="absolute right-[10px] top-1/2 flex h-[20px] w-[20px] -translate-y-1/2 items-center justify-center rounded-full text-[14px] leading-none"
+                      style={{ backgroundColor: '#e5e5e5', color: '#161616' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void applyCoupon()}
+                  disabled={couponLoading || !!appliedCoupon || !couponInput.trim()}
+                  className="h-[44px] shrink-0 rounded-lg bg-[#007aff] px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {couponLoading ? 'Checking…' : appliedCoupon ? 'Applied' : 'Apply'}
+                </button>
+              </div>
+
+              {couponError && (
+                <p className="mt-1.5 flex items-start gap-1 text-xs" style={{ color: '#b91c1c' }}>
+                  <span className="leading-[1.4]">⚠</span>
+                  <span>{couponError}</span>
+                </p>
+              )}
+              {!appliedCoupon && (
+                <button
+                  type="button"
+                  onClick={clearCoupon}
+                  className="mt-2 text-xs text-gray-500 underline underline-offset-2"
+                >
+                  Cancel, keep the Black Friday offer
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Pricing Table */}
         <div className="px-6 pt-5 overflow-auto xl:overflow-hidden">
           <div className="grid grid-cols-[200px_220px_220px_316px_316px] text-left">
@@ -172,6 +358,7 @@ export function PricingTable({
               primary
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('basic')}
+              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.basic}
             />
             <PlanHeader
               title="Essential"
@@ -180,6 +367,7 @@ export function PricingTable({
               highlight
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('essential')}
+              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.essential}
             />
             <PlanHeader
               title="Growth"
@@ -188,6 +376,7 @@ export function PricingTable({
               primary
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('growth')}
+              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.growth}
             />
 
             {/* Row 1 */}
@@ -246,9 +435,11 @@ type PlanHeaderProps = {
   highlight?: boolean;
   onClick?: () => void;
   disabled?: boolean;
+  /** Black Friday code auto-applied for this plan; null/undefined hides the badge. */
+  offer?: { code: string; percentOff: number } | null;
 };
 
-function PlanHeader({ title, price, button, primary = false, highlight = false, onClick, disabled = false }: PlanHeaderProps) {
+function PlanHeader({ title, price, button, primary = false, highlight = false, onClick, disabled = false, offer = null }: PlanHeaderProps) {
   return (
     <div
       className={`py-7.5 px-6 flex flex-col gap-4 ${
@@ -281,6 +472,12 @@ function PlanHeader({ title, price, button, primary = false, highlight = false, 
       >
         {button}
       </button>
+
+      {offer && (
+        <p className="text-[13px] font-semibold text-[#15803d]">
+          {offer.percentOff}% off · code <span className="font-mono">{offer.code}</span>
+        </p>
+      )}
     </div>
   );
 }

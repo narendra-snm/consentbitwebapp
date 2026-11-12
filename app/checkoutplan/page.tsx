@@ -40,6 +40,21 @@ const BLACK_FRIDAY_OFFERS: Record<PlanId, { code: string; percentOff: number; pr
   growth: { code: 'BF30OFF', percentOff: 30, promotionCodeId: 'promo_1UakbBJwcuG9163MHJ5xP4EW' },
 };
 
+/** Human-readable discount line for a manually applied coupon. */
+function couponSummary(c: AppliedCoupon): string {
+  const amount =
+    c.percentOff != null
+      ? `${c.percentOff}% off`
+      : c.amountOff != null
+        ? `$${(c.amountOff / 100).toFixed(2)} off`
+        : 'Discount applied';
+  if (c.duration === 'repeating' && c.durationInMonths) {
+    return `${amount} for your first ${c.durationInMonths} month${c.durationInMonths > 1 ? 's' : ''}.`;
+  }
+  if (c.duration === 'forever') return `${amount}, forever.`;
+  return `${amount} your first charge.`;
+}
+
 interface PlanConfig {
   name: string;
   monthly: number;
@@ -432,6 +447,10 @@ interface CheckoutFormProps {
   onPlanChange: (p: PlanId) => void;
   onIntervalChange: (i: Interval) => void;
   appliedCoupon: AppliedCoupon;
+  /** true while the automatic Black Friday offer is in effect (no manual code applied). */
+  isDefaultOffer: boolean;
+  /** A code the customer validated manually; null reverts to the automatic offer. */
+  onCouponChange: (c: AppliedCoupon | null) => void;
 }
 
 function CheckoutForm({
@@ -446,6 +465,8 @@ function CheckoutForm({
   onPlanChange,
   onIntervalChange,
   appliedCoupon,
+  isDefaultOffer,
+  onCouponChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -469,6 +490,11 @@ function CheckoutForm({
   // "Stay on this page", so the trial button stays disabled and can never charge
   // a second time once the account is set up.
   const [paid, setPaid] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  // Manual coupon box is hidden until the customer asks for it; the offer applies by default.
+  const [showCouponInput, setShowCouponInput] = useState(false);
 
   // The account email can arrive after this form has mounted (the parent resolves it
   // asynchronously when the checkout handoff didn't include it). Adopt it only while
@@ -482,6 +508,77 @@ function CheckoutForm({
 
   function clearErr(field: string) {
     setFieldErrors(p => ({ ...p, [field]: '' }));
+  }
+
+  /**
+   * Fallback for when the automatic offer does not come through (or the customer has a
+   * different code): validate a code server-side and let it override the default offer.
+   * A rejected code leaves the automatic offer in place.
+   */
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) {
+      setCouponError('Enter a coupon code.');
+      return;
+    }
+    setCouponError('');
+    setCouponLoading(true);
+    try {
+      const res = await fetch(
+        `/api/validate-coupon?code=${encodeURIComponent(code)}`
+          // Email hint: this page has no session cookie (guest checkout), and per-customer
+          // promo codes need to know who is asking. Advisory only — the worker re-checks
+          // against the account that actually pays.
+          + (email ? `&email=${encodeURIComponent(email)}` : ''),
+        { credentials: 'include' },
+      );
+      const data = (await parseApiResponse(res)) as {
+        valid: boolean;
+        error?: string;
+        promotionCodeId?: string;
+        code?: string;
+        name?: string;
+        percentOff?: number | null;
+        amountOff?: number | null;
+        currency?: string;
+        duration?: 'once' | 'repeating' | 'forever';
+        durationInMonths?: number | null;
+      };
+      if (!data.valid || !data.promotionCodeId) {
+        setCouponError(data.error || 'Invalid or expired code.');
+        setCouponLoading(false);
+        return;
+      }
+      onCouponChange({
+        promotionCodeId: data.promotionCodeId,
+        code: data.code || code,
+        name: data.name || code,
+        percentOff: data.percentOff ?? null,
+        amountOff: data.amountOff ?? null,
+        currency: data.currency || 'usd',
+        duration: data.duration || 'once',
+        durationInMonths: data.durationInMonths ?? null,
+      });
+      setCouponInput('');
+      setShowCouponInput(false);
+    } catch {
+      setCouponError('Could not validate code. Please try again.');
+    }
+    setCouponLoading(false);
+  }
+
+  /** Drop the manually entered code and fall back to the automatic Black Friday offer. */
+  function removeCoupon() {
+    onCouponChange(null);
+    setCouponInput('');
+    setCouponError('');
+    setShowCouponInput(false);
+  }
+
+  function cancelCouponInput() {
+    setShowCouponInput(false);
+    setCouponInput('');
+    setCouponError('');
   }
 
   function handleEmailChange(v: string) {
@@ -956,16 +1053,91 @@ function CheckoutForm({
         </div>
       </FormSection>
 
-      {/* 5 — Black Friday offer (applied automatically from the selected plan; no code entry) */}
-      <FormSection n={5} title="Black Friday offer">
-        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-          <p className="text-sm font-semibold text-green-800">
-            Black Friday {appliedCoupon.percentOff}% offer applied
-          </p>
-          <p className="text-xs text-green-700">
-            {appliedCoupon.percentOff}% off for your first 3 months.
-          </p>
+      {/* 5 — Coupon. The Black Friday offer for the selected plan is applied automatically and
+          its code is shown, so the customer can re-enter it (or another code) manually if the
+          discount does not come through. A manual code overrides the automatic offer. */}
+      <FormSection n={5} title="Coupon">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-green-800 truncate">
+              {isDefaultOffer
+                ? `Black Friday ${appliedCoupon.percentOff}% offer applied`
+                : `${appliedCoupon.code} applied`}
+            </p>
+            <p className="text-xs text-green-700">
+              {isDefaultOffer ? (
+                <>
+                  Coupon code <span className="font-mono font-semibold">{appliedCoupon.code}</span>
+                  {' — '}{appliedCoupon.percentOff}% off for your first 3 months.
+                </>
+              ) : (
+                couponSummary(appliedCoupon)
+              )}
+            </p>
+          </div>
+          {!isDefaultOffer && (
+            <button
+              type="button"
+              onClick={removeCoupon}
+              className="shrink-0 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Remove
+            </button>
+          )}
         </div>
+
+        {isDefaultOffer && !showCouponInput && (
+          <button
+            type="button"
+            onClick={() => setShowCouponInput(true)}
+            className="mt-2 text-xs font-medium text-[#262E84] underline underline-offset-2 hover:text-[#1e246c]"
+          >
+            Have a coupon code?
+          </button>
+        )}
+
+        {isDefaultOffer && showCouponInput && (
+          <div className="mt-3">
+            <Field label="Coupon code" error={couponError}>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={e => {
+                    setCouponInput(e.target.value.toUpperCase());
+                    if (couponError) setCouponError('');
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void applyCoupon();
+                    }
+                  }}
+                  placeholder="Enter coupon code"
+                  disabled={couponLoading}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={inputCls(!!couponError, couponLoading)}
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyCoupon()}
+                  disabled={couponLoading || !couponInput.trim()}
+                  className="shrink-0 rounded-md bg-[#262E84] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#1e246c] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {couponLoading ? 'Checking…' : 'Apply'}
+                </button>
+              </div>
+            </Field>
+            <button
+              type="button"
+              onClick={cancelCouponInput}
+              className="mt-2 text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
+            >
+              Cancel, keep the Black Friday offer
+            </button>
+          </div>
+        )}
       </FormSection>
 
       {error && (
@@ -1028,9 +1200,10 @@ function CheckoutPageInner() {
   const [interval, setInterval] = useState<Interval>(
     rawInterval === 'yearly' ? 'yearly' : 'monthly',
   );
-  // Offer is derived from the selected plan — no code entry, no apply step.
+  // The Black Friday offer for the selected plan is applied by default. A code the
+  // customer validates manually overrides it; removing that code falls back to the offer.
   const offer = BLACK_FRIDAY_OFFERS[planId];
-  const appliedCoupon: AppliedCoupon = {
+  const defaultCoupon: AppliedCoupon = {
     promotionCodeId: offer.promotionCodeId,
     code: offer.code,
     name: 'Black Friday',
@@ -1040,6 +1213,8 @@ function CheckoutPageInner() {
     duration: 'repeating',
     durationInMonths: 3,
   };
+  const [manualCoupon, setManualCoupon] = useState<AppliedCoupon | null>(null);
+  const appliedCoupon: AppliedCoupon = manualCoupon ?? defaultCoupon;
 
   const urlT = params.get('t') ?? '';
   // null = still resolving; object = resolved checkout context.
@@ -1158,6 +1333,8 @@ function CheckoutPageInner() {
                   onPlanChange={setPlanId}
                   onIntervalChange={setInterval}
                   appliedCoupon={appliedCoupon}
+                  isDefaultOffer={!manualCoupon}
+                  onCouponChange={setManualCoupon}
                 />
               </Elements>
             ) : (
