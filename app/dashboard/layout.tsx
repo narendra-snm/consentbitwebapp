@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { DashboardSessionProvider } from "./DashboardSessionProvider";
 import PostSetupOverlay from "./components/PostSetupOverlay";
 import SetPasswordPrompt from "./components/SetPasswordPrompt";
+import DashboardPromoPopup from "./components/DashboardPromoPopup";
 import Footer from "@/components/auth/Footer";
 import Header from "./components/header";
 import DashboardTabs from "./components/DashboardTabs";
@@ -38,6 +39,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <PostSetupOverlay />
       </Suspense>
       <SetPasswordPrompt />
+      {/* Black Friday popup, once per login. Remove with the offer. */}
+      <DashboardPromoPopup />
       <PendingTeamInviteRedirect />
     </DashboardSessionProvider>
   );

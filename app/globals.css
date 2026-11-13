@@ -53,3 +53,52 @@ a:disabled,
 .animate-fadeIn {
   animation: fadeIn 0.35s ease forwards;
 }
+/* Black Friday offer card (checkout order summary). Lime card that fades in,
+   with a soft highlight sweeping across it every few seconds. Remove with the offer. */
+.cb-offer-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #e6ff7a;
+  color: #0b0b1a;
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateY(-8px);
+  animation: cbOfferIn 0.5s 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.cb-offer-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -50%;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: cbOfferSweep 3.6s 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes cbOfferIn {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cbOfferSweep {
+  0% {
+    left: -50%;
+  }
+  45%,
+  100% {
+    left: 120%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-offer-card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .cb-offer-card::after {
+    animation: none;
+  }
+}

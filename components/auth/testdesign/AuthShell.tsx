@@ -118,6 +118,11 @@ export type AuthShellProps = {
   subtitle: ReactNode;
   /** The form: fields, submit button, helper copy. */
   children: ReactNode;
+  /**
+   * Optional full-width strip above the two panels (the Black Friday banner on
+   * the login screen). It takes its own height; the panels fill what is left.
+   */
+  banner?: ReactNode;
 };
 
 /**
@@ -131,9 +136,11 @@ export default function AuthShell({
   title,
   subtitle,
   children,
+  banner,
 }: AuthShellProps) {
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-gray-100 flex items-center justify-center ">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-gray-100 flex flex-col">
+      {banner}
       {/*
         h-screen (not min-h-screen) is what keeps the desktop layout inside one
         viewport: a minimum would grow past it and scroll. Below lg the page
@@ -147,7 +154,9 @@ export default function AuthShell({
         1024px, which rewraps the copy into enough extra lines to overflow the
         viewport. Give it more room until xl, where 61/39 is comfortable again.
       */}
-      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[56fr_44fr] xl:grid-cols-[61fr_39fr] lg:h-screen">
+      {/* lg:flex-1 + min-h-0 (not lg:h-screen): the grid fills the viewport minus
+          the banner when there is one, and the whole viewport when there is not. */}
+      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[56fr_44fr] xl:grid-cols-[61fr_39fr] lg:flex-1 lg:min-h-0">
         {/* ─── Left panel (white) ─── */}
         <div className="bg-white flex flex-col min-h-0 px-5 py-8 sm:px-8 sm:py-10 md:px-12 lg:px-[72px] lg:py-[clamp(20px,5vh,45px)]">
 

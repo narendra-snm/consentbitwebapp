@@ -10,6 +10,7 @@ import {
 import { captureScanId, getScanId, clearScanId } from "@/lib/scan-handoff";
 import { analytics } from "@/lib/analytics";
 import AuthShell from "./AuthShell";
+import AuthBlackFridayBar from "./AuthBlackFridayBar";
 import AuthField from "./AuthField";
 import AuthOtpInput from "./AuthOtpInput";
 import { FONT_SANS, OPSZ } from "./fonts";
@@ -312,6 +313,8 @@ export default function TestSignupForm() {
 
   return (
     <AuthShell
+      // Black Friday banner — remove this prop with the offer.
+      banner={<AuthBlackFridayBar />}
       headerPrompt="Already have an account?"
       headerLinkLabel="Log in"
       headerLinkHref="/login"

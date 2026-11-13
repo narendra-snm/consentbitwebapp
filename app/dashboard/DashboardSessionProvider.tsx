@@ -515,6 +515,11 @@ export function DashboardSessionProvider({
         sessionStorage.removeItem(SESSION_CACHE_KEY);
         sessionStorage.removeItem("dashboardInit");
         sessionStorage.removeItem("cbLastUserEmail");
+        // Forget "already shown this login" so the promo popup greets the next login.
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const k = sessionStorage.key(i);
+          if (k && k.startsWith("cb_dashboard_promo_popup_")) sessionStorage.removeItem(k);
+        }
       }
     } catch { /* ignore */ }
     router.push("/login");

@@ -290,16 +290,77 @@ function FormSection({
   );
 }
 
+// ─── Black Friday offer card ──────────────────────────────────────────────────
+
+/** Date shown on the offer card (design copy). Remove the card with the offer. */
+const OFFER_ENDS_LABEL = "Nov 30";
+
+/**
+ * Lime offer card at the top of the order summary. Code, percentage and prices all
+ * follow the plan the customer selected (BF20OFF on Basic/Essential, BF30OFF on Growth);
+ * a manually applied coupon shows its own code and discount instead.
+ */
+function OfferCard({
+  planId,
+  interval,
+  appliedCoupon,
+  isDefaultOffer,
+}: {
+  planId: PlanId;
+  interval: Interval;
+  appliedCoupon: AppliedCoupon;
+  isDefaultOffer: boolean;
+}) {
+  const plan = PLANS[planId];
+  const base = interval === "yearly" ? plan.yearlyTotal : plan.monthly;
+  const unit = interval === "yearly" ? "/year" : "/month";
+  let discounted = base;
+  if (appliedCoupon.percentOff != null) {
+    discounted = base - (base * appliedCoupon.percentOff) / 100;
+  } else if (appliedCoupon.amountOff != null) {
+    discounted = Math.max(0, base - appliedCoupon.amountOff / 100);
+  }
+  const fmt = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
+  const badge =
+    appliedCoupon.percentOff != null
+      ? `${appliedCoupon.percentOff}% OFF`
+      : appliedCoupon.amountOff != null
+        ? `${fmt(appliedCoupon.amountOff / 100)} OFF`
+        : "OFFER";
+
+  return (
+    <div className="cb-offer-card mb-4" role="status">
+      <div className="flex items-center justify-between gap-2 text-[11px] font-bold uppercase leading-none tracking-[0.08em]">
+        <span>{isDefaultOffer ? "Black Friday offer" : "Coupon applied"}</span>
+        <span className="shrink-0 rounded-md bg-[#0B0B1A] px-2 py-1 text-[13px] tracking-[0.02em] text-[#E6FF7A]">
+          {badge}
+        </span>
+      </div>
+      <div className="mb-1 mt-2 text-[17px] font-bold leading-tight">
+        {fmt(discounted)}
+        {unit}
+        <s className="ml-1 font-medium text-[#4B5563]">{fmt(base)}</s>
+      </div>
+      <p className="text-[12.5px] leading-snug text-[#1F2937]">
+        Code <span className="font-semibold">{appliedCoupon.code}</span> applied to the {plan.name} plan.
+        {isDefaultOffer ? ` Ends ${OFFER_ENDS_LABEL}.` : ""}
+      </p>
+    </div>
+  );
+}
+
 // ─── Order summary ────────────────────────────────────────────────────────────
 
 function OrderSummary({
   planId,
   interval,
   appliedCoupon,
+  isDefaultOffer,
 }: {
   planId: PlanId;
   interval: Interval;
   appliedCoupon: AppliedCoupon | null;
+  isDefaultOffer: boolean;
 }) {
   const plan = PLANS[planId];
   const basePrice = interval === "yearly" ? plan.yearly : plan.monthly;
@@ -307,7 +368,8 @@ function OrderSummary({
 
   const price = basePrice;
 
-  const firstChargeBase = plan.monthly;
+  // First invoice after the trial: the yearly total on yearly billing, else one month.
+  const firstChargeBase = interval === "yearly" ? plan.yearlyTotal : plan.monthly;
   let discount = 0;
   if (appliedCoupon) {
     if (appliedCoupon.percentOff != null) {
@@ -328,7 +390,7 @@ function OrderSummary({
     discount?: boolean;
     green?: boolean;
   }> = [
-    { label: plan.name, value: `$${price}/mo` },
+    { label: plan.name, value: interval === "yearly" ? `$${plan.yearlyTotal}/yr` : `$${price}/mo` },
     { label: "Billing", value: interval === "yearly" ? "Yearly" : "Monthly" },
     { label: "Trial period", value: "14 days", pill: true },
     ...(appliedCoupon
@@ -353,16 +415,28 @@ function OrderSummary({
   return (
     <div className="sticky top-6 space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white p-5">
+        {appliedCoupon && (
+          <OfferCard
+            planId={planId}
+            interval={interval}
+            appliedCoupon={appliedCoupon}
+            isDefaultOffer={isDefaultOffer}
+          />
+        )}
         <span className="inline-block rounded-full bg-[#262E84]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#262E84]">
           {plan.name} plan
         </span>
 
         <div className="mt-2 flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-gray-900">${price}</span>
-          <span className="text-sm text-gray-400">/month</span>
+          <span className="text-3xl font-bold text-gray-900">
+            ${interval === "yearly" ? plan.yearlyTotal : price}
+          </span>
+          <span className="text-sm text-gray-400">{interval === "yearly" ? "/year" : "/month"}</span>
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
-          Free for 14 days — then ${plan.monthly}/mo
+          {interval === "yearly"
+            ? `Free for 14 days — then $${plan.yearlyTotal}/yr ($${plan.yearly}/mo)`
+            : `Free for 14 days — then $${plan.monthly}/mo`}
         </p>
 
         <div className="mt-4 divide-y divide-gray-100">
@@ -1477,6 +1551,7 @@ function CheckoutPageInner() {
               planId={planId}
               interval={interval}
               appliedCoupon={appliedCoupon}
+              isDefaultOffer={!manualCoupon}
             />
           </div>
         </div>
