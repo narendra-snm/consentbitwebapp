@@ -334,36 +334,40 @@ export default function TestLoginForm() {
               <AuthError message={error} />
             </div>
           )}
-          <AuthSubmitButton disabled={loading}>
-            {method === "password"
-              ? loading
-                ? "Logging in…"
-                : "Log in"
-              : loading
-              ? step === 1
-                ? "Sending code…"
-                : "Verifying…"
-              : step === 1
-              ? "Send code"
-              : "Verify & log in"}
-          </AuthSubmitButton>
+          {/* Submit button and the method-switch link share one row from `sm` up;
+              on phones the button is full-width, so the link drops underneath, centred. */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+            <AuthSubmitButton disabled={loading}>
+              {method === "password"
+                ? loading
+                  ? "Logging in…"
+                  : "Log in"
+                : loading
+                ? step === 1
+                  ? "Sending code…"
+                  : "Verifying…"
+                : step === 1
+                ? "Send code"
+                : "Verify & log in"}
+            </AuthSubmitButton>
 
-          {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
-              would silently discard the code the user is already holding. */}
-          {(method === "password" || step === 1) && (
-            <div className="mt-4 text-center">
-              <AuthTextButton
-                onClick={() =>
-                  switchMethod(method === "password" ? "otp" : "password")
-                }
-                disabled={loading}
-              >
-                {method === "password"
-                  ? "Log in with an email code instead"
-                  : "Log in with a password instead"}
-              </AuthTextButton>
-            </div>
-          )}
+            {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
+                would silently discard the code the user is already holding. */}
+            {(method === "password" || step === 1) && (
+              <div className="text-center sm:text-left">
+                <AuthTextButton
+                  onClick={() =>
+                    switchMethod(method === "password" ? "otp" : "password")
+                  }
+                  disabled={loading}
+                >
+                  {method === "password"
+                    ? "Log in with an email code"
+                    : "Log in with a password"}
+                </AuthTextButton>
+              </div>
+            )}
+          </div>
         </div>
 
         {(method === "password" || step === 1) && (
