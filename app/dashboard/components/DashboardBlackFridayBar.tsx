@@ -9,8 +9,15 @@ import { useDashboardSession } from "../DashboardSessionProvider";
  * page, or the dashboard home before a site exists. Remove with the offer.
  */
 export default function DashboardBlackFridayBar() {
-  const { authenticated, activeSiteId } = useDashboardSession();
+  const { authenticated, activeSiteId, effectivePlanId } = useDashboardSession();
   if (!authenticated) return null;
   const href = activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard";
-  return <BlackFridayBar claimHref={href} />;
+  return (
+    <BlackFridayBar
+      claimHref={href}
+      source="black_friday_dashboard_bar"
+      siteId={activeSiteId || undefined}
+      currentPlan={effectivePlanId || "free"}
+    />
+  );
 }

@@ -315,7 +315,7 @@ export default function TestSignupForm() {
   return (
     <AuthShell
       // Black Friday banner — remove this prop with the offer.
-      banner={<BlackFridayBar claimHref={BLACK_FRIDAY_PRICING_URL} />}
+      banner={<BlackFridayBar claimHref={BLACK_FRIDAY_PRICING_URL} source="black_friday_signup_bar" />}
       headerPrompt="Already have an account?"
       headerLinkLabel="Log in"
       headerLinkHref="/login"

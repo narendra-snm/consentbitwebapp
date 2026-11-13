@@ -4,6 +4,7 @@ import Link from "next/link";
 import localFont from "next/font/local";
 import styles from "./BlackFridayBar.module.css";
 import { isBlackFridayActive } from "@/lib/blackFridayOffer";
+import { analytics } from "@/lib/analytics";
 
 /**
  * Black Friday banner — a 60px lime strip with the headline set in Anton, each letter
@@ -30,14 +31,29 @@ const WORDS = ["Black", "Friday", "Sale", "Upto", "30% Off"];
 export default function BlackFridayBar({
   claimHref,
   claimLabel = "Claim Offer →",
+  source,
+  siteId,
+  currentPlan,
 }: {
   /** Absolute URL (rendered as a plain link) or an in-app path (rendered with next/link). */
   claimHref: string;
   claimLabel?: string;
+  /**
+   * PostHog `source` for the upgrade_cta_clicked event, e.g. "black_friday_login_bar".
+   * One value per placement so the bars can be compared in the upgrade funnel.
+   */
+  source: string;
+  /** Dashboard placement only — the active site and its plan, for the same event. */
+  siteId?: string;
+  currentPlan?: string;
 }) {
   if (!isBlackFridayActive()) return null;
 
   const external = /^https?:\/\//i.test(claimHref);
+  // Same upgrade_cta_clicked event the header / popup CTAs send. On login / signup the
+  // visitor is still anonymous, so PostHog keys it on the device id and merges it into
+  // the person once they identify.
+  const trackClaim = () => analytics.upgradeCtaClicked(source, siteId, currentPlan);
   let i = 0;
   return (
     <div className={styles.bar} role="region" aria-label="Black Friday sale">
@@ -55,11 +71,11 @@ export default function BlackFridayBar({
         </p>
         {external ? (
           // Marketing site opens in a new tab so the login / signup form stays put.
-          <a href={claimHref} className={styles.cta} target="_blank" rel="noopener noreferrer">
+          <a href={claimHref} className={styles.cta} target="_blank" rel="noopener noreferrer" onClick={trackClaim}>
             {claimLabel}
           </a>
         ) : (
-          <Link href={claimHref} className={styles.cta}>
+          <Link href={claimHref} className={styles.cta} onClick={trackClaim}>
             {claimLabel}
           </Link>
         )}
