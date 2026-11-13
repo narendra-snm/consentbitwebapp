@@ -1,0 +1,257 @@
+/* Black Friday pricing pieces — ported from the Claude Design file
+   "Pricing Black Friday.html" (Black Friday pricing animation project): the offer pill
+   with countdown, the dark-knob billing toggle, the trial pill, and the plan price block
+   (struck old price, counting new price, "% OFF" stamp). DM Sans stands in for Aeonik.
+   Remove with the offer. */
+
+/* ── Offer pill + countdown ─────────────────────────────────────────────── */
+.promo {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 8px 8px 22px;
+  border-radius: 50px;
+  background: #0a091f;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  font-family: var(--font-dm-sans), sans-serif;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: rise 0.6s 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.promo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(120, 184, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: shine 3.2s 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.promoT {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.promoT strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: #78b8ff;
+  white-space: nowrap;
+}
+.cd {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 50px;
+  background: #fff;
+  color: #0a091f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cd small {
+  font-size: inherit;
+  font-weight: 500;
+  color: #4b5563;
+  margin-right: 4px;
+}
+@keyframes shine {
+  0% { transform: translateX(-100%); }
+  45%, 100% { transform: translateX(100%); }
+}
+@keyframes rise {
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 640px) {
+  .promo { flex-wrap: wrap; justify-content: center; border-radius: 24px; padding: 12px; }
+  .promoT, .promoT strong { font-size: 18px; }
+}
+
+/* ── Billing toggle ─────────────────────────────────────────────────────── */
+.tog {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: 50px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #007aff;
+  font-family: var(--font-dm-sans), sans-serif;
+}
+.tog button {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: none;
+  padding: 18px 22px;
+  border-radius: 50px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #0a091f;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.18s;
+}
+.tog button.on { color: #fff; }
+.knob {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+  border-radius: 50px;
+  background: #0a091f;
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.knobY { transform: translateX(100%); }
+
+/* ── Trial pill ─────────────────────────────────────────────────────────── */
+.trial {
+  padding: 9px 16px;
+  border-radius: 38px;
+  background: linear-gradient(244.97deg, #edeefc 6.11%, #78b8ff 116.62%);
+  color: #101828;
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── Plan header pieces ─────────────────────────────────────────────────── */
+.pn {
+  margin: 0 0 22px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: #007aff;
+}
+.rtag {
+  background: #2ec04f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 9px;
+  border-radius: 50px;
+}
+.run { position: relative; }
+.oldrow {
+  display: flex;
+  align-items: center;
+}
+.old {
+  position: relative;
+  display: inline-block;
+  height: 18px;
+  margin-bottom: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  color: #939393;
+}
+.old::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  height: 2px;
+  width: 0;
+  background: #e5484d;
+  transform: rotate(-8deg);
+  transform-origin: left;
+}
+.nos::after { display: none; }
+.run .old::after {
+  animation: strike 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: var(--d);
+}
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 30px;
+  margin-bottom: 24px;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: #0a091f;
+}
+.price small {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  color: #4b5563;
+}
+.n {
+  font-variant-numeric: tabular-nums;
+  transition: color 0.4s;
+}
+.hit { color: #e5484d; }
+.stamp {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: #0a091f;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(2.2) rotate(-30deg);
+}
+.stamp::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+}
+.stamp span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: #78b8ff;
+}
+.run .stamp {
+  animation: stamp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--d) + 0.9s);
+}
+@keyframes strike {
+  to { width: calc(100% + 6px); }
+}
+@keyframes stamp {
+  60% { opacity: 1; transform: scale(0.92) rotate(-12deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-12deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .promo { animation: none; opacity: 1; transform: none; }
+  .promo::after { display: none; }
+  .run .old::after { animation: none; width: calc(100% + 6px); }
+  .run .stamp { animation: none; opacity: 1; transform: rotate(-12deg); }
+}

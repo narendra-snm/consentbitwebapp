@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { createCheckoutSession, parseApiResponse } from '@/lib/client-api';
 import { analytics } from '@/lib/analytics';
 import { BLACK_FRIDAY_CODE_PLANS, couponPlanMismatch, friendlyCouponError } from '@/lib/blackFridayCoupons';
+// Black Friday pricing design (remove with the offer).
+import { BlackFridayPromoPill, BillingToggle, PlanPrice, TrialPill, bfStyles } from '@/components/pricing/BlackFridayPricing';
+import { isBlackFridayActive } from '@/lib/blackFridayOffer';
 
 /**
  * Black Friday offer, applied automatically from the chosen plan at checkout. The code is shown
@@ -192,63 +195,25 @@ export function PricingTable({
     }
   }
 
+  // Black Friday price display: struck list price + discounted price + stamp, only while
+  // the offer runs and no manual code replaced it.
+  const bfActive = isBlackFridayActive();
+  const bfOff = (plan: 'basic' | 'essential' | 'growth') =>
+    bfActive && !appliedCoupon ? BLACK_FRIDAY_OFFERS[plan].percentOff : 0;
+
   return (
-    <div className="w-full  flex items-center justify-center">
+    <div className="w-full flex flex-col items-center justify-center gap-6">
+      {/* Black Friday offer pill with countdown (design: "Pricing Black Friday"). */}
+      <BlackFridayPromoPill />
       <div className="w-full max-w-[1292px] bg-white rounded-[29px] shadow-lg overflow-hidden">
 
-        {/* Header */}
-        <div className="bg-[#E6F1FD]/50 px-9 py-3.75 flex items-center justify-between">
-     <div
-  className="p-[1px] rounded-[22px] inline-block"
-  style={{
-    background:
-      billingInterval === 'year'
-        ? 'linear-gradient(90deg, #007AFF 0%, #F3F8FE 70%)'
-        : 'linear-gradient(90deg, #F3F8FE 30.59%, #007AFF 100%)',
-  }}
->
-  <div className="flex items-center gap-3 bg-white rounded-[22px] relative px-1 py-1">
-    
-    {/* MONTHLY */}
-    <button
-      type="button"
-      onClick={() => setBillingInterval('month')}
-      className={`
-        relative rounded-[22px] text-sm font-extrabold transition-all duration-200
-        ${
-          billingInterval === 'month'
-            ? 'bg-[#007aff] text-white scale-[1.2] z-10 px-7 py-3'
-            : 'text-[#848199] scale-100 px-6 py-3'
-        }
-      `}
-    >
-      MONTHLY
-    </button>
-
-    {/* YEARLY */}
-    <button
-      type="button"
-      onClick={() => setBillingInterval('year')}
-      className={`
-        relative rounded-[22px] text-sm font-extrabold transition-all duration-200
-        ${
-          billingInterval === 'year'
-            ? 'bg-[#007aff] text-white scale-[1.2] z-10 px-7 py-3'
-            : 'text-[#848199] scale-100 px-6 py-3'
-        }
-      `}
-    >
-      YEARLY (20% OFF)
-    </button>
-
-  </div>
-</div>
-
-          <div className="  font-medium">
-            <span className=" bg-[linear-gradient(259.32deg,_#EDEEFC_5.12%,_#78B8FF_118.29%)]  px-2.75 py-2 rounded-full ">
-            FOR ALL PLANS 14 DAYS TRIAL IS AVAILABLE
-          </span>
-          </div>
+        {/* Header — MONTHLY / YEARLY toggle + trial pill (Black Friday pricing design). */}
+        <div className="bg-[#E8F3FF] py-[14px] pr-[22px] pl-[30px] flex flex-wrap items-center justify-between gap-4">
+          <BillingToggle
+            value={billingInterval === 'year' ? 'yearly' : 'monthly'}
+            onChange={(next) => setBillingInterval(next === 'yearly' ? 'year' : 'month')}
+          />
+          <TrialPill />
         </div>
 
         {/* Black Friday offer — applied automatically at checkout for the chosen plan. The codes are
@@ -363,44 +328,52 @@ export function PricingTable({
 
         {/* Pricing Table */}
         <div className="px-6 pt-5 overflow-auto xl:overflow-hidden">
-          <div className="grid grid-cols-[200px_220px_220px_316px_316px] text-left">
+          <div className="grid grid-cols-[160px_repeat(4,minmax(0,1fr))] min-w-[1100px] text-left">
 
             {/* Header Row */}
             <div></div>
 
             <PlanHeader
               title="Free"
-              price="$0"
+              price={0}
+              index={0}
+              period={billingInterval}
               button={freeLoading ? 'Setting up…' : 'Take this plan'}
               disabled={freeLoading || loadingPlan !== null}
               onClick={handleFreeClick}
             />
             <PlanHeader
               title="Basic"
-              price={`$${prices.basic}`}
+              price={prices.basic}
+              percentOff={bfOff('basic')}
+              index={1}
+              period={billingInterval}
               button={loadingPlan === 'basic' ? 'Redirecting…' : '14 day free trial'}
               primary
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('basic')}
-              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.basic}
             />
             <PlanHeader
               title="Essential"
-              price={`$${prices.essential}`}
+              price={prices.essential}
+              percentOff={bfOff('essential')}
+              index={2}
+              period={billingInterval}
               button={loadingPlan === 'essential' ? 'Redirecting…' : '14 day free trial'}
               highlight
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('essential')}
-              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.essential}
             />
             <PlanHeader
               title="Growth"
-              price={`$${prices.growth}`}
+              price={prices.growth}
+              percentOff={bfOff('growth')}
+              index={3}
+              period={billingInterval}
               button={loadingPlan === 'growth' ? 'Redirecting…' : '14 day free trial'}
               primary
               disabled={!organizationId || (!pendingDomain && !siteId) || loadingPlan !== null || freeLoading}
               onClick={() => goPaid('growth')}
-              offer={appliedCoupon ? null : BLACK_FRIDAY_OFFERS.growth}
             />
 
             {/* Row 1 */}
@@ -453,35 +426,36 @@ export function PricingTable({
 
 type PlanHeaderProps = {
   title: string;
-  price: string;
+  /** Monthly-equivalent list price for the selected period. */
+  price: number;
+  /** Black Friday percent off to display (0 = plain price). */
+  percentOff?: number;
+  /** Column order, for the staggered strike / stamp animation. */
+  index: number;
+  /** Replays the price animation when the billing period changes. */
+  period: 'month' | 'year';
   button: string;
   primary?: boolean;
   highlight?: boolean;
   onClick?: () => void;
   disabled?: boolean;
-  /** Black Friday code auto-applied for this plan; null/undefined hides the badge. */
-  offer?: { code: string; percentOff: number } | null;
 };
 
-function PlanHeader({ title, price, button, primary = false, highlight = false, onClick, disabled = false, offer = null }: PlanHeaderProps) {
+function PlanHeader({ title, price, percentOff = 0, index, period, button, primary = false, highlight = false, onClick, disabled = false }: PlanHeaderProps) {
   return (
     <div
-      className={`py-7.5 px-6 flex flex-col gap-4 ${
+      className={`py-7.5 px-6 flex flex-col ${
         highlight ? "bg-[#f0fff1] border border-b-0 border-[#A4BFA64D] rounded-t-[20px] relative" : ""
       }`}
     >
       {highlight && (
-        <div className="absolute -top-3 left-4 bg-[#4cbb66] text-white text-[17px] px-3.25 py-0.5 rounded-full">
-          Recommended
-        </div>
+        <div className={`absolute -top-3 left-4 ${bfStyles.rtag}`}>Recommended</div>
       )}
 
-      <h3 className="text-[#007aff] text-[28px] font-extrabold mb-0.5">{title}</h3>
+      <h3 className={bfStyles.pn}>{title}</h3>
 
-      <div className="flex items-baseline gap-1 mb-2.75">
-        <span className="text-[#231d4f] text-4xl font-extrabold">{price}</span>
-        <span className="text-gray-500 text-[base]">/month</span>
-      </div>
+      {/* Black Friday: list price struck through, discounted price counts in, "% OFF" stamp. */}
+      <PlanPrice base={price} percentOff={percentOff} index={index} animKey={period} />
 
       <button
         onClick={onClick}
@@ -496,12 +470,6 @@ function PlanHeader({ title, price, button, primary = false, highlight = false, 
       >
         {button}
       </button>
-
-      {offer && (
-        <p className="text-[13px] font-semibold text-[#15803d]">
-          {offer.percentOff}% off · code <span className="font-mono">{offer.code}</span>
-        </p>
-      )}
     </div>
   );
 }

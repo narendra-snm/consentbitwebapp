@@ -7,6 +7,7 @@ import { DashboardSessionProvider } from "./DashboardSessionProvider";
 import PostSetupOverlay from "./components/PostSetupOverlay";
 import SetPasswordPrompt from "./components/SetPasswordPrompt";
 import DashboardPromoPopup from "./components/DashboardPromoPopup";
+import DashboardBlackFridayBar from "./components/DashboardBlackFridayBar";
 import Footer from "@/components/auth/Footer";
 import Header from "./components/header";
 import DashboardTabs from "./components/DashboardTabs";
@@ -28,6 +29,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <DashboardSessionProvider>
       <div className="min-h-screen flex flex-col">
+        {/* Black Friday banner → the site's upgrade page. Remove with the offer. */}
+        <DashboardBlackFridayBar />
         {/* <Header />
         <div className="max-w-[1148px] mx-auto pb-4.25 w-full">
           <DashboardTabs />

@@ -15,6 +15,9 @@ import { analytics } from "@/lib/analytics";
 import LoadingScreen from "@/components/animations/LoadingScreen";
 import PaymentDone from "@/components/animations//PaymentDone";
 import { safeInvoiceUrl } from "@/lib/safe-redirect";
+// Black Friday pricing design (remove with the offer).
+import { BlackFridayPromoPill, BillingToggle, PlanPrice, TrialPill, bfStyles } from "@/components/pricing/BlackFridayPricing";
+import { isBlackFridayActive } from "@/lib/blackFridayOffer";
 /* NEW WORKFLOW (prorated in-place tier change) — Stripe Elements card entry, kept for later.
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -455,6 +458,10 @@ export default function PricingTable() {
   const appliedCoupon: AppliedCoupon | null =
     selected && selected !== "free" ? (manualCoupon ?? defaultCoupon) : null;
   const isDefaultOffer = !manualCoupon;
+  // Black Friday price display: struck list price + discounted price + stamp, only while
+  // the offer runs and no manual code replaced it. Column order for the stagger.
+  const bfActive = isBlackFridayActive();
+  const BF_PLAN_INDEX = { free: 0, basic: 1, essential: 2, growth: 3 } as const;
   // A manual Black Friday code only covers certain plans. If the customer picks a plan
   // it does not cover, drop it (back to that plan's automatic offer) and say why.
   useEffect(() => {
@@ -791,42 +798,34 @@ export default function PricingTable() {
     recommended?: boolean;
   }) => (
     <div
-      className={`p-6 pt-8 ${name === "Growth" ? "pl-[50px]" : ""} ${
+      className={`p-6 pt-8 ${
         recommended
           ? "bg-[#f0fff1] border border-[rgba(164,191,166,0.3)] rounded-t-[20px] relative"
           : ""
       }`}
     >
       {recommended && (
-        <div className="absolute -top-3 left-4 bg-[#4cbb66] text-white text-[13px] px-3 py-1 rounded-full">
-          Recommended
-        </div>
+        <div className={`absolute -top-3 left-4 ${bfStyles.rtag}`}>Recommended</div>
       )}
 
-      <div className="text-[28px] font-extrabold text-[#007aff] tracking-[-1.5px]">
-        {name}
-      </div>
+      <h3 className={bfStyles.pn}>{name}</h3>
 
-      {plan && (
-        <>
-          <div className={`text-[#007aff] text-sm mt-1 ${plan === "free" ? "invisible" : "visible"}`}>
-            14 days trial period
-          </div>
-
-          <div className="flex items-baseline gap-1 mt-4">
-            <span className="text-[36px] font-extrabold text-[#231d4f]">
-              ${getPrice(plan)}
-            </span>
-            <span className="text-[15px] text-[#848199]">/month</span>
-          </div>
-
-          {billing === "yearly" && (
-            <div className="text-xs text-[#848199] mt-1">
-              {getYearlyText(plan)}
-            </div>
-          )}
-        </>
-      )}
+      {plan && (() => {
+        // Black Friday: list price struck through, discounted price counts in, "% OFF" stamp.
+        const percentOff = bfActive && isDefaultOffer && plan !== "free" ? BLACK_FRIDAY_OFFERS[plan].percentOff : 0;
+        return (
+          <>
+            <PlanPrice base={getPrice(plan)} percentOff={percentOff} index={BF_PLAN_INDEX[plan]} animKey={billing} />
+            {/* The yearly total is the undiscounted list total, so it only shows when no
+                discount is displayed (it would contradict the struck price otherwise). */}
+            {billing === "yearly" && percentOff === 0 && (
+              <div className="text-xs text-[#848199] -mt-4 mb-2">
+                {getYearlyText(plan)}
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 
@@ -1290,41 +1289,24 @@ function redirectToDashboard() {
           </div>
         )}
 
-        {/* HEADER */}
-        <div className="flex gap-8 items-center  px-9 py-3.5 pt-7 mt-2 ">
+        {/* HEADER — Black Friday pricing design: title, offer pill with countdown, then the
+            box header with the MONTHLY / YEARLY toggle and the trial pill. */}
+        <div className="px-9 pt-7 mt-2 flex flex-col gap-5">
           <div className="text-xl font-semibold ">
             Chose your Payment Plan
           </div>
-          <div className="flex bg-[#f1f5f9] rounded-[22px] p-1 gap-2.25">
-            <button
-              onClick={() => setBilling("monthly")}
-              className={`px-5.75 py-2 text-[14px] h-[44px] font-extrabold rounded-[22px] ${
-                billing === "monthly"
-                  ? "bg-[#007aff] text-white"
-                  : "text-[#848199]"
-              }`}
-            >
-              MONTHLY
-            </button>
-
-            <button
-              onClick={() => setBilling("yearly")}
-              className={`px-2 py-2 text-[14px]  h-[44px] font-extrabold rounded-[22px] ${
-                billing === "yearly"
-                  ? "bg-[#007aff] text-white"
-                  : "text-[#848199]"
-              }`}
-            >
-              YEARLY (20% OFF)
-            </button>
+          <div className="flex justify-center">
+            <BlackFridayPromoPill />
           </div>
-
-          
+        </div>
+        <div className="mx-6 mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[24px] bg-[#E8F3FF] py-[14px] pr-[22px] pl-[30px]">
+          <BillingToggle value={billing} onChange={setBilling} />
+          <TrialPill />
         </div>
 
         {/* PLANS GRID */}
         <div className="overflow-x-auto pb-2">
-        <div className="grid grid-cols-[200px_200px_220px_316px_1fr] mt-5 px-6 min-w-[1292px]">
+        <div className="grid grid-cols-[160px_repeat(4,minmax(0,1fr))] mt-5 px-6 min-w-[1244px]">
 
           <div></div>
 
@@ -1412,7 +1394,7 @@ function redirectToDashboard() {
             )}
           </div>
 
-          <div className="p-4 pl-[50px] border-t border-[#000000]/10">
+          <div className="p-4 border-t border-[#000000]/10">
             {currentTier === "growth" ? (
               !canResume && currentInterval && currentInterval !== billing ? (
                 <SwitchIntervalButton target={billing} />
@@ -1614,11 +1596,6 @@ function Feature({
             i === 2
               ? "bg-[#F0FFF1] border-l border-r border-[#A4BFA64D] px-8"
               : "text-[#5243c2] "
-          }
-          ${
-            i === 3
-              ? "pl-[50px] pr-0"
-              : ""
           }
           
           `}
