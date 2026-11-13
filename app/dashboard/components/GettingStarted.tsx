@@ -28,7 +28,7 @@ export default function GettingStarted({ activeSiteId, isLegacy = false }: { act
             rel="noreferrer"
             className="bg-[#007AFF] text-white text-sm px-4 py-1.5 rounded-md whitespace-nowrap"
           >
-            help Doc
+            Help Doc
           </a>
 
           <a
