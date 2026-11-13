@@ -171,7 +171,8 @@ export function PlanPrice({
       </div>
       <div className={styles.price}>
         <span className={`${styles.n} ${hit ? styles.hit : ""}`}>{fmtPrice(shown)}</span>
-        <small>/month</small>
+        {/* "/m", not "/month": the stamp sits over the long suffix in the dashboard's narrower columns. */}
+        <small>/m</small>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import { OFFER_ENDS_AT } from "@/lib/blackFridayOffer";
 import { analytics } from "@/lib/analytics";
 
 /**
@@ -25,8 +26,9 @@ import { analytics } from "@/lib/analytics";
  * Remove with the offer (see lib/blackFridayCoupons.ts).
  */
 
-/** Stripe promo codes expire at this instant; the popup hides itself from then on. */
-const OFFER_ENDS_AT = Date.UTC(2026, 10, 17, 18, 30, 0);
+/** Shared offer end (2026-11-30 18:29 UTC, matches the worker); the popup hides itself from then on. */
+/** Shown in the navy panel overlaid on the artwork ("Until 30th November"). */
+const OFFER_UNTIL_LABEL = "30th November";
 
 /** Bump the version to re-show the popup to everyone. Logout clears keys with this prefix (DashboardSessionProvider). */
 const PROMO_POPUP_SEEN_PREFIX = "cb_dashboard_promo_popup_v1:";
@@ -129,7 +131,7 @@ export default function DashboardPromoPopup() {
       <style>{`
         .cbbf-ov{position:fixed;inset:0;z-index:9998;background:rgba(2,6,23,.55);display:grid;place-items:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.4,0,.2,1)}
         .cbbf-ov.on{opacity:1;pointer-events:auto}
-        .cbbf-pop{position:relative;width:min(720px,100%);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5);transform:translateY(24px) scale(.94);opacity:0;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+        .cbbf-pop{container-type:inline-size;position:relative;width:min(720px,100%);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5);transform:translateY(24px) scale(.94);opacity:0;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
         .cbbf-ov.on .cbbf-pop{transform:none;opacity:1}
         .cbbf-pop img{display:block;width:100%;height:auto;user-select:none}
         .cbbf-pop:after{content:"";position:absolute;top:0;bottom:0;width:30%;left:-40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.12),transparent);animation:cbbf-sw 4s 1s cubic-bezier(.4,0,.2,1) infinite;pointer-events:none}
@@ -142,6 +144,13 @@ export default function DashboardPromoPopup() {
         .cbbf-code{left:56%;top:42.5%;width:39%;height:31%;border-radius:20px}
         .cbbf-toast{position:absolute;left:75.5%;top:78%;transform:translate(-50%,6px);background:#fff;color:#0B0B1A;font:600 13px/1 var(--font-dm-sans),"DM Sans",sans-serif;padding:8px 12px;border-radius:50px;opacity:0;transition:all .18s cubic-bezier(.4,0,.2,1);z-index:3;pointer-events:none;white-space:nowrap}
         .cbbf-toast.on{opacity:1;transform:translate(-50%,0)}
+        /* Navy panel over the artwork's "Black Friday 2026" text: BLACK FRIDAY 2026 left,
+           clock + "Until 30th November" right (user's reference, 2026-11-14). Sized in
+           cqw so it tracks the artwork at every popup width. */
+        .cbbf-panel{position:absolute;left:37.3%;top:20.8%;width:58.2%;height:16.6%;border-radius:1.5cqw;background:linear-gradient(90deg,#0e1f48 0%,#0b1836 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);display:flex;align-items:center;padding:0 5cqw 0 3cqw;z-index:2;pointer-events:none;font-family:var(--font-dm-sans),"DM Sans",sans-serif;color:#fff}
+        .cbbf-panel-bf{font-size:1.7cqw;line-height:1.45;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:#E5E7EB}
+        .cbbf-panel-until{margin-left:auto;display:flex;align-items:center;gap:.9cqw;font-size:2.35cqw;font-weight:600;line-height:1;white-space:nowrap}
+        .cbbf-panel-until svg{width:2.3cqw;height:2.3cqw;flex:none}
         .cbbf-reopen{position:fixed;right:24px;bottom:24px;z-index:9997;background:#0B0B1A;color:#fff;border:0;border-radius:50px;padding:12px 18px;font:600 14px var(--font-dm-sans),"DM Sans",sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25)}
         .cbbf-reopen:hover{background:#1a1a2e}
         @media (prefers-reduced-motion:reduce){.cbbf-pop:after{animation:none}.cbbf-ov,.cbbf-pop,.cbbf-toast{transition:none}}
@@ -169,6 +178,25 @@ export default function DashboardPromoPopup() {
             <button type="button" className="cbbf-x" aria-label="Close" onClick={closePopup}>
               ×
             </button>
+            <div className="cbbf-panel" aria-hidden="true">
+              <div className="cbbf-panel-bf">
+                Black
+                <br />
+                Friday
+                <br />
+                2026
+              </div>
+              <div className="cbbf-panel-until">
+                {/* Stopwatch */}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="13" r="8" />
+                  <path d="M12 9v4l2.5 2.5" />
+                  <path d="M9 2h6" />
+                  <path d="M12 2v3" />
+                </svg>
+                Until {OFFER_UNTIL_LABEL}
+              </div>
+            </div>
             <button
               type="button"
               className="cbbf-hit cbbf-code"
