@@ -571,8 +571,10 @@ export default function PricingTable() {
 
   const calculateTotal = () => {
     if (!selected) return 0;
-    const mp = prices[selected];
-    let total = billing === "yearly" ? mp * 12 * 0.8 : mp;
+    // Start from the SAME per-month figure the plan table shows (getPrice: list price, or the
+    // rounded yearly equivalent), times 12 for yearly, then apply the coupon — so the Total box
+    // can never disagree with the discounted price in the table (e.g. $7.20, not $7).
+    let total = getPrice(selected) * (billing === "yearly" ? 12 : 1);
 
     if (appliedCoupon) {
       if (appliedCoupon.percentOff != null) {
@@ -582,8 +584,12 @@ export default function PricingTable() {
       }
     }
 
-    return Math.round(total);
+    // Keep cents; whole dollars still print without a decimal part (fmtMoney).
+    return Math.round(total * 100) / 100;
   };
+
+  /** "$7.20" / "$16" style — whole dollars without ".00", otherwise two decimals. */
+  const fmtMoney = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
 
   /**
    * Fallback for when the automatic offer does not come through (or the customer has a
@@ -652,8 +658,9 @@ export default function PricingTable() {
   };
 
   const total = calculateTotal();
+  // Same base as calculateTotal, before the coupon — the struck-through figure.
   const listTotal = selected && selected !== "free"
-    ? Math.round(billing === "yearly" ? prices[selected] * 12 * 0.8 : prices[selected])
+    ? getPrice(selected) * (billing === "yearly" ? 12 : 1)
     : 0;
 
   /* NEW WORKFLOW (prorated in-place tier change) — Total-box "due now" derivation, kept for later.
@@ -1430,8 +1437,8 @@ function redirectToDashboard() {
                   Coupon code <span className="font-mono font-semibold">{appliedCoupon.code}</span>
                 </div>
                 <div className="relative z-10 mt-2 text-sm text-[#374151]">
-                  <span className="line-through text-[#9ca3af] mr-2">${listTotal}</span>
-                  <span className="font-semibold">${total}</span>
+                  <span className="line-through text-[#9ca3af] mr-2">${fmtMoney(listTotal)}</span>
+                  <span className="font-semibold">${fmtMoney(total)}</span>
                   {" "}{billing === "yearly" ? "billed yearly" : "billed monthly"} for your first 3 months
                 </div>
               </>
@@ -1439,7 +1446,7 @@ function redirectToDashboard() {
 
             {appliedCoupon && !isDefaultOffer && (
               <div className="relative z-10 mt-3 text-[17px] font-medium text-[#15803d]">
-                {appliedCoupon.code} applied. You pay ${total}
+                {appliedCoupon.code} applied. You pay ${fmtMoney(total)}
                 {(() => {
                   const scope = BLACK_FRIDAY_CODE_PLANS[appliedCoupon.code.toUpperCase()];
                   if (!scope) return null;
@@ -1540,7 +1547,7 @@ function redirectToDashboard() {
                 <div className="text-gray-500">Total</div>
 
                 <div className="text-[40px] text-[#007aff] font-semibold tracking-[-2px]">
-                  ${total}
+                  ${fmtMoney(total)}
                 </div>
 
                 <div>

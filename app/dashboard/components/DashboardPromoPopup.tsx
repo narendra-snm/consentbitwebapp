@@ -22,7 +22,8 @@ import { analytics } from "@/lib/analytics";
  * first deploy shipped "dashboard popup.jpg" and the live popup rendered only the alt
  * text). If the image still fails to load, the popup hides itself. Seen-state is kept in
  * sessionStorage per account and cleared by the logout handler in
- * DashboardSessionProvider, so the next login in the same tab shows it again.
+ * DashboardSessionProvider, so the next login in the same tab shows it again — capped at
+ * 3 auto-opens per rolling 24h per account (localStorage, see takeAutoOpenSlot).
  * Remove with the offer (see lib/blackFridayCoupons.ts).
  */
 
@@ -41,6 +42,46 @@ const TOAST_MS = 1400;
 
 function seenKey(email: string) {
   return `${PROMO_POPUP_SEEN_PREFIX}${email}`;
+}
+
+/**
+ * Auto-open cap: at most AUTO_OPENS_PER_WINDOW logins per rolling 24h window, counted
+ * from the first auto-open in that window. After that the popup stays closed (the
+ * "Black Friday offer" pill still reopens it) until the window has elapsed, then the
+ * count starts over. Kept in localStorage per account so it survives logout, which only
+ * clears the per-login sessionStorage keys above.
+ */
+const AUTO_OPENS_PER_WINDOW = 3;
+const AUTO_OPEN_WINDOW_MS = 24 * 60 * 60 * 1000;
+const AUTO_OPEN_COUNT_PREFIX = "cb_dashboard_promo_popup_opens_v1:";
+
+function countKey(email: string) {
+  return `${AUTO_OPEN_COUNT_PREFIX}${email}`;
+}
+
+/** Returns true (and records the open) when this login may auto-open the popup. */
+function takeAutoOpenSlot(email: string, now: number): boolean {
+  try {
+    const rawValue = localStorage.getItem(countKey(email));
+    let state: { windowStart: number; count: number } | null = null;
+    if (rawValue) {
+      const parsed = JSON.parse(rawValue) as { windowStart?: unknown; count?: unknown };
+      if (typeof parsed.windowStart === "number" && typeof parsed.count === "number") {
+        state = { windowStart: parsed.windowStart, count: parsed.count };
+      }
+    }
+    // No record, or the 24h window has passed (also covers a clock set backwards): start over.
+    if (!state || now - state.windowStart >= AUTO_OPEN_WINDOW_MS || now < state.windowStart) {
+      state = { windowStart: now, count: 0 };
+    }
+    if (state.count >= AUTO_OPENS_PER_WINDOW) return false;
+    state.count += 1;
+    localStorage.setItem(countKey(email), JSON.stringify(state));
+    return true;
+  } catch {
+    // localStorage unavailable — fall back to once per login.
+    return true;
+  }
 }
 
 /** Post-checkout / post-setup lands with these and PostSetupOverlay owns the screen. */
@@ -88,6 +129,8 @@ export default function DashboardPromoPopup() {
     } catch {
       // sessionStorage unavailable — show it anyway; worst case it repeats.
     }
+    // Then the daily cap: 3 auto-opens per rolling 24h per account (user request, 2026-11-14).
+    if (!takeAutoOpenSlot(email, Date.now())) return;
     const t = setTimeout(openPopup, OPEN_DELAY_MS);
     return () => clearTimeout(t);
   }, [authenticated, email, openPopup]);
