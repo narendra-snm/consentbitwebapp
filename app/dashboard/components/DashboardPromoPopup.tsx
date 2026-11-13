@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDashboardSession } from "../DashboardSessionProvider";
+import { analytics } from "@/lib/analytics";
 
 /**
  * Black Friday promo popup — shown once per login on the dashboard.
@@ -14,8 +15,11 @@ import { useDashboardSession } from "../DashboardSessionProvider";
  * "Claim your offer" goes to the active site's upgrade page. After closing, a small
  * "Black Friday offer" pill in the bottom-right corner reopens it.
  *
- * Artwork: /asset/dashboard popup.jpg (1280×905, same as the design's bf-popup.png — the
- * hit-area percentages below are relative to that frame). Seen-state is kept in
+ * Artwork: /asset/dashboard-popup.jpg (1280×905, same as the design's bf-popup.png — the
+ * hit-area percentages below are relative to that frame). The filename must stay free of
+ * spaces: the Cloudflare Pages build 404s every public/ file whose name contains one (the
+ * first deploy shipped "dashboard popup.jpg" and the live popup rendered only the alt
+ * text). If the image still fails to load, the popup hides itself. Seen-state is kept in
  * sessionStorage per account and cleared by the logout handler in
  * DashboardSessionProvider, so the next login in the same tab shows it again.
  * Remove with the offer (see lib/blackFridayCoupons.ts).
@@ -27,7 +31,7 @@ const OFFER_ENDS_AT = Date.UTC(2026, 10, 17, 18, 30, 0);
 /** Bump the version to re-show the popup to everyone. Logout clears keys with this prefix (DashboardSessionProvider). */
 const PROMO_POPUP_SEEN_PREFIX = "cb_dashboard_promo_popup_v1:";
 
-const IMAGE_SRC = "/asset/dashboard%20popup.jpg";
+const IMAGE_SRC = "/asset/dashboard-popup.jpg";
 const PROMO_CODE = "BF30OFF";
 /** Design opens the popup 600ms after the page settles. */
 const OPEN_DELAY_MS = 600;
@@ -46,7 +50,7 @@ function inPostSetupFlow(): boolean {
 
 export default function DashboardPromoPopup() {
   const router = useRouter();
-  const { authenticated, user, activeSiteId } = useDashboardSession();
+  const { authenticated, user, activeSiteId, effectivePlanId } = useDashboardSession();
   /** Eligible = logged in, offer still running, not in the post-setup flow. */
   const [eligible, setEligible] = useState(false);
   /** Mounted keeps the overlay in the DOM while `on` drives the CSS transitions. */
@@ -98,9 +102,12 @@ export default function DashboardPromoPopup() {
   }, []);
 
   const claim = useCallback(() => {
+    // Same upgrade_cta_clicked event the header / profile upgrade buttons send, so the
+    // popup sits in the existing PostHog upgrade funnel; `source` tells it apart.
+    analytics.upgradeCtaClicked("black_friday_popup", activeSiteId || undefined, effectivePlanId || "free");
     closePopup();
     router.push(activeSiteId ? `/dashboard/${activeSiteId}/upgrade` : "/dashboard");
-  }, [router, activeSiteId, closePopup]);
+  }, [router, activeSiteId, effectivePlanId, closePopup]);
 
   useEffect(() => {
     if (!on) return;
@@ -154,6 +161,10 @@ export default function DashboardPromoPopup() {
               src={IMAGE_SRC}
               alt="Up to 30% off – Black Friday 2026. Your code BF30OFF. Claim your offer"
               draggable={false}
+              // The hit areas and toast only make sense over the artwork. If the image
+              // can't load, drop the whole popup (and the reopen pill) rather than show
+              // a bare alt-text strip over the dashboard.
+              onError={() => setEligible(false)}
             />
             <button type="button" className="cbbf-x" aria-label="Close" onClick={closePopup}>
               ×
