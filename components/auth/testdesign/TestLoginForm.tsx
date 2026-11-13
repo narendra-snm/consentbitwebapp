@@ -334,9 +334,9 @@ export default function TestLoginForm() {
               <AuthError message={error} />
             </div>
           )}
-          {/* Submit button and the method-switch link share one row from `sm` up;
+          {/* Submit button left, method-switch link flush with the right edge of the fields from `sm` up;
               on phones the button is full-width, so the link drops underneath, centred. */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <AuthSubmitButton disabled={loading}>
               {method === "password"
                 ? loading
@@ -354,7 +354,7 @@ export default function TestLoginForm() {
             {/* Method switch. Hidden once a code is in flight — jumping away mid-OTP
                 would silently discard the code the user is already holding. */}
             {(method === "password" || step === 1) && (
-              <div className="text-center sm:text-left">
+              <div className="text-center sm:text-right sm:pr-3">
                 <AuthTextButton
                   onClick={() =>
                     switchMethod(method === "password" ? "otp" : "password")
