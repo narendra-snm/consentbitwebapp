@@ -151,8 +151,8 @@ export default function DashboardPromoPopup() {
         .cbbf-panel-bf{font-size:1.7cqw;line-height:1.45;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:#E5E7EB}
         .cbbf-panel-until{margin-left:auto;display:flex;align-items:center;gap:.9cqw;font-size:2.35cqw;font-weight:600;line-height:1;white-space:nowrap}
         .cbbf-panel-until svg{width:2.3cqw;height:2.3cqw;flex:none}
-        .cbbf-reopen{position:fixed;right:24px;bottom:24px;z-index:9997;background:#0B0B1A;color:#fff;border:0;border-radius:50px;padding:12px 18px;font:600 14px var(--font-dm-sans),"DM Sans",sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-        .cbbf-reopen:hover{background:#1a1a2e}
+        .cbbf-reopen{position:fixed;right:24px;bottom:24px;z-index:9997;background:#007AFF;color:#fff;border:0;border-radius:50px;padding:12px 18px;font:600 14px var(--font-dm-sans),"DM Sans",sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,122,255,.3)}
+        .cbbf-reopen:hover{background:#0066D6}
         @media (prefers-reduced-motion:reduce){.cbbf-pop:after{animation:none}.cbbf-ov,.cbbf-pop,.cbbf-toast{transition:none}}
       `}</style>
 
