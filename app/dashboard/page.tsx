@@ -350,33 +350,38 @@ export default function DashboardPage() {
     );
   }
 
-  // Show skeleton until hydrated (prevents server/client mismatch) or while session loads
+  // Skeleton until hydrated (prevents server/client mismatch) or while the session loads.
+  // Every login starts cold — neither password login nor code verify seeds the session
+  // any more — so dashboard-init takes a few seconds and this is what the user sees
+  // meanwhile. Mirrors the authenticated layout below (Header + tabs + two cards + a
+  // strip) so the real content lands in place instead of jumping in from a blank page.
+  // Header and DashboardTabs render their own placeholders while `loading` is true.
   if (!hydrated || loading) {
-    // return (
-    //   <>
-    //     <Header />
-    //     <div className="max-w-[1148px] mx-auto pb-4">
-    //       <DashboardTabs />
-    //       {/* Skeleton cards */}
-    //       <div className="grid grid-cols-2 gap-6 mt-4 animate-pulse">
-    //         <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
-    //           <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
-    //           <div className="h-20 bg-gray-100 rounded-lg mb-3" />
-    //           <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-    //           <div className="h-4 bg-gray-200 rounded w-1/4" />
-    //         </div>
-    //         <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
-    //           <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
-    //           <div className="h-20 bg-gray-100 rounded-lg mb-3" />
-    //           <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-    //           <div className="h-4 bg-gray-200 rounded w-1/4" />
-    //         </div>
-    //       </div>
-    //       <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
-    //     </div>
-    //   </>
-    // );
- return null
+    return (
+      <>
+        <Header />
+        <div className="max-w-[1148px] mx-auto pb-4.25 w-full">
+          <DashboardTabs />
+        </div>
+        <div className="max-w-[1148px] mx-auto pb-4 px-4" aria-busy="true" aria-label="Loading dashboard">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 animate-pulse">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 h-[260px]">
+              <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
+              <div className="h-20 bg-gray-100 rounded-lg mb-3" />
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+            </div>
+          </div>
+          <div className="bg-gray-100 rounded-xl mt-5 h-[120px] animate-pulse" />
+        </div>
+      </>
+    );
 //     return (
 //       <div className="min-h-screen bg-[#E6F1FD] pb-4">
 //         <div className="flex justify-between items-center px-8 pt-7.5 pb-5.25 border-b border-[#000000]/10  rounded-t-xl">
