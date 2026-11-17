@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import localFont from "next/font/local";
 import styles from "./BlackFridayBar.module.css";
-import { isBlackFridayActive } from "@/lib/blackFridayOffer";
+import { isBlackFridayActive, OFFER_ENDS_AT } from "@/lib/blackFridayOffer";
 import { analytics } from "@/lib/analytics";
 
 /**
@@ -28,12 +29,56 @@ const anton = localFont({
 
 const WORDS = ["Black", "Friday", "Sale", "Upto", "30% Off"];
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * "Ends in: 12D : 22H : 41M : 57S" — ticks every second until OFFER_ENDS_AT. Renders
+ * nothing until mounted so the server HTML and the first client render match.
+ */
+function Countdown() {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  if (now === null) return null;
+
+  const left = Math.max(0, OFFER_ENDS_AT - now);
+  const s = Math.floor(left / 1000);
+  const units = [
+    { v: Math.floor(s / 86400), u: "D", label: "days" },
+    { v: Math.floor((s % 86400) / 3600), u: "H", label: "hours" },
+    { v: Math.floor((s % 3600) / 60), u: "M", label: "minutes" },
+    { v: s % 60, u: "S", label: "seconds" },
+  ];
+  return (
+    <div
+      className={styles.countdown}
+      role="timer"
+      aria-label={`Offer ends in ${units.map((x) => `${x.v} ${x.label}`).join(", ")}`}
+    >
+      <span className={styles.countdownLabel} aria-hidden="true">Ends in:</span>
+      {units.map((x, idx) => (
+        <span key={x.u} className={styles.countdownGroup} aria-hidden="true">
+          {idx > 0 && <span className={styles.countdownSep}>:</span>}
+          <span className={styles.countdownBox}>
+            {x.u === "D" ? x.v : pad(x.v)}
+            {x.u}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function BlackFridayBar({
   claimHref,
   claimLabel = "Claim Offer →",
   source,
   siteId,
   currentPlan,
+  showCountdown = false,
 }: {
   /** Absolute URL (rendered as a plain link) or an in-app path (rendered with next/link). */
   claimHref: string;
@@ -46,6 +91,8 @@ export default function BlackFridayBar({
   /** Dashboard placement only — the active site and its plan, for the same event. */
   siteId?: string;
   currentPlan?: string;
+  /** Show the "Ends in: 12D : 22H : 41M : 57S" timer after the Claim Offer button. */
+  showCountdown?: boolean;
 }) {
   if (!isBlackFridayActive()) return null;
 
@@ -79,6 +126,7 @@ export default function BlackFridayBar({
             {claimLabel}
           </Link>
         )}
+        {showCountdown && <Countdown />}
       </div>
     </div>
   );

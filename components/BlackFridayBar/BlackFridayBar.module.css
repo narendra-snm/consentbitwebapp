@@ -90,10 +90,51 @@
   outline: 2px solid #0b0b1a;
   outline-offset: 2px;
 }
+/* "Ends in: 12D : 22H : 41M : 57S" — login bar only (showCountdown). */
+.countdown {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  font-family: var(--font-dm-sans), sans-serif;
+  color: #0b0b1a;
+  white-space: nowrap;
+}
+.countdownLabel {
+  font-size: 15px;
+  font-weight: 500;
+  margin-right: 2px;
+}
+.countdownGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.countdownSep {
+  font-size: 15px;
+  font-weight: 600;
+}
+.countdownBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 7px 9px;
+  border: 1px solid rgba(11, 11, 26, 0.22);
+  border-radius: 8px;
+  background: rgba(11, 11, 26, 0.07);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 @media (max-width: 900px) {
   .text { font-size: 20px; }
   .inner { gap: 8px 16px; }
   .cta { font-size: 12px; padding: 8px 14px; }
+  .countdown, .countdownGroup { gap: 5px; }
+  .countdownLabel, .countdownSep { font-size: 12px; }
+  .countdownBox { min-width: 38px; padding: 5px 6px; font-size: 12px; }
 }
 @media (max-width: 480px) {
   .text { font-size: 15px; }
