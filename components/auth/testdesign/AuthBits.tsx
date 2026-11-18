@@ -14,6 +14,7 @@ export function AuthSubmitButton({
   return (
     <button
       type="submit"
+      suppressHydrationWarning
       disabled={disabled}
       className="bg-[#0777e6] border border-[#0777e6] rounded-full h-[57px] px-8 w-full sm:w-auto text-white text-[18px] font-semibold tracking-[-0.36px] leading-[18px] cursor-pointer transition-colors hover:bg-[#0668c9] hover:border-[#0668c9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0777e6] disabled:opacity-60 disabled:cursor-not-allowed"
       style={{ fontFamily: FONT_SANS, fontVariationSettings: OPSZ }}
@@ -79,6 +80,7 @@ export function AuthTextButton({
   return (
     <button
       type="button"
+      suppressHydrationWarning
       onClick={onClick}
       disabled={disabled}
       className="text-[#0777e6] text-[14px] font-medium leading-6 underline underline-offset-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed hover:text-[#0668c9]"

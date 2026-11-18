@@ -80,6 +80,10 @@ export default function AuthField({
           autoFocus={autoFocus}
           aria-invalid={invalid || undefined}
           aria-describedby={hint ? `${id}-hint` : undefined}
+          // Form-filler / password-manager extensions (Edge's fdprocessedid,
+          // Shark's data-sharkid, etc.) stamp attributes on inputs before React
+          // hydrates. Ignore attribute mismatches on this element only.
+          suppressHydrationWarning
           // Extra right padding on password fields so long values don't slide under
           // the reveal button.
           className={`w-full bg-white border rounded-xl h-[52px] pl-5 ${

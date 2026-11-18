@@ -139,7 +139,11 @@ export default function AuthShell({
   banner,
 }: AuthShellProps) {
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-gray-100 flex flex-col">
+    // min-h-screen (no lg:h-screen + overflow-hidden): on a tall window the grid
+    // still fills the viewport via flex-1, but on a short one (especially with
+    // the banner eating ~75px) the page now grows and scrolls instead of the
+    // form/marketing copy overflowing on top of the logo and badges.
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       {banner}
       {/*
         h-screen (not min-h-screen) is what keeps the desktop layout inside one
@@ -156,7 +160,7 @@ export default function AuthShell({
       */}
       {/* lg:flex-1 + min-h-0 (not lg:h-screen): the grid fills the viewport minus
           the banner when there is one, and the whole viewport when there is not. */}
-      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[56fr_44fr] xl:grid-cols-[61fr_39fr] lg:flex-1 lg:min-h-0">
+      <div className="w-full max-w-full bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-[56fr_44fr] xl:grid-cols-[61fr_39fr] lg:flex-1">
         {/* ─── Left panel (white) ─── */}
         <div className="bg-white flex flex-col min-h-0 px-5 py-8 sm:px-8 sm:py-10 md:px-12 lg:px-[72px] lg:py-[clamp(20px,5vh,45px)]">
 
@@ -181,7 +185,7 @@ export default function AuthShell({
           {/* Form area */}
           {/* lg:py-0 — justify-center already centres this block, so the old
               lg:py-10 was 80px of invisible padding. */}
-          <div className="flex flex-col flex-1 min-h-0 justify-center py-6 lg:py-0 w-full max-w-[480px]">
+          <div className="flex flex-col flex-1 justify-center py-6 lg:py-0 w-full max-w-[480px]">
             <h1
               className="text-[#202022] text-[26px] sm:text-[28px] lg:text-[32px] font-bold tracking-[-0.32px] leading-9 lg:leading-10 mb-1.5"
               style={{ fontFamily: FONT_DISPLAY }}
@@ -231,7 +235,7 @@ export default function AuthShell({
             below the last feature, which is the long gap the designer marked
             "reduce the space". Centring splits it above and below instead.
           */}
-          <div className="relative z-10 flex flex-col flex-1 min-h-0 lg:justify-center px-6 pt-12 pb-10 sm:px-10 lg:px-9 xl:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
+          <div className="relative z-10 flex flex-col flex-1 lg:justify-center px-6 pt-12 pb-10 sm:px-10 lg:px-9 xl:px-[56px] lg:pt-[clamp(28px,5.3vh,48px)] lg:pb-0">
             <h2
               className="text-white text-[26px] sm:text-[30px] lg:text-[30px] xl:text-[34px] font-medium tracking-[-0.68px] leading-[36px] sm:leading-[40px] lg:leading-[40px] xl:leading-[44px] mb-8 lg:mb-[clamp(20px,4.2vh,38px)]"
               style={{ fontFamily: FONT_DISPLAY }}
