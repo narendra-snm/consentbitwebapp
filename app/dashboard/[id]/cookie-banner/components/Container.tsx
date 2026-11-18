@@ -6,6 +6,7 @@ import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
 import FontPickerPanel from "./FontPickerPanel";
 import RegionalLanguagesCard, { DEFAULT_REGIONAL_LANGUAGES, type RegionalLanguages } from "./RegionalLanguagesCard";
+import PageLanguagesCard, { DEFAULT_PAGE_LANGUAGES, readPageLanguagesConfig, type PageLanguages } from "./PageLanguagesCard";
 import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
@@ -169,6 +170,9 @@ export default function page({ siteId }: { siteId: string }) {
   /** Regional requirements (General tab): translations.config.regionalLanguages. */
   const [regionalLanguages, setRegionalLanguages] = useState<RegionalLanguages>(DEFAULT_REGIONAL_LANGUAGES);
   const [lastSavedRegionalLanguages, setLastSavedRegionalLanguages] = useState<RegionalLanguages | null>(null);
+  /** Banner languages (General tab): translations.config.pageLanguages. Dirty state rides on regionalDirty. */
+  const [pageLanguages, setPageLanguages] = useState<PageLanguages>(DEFAULT_PAGE_LANGUAGES);
+  const [lastSavedPageLanguages, setLastSavedPageLanguages] = useState<PageLanguages | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -493,6 +497,10 @@ export default function page({ siteId }: { siteId: string }) {
         setRegionalLanguages(rlState);
         setLastSavedRegionalLanguages(rlState);
 
+        const plState = readPageLanguagesConfig(cfgTr.pageLanguages);
+        setPageLanguages(plState);
+        setLastSavedPageLanguages(plState);
+
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
         setLastSavedAppearance(app);
@@ -738,8 +746,9 @@ export default function page({ siteId }: { siteId: string }) {
 
   const regionalDirty = useMemo(() => {
     if (!lastSavedRegionalLanguages) return false;
-    return JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages);
-  }, [regionalLanguages, lastSavedRegionalLanguages]);
+    if (JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages)) return true;
+    return !!lastSavedPageLanguages && JSON.stringify(pageLanguages) !== JSON.stringify(lastSavedPageLanguages);
+  }, [regionalLanguages, lastSavedRegionalLanguages, pageLanguages, lastSavedPageLanguages]);
 
 
   const appearanceDirty = useMemo(() => {
@@ -821,6 +830,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedLangCode(selectedLangCode);
     setLastSavedFloatingButton(floatingButton);
     setLastSavedRegionalLanguages(regionalLanguages);
+    setLastSavedPageLanguages(pageLanguages);
     setLastSavedAppearance(appearance);
     setLastSavedHideBranding(hideBranding);
     setLastPublishedBothFocus(bothContentFocus);
@@ -854,6 +864,8 @@ export default function page({ siteId }: { siteId: string }) {
           googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
             // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
             regionalLanguages,
+            // Banner languages (PageLanguagesCard); the worker applies it + the plan.
+            pageLanguages,
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -912,6 +924,7 @@ export default function page({ siteId }: { siteId: string }) {
     currentRegulationSnapshot,
     floatingButton,
     regionalLanguages,
+    pageLanguages,
     hideBranding,
     iabEnabled,
     googleAcEnabled,
@@ -985,6 +998,8 @@ export default function page({ siteId }: { siteId: string }) {
             googlePrivacyLink: contentSettings.googlePrivacyLink ? "1" : "0",
             // Quebec / Brazil local language (RegionalLanguagesCard); the worker applies it + the plan.
             regionalLanguages,
+            // Banner languages (PageLanguagesCard); the worker applies it + the plan.
+            pageLanguages,
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1284,6 +1299,17 @@ export default function page({ siteId }: { siteId: string }) {
                 onChange={setRegionalLanguages}
                 isPaidPlan={isToggleEnabled}
                 iabActive={iabEnabled}
+                onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
+              />
+            )}
+
+            {/* Banner languages (follows the page's lang). Essential/Growth, hidden under IAB. */}
+            {isToggleEnabled && !iabEnabled && (
+              <PageLanguagesCard
+                value={pageLanguages}
+                onChange={setPageLanguages}
+                publishedLang={selectedLangCode}
+                isPaidPlan={isToggleEnabled}
                 onUpgrade={() => router.push(`/dashboard/${siteId}/upgrade`)}
               />
             )}

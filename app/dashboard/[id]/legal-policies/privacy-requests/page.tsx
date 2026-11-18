@@ -438,6 +438,8 @@ function RequestDetail({
   const [note, setNote] = useState(req.ownerNote || '');
   const [events, setEvents] = useState<RequestEvent[] | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[] | null | undefined>(undefined);
+  // Bumped after a note is added so the timeline re-fetches even when the text repeats.
+  const [noteTick, setNoteTick] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const [apiErr, setApiErr] = useState('');
@@ -463,11 +465,13 @@ function RequestDetail({
         setEvents([]);
         setConsents(null);
       });
-  }, [siteId, req.id, req.status, req.dueAt, req.ownerNote]);
+  }, [siteId, req.id, req.status, req.dueAt, req.ownerNote, noteTick]);
 
+  // Notes are added, not edited: the box starts empty and each saved note becomes its own
+  // timeline entry.
   useEffect(() => {
-    setNote(req.ownerNote || '');
-  }, [req.ownerNote]);
+    setNote('');
+  }, [req.id]);
 
   const run = async (name: string, body: Record<string, string>, toast: string) => {
     setBusy(name);
@@ -498,7 +502,18 @@ function RequestDetail({
     }
   };
 
-  const saveNote = () => run('note', { note: note.trim() }, 'Note saved');
+  const saveNote = async () => {
+    if (!note.trim()) return;
+    const ok = await run('note', { note: note.trim() }, 'Note added');
+    if (ok) {
+      setNote('');
+      setNoteTick((t) => t + 1);
+    }
+  };
+
+  // Notes saved before note text was logged on the event have no detail; show the stored
+  // ownerNote once for those so it doesn't disappear.
+  const notesInTimeline = (events || []).some((e) => e.action === 'note' && e.detail);
 
   const banner = closed ? s.rdDlClosed : late ? s.rdDlLate : soon ? s.rdDlSoon : '';
 
@@ -724,19 +739,29 @@ function RequestDetail({
               </p>
             ) : (
               <ol className={s.rdTl}>
-                {events.map((e, i) => (
-                  <li key={i}>
-                    <i />
-                    <div>
-                      <span className={s.sub}>{fmtShort(e.at)}</span>
-                      <p>
-                        {EVENT_LABEL[e.action] || e.action}
-                        {e.action === 'extended' && e.detail ? ` to ${fmtDate(e.detail)}` : ''}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-                {req.ownerNote && (
+                {events.map((e, i) =>
+                  e.action === 'note' && e.detail ? (
+                    <li key={i} className={s.tlNote}>
+                      <i />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <span className={s.sub}>{fmtShort(e.at)} · Internal note</span>
+                        <p>{e.detail}</p>
+                      </div>
+                    </li>
+                  ) : (
+                    <li key={i}>
+                      <i />
+                      <div>
+                        <span className={s.sub}>{fmtShort(e.at)}</span>
+                        <p>
+                          {EVENT_LABEL[e.action] || e.action}
+                          {e.action === 'extended' && e.detail ? ` to ${fmtDate(e.detail)}` : ''}
+                        </p>
+                      </div>
+                    </li>
+                  )
+                )}
+                {req.ownerNote && !notesInTimeline && (
                   <li className={s.tlNote}>
                     <i />
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -759,10 +784,10 @@ function RequestDetail({
                 <button
                   type="button"
                   className={`${s.btn} ${s.btnO}`}
-                  disabled={!!busy || note.trim() === (req.ownerNote || '').trim()}
+                  disabled={!!busy || !note.trim()}
                   onClick={saveNote}
                 >
-                  {busy === 'note' ? 'Saving…' : req.ownerNote ? 'Update Note' : 'Add Note'}
+                  {busy === 'note' ? 'Saving…' : 'Add Note'}
                 </button>
               </div>
             )}

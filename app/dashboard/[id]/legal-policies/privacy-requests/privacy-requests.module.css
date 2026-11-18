@@ -628,8 +628,10 @@
   width: 16px;
   height: 16px;
   margin-top: 1px;
+  box-sizing: border-box;
   border-radius: 50%;
-  border: 1.5px solid var(--ink600);
+  /* whole-pixel border: a 1.5px border leaves a 13px inside, and the 8px dot snaps off-centre */
+  border: 2px solid var(--ink600);
   flex-shrink: 0;
   display: grid;
   place-items: center;

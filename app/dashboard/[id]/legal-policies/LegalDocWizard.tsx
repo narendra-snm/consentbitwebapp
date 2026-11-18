@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { previewSections, previewSrcDoc, PREVIEW_SANDBOX } from './previewLinks';
 import {
   Ck,
   Crumb,
@@ -251,6 +252,10 @@ export default function LegalDocWizard({ kind }: { kind: Kind }) {
   }, [pub, versions.length]);
 
   const sections = useMemo(() => {
+    // Prefer the real headings from the generated preview; the list below is only an
+    // estimate shown before the preview has loaded.
+    const fromPreview = previewSections(previewHtml);
+    if (fromPreview) return fromPreview;
     if (!answers) return [];
     const a = answers;
     const list =
@@ -269,6 +274,7 @@ export default function LegalDocWizard({ kind }: { kind: Kind }) {
           ]
         : [
             'Who we are and what these terms cover',
+            a.accounts || o.software ? 'Eligibility and your account' : 'Who may use the website',
             'What we offer',
             sells && 'Prices and payment',
             o.products && 'Delivery',
@@ -276,7 +282,7 @@ export default function LegalDocWizard({ kind }: { kind: Kind }) {
             a.userContent && 'Content you post or upload',
             'Acceptable use',
             'Intellectual property',
-            a.thirdPartyLinks && 'Links to other websites',
+            (a.thirdPartyLinks || a.affiliateLinks) && 'Links to other websites',
             'Disclaimers',
             'Limitation of liability',
             'Your responsibility to us',
@@ -287,7 +293,7 @@ export default function LegalDocWizard({ kind }: { kind: Kind }) {
             'Contact',
           ];
     return list.filter((x): x is string => typeof x === 'string');
-  }, [answers, kind, sells, o.products]);
+  }, [answers, kind, sells, o.products, o.software, previewHtml]);
 
   const savedText =
     saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Draft saved just now' : data?.draftSavedAt ? `Draft saved ${fmtDate(data.draftSavedAt)}` : ro ? 'Read-only' : 'Not saved yet';
@@ -381,7 +387,7 @@ export default function LegalDocWizard({ kind }: { kind: Kind }) {
           </div>
           {previewHtml !== null ? (
             /* Empty sandbox: the preview can't run scripts or reach the dashboard. */
-            <iframe title={`${meta.title} preview`} sandbox="" srcDoc={previewHtml} className="w-full h-[560px] bg-white" />
+            <iframe title={`${meta.title} preview`} sandbox={PREVIEW_SANDBOX} srcDoc={previewSrcDoc(previewHtml)} className="w-full h-[560px] bg-white" />
           ) : (
             <p className="px-4 py-8 text-sm text-center text-[#4B5563]">{busy === 'preview' ? 'Building the preview…' : 'Click Refresh preview to see the document.'}</p>
           )}

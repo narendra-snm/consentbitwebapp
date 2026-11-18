@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { previewSections, previewSrcDoc, PREVIEW_SANDBOX } from '../previewLinks';
 import {
   Chip,
   Ck,
@@ -287,6 +288,10 @@ export default function PrivacyPolicyPage() {
   }, [pub, versions.length]);
 
   const sections = useMemo(() => {
+    // Prefer the real headings from the generated preview; the list below is only an
+    // estimate shown before the preview has loaded.
+    const fromPreview = previewSections(previewHtml);
+    if (fromPreview) return fromPreview;
     if (!answers) return [];
     const a = answers;
     const rr = a.regions || {};
@@ -301,6 +306,7 @@ export default function PrivacyPolicyPage() {
       'How long we keep your data',
       'How we protect your data',
       'Your rights and how to use them',
+      (rr.eu || rr.uk) && (rr.eu && rr.uk ? 'Visitors in the EU and UK' : rr.eu ? 'Visitors in the EU / EEA' : 'Visitors in the UK'),
       rr.california && 'Visitors in California',
       rr.us_state && 'Visitors in other US states',
       rr.brazil && 'Visitors in Brazil',
@@ -310,7 +316,7 @@ export default function PrivacyPolicyPage() {
       a.automatedDecisions && 'Automated decisions',
       'Changes and contact',
     ].filter((x): x is string => typeof x === 'string');
-  }, [answers]);
+  }, [answers, previewHtml]);
 
   const savedText =
     saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Draft saved just now' : data?.draftSavedAt ? `Draft saved ${fmtDate(data.draftSavedAt)}` : ro ? 'Read-only' : 'Not saved yet';
@@ -570,7 +576,7 @@ export default function PrivacyPolicyPage() {
               </div>
               {previewHtml !== null ? (
                 /* Empty sandbox: the preview can't run scripts or reach the dashboard. */
-                <iframe title="Privacy policy preview" sandbox="" srcDoc={previewHtml} className="w-full h-[560px] bg-white" />
+                <iframe title="Privacy policy preview" sandbox={PREVIEW_SANDBOX} srcDoc={previewSrcDoc(previewHtml)} className="w-full h-[560px] bg-white" />
               ) : (
                 <p className="px-4 py-8 text-sm text-center text-[#4B5563]">{busy === 'preview' ? 'Building the preview…' : 'Click Refresh preview to see the policy.'}</p>
               )}
