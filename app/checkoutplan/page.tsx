@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -767,6 +767,11 @@ function CheckoutForm({
           <p className="mt-1.5 text-sm text-gray-600">
             Your 14-day free trial has started. No charge until {trialEndLabel()}.
           </p>
+          {platform.toLowerCase() === 'webflow' || platform.toLowerCase() === 'framer' ? (
+          <p className="mt-3 text-sm font-medium text-gray-900">
+            Return to ConsentBit to continue.
+          </p>
+          ) : (
           <div className="mt-5 flex flex-col gap-2">
             <button
               type="button"
@@ -783,6 +788,7 @@ function CheckoutForm({
               Stay on this page
             </button>
           </div>
+          )}
         </div>
       </div>
     )}

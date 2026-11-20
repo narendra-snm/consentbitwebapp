@@ -56,6 +56,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* ConsentBit banner — TEST runtime (/cdn-test/) for cross-domain consent testing,
+            site accounts.consentbit.com (dafe59ee-…). PostHog is never blocked for this site
+            (consent-manager data/neverBlockBySite.js). Remove this tag to take the banner off. */}
+        <Script
+          id="consentbit"
+          src="https://manager.consentbit.com/cdn-test/30bd2286-124c-41dd-b467-fbffd8c5bddb.js"
+          strategy="beforeInteractive"
+        />
+      </head>
 
       <body
         className={`${dmSans.className} ${dmSans.variable} ${funnelDisplay.variable} ${manrope.variable} antialiased`}
