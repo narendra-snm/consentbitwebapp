@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import s from './privacy-requests.module.css';
+import { deleteVisitorConsent } from '@/lib/client-api';
 
 /** Slug of the Legal hub this page sits under in the breadcrumb; null when the webapp has no hub. */
 const LEGAL_HUB_SLUG: string | null = 'legal-policies';
@@ -57,6 +58,8 @@ type ListResponse = {
   /** Older worker builds omit it; the page then shows the defaults. */
   branding?: Branding;
   requests?: PrivacyRequest[];
+  /** Site plan id (e.g. "growth"); null without an active subscription. */
+  plan?: string | null;
 };
 
 type RequestEvent = { at: string; action: string; detail: string | null };
@@ -104,6 +107,11 @@ const RELATIONSHIP_LABEL: Record<string, string> = {
   partner: 'Business Partner',
   other: 'Other',
 };
+
+/** Visitors outside every listed region are stored with law 'Other'; say what that means. */
+function lawName(law?: string | null): string {
+  return !law || law === 'Other' ? 'No specific privacy law' : law;
+}
 
 /** Country codes from the public form; 'US-CA' / 'CA-QC' are the California / Quebec splits. */
 function countryName(code?: string | null): string {
@@ -450,6 +458,7 @@ function RequestDetail({
   siteId,
   req,
   canEdit,
+  plan,
   onBack,
   onChanged,
   onToast,
@@ -457,6 +466,7 @@ function RequestDetail({
   siteId: string;
   req: PrivacyRequest;
   canEdit: boolean;
+  plan?: string | null;
   onBack: () => void;
   onChanged: () => Promise<void> | void;
   onToast: (text: string) => void;
@@ -486,7 +496,17 @@ function RequestDetail({
   useEffect(() => {
     setAttachRecords(req.type === 'access' || req.type === 'portability' || req.type === 'know');
   }, [req.id, req.type]);
-  const extendDisabledReason = req.extendedAt ? 'Already extended once.' : !extDate ? `${req.law} does not allow an extension.` : '';
+  // Right to Delete: Complete can erase the matched records first, through the same
+  // /api/consent-visitor delete Consent Logs uses (also clears archived/retained copies and
+  // writes the erasure log). That delete is Growth-only (decision 2026-10-17); the worker
+  // re-checks the plan.
+  const isDelete = req.type === 'delete';
+  const canDeleteRecords = String(plan || '').toLowerCase().includes('growth');
+  const [deleteRecords, setDeleteRecords] = useState(true);
+  useEffect(() => {
+    setDeleteRecords(true);
+  }, [req.id]);
+  const extendDisabledReason = req.extendedAt ? 'Already extended once.' : !extDate ? `${lawName(req.law)} does not allow an extension.` : '';
 
   useEffect(() => {
     const params = new URLSearchParams({ siteId, id: req.id });
@@ -530,8 +550,30 @@ function RequestDetail({
       return;
     }
     setErr('');
-    const withRecords = act === 'complete' && canAttach && attachRecords;
-    const ok = await run(act, { reply: msg.trim(), ...(withRecords ? { attachConsents: true } : {}) }, withRecords ? 'Visitor emailed with their consent records' : 'Visitor emailed');
+    // Delete BEFORE completing: if the delete fails, the request stays open and the visitor
+    // is not told it is done. A delete request sends no copy of the records.
+    const erase = act === 'complete' && isDelete && canAttach && canDeleteRecords && deleteRecords;
+    let erased = 0;
+    if (erase) {
+      setBusy(act);
+      setApiErr('');
+      try {
+        // Same helper Consent Logs uses: worker replies come in an encoded envelope that
+        // parseApiResponse unwraps — reading res.json() directly misses `success`.
+        const { deleted, archivedDeleted } = await deleteVisitorConsent(siteId, req.consentId!);
+        erased = deleted + archivedDeleted;
+      } catch (e: any) {
+        setBusy(null);
+        setApiErr(`Could not delete their consent records, so the request was not completed: ${e?.message || 'unknown error'}`);
+        return;
+      }
+    }
+    const withRecords = act === 'complete' && !isDelete && canAttach && attachRecords;
+    const ok = await run(
+      act,
+      { reply: msg.trim(), ...(withRecords ? { attachConsents: true } : {}), ...(erase ? { deletedConsents: String(erased) } : {}) },
+      erase ? `Deleted ${erased} consent record${erased === 1 ? '' : 's'} and emailed the visitor` : withRecords ? 'Visitor emailed with their consent records' : 'Visitor emailed'
+    );
     if (ok) {
       setMsg('');
       setAct('complete');
@@ -571,7 +613,7 @@ function RequestDetail({
         <div>
           <h1 className={s.h1}>{TYPE_LABEL[req.type] || req.type}</h1>
           <p className={s.rdBy}>
-            From {req.name || req.email} · {req.law} · Received {fmtDate(req.createdAt)}
+            From {req.name || req.email} · {lawName(req.law)} · Received {fmtDate(req.createdAt)}
           </p>
         </div>
         <div className={s.rdHr}>
@@ -676,13 +718,31 @@ function RequestDetail({
                 />
                 {err && <span className={s.err}>{err}</span>}
               </label>
-              {act === 'complete' && canAttach && (
+              {act === 'complete' && isDelete && canAttach && canDeleteRecords && (
+                <label className={s.rdAttach}>
+                  <input type="checkbox" checked={deleteRecords} onChange={(e) => setDeleteRecords(e.target.checked)} />
+                  <span>
+                    <b>Delete their consent records</b>
+                    <span className={s.actDesc}>
+                      Permanently deletes the {consents!.length} record{consents!.length === 1 ? '' : 's'} below (and any archived copies) before the visitor is
+                      emailed. This can&apos;t be undone.
+                    </span>
+                  </span>
+                </label>
+              )}
+              {act === 'complete' && isDelete && canAttach && !canDeleteRecords && (
+                <div className={s.rdInfo}>
+                  Completing does not delete their consent records. Delete them first in{' '}
+                  <Link href={`/dashboard/${siteId}/consent-logs`}>Consent Logs</Link> (Find visitor → Delete), or upgrade to Growth to delete them here.
+                </div>
+              )}
+              {act === 'complete' && !isDelete && canAttach && (
                 <label className={s.rdAttach}>
                   <input type="checkbox" checked={attachRecords} onChange={(e) => setAttachRecords(e.target.checked)} />
                   <span>
                     <b>Attach their consent records</b>
                     <span className={s.actDesc}>
-                      {consents!.length} record{consents!.length === 1 ? '' : 's'} as a readable report (.html) and a spreadsheet file (.csv).
+                      {consents!.length} record{consents!.length === 1 ? '' : 's'} as a PDF report and a spreadsheet file (.csv).
                     </span>
                   </span>
                 </label>
@@ -755,7 +815,7 @@ function RequestDetail({
                 </>
               )}
               <dt>Law</dt>
-              <dd>{req.law}</dd>
+              <dd>{lawName(req.law)}</dd>
               <dt>Received</dt>
               <dd>{fmtDate(req.createdAt)}</dd>
               {req.relationship && (
@@ -822,6 +882,7 @@ function RequestDetail({
                           {EVENT_LABEL[e.action] || e.action}
                           {e.action === 'extended' && e.detail ? ` to ${fmtDate(e.detail)}` : ''}
                           {e.action === 'completed' && e.detail === 'consent records attached' ? ' (consent records attached)' : ''}
+                          {e.action === 'completed' && e.detail?.startsWith('consent records deleted') ? ` (${e.detail})` : ''}
                         </p>
                       </div>
                     </li>
@@ -1096,20 +1157,42 @@ export default function PrivacyRequestsPage() {
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState('');
 
-  const load = useCallback(async () => {
-    if (!siteId) return;
-    try {
-      const res = await fetch(`/api/privacy-requests?siteId=${encodeURIComponent(siteId)}`, { cache: 'no-store' });
-      setData(await res.json());
-    } catch {
-      setData({ success: false, error: 'Could not load privacy requests.' });
-    } finally {
-      setLoading(false);
-    }
-  }, [siteId]);
+  // `silent`: a background refresh. A failed one keeps the list already on screen instead of
+  // replacing it with an error.
+  const load = useCallback(
+    async (silent = false) => {
+      if (!siteId) return;
+      try {
+        const res = await fetch(`/api/privacy-requests?siteId=${encodeURIComponent(siteId)}`, { cache: 'no-store' });
+        const next = (await res.json()) as ListResponse;
+        if (!silent || next?.success) setData(next);
+      } catch {
+        if (!silent) setData({ success: false, error: 'Could not load privacy requests.' });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [siteId]
+  );
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // New requests appear without a manual reload: refresh every 30 s while the tab is visible,
+  // and straight away when the owner comes back to the tab.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') load(true);
+    };
+    const id = window.setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('focus', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('focus', tick);
+    };
   }, [load]);
 
   // Keep the open request in the URL so Back returns to the list.
@@ -1182,6 +1265,7 @@ export default function PrivacyRequestsPage() {
           siteId={siteId}
           req={current}
           canEdit={!!data.canEdit}
+          plan={data.plan ?? null}
           onBack={() => openRequest(null)}
           onChanged={load}
           onToast={flash}
@@ -1327,7 +1411,7 @@ export default function PrivacyRequestsPage() {
                           {TYPE_LABEL[r.type] || r.type}
                           <span className={s.sub}>{r.name || r.email}</span>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>{r.law}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{lawName(r.law)}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.createdAt)}</td>
                         <td>
                           {closed ? (

@@ -201,11 +201,8 @@ export default function LegalPage() {
 
       {!loading && !failed && enabled && (
         <>
+          {/* Order (user, 2026-11-20): Privacy Requests, Privacy Policy, Cookie Policy, Terms & Conditions. */}
           <div className={s.lgrid}>
-            {POLICY_CARDS_ENABLED &&
-              DOC_CARDS.map((c) => (
-                <HubCard key={c.kind} href={`${base}/${c.slug}`} icon={c.icon} title={c.title} desc={c.desc} meta={docMeta(legal?.documents?.[c.kind])} />
-              ))}
             <HubCard
               href={`${base}/privacy-requests`}
               icon={ShieldIcon}
@@ -213,6 +210,10 @@ export default function LegalPage() {
               desc="Receive and respond to data subject requests from your visitors, each with its legal deadline."
               meta={requestsMeta}
             />
+            {POLICY_CARDS_ENABLED &&
+              DOC_CARDS.map((c) => (
+                <HubCard key={c.kind} href={`${base}/${c.slug}`} icon={c.icon} title={c.title} desc={c.desc} meta={docMeta(legal?.documents?.[c.kind])} />
+              ))}
           </div>
           {POLICY_CARDS_ENABLED && (
             <p className={s.tip}>
