@@ -22,7 +22,7 @@ const LEGAL_HUB_SLUG: string | null = 'legal-policies';
 type PrivacyRequest = {
   id: string;
   ref: string;
-  type: 'access' | 'delete' | 'correct' | 'optout';
+  type: 'know' | 'access' | 'disclosure' | 'correct' | 'restrict' | 'delete' | 'portability' | 'optout';
   region: string;
   law: string;
   name: string | null;
@@ -31,6 +31,10 @@ type PrivacyRequest = {
   consentId: string | null;
   /** 1 when the requester said they are acting for someone else (older worker builds omit it). */
   onBehalf?: number | boolean | null;
+  /** DSR form v2 (older rows / worker builds omit these). */
+  country?: string | null;
+  relationship?: string | null;
+  subjectRelation?: string | null;
   status: 'new' | 'in_progress' | 'completed' | 'rejected';
   createdAt: string;
   verifiedAt: string | null;
@@ -83,11 +87,35 @@ type ActionId = 'complete' | 'extend' | 'reject';
 const DAY = 86400000;
 
 const TYPE_LABEL: Record<PrivacyRequest['type'], string> = {
-  access: 'See a copy of their data',
-  delete: 'Delete their data',
-  correct: 'Correct their data',
-  optout: 'Stop selling or sharing their data',
+  know: 'Right to Know',
+  access: 'Right to Access',
+  disclosure: 'Right to Disclosure',
+  correct: 'Right to Correct',
+  restrict: 'Right to Restrict',
+  delete: 'Right to Delete',
+  portability: 'Right to Portability',
+  optout: 'Right to Opt-Out',
 };
+
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  visitor: 'Website Visitor',
+  customer: 'Customer',
+  supplier: 'Supplier',
+  partner: 'Business Partner',
+  other: 'Other',
+};
+
+/** Country codes from the public form; 'US-CA' / 'CA-QC' are the California / Quebec splits. */
+function countryName(code?: string | null): string {
+  if (!code) return '—';
+  if (code === 'US-CA') return 'United States — California';
+  if (code === 'CA-QC') return 'Canada — Quebec';
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+  } catch {
+    return code;
+  }
+}
 
 const STATUS_TEXT: Record<ViewStatus, string> = {
   new: 'New',
@@ -250,7 +278,7 @@ function choiceOf(c: ConsentRecord): { text: string; tone: string } {
   return { text: c.status || 'Recorded', tone: s.pillB };
 }
 
-async function postUpdate(body: Record<string, string>) {
+async function postUpdate(body: Record<string, string | boolean>) {
   const res = await fetch('/api/privacy-requests/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -451,6 +479,13 @@ function RequestDetail({
   const vs = viewStatus(req);
   const action = ACTIONS.find((a) => a.id === act)!;
   const extDate = useMemo(() => extensionDate(req.region, req.type, req.dueAt), [req.region, req.type, req.dueAt]);
+  // "Attach their consent records" on Complete: only when records matched the visitor's Consent ID.
+  // On by default for requests that ask for a copy of their data.
+  const canAttach = !!req.consentId && !!consents && consents.length > 0;
+  const [attachRecords, setAttachRecords] = useState(true);
+  useEffect(() => {
+    setAttachRecords(req.type === 'access' || req.type === 'portability' || req.type === 'know');
+  }, [req.id, req.type]);
   const extendDisabledReason = req.extendedAt ? 'Already extended once.' : !extDate ? `${req.law} does not allow an extension.` : '';
 
   useEffect(() => {
@@ -473,7 +508,7 @@ function RequestDetail({
     setNote('');
   }, [req.id]);
 
-  const run = async (name: string, body: Record<string, string>, toast: string) => {
+  const run = async (name: string, body: Record<string, string | boolean>, toast: string) => {
     setBusy(name);
     setApiErr('');
     try {
@@ -495,7 +530,8 @@ function RequestDetail({
       return;
     }
     setErr('');
-    const ok = await run(act, { reply: msg.trim() }, 'Visitor emailed');
+    const withRecords = act === 'complete' && canAttach && attachRecords;
+    const ok = await run(act, { reply: msg.trim(), ...(withRecords ? { attachConsents: true } : {}) }, withRecords ? 'Visitor emailed with their consent records' : 'Visitor emailed');
     if (ok) {
       setMsg('');
       setAct('complete');
@@ -640,6 +676,17 @@ function RequestDetail({
                 />
                 {err && <span className={s.err}>{err}</span>}
               </label>
+              {act === 'complete' && canAttach && (
+                <label className={s.rdAttach}>
+                  <input type="checkbox" checked={attachRecords} onChange={(e) => setAttachRecords(e.target.checked)} />
+                  <span>
+                    <b>Attach their consent records</b>
+                    <span className={s.actDesc}>
+                      {consents!.length} record{consents!.length === 1 ? '' : 's'} as a readable report (.html) and a spreadsheet file (.csv).
+                    </span>
+                  </span>
+                </label>
+              )}
               <div className={s.rdSend}>
                 <span className={s.hint}>Sent to {req.email}</span>
                 <button
@@ -701,12 +748,30 @@ function RequestDetail({
                 <span>{req.email}</span>
                 <CopyButton text={req.email} />
               </dd>
+              {req.country && (
+                <>
+                  <dt>Country</dt>
+                  <dd>{countryName(req.country)}</dd>
+                </>
+              )}
               <dt>Law</dt>
               <dd>{req.law}</dd>
               <dt>Received</dt>
               <dd>{fmtDate(req.createdAt)}</dd>
+              {req.relationship && (
+                <>
+                  <dt>Relationship</dt>
+                  <dd>{RELATIONSHIP_LABEL[req.relationship] || req.relationship}</dd>
+                </>
+              )}
               <dt>Third party</dt>
               <dd>{req.onBehalf ? <span className={s.amber}>Yes — verify they are authorised</span> : 'No'}</dd>
+              {req.subjectRelation && (
+                <>
+                  <dt>Relation to subject</dt>
+                  <dd style={{ whiteSpace: 'pre-wrap' }}>{req.subjectRelation}</dd>
+                </>
+              )}
               <dt>Consent ID</dt>
               <dd className={s.cpRow}>
                 {req.consentId ? (
@@ -756,6 +821,7 @@ function RequestDetail({
                         <p>
                           {EVENT_LABEL[e.action] || e.action}
                           {e.action === 'extended' && e.detail ? ` to ${fmtDate(e.detail)}` : ''}
+                          {e.action === 'completed' && e.detail === 'consent records attached' ? ' (consent records attached)' : ''}
                         </p>
                       </div>
                     </li>
@@ -1009,7 +1075,7 @@ function Customize({
             <b>Data Subject Request (DSR) Portal</b>
             <i />
             <i />
-            <span style={{ background: color, color: textOn(color) }}>Send request</span>
+            <span style={{ background: color, color: textOn(color) }}>Submit Request</span>
           </div>
         </div>
       </div>

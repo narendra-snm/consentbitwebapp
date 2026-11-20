@@ -630,11 +630,10 @@
   margin-top: 1px;
   box-sizing: border-box;
   border-radius: 50%;
-  /* whole-pixel border: a 1.5px border leaves a 13px inside, and the 8px dot snaps off-centre */
-  border: 2px solid var(--ink600);
+  /* Ring = inset shadow, dot = radial gradient, both on this one element, so they share the
+     same centre at any zoom. A border + child dot snapped to pixels separately and drifted off-centre. */
+  box-shadow: inset 0 0 0 2px var(--ink600);
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
 }
 .rdActOn {
   background: var(--blueTint);
@@ -647,14 +646,8 @@
   color: var(--blue500);
 }
 .rdActOn .rad {
-  border-color: var(--blue500);
-}
-.rdActOn .rad::after {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--blue500);
+  box-shadow: inset 0 0 0 2px var(--blue500);
+  background: radial-gradient(circle, var(--blue500) 0 4px, transparent 4.5px);
 }
 .rdActNeg.rdActOn {
   background: var(--red50);
@@ -664,10 +657,8 @@
   color: var(--red700);
 }
 .rdActNeg.rdActOn .rad {
-  border-color: var(--red700);
-}
-.rdActNeg.rdActOn .rad::after {
-  background: var(--red700);
+  box-shadow: inset 0 0 0 2px var(--red700);
+  background: radial-gradient(circle, var(--red700) 0 4px, transparent 4.5px);
 }
 .rdActDis {
   opacity: 0.5;
@@ -683,6 +674,38 @@
   border-radius: 8px;
   padding: 10px 12px;
   line-height: 18px;
+}
+
+.rdAttach {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--gray200);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 18px;
+}
+.rdAttach input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--blue500);
+  cursor: pointer;
+}
+.rdAttach b {
+  display: block;
+  font-weight: 600;
+  color: var(--ink900);
+}
+.rdAttach .actDesc {
+  display: block;
+  font-size: 12px;
+  color: var(--ink600);
+  line-height: 16px;
+  margin-top: 2px;
 }
 
 /* Form bits */

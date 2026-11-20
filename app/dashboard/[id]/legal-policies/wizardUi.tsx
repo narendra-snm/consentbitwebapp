@@ -290,7 +290,14 @@ export function RadioCards({ value, options, onChange, cols = 2 }: { value: stri
             }}
             className={`flex gap-2.5 p-3 rounded-lg select-none ${ro ? '' : 'cursor-pointer hover:bg-[#F9F9FA]'} ${on ? 'bg-[#6790EA1A] shadow-[inset_0_0_0_1px_#007AFF] hover:bg-[#6790EA1A]' : 'shadow-[inset_0_0_0_1px_#E5E5E5]'}`}
           >
-            <span className={`w-4 h-4 rounded-full border-[1.5px] shrink-0 mt-px grid place-items-center ${on ? 'border-[#007AFF]' : 'border-[#4B5563]'}`}>{on && <span className="w-2 h-2 rounded-full bg-[#007AFF]" />}</span>
+            {/* Ring (inset shadow) + dot (radial gradient) on ONE element, so both share the same centre at any zoom level. */}
+            <span
+              className="w-4 h-4 rounded-full shrink-0 mt-px"
+              style={{
+                boxShadow: `inset 0 0 0 1.5px ${on ? '#007AFF' : '#4B5563'}`,
+                background: on ? 'radial-gradient(circle, #007AFF 0 4px, transparent 4.5px)' : undefined,
+              }}
+            />
             <div>
               <span className={`block text-sm font-semibold leading-[18px] ${on ? 'text-[#007AFF]' : 'text-[#111827]'}`}>{o.label}</span>
               {o.sub && <span className="block text-xs leading-4 text-[#4B5563] mt-0.5">{o.sub}</span>}

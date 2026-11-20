@@ -9,6 +9,7 @@ import BillingPage from "./component/BillingPage";
 import TeamPage from "./component/TeamPage";
 import DpaRequestPage from "./component/DpaRequestPage";
 import McpAccessPage from "./component/McpAccessPage";
+import CrossDomainConsentModal, { directionLabel, fetchShareLinks, type ShareLink } from "./component/CrossDomainConsentModal";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
@@ -78,7 +79,7 @@ function toPlanLabel(raw: unknown): PlanTier {
 }
 
 // Shared grid column definition — single source of truth
-const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_180px]";
+const TABLE_GRID = "grid-cols-[1fr_1fr_1fr_1.4fr_1.4fr_290px]";
 
 
 export default function SettingsPage() {
@@ -147,6 +148,8 @@ export default function SettingsPage() {
   }, [activeTab, loading, tabAllowed]);
 
   const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
+  // Cross-domain consent dialog (subdomains sharing one consent choice).
+  const [crossDomainOrg, setCrossDomainOrg] = useState<Organization | null>(null);
   const [manageDomain, setManageDomain] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -233,6 +236,20 @@ export default function SettingsPage() {
 
   const orgTotalPages = Math.max(1, Math.ceil(organizations.length / ORGS_PER_PAGE));
   const pagedOrganizations = organizations.slice((orgPage - 1) * ORGS_PER_PAGE, orgPage * ORGS_PER_PAGE);
+
+  // Cross-domain consent badges ("Linked to …", "One-way") per site row.
+  const [shareLinks, setShareLinks] = useState<Record<string, ShareLink>>({});
+  const shareSiteIds = useMemo(
+    () => organizations.map((o) => (o.siteId ? String(o.siteId) : "")).filter(Boolean).join(","),
+    [organizations],
+  );
+  const reloadShareLinks = useCallback(() => {
+    if (!shareSiteIds) return setShareLinks({});
+    fetchShareLinks(shareSiteIds.split(",")).then(setShareLinks);
+  }, [shareSiteIds]);
+  useEffect(() => {
+    reloadShareLinks();
+  }, [reloadShareLinks]);
 
   const currentPlan = useMemo<PlanTier>(() => {
     const rows = Array.isArray(sites) ? sites : [];
@@ -649,10 +666,38 @@ export default function SettingsPage() {
                 {pagedOrganizations.map((org, index) => (
                   <div key={index}>
                     <div className={`px-[13px] py-4 grid ${TABLE_GRID} gap-x-4 items-center`}>
-                      {/* Site URL */}
-                      <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
-                        {org.siteUrl}
-                      </p>
+                      {/* Site URL (+ cross-domain badges) */}
+                      <div className="min-w-0">
+                        <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
+                          {org.siteUrl}
+                        </p>
+                        {(() => {
+                          const link = org.siteId ? shareLinks[String(org.siteId)] : undefined;
+                          if (!link) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-[6px] mt-[4px]">
+                              {link.role === "member" && (
+                                <span
+                                  title={`Shares consent with ${link.primaryDomain}`}
+                                  className="inline-flex items-center gap-[4px] max-w-full h-[20px] px-[6px] rounded-[6px] border border-[#e5e5e5] text-[10px] text-[#374151] font-mono"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                  </svg>
+                                  <span className="truncate">Linked to {link.primaryDomain}</span>
+                                </span>
+                              )}
+                              <span
+                                title={link.role === "primary" ? `Shares consent with ${link.linkedCount} linked domain${link.linkedCount === 1 ? "" : "s"}` : undefined}
+                                className="inline-flex items-center h-[20px] px-[6px] rounded-[6px] border border-[#e5e5e5] text-[10px] text-[#374151] font-mono"
+                              >
+                                {directionLabel(link.direction)}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
 
                       {/* Site Name */}
                       <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -722,6 +767,16 @@ export default function SettingsPage() {
                         >
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Manage</p>
                         </button>
+                        {org.siteId && (
+                          <button
+                            type="button"
+                            onClick={() => setCrossDomainOrg(org)}
+                            title="Share consent across subdomains"
+                            className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
+                          >
+                            <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Cross-domain</p>
+                          </button>
+                        )}
                       </div>
                     </div>
                     {index < pagedOrganizations.length - 1 && <div className="h-[1px] bg-black/10 mx-[2px]" />}
@@ -979,6 +1034,15 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {crossDomainOrg?.siteId && (
+        <CrossDomainConsentModal
+          siteId={String(crossDomainOrg.siteId)}
+          siteUrl={crossDomainOrg.siteUrl === "—" ? "" : crossDomainOrg.siteUrl}
+          onClose={() => setCrossDomainOrg(null)}
+          onSaved={reloadShareLinks}
+        />
       )}
 
       {/* Manage Site Modal */}
