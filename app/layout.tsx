@@ -58,12 +58,15 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* ConsentBit banner — TEST runtime (/cdn-test/) for cross-domain consent testing,
-            site accounts.consentbit.com (dafe59ee-…). PostHog is never blocked for this site
-            (consent-manager data/neverBlockBySite.js). Remove this tag to take the banner off. */}
-        <Script
+            site accounts.consentbit.com (dafe59ee-…). Blocks nothing on this site
+            (consent-manager data/neverBlockBySite.js). Remove this tag to take the banner off.
+            A plain <script>, not next/script: <Script strategy="beforeInteractive"> inside a
+            hand-written <head> was never emitted into the HTML (Next 15 App Router), so the
+            banner did not load. It must run before GTM, hence a blocking script on purpose. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
           id="consentbit"
           src="https://manager.consentbit.com/cdn-test/30bd2286-124c-41dd-b467-fbffd8c5bddb.js"
-          strategy="beforeInteractive"
         />
       </head>
 
