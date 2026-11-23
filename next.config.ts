@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // "/" → "/login" as a real HTTP redirect. app/page.tsx's redirect() was served as a 200
+  // shell that switched pages inside the browser, so the root layout's <head> (incl. the
+  // ConsentBit banner <script>) was only built by React on the client and never executed.
+  // A server redirect makes the browser fully load /login, whose HTML has the banner tag.
+  async redirects() {
+    return [{ source: "/", destination: "/login", permanent: false }];
+  },
   async headers() {
     return [
       {
