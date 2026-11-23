@@ -9,7 +9,7 @@ import BillingPage from "./component/BillingPage";
 import TeamPage from "./component/TeamPage";
 import DpaRequestPage from "./component/DpaRequestPage";
 import McpAccessPage from "./component/McpAccessPage";
-import CrossDomainConsentModal, { directionLabel, fetchShareLinks, type ShareLink } from "./component/CrossDomainConsentModal";
+import AdvancedPage from "./component/AdvancedPage";
 import { useDashboardSession } from "../DashboardSessionProvider";
 import { getBillingUsage, updateProfile, requestOwnershipTransfer, type BillingUsage } from "@/lib/client-api";
 import {
@@ -31,7 +31,7 @@ const svgPaths = {
   p243d2300: "M2 12.88V11.12C2 10.08 2.85 9.22 3.9 9.22C5.71 9.22 6.45 7.94 5.54 6.37C5.02 5.47 5.33 4.3 6.24 3.78L7.97 2.79C8.76 2.32 9.78 2.6 10.25 3.39L10.36 3.58C11.26 5.15 12.74 5.15 13.65 3.58L13.76 3.39C14.23 2.6 15.25 2.32 16.04 2.79L17.77 3.78C18.68 4.3 18.99 5.47 18.47 6.37C17.56 7.94 18.3 9.22 20.11 9.22C21.15 9.22 22.01 10.07 22.01 11.12V12.88C22.01 13.92 21.16 14.78 20.11 14.78C18.3 14.78 17.56 16.06 18.47 17.63C18.99 18.54 18.68 19.7 17.77 20.22L16.04 21.21C15.25 21.68 14.23 21.4 13.76 20.61L13.65 20.42C12.75 18.85 11.27 18.85 10.36 20.42L10.25 20.61C9.78 21.4 8.76 21.68 7.97 21.21L6.24 20.22C5.33 19.7 5.02 18.53 5.54 17.63C6.45 16.06 5.71 14.78 3.9 14.78C2.85 14.78 2 13.92 2 12.88Z",
 };
 
-type TabType = "general" | "billing" | "organizations" | "usage" | "team" | "dpa" | "mcp";
+type TabType = "general" | "billing" | "organizations" | "usage" | "team" | "dpa" | "mcp" | "advanced";
 
 type Organization = {
   siteId?: string;
@@ -104,7 +104,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return;
     try {
       const raw = window.sessionStorage.getItem(profileTabKey);
-      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team" || raw === "dpa" || raw === "mcp") {
+      if (raw === "general" || raw === "billing" || raw === "organizations" || raw === "usage" || raw === "team" || raw === "dpa" || raw === "mcp" || raw === "advanced") {
         setActiveTab(raw);
       }
     } catch {
@@ -148,8 +148,6 @@ export default function SettingsPage() {
   }, [activeTab, loading, tabAllowed]);
 
   const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
-  // Cross-domain consent dialog (subdomains sharing one consent choice).
-  const [crossDomainOrg, setCrossDomainOrg] = useState<Organization | null>(null);
   const [manageDomain, setManageDomain] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -236,20 +234,6 @@ export default function SettingsPage() {
 
   const orgTotalPages = Math.max(1, Math.ceil(organizations.length / ORGS_PER_PAGE));
   const pagedOrganizations = organizations.slice((orgPage - 1) * ORGS_PER_PAGE, orgPage * ORGS_PER_PAGE);
-
-  // Cross-domain consent badges ("Linked to …", "One-way") per site row.
-  const [shareLinks, setShareLinks] = useState<Record<string, ShareLink>>({});
-  const shareSiteIds = useMemo(
-    () => organizations.map((o) => (o.siteId ? String(o.siteId) : "")).filter(Boolean).join(","),
-    [organizations],
-  );
-  const reloadShareLinks = useCallback(() => {
-    if (!shareSiteIds) return setShareLinks({});
-    fetchShareLinks(shareSiteIds.split(",")).then(setShareLinks);
-  }, [shareSiteIds]);
-  useEffect(() => {
-    reloadShareLinks();
-  }, [reloadShareLinks]);
 
   const currentPlan = useMemo<PlanTier>(() => {
     const rows = Array.isArray(sites) ? sites : [];
@@ -610,6 +594,21 @@ export default function SettingsPage() {
             <p className={`text-[15px] text-left ${isActive("mcp") ? "text-[#007aff]" : "text-[#111827]"}`}>MCP access</p>
           </button>
           )}
+
+          {/* Advanced Tab — owner or site Admin; cross-domain consent and other rarely-needed settings */}
+          {showOwnerTabs && (
+          <button onClick={() => setActiveTab("advanced")} className={`w-full h-[44px] flex items-center px-3 gap-3 rounded-[8px] text-left transition-colors ${isActive("advanced") ? "bg-[#e6f1fd] text-[#007aff]" : "text-[#374151] hover:bg-[#f5f7fa]"}`}>
+            <div className="size-[20px] shrink-0 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6H14M18 6H20M4 12H8M12 12H20M4 18H14M18 18H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="16" cy="6" r="2" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="10" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="16" cy="18" r="2" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </div>
+            <p className={`text-[15px] text-left ${isActive("advanced") ? "text-[#007aff]" : "text-[#111827]"}`}>Advanced</p>
+          </button>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -666,38 +665,10 @@ export default function SettingsPage() {
                 {pagedOrganizations.map((org, index) => (
                   <div key={index}>
                     <div className={`px-[13px] py-4 grid ${TABLE_GRID} gap-x-4 items-center`}>
-                      {/* Site URL (+ cross-domain badges) */}
-                      <div className="min-w-0">
-                        <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
-                          {org.siteUrl}
-                        </p>
-                        {(() => {
-                          const link = org.siteId ? shareLinks[String(org.siteId)] : undefined;
-                          if (!link) return null;
-                          return (
-                            <div className="flex flex-wrap items-center gap-[6px] mt-[4px]">
-                              {link.role === "member" && (
-                                <span
-                                  title={`Shares consent with ${link.primaryDomain}`}
-                                  className="inline-flex items-center gap-[4px] max-w-full h-[20px] px-[6px] rounded-[6px] border border-[#e5e5e5] text-[10px] text-[#374151] font-mono"
-                                >
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                  </svg>
-                                  <span className="truncate">Linked to {link.primaryDomain}</span>
-                                </span>
-                              )}
-                              <span
-                                title={link.role === "primary" ? `Shares consent with ${link.linkedCount} linked domain${link.linkedCount === 1 ? "" : "s"}` : undefined}
-                                className="inline-flex items-center h-[20px] px-[6px] rounded-[6px] border border-[#e5e5e5] text-[10px] text-[#374151] font-mono"
-                              >
-                                {directionLabel(link.direction)}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
+                      {/* Site URL */}
+                      <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
+                        {org.siteUrl}
+                      </p>
 
                       {/* Site Name */}
                       <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[14px] text-black truncate" style={{ fontVariationSettings: "'opsz' 14" }}>
@@ -767,16 +738,6 @@ export default function SettingsPage() {
                         >
                           <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Manage</p>
                         </button>
-                        {org.siteId && (
-                          <button
-                            type="button"
-                            onClick={() => setCrossDomainOrg(org)}
-                            title="Share consent across subdomains"
-                            className="h-[36px] px-[14px] rounded-[8px] border border-[#007aff] flex items-center justify-center shrink-0"
-                          >
-                            <p className="font-['DM_Sans:Regular',sans-serif] font-normal leading-[20px] text-[#007aff] text-[12px] whitespace-nowrap" style={{ fontVariationSettings: "'opsz' 14" }}>Cross-domain</p>
-                          </button>
-                        )}
                       </div>
                     </div>
                     {index < pagedOrganizations.length - 1 && <div className="h-[1px] bg-black/10 mx-[2px]" />}
@@ -830,6 +791,8 @@ export default function SettingsPage() {
           {activeTab === "dpa" && ownsAccount && <DpaRequestPage />}
 
           {activeTab === "mcp" && ownsAccount && <McpAccessPage />}
+
+          {activeTab === "advanced" && showOwnerTabs && <AdvancedPage />}
 
           {activeTab === "general" && (
             <div className="text-center">
@@ -1034,15 +997,6 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-      )}
-
-      {crossDomainOrg?.siteId && (
-        <CrossDomainConsentModal
-          siteId={String(crossDomainOrg.siteId)}
-          siteUrl={crossDomainOrg.siteUrl === "—" ? "" : crossDomainOrg.siteUrl}
-          onClose={() => setCrossDomainOrg(null)}
-          onSaved={reloadShareLinks}
-        />
       )}
 
       {/* Manage Site Modal */}

@@ -72,6 +72,11 @@ export async function fetchShareLinks(siteIds: string[]): Promise<Record<string,
   }
 }
 
+/** Unlink every site from this primary's group. Throws with the server's message on failure. */
+export async function stopConsentSharing(primaryId: string): Promise<void> {
+  await call('POST', '', { siteId: primaryId, siteIds: [], direction: 'one_way' });
+}
+
 export const directionLabel = (d: Direction) => (d === 'two_way' ? 'Two-way' : 'One-way');
 
 const DIRECTION_OPTIONS: { id: Direction; title: string; desc: string }[] = [
