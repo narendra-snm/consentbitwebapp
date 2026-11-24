@@ -10,6 +10,8 @@ import PageLanguagesCard, { DEFAULT_PAGE_LANGUAGES, readPageLanguagesConfig, typ
 import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
+import GoogleConsentModeCard from "./GoogleConsentModeCard";
+import { CrossDomainConsentPanel } from "../../../components/CrossDomainConsentModal";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
 import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
 import { useAppContext } from "@/app/context/AppProvider";
@@ -113,6 +115,22 @@ type RegulationSnapshot = {
 
 export default function page({ siteId }: { siteId: string }) {
   const [active, setActive] = useState("General");
+  // Keep the open tab when the user switches site from the domain dropdown (which remounts this
+  // page) or reloads. Session-scoped; free-plan sites are still sent back to General by the
+  // effect further down if the remembered tab is locked for them.
+  const TAB_KEY = "cb_banner_active_tab";
+  const [tabRestored, setTabRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const t = window.sessionStorage.getItem(TAB_KEY);
+      if (t && ["General", "Content", "Layout", "Colors", "Type", "Settings"].includes(t)) setActive(t);
+    } catch { /* storage blocked */ }
+    setTabRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!tabRestored) return;
+    try { window.sessionStorage.setItem(TAB_KEY, active); } catch { /* storage blocked */ }
+  }, [active, tabRestored]);
   /** Collapsible editor panel — only toggleable at lg (1024-1279px); always open at xl+. */
   const [editorOpen, setEditorOpen] = useState(true);
   /** True only when viewport is in [1024, 1280) — drives overlay/slide behavior. */
@@ -173,6 +191,9 @@ export default function page({ siteId }: { siteId: string }) {
   /** Banner languages (General tab): translations.config.pageLanguages. Dirty state rides on regionalDirty. */
   const [pageLanguages, setPageLanguages] = useState<PageLanguages>(DEFAULT_PAGE_LANGUAGES);
   const [lastSavedPageLanguages, setLastSavedPageLanguages] = useState<PageLanguages | null>(null);
+  /** Google Consent Mode console debug (General tab): translations.config.gcmDebug. OFF by default. */
+  const [gcmDebug, setGcmDebug] = useState<boolean>(false);
+  const [lastSavedGcmDebug, setLastSavedGcmDebug] = useState<boolean | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -501,6 +522,11 @@ export default function page({ siteId }: { siteId: string }) {
         setPageLanguages(plState);
         setLastSavedPageLanguages(plState);
 
+        // Missing / anything but "1" = off (the default).
+        const gdState = String(cfgTr.gcmDebug ?? "") === "1";
+        setGcmDebug(gdState);
+        setLastSavedGcmDebug(gdState);
+
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
         setLastSavedAppearance(app);
@@ -747,8 +773,9 @@ export default function page({ siteId }: { siteId: string }) {
   const regionalDirty = useMemo(() => {
     if (!lastSavedRegionalLanguages) return false;
     if (JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages)) return true;
+    if (lastSavedGcmDebug !== null && gcmDebug !== lastSavedGcmDebug) return true;
     return !!lastSavedPageLanguages && JSON.stringify(pageLanguages) !== JSON.stringify(lastSavedPageLanguages);
-  }, [regionalLanguages, lastSavedRegionalLanguages, pageLanguages, lastSavedPageLanguages]);
+  }, [regionalLanguages, lastSavedRegionalLanguages, pageLanguages, lastSavedPageLanguages, gcmDebug, lastSavedGcmDebug]);
 
 
   const appearanceDirty = useMemo(() => {
@@ -831,6 +858,7 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedFloatingButton(floatingButton);
     setLastSavedRegionalLanguages(regionalLanguages);
     setLastSavedPageLanguages(pageLanguages);
+    setLastSavedGcmDebug(gcmDebug);
     setLastSavedAppearance(appearance);
     setLastSavedHideBranding(hideBranding);
     setLastPublishedBothFocus(bothContentFocus);
@@ -866,6 +894,8 @@ export default function page({ siteId }: { siteId: string }) {
             regionalLanguages,
             // Banner languages (PageLanguagesCard); the worker applies it + the plan.
             pageLanguages,
+            // GCM console debug (GoogleConsentModeCard); off unless "1". Read by cdnM.js.
+            gcmDebug: gcmDebug ? "1" : "0",
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -925,6 +955,7 @@ export default function page({ siteId }: { siteId: string }) {
     floatingButton,
     regionalLanguages,
     pageLanguages,
+    gcmDebug,
     hideBranding,
     iabEnabled,
     googleAcEnabled,
@@ -1000,6 +1031,8 @@ export default function page({ siteId }: { siteId: string }) {
             regionalLanguages,
             // Banner languages (PageLanguagesCard); the worker applies it + the plan.
             pageLanguages,
+            // GCM console debug (GoogleConsentModeCard); off unless "1". Read by cdnM.js.
+            gcmDebug: gcmDebug ? "1" : "0",
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1222,13 +1255,20 @@ export default function page({ siteId }: { siteId: string }) {
         effectivePlanId={resolvedPlanId}
         isLegacy={isLegacySite}
       />
+      {/* Settings tab: full-width page (cross-domain consent), no editor column or preview. */}
+      {active === "Settings" && (
+        // No inner scroll box: the page itself scrolls (an h-screen box under the header gave two scrollbars).
+        <div className="xl:col-span-2 min-w-0 bg-white">
+          <CrossDomainConsentPanel siteId={String(site?.id || siteId || "")} siteUrl={String(site?.domain || "")} />
+        </div>
+      )}
       {/* Panel toggle — only visible at lg (1024-1279px) */}
       <button
         type="button"
         onClick={() => setEditorOpen((o) => !o)}
         aria-label={editorOpen ? 'Hide editor panel' : 'Show editor panel'}
         className={`${
-          isOverlayMode ? 'flex' : 'hidden'
+          isOverlayMode && active !== "Settings" ? 'flex' : 'hidden'
         } absolute z-40 top-24 items-center justify-center h-12 w-5 bg-white border border-[#e5e5e5] rounded-r-md hover:bg-gray-50 shadow-sm transition-[left] duration-300`}
         style={{ left: editorOpen ? '620px' : '172px' }}
       >
@@ -1241,7 +1281,7 @@ export default function page({ siteId }: { siteId: string }) {
         </svg>
       </button>
       <div
-        className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]"
+        className={`${active === "Settings" ? "!hidden " : ""}w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]`}
         style={
           isOverlayMode
             ? {
@@ -1449,6 +1489,13 @@ export default function page({ siteId }: { siteId: string }) {
     </div>
   </div>
 </div>
+
+{/* Google Consent Mode — status check + console debug toggle (all plans). */}
+<GoogleConsentModeCard
+  siteId={String(site?.id || siteId || "")}
+  debugEnabled={gcmDebug}
+  onToggleDebug={() => setGcmDebug((v) => !v)}
+/>
 
           </div>
         )}
@@ -1821,7 +1868,7 @@ export default function page({ siteId }: { siteId: string }) {
         </div>
       )}
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
-      {!customizationLoading && <ConsentPreview
+      {!customizationLoading && active !== "Settings" && <ConsentPreview
       iabEnabled={iabEnabled}
       googleAcEnabled={iabEnabled && googleAcEnabled}
         key={previewRevision}

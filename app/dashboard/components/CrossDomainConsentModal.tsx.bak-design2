@@ -1,0 +1,595 @@
+'use client';
+
+// Cross-domain consent, Captain Compliance style. Opened on one site (the primary); lists the
+// account's other sites on the same main domain, the consent direction, and a summary panel.
+// Layout follows the "Cross-domain Consent" design canvas (2026-11-24): numbered sections on the
+// left, "How consent is shared" + "What a visitor sees" on the right, unsaved-changes bar, and an
+// "Unlink …?" confirm. Parts of that design with no backend yet (separate domains, adding a
+// domain here, a "list of sites" link, Renew consents) are left out.
+// Backed by /api/sites/consent-family (consent-manager handlers/consentFamily.js).
+
+import { useEffect, useMemo, useState } from 'react';
+import { parseApiResponse } from '@/lib/client-api';
+import { useDashboardSession } from '../DashboardSessionProvider';
+
+export type Direction = 'one_way' | 'two_way';
+
+type Candidate = {
+  id: string;
+  domain: string;
+  name: string | null;
+  host: string;
+  linked: boolean;
+  linkedElsewhere: string | null; // 'primary' = has its own links; otherwise the site it is linked to
+  canAdmin: boolean;
+  plan?: string;
+  planOk?: boolean; // Growth only (server enforces it)
+};
+
+type ShareState = {
+  success: boolean;
+  error?: string;
+  site: { id: string; domain: string; host: string; plan?: string; planOk?: boolean };
+  requiredPlan?: string;
+  mainDomain: string | null;
+  supported: boolean;
+  reason: string | null;
+  platform: string | null;
+  memberOf: { id: string; domain: string | null; direction?: Direction } | null;
+  direction: Direction | null;
+  candidates: Candidate[];
+};
+
+export type ShareLink = {
+  role: 'primary' | 'member';
+  primaryId: string;
+  primaryDomain: string;
+  direction: Direction;
+  linkedCount: number;
+};
+
+const MAX_LINKED = 10;
+
+async function call<T>(method: 'GET' | 'POST', query: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api/sites/consent-family${query}`, {
+    method,
+    credentials: 'include',
+    cache: 'no-store',
+    headers: method === 'POST' ? { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } : undefined,
+    body: method === 'POST' ? JSON.stringify(body) : undefined,
+  });
+  const data = await parseApiResponse(res);
+  if (res.status === 404 && data?.error === 'Not Found') {
+    throw new Error('Cross-domain consent is not available on the server yet.');
+  }
+  if (!res.ok || data?.success === false) {
+    throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
+  }
+  return data as T;
+}
+
+/** Link badges for the site list. Never throws: no badges on failure. */
+export async function fetchShareLinks(siteIds: string[]): Promise<Record<string, ShareLink>> {
+  const ids = siteIds.filter(Boolean);
+  if (!ids.length) return {};
+  try {
+    const data = await call<{ links: Record<string, ShareLink> }>('GET', `?siteIds=${encodeURIComponent(ids.join(','))}`);
+    return data.links || {};
+  } catch {
+    return {};
+  }
+}
+
+/** Unlink every site from this primary's group. Throws with the server's message on failure. */
+export async function stopConsentSharing(primaryId: string): Promise<void> {
+  await call('POST', '', { siteId: primaryId, siteIds: [], direction: 'one_way' });
+}
+
+export const directionLabel = (d: Direction) => (d === 'two_way' ? 'Two-way' : 'One-way');
+
+// ── Design tokens (from the canvas) ──
+const BLUE = '#007AFF';
+const TEXT2 = 'text-[#4B5563]';
+const btnBase =
+  'h-[40px] rounded-[6px] px-4 inline-flex items-center gap-[6px] text-[14px] font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed';
+const btnPrimary = `${btnBase} bg-[#007AFF] text-white hover:bg-[#0062cc]`;
+const btnSecondary = `${btnBase} bg-white text-[#111827] shadow-[inset_0_0_0_1px_#E5E5E5] hover:bg-[#f9fafb]`;
+const btnDanger = `${btnBase} bg-[#AC2734] text-white hover:bg-[#8f1f2b]`;
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function CheckMark() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function StepNum({ n }: { n: number }) {
+  return (
+    <span className="w-[24px] h-[24px] rounded-full bg-[#F3F4F6] text-[#111827] text-[12px] font-semibold grid place-items-center shrink-0">
+      {n}
+    </span>
+  );
+}
+
+function Pill({ tone, children }: { tone: 'green' | 'amber' | 'gray' | 'blue'; children: React.ReactNode }) {
+  const cls = {
+    green: 'bg-[#ECFDF3] text-[#047857]',
+    amber: 'bg-[#FFF7ED] text-[#9A3412]',
+    gray: 'bg-[#F3F4F6] text-[#4B5563]',
+    blue: 'bg-[rgba(103,144,234,0.12)] text-[#0057b8]',
+  }[tone];
+  return <span className={`inline-flex items-center h-[22px] px-[8px] rounded-full text-[12px] font-medium whitespace-nowrap ${cls}`}>{children}</span>;
+}
+
+function Section({ n, title, desc, children }: { n: number; title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-[12px] border border-[#E5E5E5] bg-white">
+      <div className="flex items-start gap-3 px-5 pt-5 pb-4">
+        <StepNum n={n} />
+        <div className="min-w-0">
+          <h3 className="m-0 text-[16px] font-semibold text-[#111827]">{title}</h3>
+          <p className={`m-0 mt-[2px] text-[14px] leading-[20px] ${TEXT2}`}>{desc}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Inline version for Cookie Banner → Settings (no overlay, no Close button). */
+export function CrossDomainConsentPanel({ siteId, siteUrl }: { siteId: string; siteUrl: string }) {
+  return <CrossDomainConsentModal siteId={siteId} siteUrl={siteUrl} onClose={() => {}} inline />;
+}
+
+export default function CrossDomainConsentModal({
+  siteId,
+  siteUrl,
+  onClose,
+  onSaved,
+  inline = false,
+}: {
+  siteId: string;
+  siteUrl: string;
+  onClose: () => void;
+  onSaved?: () => void;
+  inline?: boolean;
+}) {
+  const { sites } = useDashboardSession();
+  const [state, setState] = useState<ShareState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [direction, setDirection] = useState<Direction>('one_way');
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+
+  // Script status = the site's existing "verified" flag (same one the site summary cards use).
+  const verified = useMemo(() => {
+    const m = new Map<string, boolean>();
+    (Array.isArray(sites) ? sites : []).forEach((s: any) => {
+      if (s?.id) m.set(String(s.id), s?.verified === 1 || s?.verified === true);
+    });
+    return m;
+  }, [sites]);
+
+  const apply = (s: ShareState) => {
+    setState(s);
+    setSelected((s.candidates || []).filter((c) => c.linked).map((c) => c.id));
+    setDirection(s.direction || 'one_way');
+  };
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    call<ShareState>('GET', `?siteId=${encodeURIComponent(siteId)}`)
+      .then((s) => alive && apply(s))
+      .catch((e) => alive && setError(e?.message || 'Could not load cross-domain consent.'))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [siteId]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || saving) return;
+      if (confirmUnlink) setConfirmUnlink(false);
+      else if (!inline) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmUnlink, saving, onClose, inline]);
+
+  const host = state?.site.host || (siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const candidates = state?.candidates || [];
+  const linkedIds = candidates.filter((c) => c.linked).map((c) => c.id);
+  const savedDirection = state?.direction || 'one_way';
+  const dirty =
+    !!state &&
+    ([...selected].sort().join(',') !== [...linkedIds].sort().join(',') ||
+      (selected.length > 0 && linkedIds.length > 0 && direction !== savedDirection));
+  const removed = candidates.filter((c) => c.linked && !selected.includes(c.id));
+  const canEdit =
+    !!state && state.supported && !state.memberOf && candidates.length > 0 &&
+    (state.site.planOk !== false || candidates.some((c) => c.linked));
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      apply(await call<ShareState>('POST', '', { siteId, siteIds: selected, direction }));
+      setConfirmUnlink(false);
+      setToast(selected.length ? 'Cross-domain settings saved' : 'Consent sharing stopped');
+      onSaved?.();
+    } catch (e: any) {
+      setError(e?.message || 'Could not save.');
+      setConfirmUnlink(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSave = () => (removed.length ? setConfirmUnlink(true) : save());
+  const discard = () => {
+    setSelected(linkedIds);
+    setDirection(savedDirection);
+    setError(null);
+  };
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= MAX_LINKED ? prev : [...prev, id]));
+
+  const sharing = candidates.filter((c) => selected.includes(c.id));
+  const firstLinked = sharing[0]?.host || candidates[0]?.host || `app.${state?.mainDomain || 'example.com'}`;
+
+  return (
+    <div
+      className={inline ? 'min-h-full' : 'fixed inset-0 z-50 bg-[rgba(17,24,39,0.4)] flex items-center justify-center p-4'}
+      onMouseDown={inline ? undefined : (e) => e.target === e.currentTarget && !saving && onClose()}
+    >
+      <div
+        role={inline ? 'region' : 'dialog'}
+        aria-modal={inline ? undefined : true}
+        aria-labelledby="cdc-title"
+        className={`bg-[#F9F9FA] flex flex-col text-[#111827] tracking-[-0.02em] relative ${inline ? 'min-h-screen' : 'rounded-[12px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] w-full max-w-[1120px] max-h-[92vh]'}`}
+      >
+        {/* Header */}
+        <div className={`flex items-start gap-4 px-6 pt-6 pb-5 bg-white border-b border-[#E5E5E5] ${inline ? '' : 'rounded-t-[12px]'}`}>
+          <div className="flex-1 min-w-0">
+            {inline && (
+              <p className={`m-0 mb-2 text-[13px] ${TEXT2}`}>
+                Cookie Banner / Settings / <span className="text-[#111827]">Cross-domain consent</span>
+              </p>
+            )}
+            <h2 id="cdc-title" className="m-0 text-[22px] font-semibold text-black">Cross-domain consent</h2>
+            <p className={`m-0 mt-1 text-[14px] leading-[20px] max-w-[720px] ${TEXT2}`}>
+              Ask visitors once. Their cookie choices on <b className="font-semibold text-[#111827]">{host}</b> carry over to the
+              domains you link, so they don&apos;t see the banner again.
+            </p>
+            {state?.supported && !state.memberOf && (
+              <p className="m-0 mt-3 text-[13px] text-[#111827]">
+                <span className={TEXT2}>Primary domain</span> <b className="font-semibold">{host}</b>
+                <span className={`${TEXT2}`}> · Visitors&apos; choices here are the source for every linked domain.</span>
+              </p>
+            )}
+          </div>
+          {!inline && (
+            <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="w-[40px] h-[40px] grid place-items-center rounded-[8px] text-[#4B5563] hover:bg-[#F3F4F6]">
+              <CloseIcon />
+            </button>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className={`flex-1 px-6 py-6 ${inline ? '' : 'overflow-y-auto'}`}>
+          {loading ? (
+            <p className={`text-[14px] ${TEXT2} py-10 text-center`}>Loading…</p>
+          ) : !state ? (
+            <p className="text-[14px] text-[#AC2734]">{error}</p>
+          ) : (
+            <>
+            {/* Why this site can't be edited (the layout below still shows, greyed out). */}
+            {!state.supported ? (
+              <div className="mb-5 rounded-[8px] bg-[#FFF7ED] p-4 text-[14px] text-[#9A3412]">
+                {state.reason === 'platform'
+                  ? `Sites on a builder address (${state.platform}) can't share consent: browsers keep every ${state.platform} site separate. Connect a custom domain to use this.`
+                  : 'This site’s address can’t share consent with other sites.'}
+              </div>
+            ) : state.memberOf ? (
+              <div className="mb-5 rounded-[8px] border border-[#E5E5E5] bg-white p-4 text-[14px]">
+                This site is linked to <b className="font-semibold">{state.memberOf.domain || 'another site'}</b>
+                {state.memberOf.direction ? ` (${directionLabel(state.memberOf.direction)})` : ''}. To change or remove the link, open
+                Cross-domain consent on that site.
+              </div>
+            ) : state.site.planOk === false && !candidates.some((c) => c.linked) ? (
+              <div className="mb-5 rounded-[8px] border border-[#ddd6fe] bg-[#f5f3ff] p-4 text-[14px] text-[#5b21b6]">
+                Cross-domain consent is available on the <b>Growth</b> plan. <b>{host}</b> is on {state.site.plan || 'a lower plan'}.{' '}
+                <a href={`/dashboard/${encodeURIComponent(siteId)}/upgrade`} className="underline font-medium">Upgrade to Growth</a>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-6 items-start">
+              {/* Left: settings */}
+              <div
+                className={`flex-[999_1_560px] min-w-0 flex flex-col gap-4 ${canEdit ? '' : 'opacity-50 pointer-events-none select-none'}`}
+                aria-disabled={canEdit ? undefined : true}
+              >
+                <Section
+                  n={1}
+                  title={`Domains under ${state.mainDomain || 'your main domain'}`}
+                  desc={`Checked domains share one consent cookie set on .${state.mainDomain || 'example.com'}.`}
+                >
+                  <div className="border-t border-[#E5E5E5] overflow-x-auto">
+                    <table className="w-full text-left text-[14px] border-collapse">
+                      <thead>
+                        <tr className={`text-[12px] ${TEXT2}`}>
+                          <th className="w-[44px] py-2 pl-5" aria-label="Share" />
+                          <th className="py-2 font-medium">Domain</th>
+                          <th className="py-2 font-medium">ConsentBit script</th>
+                          <th className="py-2 pr-5 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {candidates.map((c) => {
+                          const on = selected.includes(c.id);
+                          const needsPlan = c.planOk === false && !c.linked;
+                          const blocked = !!c.linkedElsewhere || !c.canAdmin || needsPlan;
+                          const full = !on && selected.length >= MAX_LINKED;
+                          const note = c.linkedElsewhere === 'primary'
+                            ? 'Has its own linked domains'
+                            : c.linkedElsewhere
+                              ? `Linked to ${c.linkedElsewhere}`
+                              : !c.canAdmin
+                                ? 'You are not an Admin of this site'
+                                : needsPlan
+                                  ? `Needs the Growth plan (on ${c.plan || 'a lower plan'})`
+                                  : full
+                                    ? `Up to ${MAX_LINKED} linked domains`
+                                    : null;
+                          const installed = verified.get(c.id);
+                          const boxId = `cdc-${c.id}`;
+                          return (
+                            <tr key={c.id} className={`border-t border-[#E5E5E5] ${blocked ? 'opacity-60' : ''}`}>
+                              <td className="py-3 pl-5 align-top">
+                                <span className="relative inline-grid">
+                                  <input
+                                    id={boxId}
+                                    type="checkbox"
+                                    checked={on}
+                                    disabled={saving || blocked || full}
+                                    onChange={() => toggle(c.id)}
+                                    className="peer absolute inset-0 opacity-0 w-[16px] h-[16px] m-0 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                  <span
+                                    aria-hidden="true"
+                                    className="w-[16px] h-[16px] rounded-[4px] grid place-items-center pointer-events-none peer-focus-visible:ring-2 peer-focus-visible:ring-[#007AFF] peer-focus-visible:ring-offset-1"
+                                    style={on ? { background: BLUE } : { boxShadow: 'inset 0 0 0 1.5px #4B5563' }}
+                                  >
+                                    {on && <CheckMark />}
+                                  </span>
+                                </span>
+                              </td>
+                              <td className="py-3 pr-3 align-top">
+                                <label htmlFor={boxId} className={`block font-medium ${on ? '' : 'text-[#4B5563]'} ${blocked ? '' : 'cursor-pointer'}`}>
+                                  {c.host}
+                                </label>
+                                {note && <span className={`block text-[12px] ${TEXT2}`}>{note}</span>}
+                              </td>
+                              <td className="py-3 pr-3 align-top">
+                                {installed ? <Pill tone="green">Script installed</Pill> : <Pill tone="amber">Script not found</Pill>}
+                              </td>
+                              <td className={`py-3 pr-5 align-top text-[13px] ${TEXT2}`}>
+                                {on ? (c.linked ? (installed ? 'Sharing' : 'Waiting for script') : 'Shares after you save') : c.linked ? 'Unlinks after you save' : 'Not sharing'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {candidates.length === 0 && (
+                          <tr className="border-t border-[#E5E5E5]">
+                            <td colSpan={4} className="px-5 py-8 text-center">
+                              <span className="mx-auto w-10 h-10 rounded-full border border-[#E5E5E5] grid place-items-center text-[#374151] mb-3">
+                                <LinkIcon />
+                              </span>
+                              <span className="block text-[14px] font-semibold mb-1">No domains to link</span>
+                              <span className={`block text-[13px] ${TEXT2}`}>
+                                {state.mainDomain
+                                  ? <>Only domains under <b className="font-semibold text-[#111827]">{state.mainDomain}</b> can share its consent. Add one of its subdomains as a site in your account and it will show up here.</>
+                                  : 'Domains under your own main domain show up here once they are sites in your account.'}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {sharing.some((c) => !verified.get(c.id)) && (
+                    <div className="mx-5 mb-5 mt-1 rounded-[8px] bg-[#FFF7ED] p-3 text-[13px] leading-[18px] text-[#9A3412]">
+                      We couldn&apos;t find the ConsentBit script on{' '}
+                      <b className="font-semibold">{sharing.filter((c) => !verified.get(c.id)).map((c) => c.host).join(', ')}</b>. Add the
+                      script from that site&apos;s dashboard. Sharing starts there once it runs.
+                    </div>
+                  )}
+                  <p className={`m-0 px-5 pb-5 text-[12px] ${TEXT2}`}>
+                    {sharing.length} of {candidates.length} sharing. Missing a domain? Add it as a site in your account and it shows up here.
+                  </p>
+                </Section>
+
+                <Section n={2} title="Consent direction" desc="What happens when a visitor changes their choices on a linked domain.">
+                  <div role="radiogroup" aria-label="Consent direction" className="grid gap-2 px-5 pb-5">
+                    {([
+                      { id: 'one_way' as Direction, title: 'One-way from primary', rec: true, desc: `Choices made on ${host} apply everywhere. Changes on a linked domain stay on that domain.` },
+                      { id: 'two_way' as Direction, title: 'Two-way', rec: false, desc: `A change on any linked domain updates consent on every domain, ${host} included.` },
+                    ]).map((o) => {
+                      const on = direction === o.id;
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          disabled={saving}
+                          onClick={() => setDirection(o.id)}
+                          className="flex gap-[10px] items-start p-[14px] rounded-[8px] text-left disabled:opacity-60"
+                          style={on ? { background: 'rgba(103,144,234,0.1)', boxShadow: `inset 0 0 0 1px ${BLUE}` } : { background: '#fff', boxShadow: 'inset 0 0 0 1px #E5E5E5' }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="w-[16px] h-[16px] mt-[2px] rounded-full shrink-0 grid place-items-center box-border"
+                            style={{ border: `1.5px solid ${on ? BLUE : '#4B5563'}` }}
+                          >
+                            {on && <span className="w-[8px] h-[8px] rounded-full" style={{ background: BLUE }} />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-2 text-[14px] font-semibold leading-[20px]" style={{ color: on ? BLUE : '#111827' }}>
+                              {o.title}
+                              {o.rec && <Pill tone="blue">Recommended</Pill>}
+                            </span>
+                            <span className={`block text-[13px] leading-[18px] mt-[2px] ${TEXT2}`}>{o.desc}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Section>
+
+                <Section n={3} title="Tell visitors which sites are covered" desc="Privacy laws like the GDPR expect visitors to know where their consent applies.">
+                  <p className={`m-0 px-5 pb-5 text-[13px] leading-[18px] ${TEXT2}`}>
+                    The banner&apos;s preferences panel lists the linked domains under &ldquo;Your choice also applies to:&rdquo;
+                    {direction === 'one_way' ? ` on ${host}` : ' on every linked domain'}. Also name them in your cookie or privacy policy.
+                  </p>
+                </Section>
+              </div>
+
+              {/* Right: summary */}
+              <aside className="flex-[1_1_320px] min-w-0 lg:sticky lg:top-0 flex flex-col gap-4">
+                <div className="rounded-[12px] border border-[#E5E5E5] bg-white p-5">
+                  <h3 className="m-0 text-[16px] font-semibold">How consent is shared</h3>
+                  {sharing.length === 0 ? (
+                    <p className={`m-0 mt-2 text-[14px] ${TEXT2}`}>Sharing is off. Each domain asks visitors for consent on its own.</p>
+                  ) : (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-2 text-[14px]">
+                        <b className="font-semibold">{host}</b>
+                        <span className={`text-[12px] ${TEXT2}`}>Primary domain</span>
+                      </div>
+                      <ul className="m-0 mt-2 ml-[6px] pl-4 border-l-2 border-[#E5E5E5] list-none flex flex-col gap-2">
+                        {sharing.map((c) => {
+                          const active = !!verified.get(c.id);
+                          return (
+                            <li key={c.id} className="flex items-center gap-2 text-[14px]">
+                              <span aria-hidden="true" className="w-[8px] h-[8px] rounded-full shrink-0" style={{ background: active ? '#10B981' : '#F59E0B' }} />
+                              <span className="flex-1 min-w-0 truncate">{c.host}</span>
+                              <span className={`text-[12px] ${TEXT2}`}>{active ? 'Shares consent' : 'Starts once script is found'}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <div className={`mt-3 flex gap-4 text-[12px] ${TEXT2}`}>
+                        <span className="inline-flex items-center gap-[6px]"><span className="w-[8px] h-[8px] rounded-full bg-[#10B981]" aria-hidden="true" />Active</span>
+                        <span className="inline-flex items-center gap-[6px]"><span className="w-[8px] h-[8px] rounded-full bg-[#F59E0B]" aria-hidden="true" />Pending</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-[12px] border border-[#E5E5E5] bg-white p-5">
+                  <h3 className="m-0 text-[16px] font-semibold">What a visitor sees</h3>
+                  <ol className="m-0 mt-3 p-0 list-none flex flex-col gap-3 text-[14px] leading-[20px]">
+                    <li className="flex gap-3"><StepNum n={1} /><span>Accepts analytics on <b className="font-semibold">{host}</b>.</span></li>
+                    <li className="flex gap-3"><StepNum n={2} /><span>Opens <b className="font-semibold">{firstLinked}</b>: no banner, analytics already allowed.</span></li>
+                    <li className="flex gap-3">
+                      <StepNum n={3} />
+                      {direction === 'one_way' ? (
+                        <span>Turns analytics off there. The change applies <b className="font-semibold">only on that domain</b>; {host} keeps the original choice.</span>
+                      ) : (
+                        <span>Turns analytics off there. The change applies <b className="font-semibold">on every linked domain</b>, {host} included.</span>
+                      )}
+                    </li>
+                  </ol>
+                  <p className={`m-0 mt-4 pt-4 border-t border-[#E5E5E5] text-[12px] leading-[17px] ${TEXT2}`}>
+                    Every domain must run the ConsentBit script and use the same cookie categories and the same banner type for a region.
+                  </p>
+                </div>
+              </aside>
+            </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer: unsaved-changes bar (inline: only while there is something to save or an error) */}
+        {(!inline || (canEdit && dirty) || (!!error && !!state)) && (
+        <div className={`flex items-center gap-3 px-6 py-[14px] border-t border-[#E5E5E5] bg-white ${inline ? 'sticky bottom-0 z-10 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]' : 'rounded-b-[12px]'}`}>
+          <span className="flex-1 min-w-0 text-[14px]">
+            {error && state ? (
+              <span className="text-[#AC2734]">{error}</span>
+            ) : canEdit && dirty ? (
+              <span className="font-medium">You have unsaved changes</span>
+            ) : null}
+          </span>
+          {canEdit && dirty ? (
+            <>
+              <button type="button" onClick={discard} disabled={saving} className={btnSecondary}>Discard</button>
+              <button type="button" onClick={onSave} disabled={saving} className={btnPrimary}>{saving ? 'Saving…' : 'Save changes'}</button>
+            </>
+          ) : inline ? null : (
+            <button type="button" onClick={onClose} disabled={saving} className={btnSecondary}>Close</button>
+          )}
+        </div>
+        )}
+
+        {toast && (
+          <div role="status" className="fixed z-[60] left-1/2 -translate-x-1/2 bottom-[84px] bg-[#111827] text-white text-[13px] px-4 py-2 rounded-[8px] shadow-lg">
+            {toast}
+          </div>
+        )}
+
+        {/* Unlink confirm (design: "Unlink domain") */}
+        {confirmUnlink && (
+          <div className={`${inline ? 'fixed z-50' : 'absolute rounded-[12px]'} inset-0 bg-[rgba(17,24,39,0.4)] grid place-items-center p-5`}>
+            <div role="alertdialog" aria-modal="true" aria-labelledby="cdc-ul-t" aria-describedby="cdc-ul-d" className="w-[460px] max-w-full bg-white rounded-[12px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] flex flex-col">
+              <div className="px-[22px] pt-5">
+                <h2 id="cdc-ul-t" className="m-0 text-[18px] font-semibold text-black">
+                  {removed.length === 1 ? `Unlink ${removed[0].host}?` : `Unlink ${removed.length} domains?`}
+                </h2>
+              </div>
+              <p id="cdc-ul-d" className={`m-0 px-[22px] pt-4 pb-5 text-[14px] leading-[20px] ${TEXT2}`}>
+                Visitors on {removed.length === 1 ? removed[0].host : removed.map((c) => c.host).join(', ')} will see the banner again and
+                choose separately. Consent already given there stays in your consent log.
+              </p>
+              <div className="px-[22px] py-[14px] border-t border-[#E5E5E5] flex justify-end gap-2 bg-[#F9F9FA] rounded-b-[12px]">
+                <button type="button" onClick={() => setConfirmUnlink(false)} disabled={saving} className={btnSecondary}>Cancel</button>
+                <button type="button" onClick={save} disabled={saving} className={btnDanger} autoFocus>
+                  {saving ? 'Unlinking…' : 'Unlink'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

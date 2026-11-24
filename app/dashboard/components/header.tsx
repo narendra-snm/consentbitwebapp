@@ -65,6 +65,13 @@ export default function Header() {
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
+  // Other screens (e.g. Cross-domain consent "Add site") can open AddNewSiteModal.
+  useEffect(() => {
+    const open = () => setAddSiteOpen(true);
+    window.addEventListener('cb:open-add-site', open);
+    return () => window.removeEventListener('cb:open-add-site', open);
+  }, []);
+
   // Auto-dismiss cancel screen after 5s then open AddNewSiteModal.
   useEffect(() => {
     if (!stripeReturnPending) return;

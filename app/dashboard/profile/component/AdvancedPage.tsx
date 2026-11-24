@@ -17,7 +17,34 @@ import CrossDomainConsentModal, {
 } from '../../components/CrossDomainConsentModal';
 import BannerPagesModal, { clearBannerPages, fetchBannerPages, modeLabel, type BannerPages } from '../../components/BannerPagesModal';
 
-type SiteRow = { id: string; domain: string };
+type SiteRow = { id: string; domain: string; plan: string };
+
+// Cross-domain consent and Disable banner on pages are Growth features (decided 2026-11-24).
+// The server enforces it (handlers/consentFamily.js, bannerPages.js); this only labels the UI.
+const isGrowth = (r: SiteRow) => r.plan === 'growth';
+
+function GrowthPill() {
+  return (
+    <span
+      title="Available on the Growth plan"
+      className="inline-flex items-center h-[20px] px-[8px] rounded-full bg-[#ede9fe] text-[#6d28d9] text-[11px] font-semibold align-middle ml-2"
+    >
+      Growth
+    </span>
+  );
+}
+
+function UpgradeButton({ siteId, domain }: { siteId: string; domain: string }) {
+  return (
+    <a
+      href={`/dashboard/${encodeURIComponent(siteId)}/upgrade`}
+      title={`${domain} needs the Growth plan for this setting`}
+      className="shrink-0 h-[38px] px-3 flex items-center justify-center rounded-[8px] border border-[#ddd6fe] bg-[#f5f3ff] text-[#6d28d9] text-[12px] font-medium hover:bg-[#ede9fe] transition-colors"
+    >
+      Upgrade to Growth
+    </a>
+  );
+}
 
 // Builder addresses: every customer gets a subdomain there and browsers keep them apart, so a
 // site on one can never share consent (same list as consent-manager handlers/consentFamily.js).
@@ -74,7 +101,7 @@ export default function AdvancedPage() {
       <p className="text-[13px] text-[#6b7280] mb-6">Settings most sites don&apos;t need. Leave them off unless you know you want them.</p>
       <div className="space-y-5">
         <BannerStatusSection />
-        <CrossDomainSection />
+        {/* Cross-domain consent moved to Cookie Banner → Settings (2026-11-24). CrossDomainSection kept below, unused. */}
         <BannerPagesSection />
       </div>
     </div>
@@ -88,7 +115,11 @@ function useAdminSites(): { rows: SiteRow[]; loading: boolean } {
     () =>
       (Array.isArray(sites) ? sites : [])
         .filter((s: any) => s?.id && !s?._isUnassigned && siteTeamRole(s) !== 'member')
-        .map((s: any) => ({ id: String(s.id), domain: String(s.domain || s.name || '') }))
+        .map((s: any) => ({
+          id: String(s.id),
+          domain: String(s.domain || s.name || ''),
+          plan: String(s?.planId ?? s?.plan_id ?? s?.subscription_plan ?? s?.plan ?? 'free').toLowerCase(),
+        }))
         .filter((r) => r.domain)
         .sort((a, b) => a.domain.localeCompare(b.domain)),
     [sites],
@@ -291,7 +322,7 @@ function BannerPagesSection() {
     <section className="rounded-[12px] border border-[#e5e7eb] bg-white">
       <div className="flex items-start gap-4 px-5 py-5">
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-black mb-1">Disable banner on specific pages</p>
+          <p className="text-[15px] font-semibold text-black mb-1">Disable banner on specific pages<GrowthPill /></p>
           <p className="text-[12px] leading-[18px] text-[#6b7280] max-w-[620px]">
             Don&apos;t show the cookie banner on chosen pages of a site, for example your privacy or cookie policy page.
           </p>
@@ -372,15 +403,19 @@ function BannerPagesSection() {
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setOpen(r)}
-                      title="Choose pages"
-                      aria-label={`Choose pages without the banner for ${r.domain}`}
-                      className="shrink-0 h-[38px] w-[44px] flex items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] hover:text-[#007aff] transition-colors"
-                    >
-                      <PencilIcon size={16} />
-                    </button>
+                    {isGrowth(r) || p ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpen(r)}
+                        title="Choose pages"
+                        aria-label={`Choose pages without the banner for ${r.domain}`}
+                        className="shrink-0 h-[38px] w-[44px] flex items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] hover:text-[#007aff] transition-colors"
+                      >
+                        <PencilIcon size={16} />
+                      </button>
+                    ) : (
+                      <UpgradeButton siteId={r.id} domain={r.domain} />
+                    )}
                   </div>
                 );
               })}
@@ -459,7 +494,7 @@ function CrossDomainSection() {
       <section className="rounded-[12px] border border-[#e5e7eb] bg-white">
         <div className="flex items-start gap-4 px-5 py-5">
           <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-semibold text-black mb-1">Cross-domain consent</p>
+            <p className="text-[15px] font-semibold text-black mb-1">Cross-domain consent<GrowthPill /></p>
             <p className="text-[12px] leading-[18px] text-[#6b7280] max-w-[620px]">
               Share a visitor&apos;s cookie choice between your sites on the same main domain (for example www.example.com and
               app.example.com), so they are not asked again on each one.
@@ -547,15 +582,19 @@ function CrossDomainSection() {
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setOpen(r)}
-                        title="Cross-domain consent"
-                        aria-label={`Cross-domain consent for ${r.domain}`}
-                        className="shrink-0 h-[38px] w-[44px] flex items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] hover:text-[#007aff] transition-colors"
-                      >
-                        <PaperclipIcon size={16} />
-                      </button>
+                      {isGrowth(r) || link ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpen(r)}
+                          title="Cross-domain consent"
+                          aria-label={`Cross-domain consent for ${r.domain}`}
+                          className="shrink-0 h-[38px] w-[44px] flex items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#374151] hover:bg-[#f3f4f6] hover:text-[#007aff] transition-colors"
+                        >
+                          <PaperclipIcon size={16} />
+                        </button>
+                      ) : (
+                        <UpgradeButton siteId={r.id} domain={r.domain} />
+                      )}
                     </div>
                   );
                 })}

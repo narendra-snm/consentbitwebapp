@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { parseApiResponse } from '@/lib/client-api';
 
 export type BannerPageMode = 'hide' | 'off';
-export type BannerPages = { paths: string[]; mode: BannerPageMode };
+export type BannerPages = { paths: string[]; mode: BannerPageMode; plan?: string; planOk?: boolean };
 
 const MAX_PATHS = 50;
 
@@ -159,13 +159,20 @@ export default function BannerPagesModal({
           <p className="text-[13px] text-[#6b7280] py-8 text-center">Loading…</p>
         ) : (
           <>
+            {initial.planOk === false && (
+              <div className="rounded-[8px] border border-[#ddd6fe] bg-[#f5f3ff] p-3 text-[12px] text-[#5b21b6] mb-4">
+                This setting is available on the <b>Growth</b> plan ({host} is on {initial.plan || 'a lower plan'}).{' '}
+                {paths.length ? 'You can still remove all pages below. ' : ''}
+                <a href={`/dashboard/${encodeURIComponent(siteId)}/upgrade`} className="underline font-medium">Upgrade to Growth</a>
+              </div>
+            )}
             <label htmlFor="bp-path" className="block text-[12px] font-medium text-[#374151] mb-2">Page path</label>
             <div className="flex gap-2 mb-1">
               <input
                 id="bp-path"
                 type="text"
                 value={draft}
-                disabled={saving}
+                disabled={saving || initial.planOk === false}
                 placeholder="/privacy-policy"
                 onChange={(e) => { setDraft(e.target.value); setDraftError(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
@@ -174,7 +181,7 @@ export default function BannerPagesModal({
               <button
                 type="button"
                 onClick={add}
-                disabled={saving || !draft.trim()}
+                disabled={saving || !draft.trim() || initial.planOk === false}
                 className="h-[38px] px-4 rounded-[8px] border border-[#007aff] text-[#007aff] text-[13px] font-medium hover:bg-[#e6f1fd] disabled:opacity-50"
               >
                 Add

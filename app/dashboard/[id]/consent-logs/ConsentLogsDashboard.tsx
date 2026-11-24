@@ -252,9 +252,31 @@ function detectMethod(log: ConsentLog): string {
   const c = normalizeCategories(log.categories);
   if (c && c.ccpa) return 'CCPA';
   const bt = (log.bannerType ?? log.regulation ?? '').toUpperCase();
+  if (bt === 'IAB') return 'IAB/GDPR'; // e.g. a shared IAB record (consentMethod "shared")
   if (bt.includes('CCPA') || bt.includes('USP') || bt.includes('VCDPA') || bt.includes('CPA')) return 'CCPA';
   if (bt.includes('GDPR')) return 'GDPR';
   return 'GDPR';
+}
+
+/** Host a cross-domain consent was copied from (consentMethod "shared"), or null. */
+function sharedFromOf(log: ConsentLog): string | null {
+  if (log.sharedFrom) return log.sharedFrom;
+  const raw = log.categories as unknown as { sharedFrom?: unknown } | null;
+  const from = raw && typeof raw === 'object' && typeof raw.sharedFrom === 'string' ? raw.sharedFrom : null;
+  if (from) return from;
+  return (log.consentMethod ?? '').toLowerCase() === 'shared' ? 'a linked site' : null;
+}
+
+function SharedFromBadge({ from }: { from: string }) {
+  return (
+    <span
+      title={`This visitor's choice was made on ${from} and shared through cross-domain consent`}
+      style={{ background: '#ecfdf5', color: '#047857', fontFamily: 'DM Sans, sans-serif' }}
+      className="inline-flex items-center gap-1 ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
+    >
+      Shared from {from}
+    </span>
+  );
 }
 
 function MethodBadge({ method }: { method: string }) {
@@ -1302,7 +1324,7 @@ export function ConsentLogsDashboard({
                           className="px-[16px] py-[9px] whitespace-nowrap border-b border-black/10"
                         >
                           <MethodBadge method={detectMethod(row)} />
-                         
+                          {sharedFromOf(row) && <SharedFromBadge from={sharedFromOf(row)!} />}
                         </td>
                         <td
                           className="px-[16px] py-[9px] font-['DM_Sans'] font-light text-[#0a091f] text-[14px] tracking-[-0.7px] border-b border-black/10"

@@ -1556,6 +1556,8 @@ export type ConsentLog = {
   status: string | null;
   expiresAt: string | null;
   categories: ConsentCategories | null;
+  /** Cross-domain consent: host the choice was copied from (consentMethod "shared"). */
+  sharedFrom?: string | null;
 };
 
 export type ConsentLogCookie = {
@@ -1703,3 +1705,44 @@ export async function verifyScript(payload: { publicUrl: string; scriptUrl: stri
   return data as { success: true; found: boolean; siteId?: string | null; debug?: any };
 }
 // script verification ends here
+// ---------------------------------------------------------------------------
+// Google Consent Mode status check (banner editor → Google Consent Mode card)
+// ---------------------------------------------------------------------------
+
+export type GcmCheckItem = {
+  s: 'pass' | 'warn' | 'info';
+  title: string;
+  detail: string;
+  code?: string;
+  fix?: boolean;
+};
+
+export type GcmCheck = {
+  checkedAt: string;
+  /** ok = no issues, issues = at least one warning, not_found = no ConsentBit script, failed = could not load the site */
+  status: 'ok' | 'issues' | 'not_found' | 'failed';
+  url: string | null;
+  results: GcmCheckItem[];
+  error: string | null;
+};
+
+export async function getLastGcmCheck(siteId: string): Promise<GcmCheck | null> {
+  const res = await fetch(`/api/gcm-check?siteId=${encodeURIComponent(siteId)}`, { credentials: 'include' });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success) return null;
+  return (data.check as GcmCheck) || null;
+}
+
+export async function runGcmCheck(siteId: string): Promise<GcmCheck> {
+  const res = await fetch('/api/gcm-check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ siteId }),
+  });
+  const data = await parseApiResponse(res);
+  if (!res.ok || !data.success || !data.check) {
+    throw new Error(data.error || `Check failed: ${res.status}`);
+  }
+  return data.check as GcmCheck;
+}
