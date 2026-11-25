@@ -11,6 +11,7 @@ import { fixCcpaLinkLabel, fixCcpaLinkLabelInText } from "./ccpaLinkTitle";
 import { CookieNoticeAccordion2 } from "./CookieNoticeAccordion2";
 import GoogleConsentModeTemplate from "./GoogleConsentModeTemplate";
 import GoogleConsentModeCard from "./GoogleConsentModeCard";
+import BannerRegionCard, { DEFAULT_BANNER_REGION, bannerRegionKey, readBannerRegion, serializeBannerRegion, type BannerRegion } from "./BannerRegionCard";
 import { CrossDomainConsentPanel } from "../../../components/CrossDomainConsentModal";
 import PreferenceBannerAccordion from "./PreferenceBannerAccordion";
 import CookieCategoriesAccordion, { type CookieCategoryContent } from "./CookieCategoriesAccordion";
@@ -194,6 +195,14 @@ export default function page({ siteId }: { siteId: string }) {
   /** Google Consent Mode console debug (General tab): translations.config.gcmDebug. OFF by default. */
   const [gcmDebug, setGcmDebug] = useState<boolean>(false);
   const [lastSavedGcmDebug, setLastSavedGcmDebug] = useState<boolean | null>(null);
+  /** Google Consent Mode Advanced / Basic / Off (GoogleConsentModeCard): translations.config.gcmSupport
+   *  and gcmTagsBeforeConsent, "1" unless switched off (both on = Advanced, the default). Read by cdnM.js. */
+  const [gcmSupport, setGcmSupport] = useState<boolean>(true);
+  const [gcmTagsBeforeConsent, setGcmTagsBeforeConsent] = useState<boolean>(true);
+  const [lastSavedGcmMode, setLastSavedGcmMode] = useState<string | null>(null);
+  /** Banner region (General tab): translations.config.bannerRegion. Worldwide by default. */
+  const [bannerRegion, setBannerRegion] = useState<BannerRegion>(DEFAULT_BANNER_REGION);
+  const [lastSavedBannerRegion, setLastSavedBannerRegion] = useState<BannerRegion | null>(null);
   /** Draft + baseline for Layout / Colors / Type — published with content in one action. */
   const [appearance, setAppearance] = useState<AppearanceState>(DEFAULT_APPEARANCE);
   const [lastSavedAppearance, setLastSavedAppearance] = useState<AppearanceState | null>(null);
@@ -526,6 +535,16 @@ export default function page({ siteId }: { siteId: string }) {
         const gdState = String(cfgTr.gcmDebug ?? "") === "1";
         setGcmDebug(gdState);
         setLastSavedGcmDebug(gdState);
+        const gsState = String(cfgTr.gcmSupport ?? "") !== "0";
+        const gtState = String(cfgTr.gcmTagsBeforeConsent ?? "") !== "0";
+        setGcmSupport(gsState);
+        setGcmTagsBeforeConsent(gtState);
+        setLastSavedGcmMode(`${gsState ? 1 : 0}${gtState ? 1 : 0}`);
+
+        // Missing / anything but "europe" = worldwide (the default).
+        const brState = readBannerRegion(cfgTr.bannerRegion);
+        setBannerRegion(brState);
+        setLastSavedBannerRegion(brState);
 
         const app = appearanceFromCustomization(customization);
         setAppearance(app);
@@ -624,6 +643,11 @@ export default function page({ siteId }: { siteId: string }) {
         setLastSavedFloatingButton(fbDefault);
         setRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
         setLastSavedRegionalLanguages(DEFAULT_REGIONAL_LANGUAGES);
+        setBannerRegion(DEFAULT_BANNER_REGION);
+        setLastSavedBannerRegion(DEFAULT_BANNER_REGION);
+        setGcmSupport(true);
+        setGcmTagsBeforeConsent(true);
+        setLastSavedGcmMode("11");
         setHideBranding(false);
         setLastSavedHideBranding(false);
         setLastPublishedBothFocus(bothContentFocusRef.current);
@@ -774,8 +798,10 @@ export default function page({ siteId }: { siteId: string }) {
     if (!lastSavedRegionalLanguages) return false;
     if (JSON.stringify(regionalLanguages) !== JSON.stringify(lastSavedRegionalLanguages)) return true;
     if (lastSavedGcmDebug !== null && gcmDebug !== lastSavedGcmDebug) return true;
+    if (lastSavedGcmMode !== null && `${gcmSupport ? 1 : 0}${gcmTagsBeforeConsent ? 1 : 0}` !== lastSavedGcmMode) return true;
+    if (lastSavedBannerRegion !== null && bannerRegionKey(bannerRegion) !== bannerRegionKey(lastSavedBannerRegion)) return true;
     return !!lastSavedPageLanguages && JSON.stringify(pageLanguages) !== JSON.stringify(lastSavedPageLanguages);
-  }, [regionalLanguages, lastSavedRegionalLanguages, pageLanguages, lastSavedPageLanguages, gcmDebug, lastSavedGcmDebug]);
+  }, [regionalLanguages, lastSavedRegionalLanguages, pageLanguages, lastSavedPageLanguages, gcmDebug, lastSavedGcmDebug, gcmSupport, gcmTagsBeforeConsent, lastSavedGcmMode, bannerRegion, lastSavedBannerRegion]);
 
 
   const appearanceDirty = useMemo(() => {
@@ -859,6 +885,8 @@ export default function page({ siteId }: { siteId: string }) {
     setLastSavedRegionalLanguages(regionalLanguages);
     setLastSavedPageLanguages(pageLanguages);
     setLastSavedGcmDebug(gcmDebug);
+    setLastSavedGcmMode(`${gcmSupport ? 1 : 0}${gcmTagsBeforeConsent ? 1 : 0}`);
+    setLastSavedBannerRegion(bannerRegion);
     setLastSavedAppearance(appearance);
     setLastSavedHideBranding(hideBranding);
     setLastPublishedBothFocus(bothContentFocus);
@@ -896,6 +924,12 @@ export default function page({ siteId }: { siteId: string }) {
             pageLanguages,
             // GCM console debug (GoogleConsentModeCard); off unless "1". Read by cdnM.js.
             gcmDebug: gcmDebug ? "1" : "0",
+            // Google Consent Mode (GoogleConsentModeCard): "0"/"1" each; both "1" = Advanced,
+            // tags-before-consent "0" = Basic, support "0" = Off. Read by cdnM.js (gcmMode).
+            gcmSupport: gcmSupport ? "1" : "0",
+            gcmTagsBeforeConsent: gcmTagsBeforeConsent ? "1" : "0",
+            // Banner region (BannerRegionCard): where the GDPR / CCPA banner is shown. Read by cdnM.js.
+            bannerRegion: serializeBannerRegion(bannerRegion),
         },
         en: {
           ...(((prev && prev.translations && prev.translations.en) || {})),
@@ -956,6 +990,9 @@ export default function page({ siteId }: { siteId: string }) {
     regionalLanguages,
     pageLanguages,
     gcmDebug,
+    gcmSupport,
+    gcmTagsBeforeConsent,
+    bannerRegion,
     hideBranding,
     iabEnabled,
     googleAcEnabled,
@@ -1033,6 +1070,12 @@ export default function page({ siteId }: { siteId: string }) {
             pageLanguages,
             // GCM console debug (GoogleConsentModeCard); off unless "1". Read by cdnM.js.
             gcmDebug: gcmDebug ? "1" : "0",
+            // Google Consent Mode (GoogleConsentModeCard): "0"/"1" each; both "1" = Advanced,
+            // tags-before-consent "0" = Basic, support "0" = Off. Read by cdnM.js (gcmMode).
+            gcmSupport: gcmSupport ? "1" : "0",
+            gcmTagsBeforeConsent: gcmTagsBeforeConsent ? "1" : "0",
+            // Banner region (BannerRegionCard): where the GDPR / CCPA banner is shown. Read by cdnM.js.
+            bannerRegion: serializeBannerRegion(bannerRegion),
             floatingButtonEnabled: floatingButton.enabled ? "1" : "0",
             floatingButtonPosition: floatingButton.position,
           },
@@ -1332,6 +1375,15 @@ export default function page({ siteId }: { siteId: string }) {
               </p>
             </div>
 
+            {/* Banner region — all plans; GDPR, CCPA and GDPR + CCPA (not IAB). */}
+            {!iabEnabled && (
+              <BannerRegionCard
+                value={bannerRegion}
+                onChange={setBannerRegion}
+                consentType={consentType}
+              />
+            )}
+
             {/* Essential/Growth only, and hidden while the IAB TCF banner is selected. */}
             {isToggleEnabled && !iabEnabled && (
               <RegionalLanguagesCard
@@ -1495,6 +1547,11 @@ export default function page({ siteId }: { siteId: string }) {
   siteId={String(site?.id || siteId || "")}
   debugEnabled={gcmDebug}
   onToggleDebug={() => setGcmDebug((v) => !v)}
+  gcmSupport={gcmSupport}
+  onToggleGcmSupport={() => setGcmSupport((v) => !v)}
+  tagsBeforeConsent={gcmTagsBeforeConsent}
+  onToggleTagsBeforeConsent={() => setGcmTagsBeforeConsent((v) => !v)}
+  iabEnabled={iabEnabled}
 />
 
           </div>

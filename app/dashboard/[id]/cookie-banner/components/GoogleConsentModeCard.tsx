@@ -9,6 +9,8 @@ const DOCS = {
   debug: "https://www.consentbit.com/articles/debug-mode",
   fix: "https://www.consentbit.com/articles/debug-mode#late-tags:~:text=Fixing%20a%20Google%20tag%20that%20loads%20too%20early,-When%20debug%20mode%20flags",
   gtg: "https://www.consentbit.com/articles/using-consentbit-with-google-tag-gateway",
+  // Help article for the Advanced / Basic / Off settings (Google CMP audit iii.5). Publish it at this URL.
+  modes: "https://www.consentbit.com/articles/google-consent-mode-advanced-basic-off",
 };
 
 function formatWhen(iso: string): string {
@@ -38,6 +40,14 @@ const ROW_LABEL = { pass: "PASS", warn: "WARN", info: "INFO" } as const;
 /**
  * Google Consent Mode card — banner editor, General tab.
  *
+ * "Support Google Consent Mode" + "Allow Google tags to fire before consent" (all plans, saved
+ * with the banner as translations.config.gcmSupport / gcmTagsBeforeConsent, both on by default):
+ *   both on            Advanced (unchanged): tags load at once, consent default denied.
+ *   support on, other off  Basic: Google tags blocked and nothing sent to Google until the
+ *                      visitor accepts Analytics or Marketing; then Consent Mode starts.
+ *   support off        Off: no Consent Mode commands; Google tags blocked by category.
+ * Applied by the worker (cdnM.js gcmMode). Not for IAB/TCF sites (Google reads the TC string).
+ *
  * "Check now" asks the worker to load the live site and run the same checks as Debug
  * Mode (consent default present and set before Google tags, all four v2 signals, no
  * Google requests before the default). The debug toggle is saved with the banner
@@ -48,11 +58,22 @@ export default function GoogleConsentModeCard({
   siteId,
   debugEnabled,
   onToggleDebug,
+  gcmSupport,
+  onToggleGcmSupport,
+  tagsBeforeConsent,
+  onToggleTagsBeforeConsent,
+  iabEnabled,
 }: {
   siteId: string;
   debugEnabled: boolean;
   onToggleDebug: () => void;
+  gcmSupport: boolean;
+  onToggleGcmSupport: () => void;
+  tagsBeforeConsent: boolean;
+  onToggleTagsBeforeConsent: () => void;
+  iabEnabled: boolean;
 }) {
+  const mode: "advanced" | "basic" | "off" = !gcmSupport ? "off" : tagsBeforeConsent ? "advanced" : "basic";
   const [check, setCheck] = useState<GcmCheck | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +112,68 @@ export default function GoogleConsentModeCard({
           Learn more
         </a>
       </p>
+
+      {/* Advanced / Basic / Off — saved with the banner; both on (Advanced) by default */}
+      {iabEnabled ? (
+        <p className="text-xs text-[#6B7280] mb-5">
+          With IAB TCF, Google reads consent from the TCF string, so the Consent Mode settings below don&apos;t
+          apply.
+        </p>
+      ) : (
+        <div className="mb-5 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs text-black tracking-tight font-medium">Support Google Consent Mode</p>
+              <p className="text-xs text-[#6B7280] mt-1">
+                Send Google the visitor&apos;s consent choices (Consent Mode default and update commands).
+              </p>
+            </div>
+            <ToggleSwitch checked={gcmSupport} onChange={onToggleGcmSupport} />
+          </div>
+
+          {gcmSupport && (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-black tracking-tight font-medium">Allow Google tags to fire before consent</p>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  On (Advanced, recommended): Google tags load right away with consent denied and send cookieless
+                  pings until the visitor chooses. Off (Basic): Google tags are blocked, and nothing is sent to Google,
+                  until the visitor accepts Analytics or Marketing.
+                </p>
+              </div>
+              <ToggleSwitch checked={tagsBeforeConsent} onChange={onToggleTagsBeforeConsent} />
+            </div>
+          )}
+
+          <div className="rounded-md border border-[#e5e5e5] bg-white px-3 py-2 text-xs text-[#374151] space-y-1">
+            <p>
+              <span className="font-semibold">
+                Current mode: {mode === "advanced" ? "Advanced" : mode === "basic" ? "Basic" : "Off"}.
+              </span>{" "}
+              {mode === "advanced" &&
+                "Google tags load immediately and adjust to the visitor's choice."}
+              {mode === "basic" &&
+                "When the visitor accepts Analytics or Marketing, Consent Mode starts with their choices and your Google tags load. Visitors who get the opt-out (CCPA) banner have nothing to accept first, so their Google tags load as in Advanced mode."}
+              {mode === "off" &&
+                "ConsentBit sends no consent signals to Google. Google tags are blocked like other trackers until the visitor accepts: Google Analytics needs Analytics, Google Ads needs Marketing, and Google Tag Manager needs both."}
+            </p>
+            {mode !== "advanced" && (
+              <p className="text-[#6B7280]">
+                Place your Google tag below the ConsentBit script: a tag above it runs before ConsentBit can block it.
+                &quot;Check now&quot; and debug mode look for a consent default before your Google tags, so they report
+                it as missing in this mode; that is expected. Our Google Tag Manager template always sets Consent Mode
+                defaults inside GTM, so these settings don&apos;t apply to a template install: to use Basic or Off, add
+                the ConsentBit script to your site directly.
+              </p>
+            )}
+            <p>
+              <a href={DOCS.modes} target="_blank" rel="noopener noreferrer" className="text-[#007aff] underline">
+                Advanced, Basic and Off explained
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Check GCM status */}
       <div className="space-y-2">

@@ -10,7 +10,7 @@ export default function ToggleSwitch({
   return (
     <button
       onClick={onChange}
-      className={`relative w-[42px] h-[22px] rounded-full transition-colors ${
+      className={`relative shrink-0 w-[42px] h-[22px] rounded-full transition-colors ${
         checked ? "bg-[#007aff]" : "bg-gray-300"
       }`}
     >
