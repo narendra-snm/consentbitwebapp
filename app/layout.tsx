@@ -56,6 +56,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* ConsentBit banner for accounts.consentbit.com (Site dafe59ee-d1f3-442d-83db-0652bbe3c821).
+            Plain synchronous <script> in <head> so it loads before GTM/gtag and can block them. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
+          id="consentbit"
+          type="text/javascript"
+          src="https://manager.consentbit.com/consentbit/30bd2286-124c-41dd-b467-fbffd8c5bddb/script.js"
+        />
+      </head>
 
       <body
         className={`${dmSans.className} ${dmSans.variable} ${funnelDisplay.variable} ${manrope.variable} antialiased`}
