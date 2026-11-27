@@ -2,6 +2,9 @@
 import  { useEffect, useState } from "react";
 import svgPaths from "./svg";
 
+/** Cookie Banner → Settings tab (cross-domain consent, disable banner on pages). Off on live for now. */
+export const SHOW_BANNER_SETTINGS = false;
+
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   return (
     <span className="relative group inline-flex w-full">
@@ -35,7 +38,11 @@ export function Sidebar({ active, setActive, effectivePlanId, isLegacy }: Sideba
     { name: "Layout", icon: "layout", tip: "Set banner position, shape, border radius and animation style." },
     { name: "Colors", icon: "colors", tip: "Customise background, text and button colors." },
     { name: "Type", icon: "type", tip: "Choose font family, weight and text alignment for the banner." },
-    { name: "Settings", icon: "settings", tip: "Cross-domain consent, and pages where the banner is hidden." },
+    // Settings (cross-domain consent + disable banner on pages) is hidden on live until those
+    // features launch (2026-11-27: only Legal goes live). Set SHOW_BANNER_SETTINGS to true to show it.
+    ...(SHOW_BANNER_SETTINGS
+      ? [{ name: "Settings", icon: "settings", tip: "Cross-domain consent, and pages where the banner is hidden." }]
+      : []),
   ];
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sidebar } from "./SideBar";
+import { Sidebar, SHOW_BANNER_SETTINGS } from "./SideBar";
 import ConsentPreview from "./ConsentPreview";
 import BannerControl from "./BannerControl";
 import ColorPickerPanel from "./ColorPickerPanel";
@@ -1269,7 +1269,7 @@ export default function page({ siteId }: { siteId: string }) {
         isLegacy={isLegacySite}
       />
       {/* Settings tab: full-width page (cross-domain consent), no editor column or preview. */}
-      {active === "Settings" && (
+      {SHOW_BANNER_SETTINGS && active === "Settings" && (
         // No inner scroll box: the page itself scrolls (an h-screen box under the header gave two scrollbars).
         <div className="xl:col-span-2 min-w-0 bg-white">
           <SettingsSubPages siteId={String(site?.id || siteId || "")} siteUrl={String(site?.domain || "")} />
