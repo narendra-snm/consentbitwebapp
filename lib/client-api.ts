@@ -1518,6 +1518,8 @@ export type ConsentLog = {
   status: string | null;
   expiresAt: string | null;
   categories: ConsentCategories | null;
+  /** Cross-domain consent: host the choice was copied from (consentMethod "shared"). */
+  sharedFrom?: string | null;
 };
 
 export type ConsentLogCookie = {

@@ -36,6 +36,65 @@ import InstallConsentModal from "../../../components/InstallConsentModal";
 import ErrorPopup from "../../../components/ErrorPopup";
 import { resolveInstallScriptUrl } from "@/lib/consentbit-script";
 import { analytics } from "@/lib/analytics";
+import { CrossDomainConsentPanel } from "../../../components/CrossDomainConsentModal";
+import { BannerPagesPanel } from "../../../components/BannerPagesModal";
+
+/** Settings tab: Cross-domain consent | Disable banner on pages (remembered for the session). */
+const SETTINGS_SUB_KEY = "cb_banner_settings_sub";
+function SettingsSubPages({ siteId, siteUrl }: { siteId: string; siteUrl: string }) {
+  const [sub, setSub] = useState<"cross" | "pages">("cross");
+  useEffect(() => {
+    try { if (window.sessionStorage.getItem(SETTINGS_SUB_KEY) === "pages") setSub("pages"); } catch { /* storage blocked */ }
+  }, []);
+  const pick = (v: "cross" | "pages") => {
+    setSub(v);
+    try { window.sessionStorage.setItem(SETTINGS_SUB_KEY, v); } catch { /* storage blocked */ }
+  };
+  const host = String(siteUrl || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const icon = (v: "cross" | "pages") =>
+    v === "cross" ? (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M8.3 11.7a3.5 3.5 0 0 0 5 0l2.6-2.6a3.5 3.5 0 0 0-5-5l-.8.8" />
+        <path d="M11.7 8.3a3.5 3.5 0 0 0-5 0l-2.6 2.6a3.5 3.5 0 0 0 5 5l.8-.8" />
+      </svg>
+    ) : (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2.5 2.5l11 11M6.6 4.1A6.8 6.8 0 0 1 8 4c3.6 0 6 4 6 4a10.6 10.6 0 0 1-1.6 2.1M4.3 5.2A10.8 10.8 0 0 0 2 8s2.4 4 6 4a5.9 5.9 0 0 0 2.6-.6M6.6 6.6a2 2 0 0 0 2.8 2.8" />
+      </svg>
+    );
+  const tab = (v: "cross" | "pages", label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={sub === v}
+      onClick={() => pick(v)}
+      className={`inline-flex items-center gap-[10px] h-[52px] px-5 -mb-px text-[16px] whitespace-nowrap rounded-t-[8px] box-border border-b-[3px] ${
+        sub === v ? "font-semibold text-[#007AFF] bg-[#E8F3FF] border-[#007AFF]" : "font-medium text-[#4B5563] border-transparent hover:text-[#111827]"
+      }`}
+    >
+      {icon(v)}
+      {label}
+    </button>
+  );
+  // Shared page header (design: "Settings" + tabs); each panel renders it above its own title.
+  const header = (
+    <>
+      <div>
+        <h1 className="m-0 text-[25px] font-semibold tracking-[-1px] text-black">Settings</h1>
+        <p className="m-0 mt-[6px] text-[14px] text-[#4B5563]">How the banner behaves on {host}.</p>
+      </div>
+      <div role="tablist" aria-label="Settings sections" className="flex flex-wrap gap-1 border-b border-[#D9D9D9] mb-1">
+        {tab("cross", "Cross-domain consent")}
+        {tab("pages", "Disable banner on pages")}
+      </div>
+    </>
+  );
+  return sub === "cross" ? (
+    <CrossDomainConsentPanel siteId={siteId} siteUrl={siteUrl} header={header} />
+  ) : (
+    <BannerPagesPanel siteId={siteId} header={header} />
+  );
+}
 
 function makeDefaultContentSettings(langCode = 'en') {
   const T = TRANSLATIONS[langCode] || TRANSLATIONS.en;
@@ -1209,13 +1268,20 @@ export default function page({ siteId }: { siteId: string }) {
         effectivePlanId={resolvedPlanId}
         isLegacy={isLegacySite}
       />
+      {/* Settings tab: full-width page (cross-domain consent), no editor column or preview. */}
+      {active === "Settings" && (
+        // No inner scroll box: the page itself scrolls (an h-screen box under the header gave two scrollbars).
+        <div className="xl:col-span-2 min-w-0 bg-white">
+          <SettingsSubPages siteId={String(site?.id || siteId || "")} siteUrl={String(site?.domain || "")} />
+        </div>
+      )}
       {/* Panel toggle — only visible at lg (1024-1279px) */}
       <button
         type="button"
         onClick={() => setEditorOpen((o) => !o)}
         aria-label={editorOpen ? 'Hide editor panel' : 'Show editor panel'}
         className={`${
-          isOverlayMode ? 'flex' : 'hidden'
+          isOverlayMode && active !== "Settings" ? 'flex' : 'hidden'
         } absolute z-40 top-24 items-center justify-center h-12 w-5 bg-white border border-[#e5e5e5] rounded-r-md hover:bg-gray-50 shadow-sm transition-[left] duration-300`}
         style={{ left: editorOpen ? '620px' : '172px' }}
       >
@@ -1228,7 +1294,7 @@ export default function page({ siteId }: { siteId: string }) {
         </svg>
       </button>
       <div
-        className="w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]"
+        className={`${active === "Settings" ? "!hidden " : ""}w-full h-screen overflow-y-auto px-5.5 py-10 space-y-5 border-r border-[#00000010]`}
         style={
           isOverlayMode
             ? {
@@ -1269,11 +1335,11 @@ export default function page({ siteId }: { siteId: string }) {
               </div>
 
               <p className="text-[15px] leading-[22px] text-black tracking-tight">
-                {iabEnabled
+                {mounted && iabEnabled
                   ? "The selected template supports IAB TCF v2.3 — a standardised framework for managing vendor consent across the EU/EEA."
-                  : consentType === "ccpa"
+                  : mounted && consentType === "ccpa"
                   ? "The selected template (opt-out banner) supports CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
-                  : consentType === "both"
+                  : mounted && consentType === "both"
                   ? "The selected template shows an opt-in banner for GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa), and an opt-out banner for CCPA/CPRA (California), VCDPA (Virginia), CPA (Colorado), CTDPA (Connecticut), & UCPA (Utah)."
                   : "The selected template (opt-in banner) supports GDPR (EU/EEA), UK GDPR, ePrivacy Directive, LGPD (Brazil), PDPA (Thailand), & POPIA (South Africa)."}
               </p>
@@ -1797,7 +1863,7 @@ export default function page({ siteId }: { siteId: string }) {
         </div>
       )}
       {/* Save persists draft edits only; Publish can be used anytime to push live (including re-publish). */}
-      {!customizationLoading && <ConsentPreview
+      {!customizationLoading && active !== "Settings" && <ConsentPreview
       iabEnabled={iabEnabled}
       googleAcEnabled={iabEnabled && googleAcEnabled}
         key={previewRevision}
