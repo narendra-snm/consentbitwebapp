@@ -4,8 +4,10 @@
  * does every session, site-access and plan check.
  * Local dev: PRIVACY_API_BASE=http://localhost:8790 in .env.local.
  */
+// Live script's custom domain. Its workers.dev address is switched off since the domain was
+// attached (Cloudflare error 1042), so don't fall back to it.
 const PRIVACY_API_BASE =
-  process.env.PRIVACY_API_BASE || 'https://consentbit-privacy-requests-production.web-8fb.workers.dev';
+  process.env.PRIVACY_API_BASE || 'https://privacy.consentbit.com';
 
 export async function proxyPrivacyApi(
   request: Request,
