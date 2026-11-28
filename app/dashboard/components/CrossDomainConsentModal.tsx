@@ -953,6 +953,18 @@ export default function CrossDomainConsentModal({
                         </span>
                       </div>
                     )}
+                    {/* A linked domain left Growth: the server switched the link to one-way. */}
+                    {!twoWay && savedDirection === 'one_way' && candidates.some((c) => c.linked && c.planOk === false) && (
+                      <div role="status" className="flex gap-[10px] items-start text-[13px] leading-[18px] rounded-[8px] px-3 py-[10px] mx-5 mb-[18px] -mt-[6px] bg-[#FFF6E6]">
+                        <span className="text-[#965200] flex">{Ic.warn()}</span>
+                        <span>
+                          Consent is shared one-way. Two-way is not available while a linked domain is off the Growth plan:{' '}
+                          <b className="font-semibold">
+                            {candidates.filter((c) => c.linked && c.planOk === false).map((c) => `${c.host} (${c.plan || 'lower plan'})`).join(', ')}
+                          </b>. Upgrade it to use two-way again.
+                        </span>
+                      </div>
+                    )}
                   </section>
 
                   {/* 4. Tell visitors */}

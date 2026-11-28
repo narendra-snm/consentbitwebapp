@@ -2,8 +2,8 @@
 import  { useEffect, useState } from "react";
 import svgPaths from "./svg";
 
-/** Cookie Banner → Settings tab (cross-domain consent, disable banner on pages). Off on live for now. */
-export const SHOW_BANNER_SETTINGS = false;
+/** Cookie Banner → Settings tab (cross-domain consent, disable banner on pages). On live since 2026-11-28. */
+export const SHOW_BANNER_SETTINGS = true;
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   return (

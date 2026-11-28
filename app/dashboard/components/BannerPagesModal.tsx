@@ -403,19 +403,41 @@ export function BannerPagesPanel({ siteId, header }: { siteId?: string; header?:
     try { window.localStorage.setItem(prefKey, v ? '1' : '0'); } catch { /* storage blocked */ }
   };
 
+  // One site: the server's own plan check for it (same one the save uses), so a downgrade or
+  // cancellation shows here even if the session's site list is stale.
+  const [planInfo, setPlanInfo] = useState<{ ok: boolean; plan?: string } | null>(null);
+
   const ids = useMemo(() => rows.map((r) => r.id).join(','), [rows]);
   const reload = useCallback(() => {
     if (!ids) { setPages({}); setLoaded(true); return; }
+    if (siteId) {
+      call<BannerPages>('GET', `?siteId=${encodeURIComponent(siteId)}`)
+        .then((v) => {
+          setPages(v.paths?.length ? { [siteId]: v } : {});
+          setPlanInfo(typeof v.planOk === 'boolean' ? { ok: v.planOk, plan: v.plan } : null);
+          setLoaded(true);
+        })
+        .catch(() => fetchBannerPages([siteId]).then((p) => { setPages(p); setPlanInfo(null); setLoaded(true); }));
+      return;
+    }
     fetchBannerPages(ids.split(',')).then((p) => { setPages(p); setLoaded(true); });
-  }, [ids]);
+  }, [ids, siteId]);
   useEffect(() => { reload(); }, [reload]);
 
-  const activeIds = Object.keys(pages).filter((id) => !pages[id].paused);
-  const pausedIds = Object.keys(pages).filter((id) => pages[id].paused);
-  // On while any site applies its pages; with only paused sites it is off; with none, it follows the switch.
-  const on = activeIds.length > 0 || (pausedIds.length === 0 && wantOn);
+  // Growth only: the served script ignores saved pages on any other plan, so the switch must too.
+  const eligible = (r: SiteRow) => (single && planInfo ? planInfo.ok : r.plan === 'growth');
+  const eligibleIds = new Set(rows.filter(eligible).map((r) => r.id));
+  const planLocked = loaded && rows.length > 0 && eligibleIds.size === 0;
+  const lockedPlan = planLocked && single ? (planInfo?.plan || rows[0]?.plan || '') : '';
+
+  const activeIds = Object.keys(pages).filter((id) => eligibleIds.has(id) && !pages[id].paused);
+  const pausedIds = Object.keys(pages).filter((id) => eligibleIds.has(id) && pages[id].paused);
+  // On while any Growth site applies its pages; with only paused sites it is off; with none, it
+  // follows the switch. Never on when no site here is on Growth.
+  const on = loaded && !planLocked && (activeIds.length > 0 || (pausedIds.length === 0 && wantOn));
 
   const toggle = async () => {
+    if (planLocked) return;
     setError(null);
     const next = !on;
     const targets = next ? pausedIds : activeIds;
@@ -464,9 +486,10 @@ export function BannerPagesPanel({ siteId, header }: { siteId?: string; header?:
             role="switch"
             aria-checked={on}
             aria-label="Disable banner on specific pages"
-            disabled={!loaded || busy}
+            disabled={!loaded || busy || planLocked}
+            title={planLocked ? 'Available on the Growth plan' : undefined}
             onClick={toggle}
-            className={`relative shrink-0 w-[52px] h-[28px] rounded-[14px] border-0 p-0 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${on ? 'bg-[#007AFF]' : 'bg-[#9CA3AF]'}`}
+            className={`relative shrink-0 w-[52px] h-[28px] rounded-[14px] border-0 p-0 cursor-pointer ${planLocked ? 'disabled:cursor-not-allowed' : 'disabled:cursor-wait'} disabled:opacity-60 ${on ? 'bg-[#007AFF]' : 'bg-[#9CA3AF]'}`}
           >
             <span className={`absolute left-[3px] top-[3px] w-[22px] h-[22px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform ${on ? 'translate-x-[24px]' : 'translate-x-0'}`} />
           </button>
@@ -508,7 +531,7 @@ export function BannerPagesPanel({ siteId, header }: { siteId?: string; header?:
           ) : (
             shown.map((r) => {
               const p = pages[r.id];
-              const growth = r.plan === 'growth';
+              const growth = eligible(r);
               return (
                 <div key={r.id} className="flex items-center gap-4 px-6 py-[14px] border-t border-[#E5E5E5]">
                   <div className="flex-1 min-w-0">
@@ -554,7 +577,16 @@ export function BannerPagesPanel({ siteId, header }: { siteId?: string; header?:
           )}
         </div>
 
-        {!on && loaded && (
+        {planLocked ? (
+          <div className="px-6 py-[14px] border-t border-[#DDD6FE] text-[13px] bg-[#F5F3FF] text-[#5B21B6] rounded-b-[10px]">
+            This setting is available on the <b>Growth</b> plan
+            {single ? <> ({rows[0]?.domain} is on {lockedPlan || 'a lower plan'})</> : null}. The banner shows on every page.
+            {Object.keys(pages).length ? ' Your saved pages are kept and apply again on Growth.' : ''}{' '}
+            {single && (
+              <a href={`/dashboard/${encodeURIComponent(siteId!)}/upgrade`} className="underline font-medium">Upgrade to Growth</a>
+            )}
+          </div>
+        ) : !on && loaded && (
           <div className={`px-6 py-[14px] border-t border-[#E5E5E5] text-[13px] bg-[#F9F9FA] rounded-b-[10px] ${TEXT2}`}>
             Off: the banner shows on every page of every site.{pausedIds.length ? ' Your saved pages are kept for when you turn this back on.' : ''}
           </div>
